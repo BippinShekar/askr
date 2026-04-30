@@ -80,6 +80,7 @@ Prefix your query with a mode or skip it — no flags needed.
 | `sales:` | PITCH / ANGLE / HOOK |
 | `deep:` | clear explanation, no fluff |
 | `quick:` | 1–2 line answer, no structure |
+| `web:` | searches the web — use for pricing, docs, current errors |
 | *(none)* | defaults to `cto` format |
 
 ---

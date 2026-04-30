@@ -13,6 +13,7 @@ MODE_COLORS = {
     "sales": "bold magenta",
     "deep":  "bold cyan",
     "quick": "bold white",
+    "web":   "bold yellow",
 }
 
 

@@ -3,6 +3,12 @@ MODES = {
     "debug": "Give fix + 1 line reason.",
     "deep": "Explain clearly but no fluff.",
 
+    "web": """Use web search for current information. Structure as:
+ANSWER: direct answer with current data
+SOURCE: where this comes from
+NOTE: any caveats about freshness or accuracy
+""",
+
     "ceo": """
 DECISION: 1 line
 WHY: 1 line

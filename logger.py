@@ -6,8 +6,9 @@ from datetime import datetime, date
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".askr_log")
 
 COST_TABLE = {
-    "claude-haiku-4-5-20251001": {"input": 1,    "output": 5.00},
-    "gpt-5.4-nano-2026-03-17":   {"input": 0.20, "output": 1.25},
+    "claude-haiku-4-5-20251001": {"input": 1.00,  "output":  5.00},
+    "claude-sonnet-4-6":         {"input": 3.00,  "output": 15.00},
+    "gpt-5.4-nano-2026-03-17":   {"input": 0.20,  "output":  1.25},
 }
 
 

@@ -8,6 +8,8 @@ load_dotenv(override=True)
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 MODEL = "claude-haiku-4-5-20251001"
+WEB_MODEL = "claude-sonnet-4-6"
+WEB_MAX_TOKENS = 700
 
 
 def call_claude(system, user, mode="default", query_preview=""):
@@ -23,6 +25,30 @@ def call_claude(system, user, mode="default", query_preview=""):
     try:
         from logger import log_query
         log_query(MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
+    except Exception:
+        pass
+
+    return text
+
+
+def call_claude_web(system, user, mode="web", query_preview=""):
+    res = client.messages.create(
+        model=WEB_MODEL,
+        max_tokens=WEB_MAX_TOKENS,
+        system=system or "You are a helpful assistant.",
+        messages=[{"role": "user", "content": user}],
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+    )
+
+    # web search returns mixed content blocks — collect only text
+    text = "\n".join(
+        block.text for block in res.content
+        if hasattr(block, "text") and block.text
+    ).strip()
+
+    try:
+        from logger import log_query
+        log_query(WEB_MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
     except Exception:
         pass
 

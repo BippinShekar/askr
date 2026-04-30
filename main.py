@@ -6,7 +6,7 @@ from modes import MODES
 from context_loader import load_fast_context, load_snapshot
 from snapshot import snapshot_is_stale, build_snapshot
 from git_utils import get_diff_summary
-from client_claude import call_claude
+from client_claude import call_claude, call_claude_web
 from client_openai import call_openai
 from logger import check_budget
 from display import print_progress
@@ -75,12 +75,15 @@ QUESTION:
 {query}
 """
 
-    if llm == "claude":
+    if mode == "web":
+        res = call_claude_web(system, prompt, mode=mode, query_preview=query[:60])
+    elif llm == "claude":
         res = call_claude(system, prompt, mode=mode, query_preview=query[:60])
     else:
         res = call_openai(system, prompt, mode=mode, query_preview=query[:60])
 
-    result = compress(res)
+    max_lines = 14 if mode == "web" else 8
+    result = compress(res, max_lines=max_lines)
     _save_history(query, mode, result)
     _copy_to_clipboard(result)
     return result, mode
