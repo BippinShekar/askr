@@ -9,6 +9,7 @@ from git_utils import get_diff_summary
 from client_claude import call_claude
 from client_openai import call_openai
 from logger import check_budget
+from display import print_progress
 from utils import compress
 
 MODE_PREFIXES = list(MODES.keys())
@@ -45,7 +46,7 @@ def run(query, mode=None, llm=None):
     llm = llm or DEFAULT_LLM
 
     if snapshot_is_stale():
-        print("(updating snapshot...)")
+        print_progress("updating snapshot...")
         build_snapshot()
 
     fast_ctx = load_fast_context()
@@ -82,4 +83,4 @@ QUESTION:
     result = compress(res)
     _save_history(query, mode, result)
     _copy_to_clipboard(result)
-    return result
+    return result, mode

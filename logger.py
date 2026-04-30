@@ -6,8 +6,8 @@ from datetime import datetime, date
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".askr_log")
 
 COST_TABLE = {
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
-    "gpt-4o-mini":               {"input": 0.15, "output": 0.60},
+    "claude-haiku-4-5-20251001": {"input": 1,    "output": 5.00},
+    "gpt-5.4-nano-2026-03-17":   {"input": 0.20, "output": 1.25},
 }
 
 
@@ -31,14 +31,15 @@ def _today_spend():
 
 
 def check_budget(daily_limit):
+    from display import console
     spent = _today_spend()
     if spent >= daily_limit:
-        print(f"\n  askr: daily budget hit (${spent:.4f} / ${daily_limit:.2f})")
-        print(f"  Run 'ask log' to review usage. Reset tomorrow.\n")
+        console.print(f"\n  [bold red]✗ daily budget hit[/bold red] [dim](${spent:.4f} / ${daily_limit:.2f})[/dim]")
+        console.print("  [dim]run[/dim] [bold]ask log[/bold] [dim]to review. resets tomorrow.[/dim]\n")
         raise SystemExit(1)
     remaining = daily_limit - spent
     if remaining < daily_limit * 0.2:
-        print(f"  (budget warning: ${spent:.4f} spent today, ${remaining:.4f} left)")
+        console.print(f"  [yellow]⚠ budget low:[/yellow] [dim]${spent:.4f} spent today, ${remaining:.4f} left[/dim]")
 
 
 def log_query(model, input_tokens, output_tokens, mode, query_preview):
@@ -62,8 +63,10 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
 
 
 def show_summary():
+    from display import console, print_summary
+
     if not os.path.exists(LOG_PATH):
-        print("No usage logged yet.")
+        console.print("\n  [dim]no usage logged yet[/dim]\n")
         return
 
     entries = []
@@ -77,7 +80,7 @@ def show_summary():
                     pass
 
     if not entries:
-        print("No usage logged yet.")
+        console.print("\n  [dim]no usage logged yet[/dim]\n")
         return
 
     week_ago = time.time() - 7 * 86400
@@ -90,22 +93,8 @@ def show_summary():
     total_in = sum(e["in"] for e in recent)
     total_out = sum(e["out"] for e in recent)
 
-    print(f"\n{'─'*44}")
-    print(f"  askr — last 7 days ({len(recent)} queries)")
-    print(f"{'─'*44}")
-    print(f"  tokens in:   {total_in:,}")
-    print(f"  tokens out:  {total_out:,}")
-    print(f"  total cost:  ${total_cost:.4f}")
-    print(f"{'─'*44}")
-
     mode_counts = {}
     for e in recent:
         mode_counts[e["mode"]] = mode_counts.get(e["mode"], 0) + 1
-    for m, count in sorted(mode_counts.items(), key=lambda x: -x[1]):
-        print(f"  {m:<12} {count} queries")
 
-    print(f"{'─'*44}")
-    print(f"\n  last 5 queries:")
-    for e in entries[-5:]:
-        print(f"  [{e['ts']}] {e['mode']:<8} ${e['cost_usd']:.5f}  {e['q']}")
-    print()
+    print_summary(recent, entries, total_in, total_out, total_cost, mode_counts)

@@ -96,7 +96,8 @@ def build_snapshot(full=False):
         to_summarize = all_files
 
     if to_summarize:
-        print(f"  summarizing {len(to_summarize)} file(s)...")
+        from display import print_progress
+        print_progress(f"  summarizing {len(to_summarize)} file(s)...")
 
     updated = dict(existing_data)
     for path in to_summarize:
