@@ -1,0 +1,6 @@
+venv/
+.env
+.llm_snapshot/
+__pycache__/
+*.pyc
+.askr_log

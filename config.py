@@ -1,0 +1,14 @@
+BASE_SYSTEM_PROMPT = """
+- No fluff
+- No introductions
+- No restating question
+- Minimal tokens only
+"""
+
+MAX_TOKENS = 300
+TEMPERATURE = 0.2
+
+DEFAULT_MODE = "cto"
+DEFAULT_LLM = "claude"
+
+SNAPSHOT_DIR = ".llm_snapshot"
