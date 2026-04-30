@@ -29,7 +29,8 @@ def _changed_files_since(old_commit):
             ["git", "diff", "--name-only", old_commit, "HEAD"],
             stderr=subprocess.DEVNULL
         ).decode()
-        return {f.strip() for f in out.split("\n") if f.strip()}
+        # normalize to same format as os.walk: ./filename.py
+        return {os.path.join(".", f.strip()) for f in out.split("\n") if f.strip()}
     except Exception:
         return None
 
