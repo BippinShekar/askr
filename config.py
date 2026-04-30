@@ -12,3 +12,4 @@ DEFAULT_MODE = "cto"
 DEFAULT_LLM = "claude"
 
 SNAPSHOT_DIR = ".llm_snapshot"
+DAILY_BUDGET_USD = 1.00

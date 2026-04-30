@@ -1,15 +1,44 @@
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, date
 
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".askr_log")
 
-# Cost per 1M tokens (input/output) — approximate as of 2025
 COST_TABLE = {
     "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
     "gpt-4o-mini":               {"input": 0.15, "output": 0.60},
 }
+
+
+def _today_spend():
+    if not os.path.exists(LOG_PATH):
+        return 0.0
+    today = date.today().strftime("%Y-%m-%d")
+    total = 0.0
+    with open(LOG_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if entry.get("ts", "").startswith(today):
+                    total += entry.get("cost_usd", 0)
+            except Exception:
+                pass
+    return total
+
+
+def check_budget(daily_limit):
+    spent = _today_spend()
+    if spent >= daily_limit:
+        print(f"\n  askr: daily budget hit (${spent:.4f} / ${daily_limit:.2f})")
+        print(f"  Run 'ask log' to review usage. Reset tomorrow.\n")
+        raise SystemExit(1)
+    remaining = daily_limit - spent
+    if remaining < daily_limit * 0.2:
+        print(f"  (budget warning: ${spent:.4f} spent today, ${remaining:.4f} left)")
 
 
 def log_query(model, input_tokens, output_tokens, mode, query_preview):

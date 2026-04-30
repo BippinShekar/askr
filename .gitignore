@@ -4,3 +4,4 @@ venv/
 __pycache__/
 *.pyc
 .askr_log
+.askr_history
