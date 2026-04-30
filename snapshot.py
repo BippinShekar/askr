@@ -77,10 +77,12 @@ def build_snapshot(full=False):
 
     if not full and os.path.exists(SUMMARY_PATH) and os.path.exists(META_PATH):
         try:
-            meta = json.load(open(META_PATH))
+            with open(META_PATH) as f:
+                meta = json.load(f)
             old_commit = meta.get("commit")
-            for entry in json.load(open(SUMMARY_PATH)):
-                existing_data[entry.get("file")] = entry
+            with open(SUMMARY_PATH) as f:
+                for entry in json.load(f):
+                    existing_data[entry.get("file")] = entry
         except Exception:
             pass
 
@@ -103,7 +105,7 @@ def build_snapshot(full=False):
     all_file_set = set(all_files)
     data = [entry for path, entry in updated.items() if path in all_file_set]
 
-    _, reverse_graph = build_graph(all_files)
+    graph, reverse_graph = build_graph(all_files)
     git_freq = {f: _count_git_changes(f) for f in all_files}
     for entry in data:
         entry["_score"] = _score(entry, reverse_graph, git_freq)
@@ -113,7 +115,6 @@ def build_snapshot(full=False):
     with open(SUMMARY_PATH, "w") as f:
         json.dump(data, f, indent=2)
 
-    graph, _ = build_graph(all_files)
     with open(GRAPH_PATH, "w") as f:
         json.dump(graph, f, indent=2)
 
@@ -131,7 +132,8 @@ def build_snapshot(full=False):
 def snapshot_is_stale():
     if not os.path.exists(META_PATH) or not os.path.exists(SUMMARY_PATH):
         return True
-    meta = json.load(open(META_PATH))
+    with open(META_PATH) as f:
+        meta = json.load(f)
     try:
         if meta.get("commit") != get_last_commit():
             return True

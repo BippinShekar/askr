@@ -79,6 +79,7 @@ Prefix your query with a mode or skip it — no flags needed.
 | `debug:` | FIX + REASON (includes recent git diff) |
 | `sales:` | PITCH / ANGLE / HOOK |
 | `deep:` | clear explanation, no fluff |
+| `quick:` | 1–2 line answer, no structure |
 | *(none)* | defaults to `cto` format |
 
 ---
@@ -156,7 +157,7 @@ askr/
 ├── logger.py           # usage + cost tracking
 ├── utils.py            # output compression
 ├── install.sh          # global CLI installer
-└── .env.example        # key template
+└── .env.example        # API key template
 ```
 
 ---

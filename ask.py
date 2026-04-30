@@ -31,7 +31,8 @@ def init_project():
     gitignore = os.path.join(cwd, ".gitignore")
     entries = [".llm_snapshot/", ".askr_history"]
     if os.path.exists(gitignore):
-        existing = open(gitignore).read()
+        with open(gitignore) as f:
+            existing = f.read()
         additions = [e for e in entries if e not in existing]
         if additions:
             with open(gitignore, "a") as f:

@@ -9,6 +9,7 @@ MAX_TOKENS = 300
 TEMPERATURE = 0.2
 
 DEFAULT_MODE = "cto"
+FALLBACK_MODE = "quick"
 DEFAULT_LLM = "claude"
 
 SNAPSHOT_DIR = ".llm_snapshot"

@@ -1,5 +1,5 @@
 MODES = {
-    "default": "Answer in 1-2 lines only.",
+    "quick": "Answer in 1-2 lines only.",
     "debug": "Give fix + 1 line reason.",
     "deep": "Explain clearly but no fluff.",
 
