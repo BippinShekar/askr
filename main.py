@@ -1,7 +1,6 @@
 import re
 from config import BASE_SYSTEM_PROMPT, DEFAULT_MODE, DEFAULT_LLM
 from modes import MODES
-from classifier import classify
 from context_loader import load_fast_context, load_snapshot
 from snapshot import snapshot_is_stale, build_snapshot
 from git_utils import get_diff_summary
@@ -22,12 +21,7 @@ def parse_prefix(query):
 
 def run(query, mode=None, llm=None):
     query, prefix_mode = parse_prefix(query)
-    if not mode:
-        mode = prefix_mode
-    if not mode:
-        c = classify(query)
-        mode = c["mode"] if c["confidence"] > 0.6 else DEFAULT_MODE
-
+    mode = mode or prefix_mode or DEFAULT_MODE
     llm = llm or DEFAULT_LLM
 
     if snapshot_is_stale():
