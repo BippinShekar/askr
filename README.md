@@ -4,60 +4,137 @@ A fast, low-token, context-aware AI CLI over your local codebase.
 
 Not a chatbot. Not a wrapper.
 
-A context-aware reasoning layer over your codebase with enforced efficiency and structured outputs.
+Type a question from any project directory and get a structured answer grounded in your actual code — in under 3 seconds.
 
 ---
 
-## CORE PRINCIPLES
+## SETUP
 
-- Separate thinking (askr) from execution (Claude Code / Cursor)
-- Enforce structured, minimal outputs — no fluff
-- Always ground responses in repo context
-- Combine LLM intelligence with system signals (git, graph, files)
-- Keep latency low and UX frictionless (global CLI + hotkey)
-
----
-
-## USAGE
+**1. Clone and install**
 
 ```bash
-ask "cto: what's the best approach to add auth?"
-ask "ceo: should we build or buy the payment layer?"
-ask "debug: login keeps returning 401"
-ask "how does the snapshot system work?"
-ask snap
+git clone https://github.com/BippinShekar/askr.git
+cd askr
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-No flags. Prefix your query with the mode or skip it — askr figures it out.
+**2. Add your API keys**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in:
+
+```
+ANTHROPIC_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
+```
+
+Get keys at [console.anthropic.com](https://console.anthropic.com) and [platform.openai.com](https://platform.openai.com).
+
+**3. Make `ask` available globally**
+
+```bash
+bash install.sh
+source ~/.zshrc   # or restart your terminal
+```
+
+Now `ask` works from any directory.
+
+---
+
+## USING IN A PROJECT
+
+Go to any project and run this once:
+
+```bash
+cd ~/your-project
+ask init
+```
+
+This indexes your codebase (estimates cost upfront, adds askr files to your `.gitignore`). After that, just ask:
+
+```bash
+ask "cto: best way to structure the auth layer?"
+ask "ceo: should we build this feature or buy?"
+ask "debug: getting a 401 on every login attempt"
+ask "how does the payment flow work?"
+```
+
+Responses are auto-copied to your clipboard. Every Q&A is saved to `.askr_history` in your project directory.
 
 ---
 
 ## MODES
 
-| Mode | Output |
+Prefix your query with a mode or skip it — no flags needed.
+
+| Prefix | Output format |
 |---|---|
 | `cto:` | DECISION / APPROACH / TRADEOFF |
 | `ceo:` | DECISION / WHY / NEXT STEP |
-| `debug:` | FIX + REASON |
+| `debug:` | FIX + REASON (includes recent git diff) |
 | `sales:` | PITCH / ANGLE / HOOK |
 | `deep:` | clear explanation, no fluff |
-| *(none)* | 1–2 line answer |
+| *(none)* | defaults to `cto` format |
 
 ---
 
-## ARCHITECTURE
+## COMMANDS
+
+```bash
+ask "cto: ..."     # ask a question (any mode prefix)
+ask init           # index a new project (run once per project)
+ask snap           # force full snapshot rebuild
+ask log            # show this week's usage + cost
+```
+
+---
+
+## ITERM2 HOTKEY (optional)
+
+Set up a floating terminal that opens with `Cmd+B` from anywhere:
+
+1. iTerm2 → Preferences → Profiles → `+` → name it `askr`
+2. Under **General** → Command → set to `/bin/zsh`
+3. Under **Keys** → Configure Hotkey Window → check "Floating window"
+4. Assign hotkey `Cmd+B`
+
+Now `Cmd+B` drops a terminal in your current directory. Type your query, get your answer, close it.
+
+---
+
+## HOW IT WORKS
 
 ```
-User Input (ask "cto: ...")
-→ Mode parsed from prefix (or auto-classified)
-→ Snapshot freshness check
-→ Context gathered:
-    README / CLAUDE.md
-    Snapshot summaries (ranked by importance)
-    Dependency graph
-    Git diff (for debug mode)
-→ LLM call (Claude default / OpenAI fallback)
-→ Compressed output
+ask "cto: ..."
+→ mode parsed from prefix
+→ snapshot freshness checked (auto-refreshes on new commits)
+→ context loaded:
+    README / CLAUDE.md (first 1000 chars)
+    top-ranked file summaries (scored by importance + git frequency)
+    recent git diff (debug mode only)
+→ Claude Haiku call (300 token cap)
+→ answer compressed, copied to clipboard, saved to .askr_history
+```
+
+The snapshot is incremental — only files changed since the last git commit get re-summarized. First run on a new project does a full index.
+
+---
+
+## COST
+
+Using Claude Haiku (~$0.80/1M input tokens). Typical query: **~$0.001**. A full day of heavy use is under $0.10.
+
+Daily budget cap is set to `$1.00` in `config.py`. Adjust it there.
+
+Track your usage anytime:
+
+```bash
+ask log
 ```
 
 ---
@@ -66,97 +143,35 @@ User Input (ask "cto: ...")
 
 ```
 askr/
-├── ask.py              # CLI entry point
+├── ask.py              # CLI entry point (init / snap / log / query)
 ├── main.py             # core pipeline
-├── config.py           # global config
-├── modes.py            # output mode definitions
-├── classifier.py       # intent classifier (fallback)
-├── snapshot.py         # codebase snapshot builder
+├── config.py           # model, token limits, daily budget
+├── modes.py            # output format per mode
+├── snapshot.py         # incremental codebase indexer
 ├── graph.py            # AST dependency graph
-├── git_utils.py        # git diff + commit utilities
-├── context_loader.py   # loads README + snapshot
-├── client_claude.py    # Anthropic API client
-├── client_openai.py    # OpenAI API client
-├── utils.py            # compression + helpers
-├── requirements.txt
-├── install.sh          # global CLI install
-└── .llm_snapshot/
-    ├── summary.json    # file summaries (LLM-generated)
-    ├── graph.json      # dependency graph
-    └── meta.json       # last commit + timestamp
+├── git_utils.py        # git diff utilities
+├── context_loader.py   # loads README + ranked snapshot
+├── client_claude.py    # Anthropic SDK client
+├── client_openai.py    # OpenAI client (fallback)
+├── logger.py           # usage + cost tracking
+├── utils.py            # output compression
+├── install.sh          # global CLI installer
+└── .env.example        # key template
 ```
-
----
-
-## SETUP
-
-```bash
-git clone https://github.com/BippinShekar/askr.git
-cd askr
-pip install -r requirements.txt
-cp .env.example .env   # add your keys
-bash install.sh        # makes 'ask' available globally
-```
-
----
-
-## ITERM2 HOTKEY SETUP
-
-1. Open iTerm2 → Preferences → Profiles → create profile `askr`
-2. Set command: `ask`
-3. Keys → Configure Hotkey Window → bind `Cmd+B`
-4. Enable "Floating window" + "Open as hotkey window"
-
-Now `Cmd+B` from anywhere drops a terminal where you just type your query.
-
----
-
-## SNAPSHOT SYSTEM
-
-Snapshots are auto-built on first run and refreshed when:
-- The git commit hash changes
-- More than 24 hours have passed
-
-Manual rebuild:
-```bash
-ask snap
-```
-
----
-
-## FILE IMPORTANCE SCORING
-
-```
-Final Score =
-    0.5 × LLM importance_score
-  + 0.2 × graph centrality (incoming edges)
-  + 0.2 × git change frequency
-  + 0.1 × entry-point boost
-```
-
-Top-ranked files (3–6) are injected into context per query.
-
----
-
-## COST TRACKING
-
-Every query is logged to `.askr_log` with token count and estimated cost. Run `ask log` to see your weekly summary.
 
 ---
 
 ## LIMITATIONS
 
-- Graph is static (not true runtime tracing)
-- Snapshot quality depends on LLM summaries
+- Snapshot quality depends on LLM file summaries (Claude Haiku)
+- Graph is static AST, not runtime
+- macOS only for clipboard (`pbcopy`) — Linux users can swap in `xclip`
 - No function-level tracing yet
-- No semantic embedding search (yet)
 
 ---
 
 ## FUTURE
 
-- Streaming output + clipboard integration
-- Function-level dependency graph
-- LLM summary caching
-- Vector retrieval layer
-- Runtime instrumentation tracing
+- Brew tap for one-line install (`brew install askr`)
+- Web search in debug mode (for errors with no local context)
+- Per-project config file (`.askr` override for model, budget, modes)
