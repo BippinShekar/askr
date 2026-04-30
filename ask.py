@@ -7,20 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import run
 from snapshot import build_snapshot
-
-def show_log():
-    log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".askr_log")
-    if not os.path.exists(log_path):
-        print("No usage logged yet.")
-        return
-    with open(log_path) as f:
-        lines = f.readlines()
-    print(f"\n{'─'*40}")
-    print(f"  askr — last {min(20, len(lines))} queries")
-    print(f"{'─'*40}")
-    for line in lines[-20:]:
-        print(line.rstrip())
-    print(f"{'─'*40}\n")
+from logger import show_summary
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -36,7 +23,7 @@ if __name__ == "__main__":
         build_snapshot()
         print("Done.")
     elif cmd == "log":
-        show_log()
+        show_summary()
     else:
         query = " ".join(sys.argv[1:])
         print("\n" + run(query) + "\n")

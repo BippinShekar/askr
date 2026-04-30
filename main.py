@@ -61,8 +61,8 @@ QUESTION:
 """
 
     if llm == "claude":
-        res = call_claude(system, prompt)
+        res = call_claude(system, prompt, mode=mode, query_preview=query[:60])
     else:
-        res = call_openai(system, prompt)
+        res = call_openai(system, prompt, mode=mode, query_preview=query[:60])
 
     return compress(res)
