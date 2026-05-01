@@ -24,7 +24,7 @@ def print_response(result, mode):
     console.print()
     console.print(Markdown(result))
     console.print()
-    console.print("  [dim]✓ copied[/dim]")
+    console.print("  [green]✓ copied[/green]")
     console.print()
 
 

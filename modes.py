@@ -1,29 +1,48 @@
 MODES = {
-    "quick": "Answer in 1-2 lines only.",
-    "debug": "Give fix + 1 line reason.",
-    "deep": "Explain clearly but no fluff.",
+    "quick": "Answer in 1-2 lines only. No labels.",
 
-    "web": """Use web search for current information. Structure as:
-ANSWER: direct answer with current data
-SOURCE: where this comes from
-NOTE: any caveats about freshness or accuracy
+    "debug": """Format exactly:
+
+**FIX:** one line fix
+
+**REASON:** one line why
 """,
 
-    "ceo": """
-DECISION: 1 line
-WHY: 1 line
-NEXT STEP: 1 line
+    "deep": "Explain clearly. Use short paragraphs. No fluff.",
+
+    "web": """Search the web and answer with current data. Format exactly:
+
+**ANSWER:** direct answer with current data
+
+**SOURCE:** where this comes from
+
+**NOTE:** any caveats about freshness
 """,
 
-    "cto": """
-DECISION: 1 line
-APPROACH: 1–2 lines
-TRADEOFF: 1 line
+    "ceo": """Format exactly:
+
+**DECISION:** one line
+
+**WHY:** one line
+
+**NEXT STEP:** one line
 """,
 
-    "sales": """
-PITCH: 1–2 lines
-ANGLE: 1 line
-HOOK: 1 line
-"""
+    "cto": """Format exactly:
+
+**DECISION:** one line
+
+**APPROACH:** 1-2 lines
+
+**TRADEOFF:** one line
+""",
+
+    "sales": """Format exactly:
+
+**PITCH:** 1-2 lines
+
+**ANGLE:** one line
+
+**HOOK:** one line
+""",
 }

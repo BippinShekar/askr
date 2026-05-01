@@ -6,7 +6,7 @@ from modes import MODES
 from context_loader import load_fast_context, load_snapshot
 from snapshot import snapshot_is_stale, build_snapshot
 from git_utils import get_diff_summary
-from client_claude import call_claude, call_claude_web
+from client_claude import call_claude, call_claude_web, MODEL as CLAUDE_MODEL
 from client_openai import call_openai
 from logger import check_budget
 from display import print_progress
@@ -71,6 +71,9 @@ def run(query, mode=None, llm=None):
 FILES:
 {file_context}
 {git_context}
+RUNTIME:
+model={CLAUDE_MODEL}, cost=$1.00/1M input tokens $5.00/1M output tokens
+
 QUESTION:
 {query}
 """
