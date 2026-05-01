@@ -15,6 +15,40 @@ from utils import compress
 MODE_PREFIXES = list(MODES.keys())
 HISTORY_FILE = ".askr_history"
 
+# Narrow, high-signal phrases that almost always need live web data.
+# Deliberately specific — generic words like "current" or "latest" alone
+# would hit codebase questions and trigger expensive Sonnet calls.
+_WEB_SIGNALS = [
+    r"\bpric(e|ing|es)\b",
+    r"\bcost per\b",
+    r"\bper month\b",
+    r"\bhow much.{0,40}cost\b",
+    r"\bwhat.{0,10}(cost|charge|fee)\b",
+    r"\bsubscription\b",
+    r"\blatest version\b",
+    r"\bcurrent version\b",
+    r"\bchangelog\b",
+    r"\brelease notes?\b",
+    r"\bapi docs?\b",
+    r"\bofficial docs?\b",
+    r"\bhow to install\b",
+    r"\bnpm install\b",
+    r"\bpip install\b",
+    r"\bbrew install\b",
+    r"\bhttp [45]\d{2}\b",
+    r"\b[45]\d{2} error\b",
+    r"\bstatus code\b",
+    r"\bdeprecated\b",
+    r"\bwhat.s new in\b",
+    r"\bwhen was .+ released\b",
+]
+
+_WEB_PATTERN = re.compile("|".join(_WEB_SIGNALS), re.IGNORECASE)
+
+
+def _auto_web(query):
+    return bool(_WEB_PATTERN.search(query))
+
 
 def parse_prefix(query):
     pattern = r'^(' + '|'.join(MODE_PREFIXES) + r'):\s*'
@@ -44,6 +78,12 @@ def run(query, mode=None, llm=None):
     query, prefix_mode = parse_prefix(query)
     mode = mode or prefix_mode or DEFAULT_MODE
     llm = llm or DEFAULT_LLM
+
+    # Auto-upgrade to web search if query signals live data need,
+    # unless the user already set a non-default mode explicitly.
+    if mode == DEFAULT_MODE and prefix_mode is None and _auto_web(query):
+        mode = "web"
+        print_progress("auto: web search triggered")
 
     if snapshot_is_stale():
         print_progress("updating snapshot...")
