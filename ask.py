@@ -2,6 +2,7 @@
 
 import sys
 import os
+import getpass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -9,6 +10,36 @@ from main import run
 from snapshot import build_snapshot
 from logger import show_summary
 from display import console, print_progress, print_init, print_response
+
+
+def setup_keys():
+    config_dir = os.path.expanduser("~/.config/askr")
+    env_file = os.path.join(config_dir, ".env")
+
+    console.print()
+    console.rule("[bold]askr setup[/]", style="dim")
+
+    if os.path.exists(env_file):
+        console.print(f"  [dim]keys already saved at[/dim] {env_file}")
+        console.print("  [dim]delete that file to reconfigure[/dim]\n")
+        return
+
+    console.print(f"  [dim]saving to[/dim] {env_file}\n")
+
+    anthropic_key = getpass.getpass("  ANTHROPIC_API_KEY: ").strip()
+    if not anthropic_key:
+        console.print("  [red]✗ anthropic key required[/red]\n")
+        raise SystemExit(1)
+
+    openai_key = getpass.getpass("  OPENAI_API_KEY (optional — press enter to skip): ").strip()
+
+    os.makedirs(config_dir, exist_ok=True)
+    with open(env_file, "w") as f:
+        f.write(f"ANTHROPIC_API_KEY={anthropic_key}\n")
+        if openai_key:
+            f.write(f"OPENAI_API_KEY={openai_key}\n")
+
+    console.print("\n  [green]✓ saved[/green]  [dim]now run[/dim] [bold]ask init[/bold] [dim]in your project\n[/dim]")
 
 
 def init_project():
@@ -42,6 +73,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]context-aware codebase Q&A[/dim]")
         console.print("\n  [dim]ask \"cto: your question\"[/dim]")
+        console.print("  [dim]ask setup[/dim]")
         console.print("  [dim]ask init[/dim]")
         console.print("  [dim]ask snap[/dim]")
         console.print("  [dim]ask log[/dim]\n")
@@ -49,7 +81,9 @@ if __name__ == "__main__":
 
     cmd = sys.argv[1]
 
-    if cmd == "init":
+    if cmd == "setup":
+        setup_keys()
+    elif cmd == "init":
         init_project()
     elif cmd == "snap":
         print_progress("rebuilding snapshot...")
