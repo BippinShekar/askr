@@ -72,7 +72,7 @@ FILES:
 {file_context}
 {git_context}
 RUNTIME:
-model={CLAUDE_MODEL}, cost=$1.00/1M input tokens $5.00/1M output tokens
+date={datetime.now().strftime("%Y-%m-%d")}, model={CLAUDE_MODEL}, cost=$1.00/1M input tokens $5.00/1M output tokens
 
 QUESTION:
 {query}
