@@ -1,4 +1,6 @@
 MODES = {
+    "default": "Answer the question directly. Match the format and tone to what is being asked — no rigid structure. Use codebase context when relevant.",
+
     "quick": "Answer in 1-2 lines only. No labels.",
 
     "debug": """Format exactly:

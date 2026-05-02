@@ -8,7 +8,7 @@ BASE_SYSTEM_PROMPT = """
 MAX_TOKENS = 300
 TEMPERATURE = 0.2
 
-DEFAULT_MODE = "cto"
+DEFAULT_MODE = "default"
 FALLBACK_MODE = "quick"
 DEFAULT_LLM = "claude"
 
