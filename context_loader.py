@@ -22,3 +22,17 @@ def load_snapshot(top_k=6):
         data = json.load(f)
     data.sort(key=lambda x: x.get("_score", 0), reverse=True)
     return data[:top_k]
+
+
+def load_file_contents(snapshot, chars_per_file=1500):
+    """Return dict of file path → truncated content for files in snapshot."""
+    contents = {}
+    for entry in snapshot:
+        path = entry.get("file", "")
+        if path and os.path.exists(path):
+            try:
+                with open(path, errors="ignore") as f:
+                    contents[path] = f.read(chars_per_file)
+            except Exception:
+                pass
+    return contents

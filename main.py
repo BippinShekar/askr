@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 from config import BASE_SYSTEM_PROMPT, DEFAULT_MODE, DEFAULT_LLM, DAILY_BUDGET_USD
 from modes import MODES
-from context_loader import load_fast_context, load_snapshot
+from context_loader import load_fast_context, load_snapshot, load_file_contents
 from snapshot import snapshot_is_stale, build_snapshot
 from git_utils import get_diff_summary
 from client_claude import call_claude, call_claude_web, MODEL as CLAUDE_MODEL
@@ -91,11 +91,17 @@ def run(query, mode=None, llm=None):
 
     fast_ctx = load_fast_context()
     snapshot = load_snapshot()
+    file_contents = load_file_contents(snapshot)
 
-    file_context = "\n".join([
-        f"{f.get('file')} (score:{f.get('_score', 0):.2f}): {f.get('purpose', '')}"
-        for f in snapshot
-    ])
+    file_sections = []
+    for f in snapshot:
+        path = f.get("file", "")
+        header = f"FILE: {path} (score:{f.get('_score', 0):.2f})\nPURPOSE: {f.get('purpose', '')}"
+        content = file_contents.get(path, "")
+        if content:
+            header += f"\n---\n{content}"
+        file_sections.append(header)
+    file_context = "\n\n".join(file_sections)
 
     git_context = ""
     if mode == "debug":
