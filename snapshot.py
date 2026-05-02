@@ -76,7 +76,7 @@ def _score(entry, reverse_graph, git_freq):
     return 0.5 * llm_score + 0.2 * centrality + 0.2 * git_score + 0.1 * is_entry
 
 
-def build_snapshot(full=False):
+def build_snapshot(full=False, show_progress=False):
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
     all_files = _collect_files()
 
@@ -103,13 +103,21 @@ def build_snapshot(full=False):
     else:
         to_summarize = all_files
 
-    if to_summarize:
-        from display import print_progress
-        print_progress(f"  summarizing {len(to_summarize)} file(s)...")
-
     updated = dict(existing_data)
-    for path in to_summarize:
-        updated[path] = summarize_file(path)
+
+    if to_summarize:
+        if show_progress:
+            from display import make_progress_bar
+            progress, task = make_progress_bar(len(to_summarize))
+            with progress:
+                for path in to_summarize:
+                    updated[path] = summarize_file(path)
+                    progress.advance(task)
+        else:
+            from display import print_progress
+            print_progress(f"  summarizing {len(to_summarize)} file(s)...")
+            for path in to_summarize:
+                updated[path] = summarize_file(path)
 
     all_file_set = set(all_files)
     data = [entry for path, entry in updated.items() if path in all_file_set]

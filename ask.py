@@ -52,8 +52,9 @@ def init_project():
         count += sum(1 for f in files if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h")))
 
     est_cost = count * 0.0012
-    print_init(cwd, count, est_cost)
-    build_snapshot(full=True)
+    est_secs = count * 1.5
+    print_init(cwd, count, est_cost, est_secs)
+    build_snapshot(full=True, show_progress=True)
 
     gitignore = os.path.join(cwd, ".gitignore")
     entries = [".llm_snapshot/", ".askr_history"]

@@ -2,6 +2,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.rule import Rule
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn, SpinnerColumn
 from rich import box
 
 console = Console(highlight=False)
@@ -36,13 +37,30 @@ def print_error(msg):
     console.print(f"[bold red]✗[/bold red] {msg}")
 
 
-def print_init(cwd, count, est_cost):
+def print_init(cwd, count, est_cost, est_secs):
+    mins, secs = divmod(int(est_secs), 60)
+    time_str = f"{mins}m {secs}s" if mins else f"~{secs}s"
     console.print()
     console.rule("[bold]askr init[/]", style="dim")
     console.print(f"  [dim]directory[/dim]  {cwd}")
     console.print(f"  [dim]files[/dim]      {count}")
     console.print(f"  [dim]est. cost[/dim]  ~${est_cost:.3f}")
+    console.print(f"  [dim]est. time[/dim]  {time_str}")
     console.print()
+
+
+def make_progress_bar(total):
+    progress = Progress(
+        SpinnerColumn(style="dim"),
+        TextColumn("  [dim]{task.description}[/dim]"),
+        BarColumn(bar_width=36, style="dim", complete_style="green"),
+        TextColumn("[green]{task.completed}[/green][dim]/{task.total}[/dim]"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False,
+    )
+    task = progress.add_task("indexing", total=total)
+    return progress, task
 
 
 def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts):
