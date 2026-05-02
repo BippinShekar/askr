@@ -131,7 +131,7 @@ QUESTION:
     else:
         res = call_openai(system, prompt, mode=mode, query_preview=query[:60])
 
-    max_lines = 14 if mode == "web" else 8
+    max_lines = 14 if mode == "web" else (5 if mode == "default" else 8)
     result = compress(res, max_lines=max_lines)
     _save_history(query, mode, result)
     _copy_to_clipboard(result)

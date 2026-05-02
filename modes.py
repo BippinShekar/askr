@@ -1,5 +1,5 @@
 MODES = {
-    "default": "Answer the question directly. Match the format and tone to what is being asked — no rigid structure. Use codebase context when relevant.",
+    "default": "Answer in 2-3 sentences max. Lead with yes or no if applicable. No numbered lists, no headers. Use codebase context when relevant.",
 
     "quick": "Answer in 1-2 lines only. No labels.",
 
