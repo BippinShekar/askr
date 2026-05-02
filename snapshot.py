@@ -45,6 +45,14 @@ def _count_git_changes(path):
         return 0
 
 
+def _parse_json(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        text = text.rsplit("```", 1)[0]
+    return json.loads(text.strip())
+
+
 def summarize_file(path):
     content = open(path, "r", errors="ignore").read()[:2000]
     prompt = f"""Summarize this file in JSON with keys: file, purpose, key_components (list), dependencies (list), importance_score (0-10).
@@ -53,7 +61,7 @@ Return only valid JSON, no markdown.
 {content}"""
     res = call_claude("Return only valid JSON. No markdown.", prompt)
     try:
-        data = json.loads(res)
+        data = _parse_json(res)
         data["file"] = path
         return data
     except Exception:
