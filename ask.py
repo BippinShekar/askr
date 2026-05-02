@@ -49,7 +49,7 @@ def init_project():
     count = 0
     for _, dirs, files in os.walk("."):
         dirs[:] = [d for d in dirs if d not in skip and not d.startswith(".")]
-        count += sum(1 for f in files if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx")))
+        count += sum(1 for f in files if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h")))
 
     est_cost = count * 0.0012
     print_init(cwd, count, est_cost)

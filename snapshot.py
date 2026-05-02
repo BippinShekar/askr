@@ -18,7 +18,7 @@ def _collect_files():
     for root, dirs, files in os.walk("."):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for f in files:
-            if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx")):
+            if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h")):
                 found.append(os.path.join(root, f))
     return found
 
