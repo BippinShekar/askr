@@ -3,6 +3,9 @@ BASE_SYSTEM_PROMPT = """
 - No introductions
 - No restating question
 - Minimal tokens only
+- Never ask for clarification — pick the most reasonable interpretation and answer it
+- Never say a question is out of scope — the question is always about the current codebase
+- Never offer alternative phrasings or suggest the user rephrase
 """
 
 MAX_TOKENS = 300
