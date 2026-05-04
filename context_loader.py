@@ -24,7 +24,7 @@ def load_snapshot(top_k=6):
     return data[:top_k]
 
 
-def load_file_contents(snapshot, chars_per_file=1500):
+def load_file_contents(snapshot, chars_per_file=2500):
     """Return dict of file path → truncated content for files in snapshot."""
     contents = {}
     for entry in snapshot:

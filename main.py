@@ -96,11 +96,14 @@ def run(query, mode=None, llm=None):
     file_sections = []
     for f in snapshot:
         path = f.get("file", "")
-        header = f"FILE: {path} (score:{f.get('_score', 0):.2f})\nPURPOSE: {f.get('purpose', '')}"
+        parts = [f"FILE: {path} (score:{f.get('_score', 0):.2f})", f"PURPOSE: {f.get('purpose', '')}"]
+        components = f.get("key_components", [])
+        if components:
+            parts.append("IMPLEMENTS: " + ", ".join(components))
         content = file_contents.get(path, "")
         if content:
-            header += f"\n---\n{content}"
-        file_sections.append(header)
+            parts.append(f"---\n{content}")
+        file_sections.append("\n".join(parts))
     file_context = "\n\n".join(file_sections)
 
     git_context = ""
