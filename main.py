@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 from config import BASE_SYSTEM_PROMPT, DEFAULT_MODE, DEFAULT_LLM, DAILY_BUDGET_USD
 from modes import MODES
-from context_loader import load_fast_context, load_snapshot, load_file_contents
+from context_loader import load_fast_context, load_snapshot, load_file_contents, load_inventory
 from snapshot import snapshot_is_stale, build_snapshot
 from git_utils import get_diff_summary
 from client_claude import call_claude, call_claude_web, MODEL as CLAUDE_MODEL
@@ -90,6 +90,7 @@ def run(query, mode=None, llm=None):
         build_snapshot()
 
     fast_ctx = load_fast_context()
+    inventory = load_inventory()
     snapshot = load_snapshot()
     file_contents = load_file_contents(snapshot)
 
@@ -117,7 +118,10 @@ def run(query, mode=None, llm=None):
     prompt = f"""CONTEXT:
 {fast_ctx}
 
-FILES:
+ALL FILES (already implemented):
+{inventory}
+
+TOP FILES (detail):
 {file_context}
 {git_context}
 RUNTIME:

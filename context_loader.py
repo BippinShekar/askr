@@ -24,6 +24,17 @@ def load_snapshot(top_k=6):
     return data[:top_k]
 
 
+def load_inventory():
+    """One-liner summary of every file in the snapshot — gives LLM the full picture."""
+    if not os.path.exists(SUMMARY_PATH):
+        return ""
+    with open(SUMMARY_PATH) as f:
+        data = json.load(f)
+    data.sort(key=lambda x: x.get("_score", 0), reverse=True)
+    lines = [f"{d.get('file')} — {d.get('purpose', '')}" for d in data]
+    return "\n".join(lines)
+
+
 def load_file_contents(snapshot, chars_per_file=2500):
     """Return dict of file path → truncated content for files in snapshot."""
     contents = {}
