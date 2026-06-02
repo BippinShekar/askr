@@ -4,11 +4,12 @@ Building in public. Updated as work progresses.
 
 ---
 
-## Phase 0 — Already Shipped
+## Phase 0 — Complete ✅
 
-**The ask CLI**
+**The ask CLI + package restructure**
 
 A fast, low-token, codebase-aware Q&A tool. The fallback layer during Claude Code quota resets.
+Restructured into a proper Python package ready for Phase 1 expansion.
 
 | Feature | Status |
 |---|---|
@@ -21,6 +22,13 @@ A fast, low-token, codebase-aware Q&A tool. The fallback layer during Claude Cod
 | Auto-copy to clipboard | ✅ Done |
 | `.askr_history` per project | ✅ Done |
 | Global install via `install.sh` | ✅ Done |
+| Package structure (`askr/`) | ✅ Done |
+| Concurrent snapshot (6x faster, ThreadPoolExecutor) | ✅ Done |
+| Multi-language dependency graph (TS/JS/Go/Ruby/Rust/Swift) | ✅ Done |
+| Clean pipeline (no hardcoded strings) | ✅ Done |
+| Log moved to `~/.config/askr/usage.log` (global, not per-project) | ✅ Done |
+| `askr` CLI stub (session orchestration placeholder) | ✅ Done |
+| Phase 1 module stubs (session/, hooks/, state/, notifications/) | ✅ Done |
 
 ---
 
