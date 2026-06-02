@@ -1,7 +1,7 @@
 import os
 from anthropic import Anthropic
-from config import MAX_TOKENS, TEMPERATURE
-import env
+from askr.utils.config import MAX_TOKENS, TEMPERATURE
+from askr.utils import env
 
 env.load()
 
@@ -17,7 +17,7 @@ def _get_client():
     if _client is None:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            from display import console
+            from askr.utils.display import console
             console.print("\n  [bold red]✗ ANTHROPIC_API_KEY not set[/bold red]")
             console.print("  run [bold]ask setup[/bold] to configure your keys\n")
             raise SystemExit(1)
@@ -36,7 +36,7 @@ def call_claude(system, user, mode="default", query_preview=""):
     text = res.content[0].text
 
     try:
-        from logger import log_query
+        from askr.utils.logger import log_query
         log_query(MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
     except Exception:
         pass
@@ -59,7 +59,7 @@ def call_claude_web(system, user, mode="web", query_preview=""):
     ).strip()
 
     try:
-        from logger import log_query
+        from askr.utils.logger import log_query
         log_query(WEB_MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
     except Exception:
         pass

@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
-from config import MAX_TOKENS, TEMPERATURE
-import env
+from askr.utils.config import MAX_TOKENS, TEMPERATURE
+from askr.utils import env
 
 env.load()
 
@@ -15,7 +15,7 @@ def _get_client():
     if _client is None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            from display import console
+            from askr.utils.display import console
             console.print("\n  [bold red]✗ OPENAI_API_KEY not set[/bold red]")
             console.print("  run [bold]ask setup[/bold] to configure your keys\n")
             raise SystemExit(1)
@@ -36,7 +36,7 @@ def call_openai(system, user, mode="default", query_preview=""):
     text = res.choices[0].message.content
 
     try:
-        from logger import log_query
+        from askr.utils.logger import log_query
         log_query(MODEL, res.usage.prompt_tokens, res.usage.completion_tokens, mode, query_preview)
     except Exception:
         pass
