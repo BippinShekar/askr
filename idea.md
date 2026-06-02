@@ -8,8 +8,8 @@
 
 Askr exists to solve two problems that happen simultaneously when building with Claude Code:
 
-1. Sessions exhaust — context fills, quota runs out, work stops
-2. Teams drift — one developer doesn't know what the other built
+1. Sessions exhaust  - context fills, quota runs out, work stops
+2. Teams drift  - one developer doesn't know what the other built
 
 Both problems share one solution: structured, persistent project state that Claude always knows about, that git always tracks, and that any session can resume from.
 
@@ -36,7 +36,7 @@ A reliability layer that makes Claude Code viable for serious, long-horizon work
 
 # What Already Exists
 
-The `ask` CLI — already built, already working:
+The `ask` CLI  - already built, already working:
 
 ```bash
 ask "cto: best way to structure the auth layer?"
@@ -60,7 +60,7 @@ Claude Code has two simultaneous limits:
 
 **Context window** (~200k tokens default)
 - Fills up as the session grows
-- When full, Claude auto-compacts — lossy, retains ~20-30% of details
+- When full, Claude auto-compacts  - lossy, retains ~20-30% of details
 - Quality degrades before this: circular reasoning starts at 20% fill, forgotten decisions at 40%
 
 **5-hour quota window** (per plan tier)
@@ -121,7 +121,7 @@ Claude continues from exact next step
 
 **Why intercept instead of letting Claude compact?**
 
-Claude's auto-compact is lossy — it summarises everything and discards ~70-80% of detail. Askr's handover.md captures 100% of what matters in a structured format Claude can act on immediately.
+Claude's auto-compact is lossy  - it summarises everything and discards ~70-80% of detail. Askr's handover.md captures 100% of what matters in a structured format Claude can act on immediately.
 
 This can happen multiple times inside a single 5-hour quota window.
 
@@ -154,7 +154,7 @@ New session reads handover.md
 Claude continues from exact next step
 ```
 
-This is the overnight scenario. Deterministic — Askr knows exactly when the window resets.
+This is the overnight scenario. Deterministic  - Askr knows exactly when the window resets.
 
 ---
 
@@ -170,7 +170,7 @@ Askr ⚠  ctx:50%  quota:71%
 
 Developer sees it. Keeps working. Askr keeps watching.
 
-The threshold for Trigger A is ~90% — before compaction fires.
+The threshold for Trigger A is ~90%  - before compaction fires.
 The threshold for Trigger B is quota pace ahead of time remaining by a configurable margin.
 
 ---
@@ -396,7 +396,7 @@ The moment that creates word of mouth.
 Developer leaves Claude working. Goes to bed. Askr manages all session transitions overnight. Wakes up to:
 
 ```
-Askr — Night Report
+Askr  - Night Report
 
 Sessions:     6
 Duration:     4h 23m
@@ -443,7 +443,7 @@ Choose reliability.
 
 Always.
 
-One false checkpoint — one interruption at the wrong time — and developers uninstall.
+One false checkpoint  - one interruption at the wrong time  - and developers uninstall.
 
 Zero misfires is the standard.
 

@@ -1,4 +1,4 @@
-# Phase 1 — Discord Notification Engine
+# Phase 1  - Discord Notification Engine
 #
 # Sends structured webhook messages to a configured Discord channel.
 #

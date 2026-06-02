@@ -27,7 +27,7 @@ chmod +x "$ASKR_BIN"
 SHELL_RC="$HOME/.zshrc"
 if ! grep -q '"$HOME/bin:$PATH"' "$SHELL_RC" 2>/dev/null; then
     echo 'export PATH="$HOME/bin:$PATH"' >> "$SHELL_RC"
-    echo "Added ~/bin to PATH in $SHELL_RC — restart your shell or run: source $SHELL_RC"
+    echo "Added ~/bin to PATH in $SHELL_RC  - restart your shell or run: source $SHELL_RC"
 fi
 
-echo "askr installed — ask for Q&A, askr for session management."
+echo "askr installed  - ask for Q&A, askr for session management."

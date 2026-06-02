@@ -1,4 +1,4 @@
-# Phase 1 — Dual Forecast Engine
+# Phase 1  - Dual Forecast Engine
 #
 # Tracks two independent burn rates:
 #

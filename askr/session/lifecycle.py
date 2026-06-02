@@ -1,4 +1,4 @@
-# Phase 1 — Session Lifecycle Engine
+# Phase 1  - Session Lifecycle Engine
 #
 # Handles two distinct resume paths:
 #

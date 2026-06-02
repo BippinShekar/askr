@@ -4,7 +4,7 @@ Building in public. Updated as work progresses.
 
 ---
 
-## Phase 0 — Complete ✅
+## Phase 0  - Complete ✅
 
 **The ask CLI + package restructure**
 
@@ -32,7 +32,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 1 — Core State Loop
+## Phase 1  - Core State Loop
 
 **Goal:** Both developers' Claude sessions always start informed. State persists across sessions via git. No manual handoff needed.
 
@@ -41,7 +41,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Feature | Status |
 |---|---|
 | State file structure (`handover.md`, `decisions.md`, `architecture.md`, `current_task.md`, `implementation_state.md`, `blockers.md`) | 🔲 Todo |
-| `askr init` command — creates state files, installs hooks | 🔲 Todo |
+| `askr init` command  - creates state files, installs hooks | 🔲 Todo |
 | `UserPromptSubmit` hook → updates `current_task.md` | 🔲 Todo |
 | `PostToolUse` hook → updates `implementation_state.md` | 🔲 Todo |
 | `Stop` hook → writes `handover.md`, commits state, pushes | 🔲 Todo |
@@ -54,7 +54,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 2 — Session Orchestration
+## Phase 2  - Session Orchestration
 
 **Goal:** Askr intercepts before Claude degrades or quota runs out. Both triggers working autonomously.
 
@@ -78,7 +78,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 3 — Morning Report + Notifications
+## Phase 3  - Morning Report + Notifications
 
 **Goal:** The wow moment. The tweet screenshot. The thing that makes people want it.
 
@@ -98,7 +98,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 4 — Public Launch
+## Phase 4  - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
 
@@ -118,7 +118,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 5 — Hardening (Post-Launch)
+## Phase 5  - Hardening (Post-Launch)
 
 **Goal:** Zero misfires. Trust is the product.
 
@@ -143,7 +143,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 - State files committed to git. Team sync is a core feature, not an add-on.
 - `ask` CLI confirmed as the fallback Q&A layer during quota resets. Already shipped.
 - Per-developer file naming to prevent merge conflicts during simultaneous work.
-- decisions.md is append-only + timestamped — conflict-free by design.
+- decisions.md is append-only + timestamped  - conflict-free by design.
 - Business model: irrelevant for now. Build in public, get stars, establish reputation.
 
 ---

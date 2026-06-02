@@ -29,7 +29,7 @@ def setup_keys():
         console.print("  [red]✗ anthropic key required[/red]\n")
         raise SystemExit(1)
 
-    openai_key = getpass.getpass("  OPENAI_API_KEY (optional — press enter to skip): ").strip()
+    openai_key = getpass.getpass("  OPENAI_API_KEY (optional  - press enter to skip): ").strip()
 
     os.makedirs(config_dir, exist_ok=True)
     with open(env_file, "w") as f:
@@ -53,7 +53,7 @@ def init_project():
         })
 
     est_cost = count * 0.0012
-    est_secs = count * 0.4  # concurrent — roughly 6x faster than sequential
+    est_secs = count * 0.4  # concurrent  - roughly 6x faster than sequential
     print_init(cwd, count, est_cost, est_secs)
     build_snapshot(full=True, show_progress=True)
 
@@ -68,7 +68,7 @@ def init_project():
                 f.write("\n# askr\n" + "\n".join(additions) + "\n")
             console.print(f"  [dim]added to .gitignore:[/dim] {', '.join(additions)}")
 
-    console.print("\n  [dim]done — run[/dim] [bold]ask \"your question\"[/bold] [dim]to start[/dim]\n")
+    console.print("\n  [dim]done  - run[/dim] [bold]ask \"your question\"[/bold] [dim]to start[/dim]\n")
 
 
 def main():

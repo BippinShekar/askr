@@ -4,10 +4,10 @@
 
 Two problems. One tool.
 
-1. **Session exhaustion** — Claude hits context or quota limits mid-task. Work stops. Recovery is manual and painful.
-2. **Team drift** — your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
+1. **Session exhaustion**  - Claude hits context or quota limits mid-task. Work stops. Recovery is manual and painful.
+2. **Team drift**  - your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
 
-Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps your project state in git so both developers are always in sync — no Slack, no standups, no re-explaining.
+Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps your project state in git so both developers are always in sync  - no Slack, no standups, no re-explaining.
 
 > Claude may stop. Work must not.
 
@@ -17,9 +17,9 @@ Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, 
 
 Askr runs two things in parallel:
 
-**Session Orchestration** — hooks into Claude Code's lifecycle. Monitors context fill and quota burn rate simultaneously. Intercepts before Claude's lossy auto-compaction fires. Writes a complete `handover.md`. Starts a fresh session immediately (context reset) or waits for quota reset and resumes automatically.
+**Session Orchestration**  - hooks into Claude Code's lifecycle. Monitors context fill and quota burn rate simultaneously. Intercepts before Claude's lossy auto-compaction fires. Writes a complete `handover.md`. Starts a fresh session immediately (context reset) or waits for quota reset and resumes automatically.
 
-**Project State** — maintains a set of structured markdown files (architecture, decisions, current task, implementation state) that get committed to git on every checkpoint. Both developers pull this state at session start. Claude reads it automatically. Your co-founder's Claude knows what you built last night.
+**Project State**  - maintains a set of structured markdown files (architecture, decisions, current task, implementation state) that get committed to git on every checkpoint. Both developers pull this state at session start. Claude reads it automatically. Your co-founder's Claude knows what you built last night.
 
 ---
 
@@ -68,7 +68,7 @@ Fast, low-token (~$0.001/query), grounded in your actual codebase snapshot. Work
 The `ask` CLI is shipped and working. Session orchestration is in active development.
 
 **Working now:**
-- `ask` — codebase Q&A via Claude Haiku or OpenAI
+- `ask`  - codebase Q&A via Claude Haiku or OpenAI
 - Incremental codebase snapshots
 - Multi-mode responses (cto / ceo / debug / sales / deep / quick / web)
 - Usage + cost tracking
@@ -144,7 +144,7 @@ Askr ↺ Resumed  saved:47min         ← restored
 ## Morning Report (Coming Soon)
 
 ```
-Askr — Night Report
+Askr  - Night Report
 
 Sessions:    6
 Duration:    4h 23m
@@ -208,6 +208,6 @@ askr/
 
 ## Building in Public
 
-Following development on [Twitter/X](https://x.com) — real usage, real numbers, real problems.
+Following development on [Twitter/X](https://x.com)  - real usage, real numbers, real problems.
 
 Contributions welcome. Open an issue or PR.

@@ -30,7 +30,7 @@ def load_inventory():
     with open(SUMMARY_PATH) as f:
         data = json.load(f)
     data.sort(key=lambda x: x.get("_score", 0), reverse=True)
-    lines = [f"{d.get('file')} — {d.get('purpose', '')}" for d in data]
+    lines = [f"{d.get('file')}  - {d.get('purpose', '')}" for d in data]
     return "\n".join(lines)
 
 

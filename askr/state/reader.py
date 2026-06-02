@@ -1,4 +1,4 @@
-# Phase 1 — State File Reader
+# Phase 1  - State File Reader
 #
 # Reads state files and formats them for injection into Claude session context.
 #

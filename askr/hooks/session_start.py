@@ -1,4 +1,4 @@
-# Claude Code Hook — SessionStart
+# Claude Code Hook  - SessionStart
 #
 # Fires at the start of every Claude Code session.
 #

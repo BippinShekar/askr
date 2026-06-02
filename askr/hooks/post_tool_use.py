@@ -1,4 +1,4 @@
-# Claude Code Hook — PostToolUse
+# Claude Code Hook  - PostToolUse
 #
 # Fires after every tool execution.
 #

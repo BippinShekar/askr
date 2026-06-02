@@ -1,4 +1,4 @@
-# Claude Code Hook — UserPromptSubmit
+# Claude Code Hook  - UserPromptSubmit
 #
 # Fires on every user message before Claude responds.
 #

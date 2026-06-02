@@ -1,4 +1,4 @@
-# Claude Code Hook — Stop
+# Claude Code Hook  - Stop
 #
 # Fires when Claude Code session ends (user stops, session interrupted, etc.)
 #

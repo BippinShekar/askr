@@ -65,7 +65,7 @@ def make_progress_bar(total):
 
 def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts):
     console.print()
-    console.rule("[bold]askr — last 7 days[/]", style="dim")
+    console.rule("[bold]askr  - last 7 days[/]", style="dim")
     console.print()
 
     stats = Table(box=None, show_header=False, padding=(0, 2), show_edge=False)
