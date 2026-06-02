@@ -9,6 +9,9 @@ Last active: 2026-06-02 17:56
 
 ### In Progress
 
+- [18:45] Ran: git add roadmap.md && git commit -m "docs: sync roadmap with actual build state 
+- [18:45] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [18:44] Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | grep -v __pycache__ | sort &
 - [18:40] Ran: git add -A && git commit -m "fix: strip IDE metadata tags from prompts before wr
 - [18:40] Modified: /Users/bippin/Desktop/askr/askr/state/templates/current_task_template.md
 - [18:40] Modified: /Users/bippin/Desktop/askr/askr_state/current_task_bippin.md
