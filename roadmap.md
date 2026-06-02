@@ -47,38 +47,39 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | `architecture.md` | Shared, last-write-wins | Occasional, easy to resolve |
 | `blockers.md` | Shared, last-write-wins | Occasional, easy to resolve |
 
-**Stage P1-1: State file templates + developer config**
+**Stage P1-1: State file templates + developer config** - done
 
 | Task | Status |
 |---|---|
-| `askr/state/templates/` with all 6 template files | 🔲 Todo |
-| `askr/state/config.py` - load developer name from `~/.config/askr/config.json` | 🔲 Todo |
+| `askr/state/templates/` with all 6 template files | ✅ Done |
+| `askr/state/config.py` - load developer name from `~/.config/askr/config.json` | ✅ Done |
 
-**Stage P1-2: State writer + reader**
-
-| Task | Status |
-|---|---|
-| `askr/state/writer.py` - write/append to all state files | 🔲 Todo |
-| `askr/state/reader.py` - load + format state for Claude context injection | 🔲 Todo |
-
-**Stage P1-3: Claude Code hooks**
+**Stage P1-2: State writer + reader** - done
 
 | Task | Status |
 |---|---|
-| `SessionStart` hook - git pull, inject state into context | 🔲 Todo |
-| `UserPromptSubmit` hook - update `current_task_<dev>.md` | 🔲 Todo |
-| `PostToolUse` hook - update `implementation_state.md` developer section | 🔲 Todo |
-| `Stop` hook - generate `handover_<dev>.md`, git commit + push | 🔲 Todo |
-| `PreCompact` hook - emergency checkpoint fallback | 🔲 Todo |
+| `askr/state/writer.py` - write/append to all state files | ✅ Done |
+| `askr/state/reader.py` - load + format state for Claude context injection | ✅ Done |
 
-**Stage P1-4: askr init command**
+**Stage P1-3: Claude Code hooks** - done
 
 | Task | Status |
 |---|---|
-| `askr init` - prompt for developer name, save to config | 🔲 Todo |
-| Create `askr/state/` directory from templates | 🔲 Todo |
-| Write hook commands into `.claude/settings.json` | 🔲 Todo |
-| Handle existing `.claude/settings.json` (merge, not overwrite) | 🔲 Todo |
+| `SessionStart` hook - git pull, inject state into context | ✅ Done |
+| `UserPromptSubmit` hook - update `current_task_<dev>.md` | ✅ Done |
+| `PostToolUse` hook - update `implementation_state.md` developer section | ✅ Done |
+| `Stop` hook - generate `handover_<dev>.md`, git commit + push | ✅ Done |
+| `PreCompact` hook - emergency checkpoint fallback | ✅ Done |
+
+**Stage P1-4: askr init command** - done
+
+| Task | Status |
+|---|---|
+| `askr init` - prompt for developer name, save to config | ✅ Done |
+| Create `askr/state/` directory from templates | ✅ Done |
+| Write hook commands into `.claude/settings.json` | ✅ Done |
+| Handle existing `.claude/settings.json` (merge, not overwrite) | ✅ Done |
+| `askr status` - show current session state | ✅ Done |
 
 **Done when:** Dev B opens a session and Claude correctly describes what Dev A built last night without any manual input.
 
