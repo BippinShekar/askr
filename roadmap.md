@@ -81,7 +81,21 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Handle existing `.claude/settings.json` (merge, not overwrite) | ✅ Done |
 | `askr status` - show current session state | ✅ Done |
 
-**Done when:** Dev B opens a session and Claude correctly describes what Dev A built last night without any manual input.
+**Stage P1-5: Goals tracking**
+
+| Task | Status |
+|---|---|
+| `askr_state/goals.md` format - shared, product-level, date-organized | 🔲 Todo |
+| `askr/state/goals.py` - add, complete, load, format for context | 🔲 Todo |
+| `askr goal add "..."` command | 🔲 Todo |
+| `askr goal done "..."` command | 🔲 Todo |
+| `askr goals` command - list open goals | 🔲 Todo |
+| `askr init` creates `goals.md` from template | 🔲 Todo |
+| `SessionStart` hook injects today's goals into Claude context | 🔲 Todo |
+| `Stop` hook infers goal completion from session transcript | 🔲 Todo |
+| `Notification` hook stub - HITL forwarding (Discord wired in Phase 3) | 🔲 Todo |
+
+**Done when:** Dev B opens a session, Claude knows today's goals without being told. Session ends, completed goals are marked done automatically.
 
 ---
 
@@ -105,7 +119,10 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | `PreCompact` hook as emergency fallback | 🔲 Todo |
 | Real use: run overnight, verify unattended continuation | 🔲 Todo |
 
-**Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress.
+| Goals-aware launch - `askr launch` picks top open goal, works on it autonomously | 🔲 Todo |
+| Session targets a goal, marks it done when complete, picks next | 🔲 Todo |
+
+**Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress. Goals updated automatically.
 
 ---
 
@@ -122,7 +139,9 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Session resumed notification | 🔲 Todo |
 | Morning report generation (sessions, time saved, completed, decisions, next step) | 🔲 Todo |
 | Time-saved analytics (per session, daily, weekly) | 🔲 Todo |
-| Feature complete detection + notification | 🔲 Todo |
+| Goal completed notification (fires when stop hook marks a goal done) | 🔲 Todo |
+| HITL notification - forwards Claude permission requests to Discord overnight | 🔲 Todo |
+| Daily goal summary to Discord (what was completed, what is still open) | 🔲 Todo |
 | StatusLine: `Askr ↺ Resumed  saved:47min` | 🔲 Todo |
 
 **Done when:** First real overnight morning report screenshot taken and posted.

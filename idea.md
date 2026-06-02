@@ -206,10 +206,47 @@ current_task.md          ← active objective, per developer
 implementation_state.md  ← sections per developer, what's done/in-progress
 decisions.md             ← append-only log, never conflicts
 blockers.md              ← known issues, pending decisions
+goals.md                 ← shared product goals, auto-updated by hooks
 checkpoints/             ← historical recovery points
 ```
 
 All committed to git. All pushed on every checkpoint. All pulled on every session start.
+
+---
+
+# Goals System
+
+No todo apps. No messages to yourself. No channels.
+
+Product goals live in `askr_state/goals.md`, committed to git, visible to both developers and both Claude sessions.
+
+```
+## Today - 2026-06-02
+
+- [ ] Complete Phase 1 hooks
+- [ ] Test two-developer sync
+
+## Backlog
+
+- [ ] Ship Phase 2 session orchestration
+- [ ] Public launch
+
+## Done
+
+[2026-06-02 23:41] Build askr init with snapshot generation
+[2026-06-01 20:15] Design conflict-resistant state files
+```
+
+How it works:
+
+- `askr goal add "..."` adds to today's list
+- Every session starts with today's goals injected into Claude's context
+- When the session ends, the Stop hook reads the transcript and infers which goals were completed
+- Completed goals move to Done automatically with a timestamp
+- In Phase 2, `askr launch` picks the top open goal and works on it autonomously
+- In Phase 3, Discord gets notified when a goal completes or when Claude needs help
+
+The ground truth for what you are building is in the code. Not in Notion. Not in a Slack thread.
 
 ---
 
@@ -360,11 +397,12 @@ For agent subagent calls: `tool_response.usage` with full token breakdown.
 
 | Hook | Purpose |
 |---|---|
-| `SessionStart` | git pull, load handover.md + state files into context |
+| `SessionStart` | git pull, load state + today's goals into context |
 | `UserPromptSubmit` | update current_task.md with active objective |
 | `PostToolUse` | update implementation_state.md, track quota burn |
-| `Stop` | write handover.md, update state files, git commit + push |
+| `Stop` | write handover.md, infer goal completion, commit + push |
 | `PreCompact` | emergency fallback if forecast missed threshold |
+| `Notification` | HITL forwarding to Discord when Claude needs attention |
 
 ---
 
