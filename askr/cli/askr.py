@@ -24,6 +24,7 @@ HOOK_MAP = {
     "PostToolUse":        "post_tool_use.py",
     "Stop":               "stop.py",
     "PreCompact":         "pre_compact.py",
+    "Notification":       "notification.py",
 }
 
 
@@ -82,6 +83,7 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
         f"current_task_{developer}.md": "current_task_template.md",
         "decisions.md":                 "decisions_template.md",
         "blockers.md":                  "blockers_template.md",
+        "goals.md":                     "goals_template.md",
     }
 
     created = []
@@ -96,7 +98,11 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
         if os.path.exists(template_path):
             with open(template_path) as f:
                 content = f.read()
-            content = content.replace("{developer}", developer).replace("{timestamp}", timestamp)
+            from datetime import date as _date
+            content = (content
+                .replace("{developer}", developer)
+                .replace("{timestamp}", timestamp)
+                .replace("{date}", _date.today().strftime("%Y-%m-%d")))
             with open(target_path, "w") as f:
                 f.write(content)
             created.append(target)
@@ -305,23 +311,105 @@ def cmd_status():
     console.print()
 
 
+def cmd_goals():
+    from askr.state.goals import load_today_goals, load_open_goals, load_done_today
+    from datetime import date
+    today = date.today().strftime("%Y-%m-%d")
+
+    console.print()
+    console.rule(f"[bold]goals - {today}[/]", style="dim")
+    console.print()
+
+    today_goals = load_today_goals()
+    if today_goals:
+        console.print("  [bold]today[/bold]")
+        for g in today_goals:
+            console.print(f"  [dim]- [ ][/dim] {g}")
+    else:
+        console.print("  [dim]no goals set for today[/dim]")
+        console.print("  [dim]add one:[/dim] [bold]askr goal add \"...\"[/bold]")
+
+    open_goals = load_open_goals()
+    backlog = [g for g in open_goals if g not in today_goals]
+    if backlog:
+        console.print()
+        console.print("  [bold]backlog[/bold]")
+        for g in backlog:
+            console.print(f"  [dim]- [ ][/dim] {g}")
+
+    done = load_done_today()
+    if done:
+        console.print()
+        console.print("  [bold]done today[/bold]")
+        for g in done:
+            console.print(f"  [green]- [x][/green] {g}")
+
+    console.print()
+
+
+def cmd_goal(args: list[str]):
+    from askr.state.goals import add_goal, complete_goal
+
+    if not args:
+        console.print("\n  [bold]askr goal[/bold]")
+        console.print("  [dim]askr goal add \"finish the auth layer\"[/dim]")
+        console.print("  [dim]askr goal add \"ship phase 2\" --backlog[/dim]")
+        console.print("  [dim]askr goal done \"finish the auth layer\"[/dim]\n")
+        return
+
+    sub = args[0]
+
+    if sub == "add":
+        if len(args) < 2:
+            console.print("\n  [red]usage: askr goal add \"goal text\"[/red]\n")
+            return
+        text = args[1]
+        section = "backlog" if "--backlog" in args else "today"
+        add_goal(text, section)
+        label = "backlog" if section == "backlog" else "today"
+        console.print(f"\n  [green]✓[/green] added to {label}: [bold]{text}[/bold]\n")
+
+    elif sub == "done":
+        if len(args) < 2:
+            console.print("\n  [red]usage: askr goal done \"goal text\"[/red]\n")
+            return
+        text = args[1]
+        if complete_goal(text):
+            console.print(f"\n  [green]✓[/green] marked done: [bold]{text}[/bold]\n")
+        else:
+            console.print(f"\n  [yellow]not found:[/yellow] {text}\n")
+            console.print("  [dim]run[/dim] [bold]askr goals[/bold] [dim]to see open goals[/dim]\n")
+
+    else:
+        console.print(f"\n  [yellow]unknown: askr goal {sub}[/yellow]")
+        console.print("  [dim]use: add / done[/dim]\n")
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]session orchestration for Claude Code[/dim]")
         console.print()
-        console.print("  [dim]askr init      - set up session orchestration in this project[/dim]")
-        console.print("  [dim]askr status    - show current session state[/dim]")
-        console.print("  [dim]askr launch    - start Claude Code under Askr management (Phase 2)[/dim]")
-        console.print("  [dim]askr log       - show session history (Phase 3)[/dim]")
+        console.print("  [dim]askr init               - set up in this project[/dim]")
+        console.print("  [dim]askr status             - show current state[/dim]")
+        console.print("  [dim]askr goals              - show today's goals[/dim]")
+        console.print("  [dim]askr goal add \"...\"     - add a goal for today[/dim]")
+        console.print("  [dim]askr goal done \"...\"    - mark a goal complete[/dim]")
+        console.print("  [dim]askr launch             - autonomous session (Phase 2)[/dim]")
+        console.print("  [dim]askr log                - session history (Phase 3)[/dim]")
         console.print()
         sys.exit(0)
 
     cmd = sys.argv[1]
+    rest = sys.argv[2:]
 
     if cmd == "init":
         cmd_init()
     elif cmd == "status":
         cmd_status()
+    elif cmd == "goals":
+        cmd_goals()
+    elif cmd == "goal":
+        cmd_goal(rest)
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
