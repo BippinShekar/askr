@@ -32,23 +32,53 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 1  - Core State Loop
+## Phase 1 - Core State Loop
 
 **Goal:** Both developers' Claude sessions always start informed. State persists across sessions via git. No manual handoff needed.
 
-**Target:** 2 weeks
+**Conflict-resistant file design (built in from the start):**
 
-| Feature | Status |
+| File | Design | Conflict risk |
+|---|---|---|
+| `handover_<dev>.md` | One file per developer | None |
+| `current_task_<dev>.md` | One file per developer | None |
+| `decisions.md` | Append-only, timestamped lines | None (git merges appends) |
+| `implementation_state.md` | Fenced sections per developer | Minimal |
+| `architecture.md` | Shared, last-write-wins | Occasional, easy to resolve |
+| `blockers.md` | Shared, last-write-wins | Occasional, easy to resolve |
+
+**Stage P1-1: State file templates + developer config**
+
+| Task | Status |
 |---|---|
-| State file structure (`handover.md`, `decisions.md`, `architecture.md`, `current_task.md`, `implementation_state.md`, `blockers.md`) | 🔲 Todo |
-| `askr init` command  - creates state files, installs hooks | 🔲 Todo |
-| `UserPromptSubmit` hook → updates `current_task.md` | 🔲 Todo |
-| `PostToolUse` hook → updates `implementation_state.md` | 🔲 Todo |
-| `Stop` hook → writes `handover.md`, commits state, pushes | 🔲 Todo |
-| `SessionStart` hook → `git pull`, injects state files into context | 🔲 Todo |
-| Per-developer file naming (`handover_<name>.md`) | 🔲 Todo |
-| Conflict-resistant file design tested with two developers | 🔲 Todo |
-| Real use: one week of actual company building on this | 🔲 Todo |
+| `askr/state/templates/` with all 6 template files | 🔲 Todo |
+| `askr/state/config.py` - load developer name from `~/.config/askr/config.json` | 🔲 Todo |
+
+**Stage P1-2: State writer + reader**
+
+| Task | Status |
+|---|---|
+| `askr/state/writer.py` - write/append to all state files | 🔲 Todo |
+| `askr/state/reader.py` - load + format state for Claude context injection | 🔲 Todo |
+
+**Stage P1-3: Claude Code hooks**
+
+| Task | Status |
+|---|---|
+| `SessionStart` hook - git pull, inject state into context | 🔲 Todo |
+| `UserPromptSubmit` hook - update `current_task_<dev>.md` | 🔲 Todo |
+| `PostToolUse` hook - update `implementation_state.md` developer section | 🔲 Todo |
+| `Stop` hook - generate `handover_<dev>.md`, git commit + push | 🔲 Todo |
+| `PreCompact` hook - emergency checkpoint fallback | 🔲 Todo |
+
+**Stage P1-4: askr init command**
+
+| Task | Status |
+|---|---|
+| `askr init` - prompt for developer name, save to config | 🔲 Todo |
+| Create `askr/state/` directory from templates | 🔲 Todo |
+| Write hook commands into `.claude/settings.json` | 🔲 Todo |
+| Handle existing `.claude/settings.json` (merge, not overwrite) | 🔲 Todo |
 
 **Done when:** Dev B opens a session and Claude correctly describes what Dev A built last night without any manual input.
 
