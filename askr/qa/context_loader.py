@@ -1,6 +1,6 @@
 import os
 import json
-from config import SNAPSHOT_DIR
+from askr.utils.config import SNAPSHOT_DIR
 
 FAST_CTX_FILES = ["README.md", "CLAUDE.md"]
 SUMMARY_PATH = f"{SNAPSHOT_DIR}/summary.json"
@@ -25,7 +25,6 @@ def load_snapshot(top_k=6):
 
 
 def load_inventory():
-    """One-liner summary of every file in the snapshot — gives LLM the full picture."""
     if not os.path.exists(SUMMARY_PATH):
         return ""
     with open(SUMMARY_PATH) as f:
@@ -36,7 +35,6 @@ def load_inventory():
 
 
 def load_file_contents(snapshot, chars_per_file=2500):
-    """Return dict of file path → truncated content for files in snapshot."""
     contents = {}
     for entry in snapshot:
         path = entry.get("file", "")

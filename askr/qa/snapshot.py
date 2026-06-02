@@ -1,16 +1,18 @@
 import os
 import json
 import time
-import subprocess
-from config import SNAPSHOT_DIR
-from client_claude import call_claude
-from graph import build_graph
-from git_utils import get_last_commit
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from askr.utils.config import SNAPSHOT_DIR
+from askr.clients.claude import call_claude
+from askr.qa.graph import build_graph
+from askr.utils.git_utils import get_last_commit
 
 SKIP_DIRS = {"venv", "node_modules", ".git", "__pycache__", "dist", "build", ".llm_snapshot"}
 META_PATH = f"{SNAPSHOT_DIR}/meta.json"
 SUMMARY_PATH = f"{SNAPSHOT_DIR}/summary.json"
 GRAPH_PATH = f"{SNAPSHOT_DIR}/graph.json"
+EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h"}
+MAX_WORKERS = 6
 
 
 def _collect_files():
@@ -18,18 +20,18 @@ def _collect_files():
     for root, dirs, files in os.walk("."):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for f in files:
-            if f.endswith((".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h")):
+            if os.path.splitext(f)[1] in EXTENSIONS:
                 found.append(os.path.join(root, f))
     return found
 
 
 def _changed_files_since(old_commit):
     try:
+        import subprocess
         out = subprocess.check_output(
             ["git", "diff", "--name-only", old_commit, "HEAD"],
             stderr=subprocess.DEVNULL
         ).decode()
-        # normalize to same format as os.walk: ./filename.py
         return {os.path.join(".", f.strip()) for f in out.split("\n") if f.strip()}
     except Exception:
         return None
@@ -37,6 +39,7 @@ def _changed_files_since(old_commit):
 
 def _count_git_changes(path):
     try:
+        import subprocess
         out = subprocess.check_output(
             ["git", "log", "--oneline", path], stderr=subprocess.DEVNULL
         ).decode()
@@ -53,7 +56,7 @@ def _parse_json(text):
     return json.loads(text.strip())
 
 
-def summarize_file(path):
+def _summarize_file(path):
     content = open(path, "r", errors="ignore").read()[:2000]
     prompt = f"""Summarize this file in JSON with keys: file, purpose, key_components (list), dependencies (list), importance_score (0-10).
 Return only valid JSON, no markdown.
@@ -63,9 +66,9 @@ Return only valid JSON, no markdown.
     try:
         data = _parse_json(res)
         data["file"] = path
-        return data
+        return path, data
     except Exception:
-        return {"file": path, "purpose": "", "importance_score": 5}
+        return path, {"file": path, "purpose": "", "importance_score": 5}
 
 
 def _score(entry, reverse_graph, git_freq):
@@ -96,10 +99,7 @@ def build_snapshot(full=False, show_progress=False):
 
     if old_commit and existing_data:
         changed = _changed_files_since(old_commit)
-        if changed is not None:
-            to_summarize = [f for f in all_files if f in changed or f not in existing_data]
-        else:
-            to_summarize = all_files
+        to_summarize = [f for f in all_files if changed is None or f in changed or f not in existing_data]
     else:
         to_summarize = all_files
 
@@ -107,17 +107,21 @@ def build_snapshot(full=False, show_progress=False):
 
     if to_summarize:
         if show_progress:
-            from display import make_progress_bar
+            from askr.utils.display import make_progress_bar
             progress, task = make_progress_bar(len(to_summarize))
             with progress:
-                for path in to_summarize:
-                    updated[path] = summarize_file(path)
-                    progress.advance(task)
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                    futures = {pool.submit(_summarize_file, p): p for p in to_summarize}
+                    for future in as_completed(futures):
+                        path, data = future.result()
+                        updated[path] = data
+                        progress.advance(task)
         else:
-            from display import print_progress
+            from askr.utils.display import print_progress
             print_progress(f"  summarizing {len(to_summarize)} file(s)...")
-            for path in to_summarize:
-                updated[path] = summarize_file(path)
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                for path, data in pool.map(_summarize_file, to_summarize):
+                    updated[path] = data
 
     all_file_set = set(all_files)
     data = [entry for path, entry in updated.items() if path in all_file_set]
@@ -131,7 +135,6 @@ def build_snapshot(full=False, show_progress=False):
 
     with open(SUMMARY_PATH, "w") as f:
         json.dump(data, f, indent=2)
-
     with open(GRAPH_PATH, "w") as f:
         json.dump(graph, f, indent=2)
 
