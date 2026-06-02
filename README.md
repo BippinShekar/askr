@@ -1,16 +1,96 @@
 # askr
 
-A fast, low-token, context-aware AI CLI over your local codebase.
+**Autonomous session orchestration for Claude Code. Built for co-founders who use Claude Code to build.**
 
-Not a chatbot. Not a wrapper.
+Two problems. One tool.
 
-Type a question from any project directory and get a structured answer grounded in your actual code — in under 3 seconds.
+1. **Session exhaustion** — Claude hits context or quota limits mid-task. Work stops. Recovery is manual and painful.
+2. **Team drift** — your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
+
+Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps your project state in git so both developers are always in sync — no Slack, no standups, no re-explaining.
+
+> Claude may stop. Work must not.
 
 ---
 
-## SETUP
+## How It Works
 
-**1. Clone and install**
+Askr runs two things in parallel:
+
+**Session Orchestration** — hooks into Claude Code's lifecycle. Monitors context fill and quota burn rate simultaneously. Intercepts before Claude's lossy auto-compaction fires. Writes a complete `handover.md`. Starts a fresh session immediately (context reset) or waits for quota reset and resumes automatically.
+
+**Project State** — maintains a set of structured markdown files (architecture, decisions, current task, implementation state) that get committed to git on every checkpoint. Both developers pull this state at session start. Claude reads it automatically. Your co-founder's Claude knows what you built last night.
+
+---
+
+## Two Triggers
+
+**Trigger A: Context near compaction (~90%)**
+```
+Context approaching limit
+→ Askr intercepts before lossy auto-compact
+→ Writes handover.md
+→ Stops session
+→ Starts new session immediately (no waiting)
+→ Claude continues from exact next step
+```
+
+**Trigger B: Quota running low**
+```
+5-hour window nearly exhausted
+→ Askr checkpoints + commits
+→ Stops session
+→ Waits for quota reset (exact time known from JSONL)
+→ Auto-resumes after reset
+→ Claude continues from exact next step
+```
+
+The 50% context mark is a StatusLine warning only. No interruption.
+
+---
+
+## The ask CLI (Already Shipped)
+
+During quota resets, the `ask` CLI fills dead time with grounded answers:
+
+```bash
+ask "cto: best way to structure the auth layer?"
+ask "debug: getting a 401 on every login attempt"
+ask "ceo: should we build this or use Auth0?"
+```
+
+Fast, low-token (~$0.001/query), grounded in your actual codebase snapshot. Works from any project directory.
+
+---
+
+## Current State
+
+The `ask` CLI is shipped and working. Session orchestration is in active development.
+
+**Working now:**
+- `ask` — codebase Q&A via Claude Haiku or OpenAI
+- Incremental codebase snapshots
+- Multi-mode responses (cto / ceo / debug / sales / deep / quick / web)
+- Usage + cost tracking
+- Git diff integration for debug mode
+
+**Building now:**
+- Claude Code hooks (SessionStart, UserPromptSubmit, PostToolUse, Stop)
+- State files (handover.md, decisions.md, architecture.md, current_task.md)
+- Dual-limit monitoring (context% + quota burn rate)
+- Predictive checkpointing (Trigger A + Trigger B)
+- Autonomous session recreation
+- Team sync via git
+
+**Coming next:**
+- StatusLine (live context% + quota%)
+- Morning report to Discord
+- Time-saved analytics
+- `brew install askr`
+
+---
+
+## Install (ask CLI)
 
 ```bash
 git clone https://github.com/BippinShekar/askr.git
@@ -18,137 +98,82 @@ cd askr
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-**2. Add your API keys**
-
-```bash
 cp .env.example .env
-```
-
-Open `.env` and fill in:
-
-```
-ANTHROPIC_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here
-```
-
-Get keys at [console.anthropic.com](https://console.anthropic.com) and [platform.openai.com](https://platform.openai.com).
-
-**3. Make `ask` available globally**
-
-```bash
+# add your API keys to .env
 bash install.sh
-source ~/.zshrc   # or restart your terminal
+source ~/.zshrc
 ```
 
 Now `ask` works from any directory.
 
 ---
 
-## USING IN A PROJECT
-
-Go to any project and run this once:
+## Using the ask CLI
 
 ```bash
 cd ~/your-project
-ask init
+ask init             # index your codebase (run once)
+
+ask "cto: ..."       # architectural decision
+ask "ceo: ..."       # product/business decision
+ask "debug: ..."     # bug fix (includes recent git diff)
+ask "deep: ..."      # thorough explanation
+ask "quick: ..."     # one-liner answer
+ask "web: ..."       # live web search
+
+ask snap             # force snapshot rebuild
+ask log              # show usage + cost this week
 ```
 
-This indexes your codebase (estimates cost upfront, adds askr files to your `.gitignore`). After that, just ask:
-
-```bash
-ask "cto: best way to structure the auth layer?"
-ask "ceo: should we build this feature or buy?"
-ask "debug: getting a 401 on every login attempt"
-ask "how does the payment flow work?"
-```
-
-Responses are auto-copied to your clipboard. Every Q&A is saved to `.askr_history` in your project directory.
+Responses are auto-copied to clipboard. Every Q&A saved to `.askr_history`.
 
 ---
 
-## MODES
+## StatusLine (Coming Soon)
 
-Prefix your query with a mode or skip it — no flags needed.
-
-| Prefix | Output format |
-|---|---|
-| `cto:` | DECISION / APPROACH / TRADEOFF |
-| `ceo:` | DECISION / WHY / NEXT STEP |
-| `debug:` | FIX + REASON (includes recent git diff) |
-| `sales:` | PITCH / ANGLE / HOOK |
-| `deep:` | clear explanation, no fluff |
-| `quick:` | 1–2 line answer, no structure |
-| `web:` | searches the web — use for pricing, docs, current errors |
-| *(none)* | defaults to `cto` format |
-
----
-
-## COMMANDS
-
-```bash
-ask "cto: ..."     # ask a question (any mode prefix)
-ask init           # index a new project (run once per project)
-ask snap           # force full snapshot rebuild
-ask log            # show this week's usage + cost
+```
+Askr ✓  ctx:62%  quota:78%          ← normal
+Askr ⚠  ctx:88%  quota:71%          ← approaching
+Askr ⚙ Checkpointing                ← active
+Askr ⏳ Reset in 1h 42m             ← waiting
+Askr ↺ Resumed  saved:47min         ← restored
 ```
 
 ---
 
-## ITERM2 HOTKEY (optional)
-
-Set up a floating terminal that opens with `Cmd+B` from anywhere:
-
-1. iTerm2 → Preferences → Profiles → `+` → name it `askr`
-2. Under **General** → Command → set to `/bin/zsh`
-3. Under **Keys** → Configure Hotkey Window → check "Floating window"
-4. Assign hotkey `Cmd+B`
-
-Now `Cmd+B` drops a terminal in your current directory. Type your query, get your answer, close it.
-
----
-
-## HOW IT WORKS
+## Morning Report (Coming Soon)
 
 ```
-ask "cto: ..."
-→ mode parsed from prefix
-→ snapshot freshness checked (auto-refreshes on new commits)
-→ context loaded:
-    README / CLAUDE.md (first 1000 chars)
-    top-ranked file summaries (scored by importance + git frequency)
-    recent git diff (debug mode only)
-→ Claude Haiku call (300 token cap)
-→ answer compressed, copied to clipboard, saved to .askr_history
-```
+Askr — Night Report
 
-The snapshot is incremental — only files changed since the last git commit get re-summarized. First run on a new project does a full index.
+Sessions:    6
+Duration:    4h 23m
+Time saved:  ~2h 10m
 
----
+Completed:
+  Auth middleware rewrite
+  JWT validation (47 tests passing)
 
-## COST
+In Progress:
+  Refresh token rotation (60%)
 
-Using Claude Haiku (~$0.80/1M input tokens). Typical query: **~$0.001**. A full day of heavy use is under $0.10.
+Decisions:
+  Token storage → httpOnly cookies
+  OAuth deferred to next sprint
 
-Daily budget cap is set to `$1.00` in `config.py`. Adjust it there.
-
-Track your usage anytime:
-
-```bash
-ask log
+Next: Complete refresh token rotation
 ```
 
 ---
 
-## PROJECT STRUCTURE
+## Project Structure
 
 ```
 askr/
-├── ask.py              # CLI entry point (init / snap / log / query)
-├── main.py             # core pipeline
+├── ask.py              # CLI entry point
+├── main.py             # core Q&A pipeline
 ├── config.py           # model, token limits, daily budget
-├── modes.py            # output format per mode
+├── modes.py            # response formats per mode
 ├── snapshot.py         # incremental codebase indexer
 ├── graph.py            # AST dependency graph
 ├── git_utils.py        # git diff utilities
@@ -156,24 +181,33 @@ askr/
 ├── client_claude.py    # Anthropic SDK client
 ├── client_openai.py    # OpenAI client (fallback)
 ├── logger.py           # usage + cost tracking
+├── display.py          # terminal output
 ├── utils.py            # output compression
 ├── install.sh          # global CLI installer
 └── .env.example        # API key template
 ```
 
+Session orchestration components (in development):
+```
+askr/
+├── daemon/             # session monitor + forecast engine
+├── hooks/              # Claude Code hook scripts
+└── state/              # project state files (per repo)
+```
+
 ---
 
-## LIMITATIONS
+## Limitations (Current)
 
-- Snapshot quality depends on LLM file summaries (Claude Haiku)
-- Graph is static AST, not runtime
-- macOS only for clipboard (`pbcopy`) — Linux users can swap in `xclip`
-- No function-level tracing yet
+- Snapshot quality depends on LLM file summaries
+- AST graph is static, not runtime
+- macOS only for clipboard (`pbcopy`)
+- Session orchestration not yet shipped
 
 ---
 
-## FUTURE
+## Building in Public
 
-- Brew tap for one-line install (`brew install askr`)
-- Web search in debug mode (for errors with no local context)
-- Per-project config file (`.askr` override for model, budget, modes)
+Following development on [Twitter/X](https://x.com) — real usage, real numbers, real problems.
+
+Contributions welcome. Open an issue or PR.
