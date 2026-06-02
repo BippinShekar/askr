@@ -3,12 +3,12 @@ import json
 import time
 from datetime import datetime, date
 
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".askr_log")
+LOG_PATH = os.path.join(os.path.expanduser("~/.config/askr"), "usage.log")
 
 COST_TABLE = {
     "claude-haiku-4-5-20251001": {"input": 1.00,  "output":  5.00},
     "claude-sonnet-4-6":         {"input": 3.00,  "output": 15.00},
-    "gpt-5.4-nano-2026-03-17":   {"input": 0.20,  "output":  1.25},
+    "gpt-4o-mini":               {"input": 0.15,  "output":  0.60},
 }
 
 
@@ -32,7 +32,7 @@ def _today_spend():
 
 
 def check_budget(daily_limit):
-    from display import console
+    from askr.utils.display import console
     spent = _today_spend()
     if spent >= daily_limit:
         console.print(f"\n  [bold red]✗ daily budget hit[/bold red] [dim](${spent:.4f} / ${daily_limit:.2f})[/dim]")
@@ -57,6 +57,7 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
         "q": query_preview[:60],
     }
 
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     with open(LOG_PATH, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
@@ -64,7 +65,7 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
 
 
 def show_summary():
-    from display import console, print_summary
+    from askr.utils.display import console, print_summary
 
     if not os.path.exists(LOG_PATH):
         console.print("\n  [dim]no usage logged yet[/dim]\n")

@@ -26,7 +26,6 @@ def get_diff_summary(max_chars=1500):
             ["git", "diff", "HEAD~1", "--", "*.py", "*.ts", "*.js"],
             stderr=subprocess.DEVNULL
         ).decode()
-        combined = out + "\n" + diff
-        return combined[:max_chars]
+        return (out + "\n" + diff)[:max_chars]
     except subprocess.CalledProcessError:
         return ""
