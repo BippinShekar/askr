@@ -1,7 +1,7 @@
 # Current Task: bippin
 
-Last updated: 2026-06-02 18:00
+## Recent Objectives
 
-## Objective
-
-<ide_opened_file>The user opened the file /Users/bippin/Desktop/askr/askr_state/architecture.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+- [2026-06-02 18:39] also, look at how the current task .md file isnt updated accurately.
+- [2026-06-02 18:39] let us figure out which phase to add this into and update the roadmap
+- [2026-06-02 18:39] why is this function slow?
