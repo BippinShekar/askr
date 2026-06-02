@@ -39,27 +39,32 @@ def _summarize_session(transcript_entries: list[dict], developer: str) -> str:
     for entry in transcript_entries:
         msg = entry.get("message", {})
         role = msg.get("role", "")
+        content = msg.get("content", [])
 
         if role == "user":
-            for block in msg.get("content", []):
-                if isinstance(block, dict) and block.get("type") == "tool_result":
-                    pass
-                elif isinstance(block, str) and len(block) > 5:
-                    user_prompts.append(block[:100])
+            if isinstance(content, str) and len(content) > 5:
+                user_prompts.append(content[:150])
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text = block.get("text", "").strip()
+                        if text and len(text) > 5:
+                            user_prompts.append(text[:150])
 
         if role == "assistant":
-            for block in msg.get("content", []):
-                if isinstance(block, dict) and block.get("type") == "tool_use":
-                    name = block.get("name", "")
-                    inp = block.get("input", {})
-                    if name in ("Write", "Edit"):
-                        path = inp.get("file_path") or inp.get("path", "")
-                        if path:
-                            tool_actions.append(f"Modified {path}")
-                    elif name == "Bash":
-                        cmd = inp.get("command", "")[:60]
-                        if cmd:
-                            tool_actions.append(f"Ran: {cmd}")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        name = block.get("name", "")
+                        inp = block.get("input", {})
+                        if name in ("Write", "Edit", "MultiEdit"):
+                            path = inp.get("file_path") or inp.get("path", "")
+                            if path:
+                                tool_actions.append(f"Modified {path}")
+                        elif name == "Bash":
+                            cmd = inp.get("command", "")[:60]
+                            if cmd:
+                                tool_actions.append(f"Ran: {cmd}")
 
     files_changed = sorted(set(
         a.replace("Modified ", "") for a in tool_actions if a.startswith("Modified")
