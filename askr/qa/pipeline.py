@@ -1,23 +1,20 @@
 import re
-import subprocess
 from datetime import datetime
-from config import BASE_SYSTEM_PROMPT, DEFAULT_MODE, DEFAULT_LLM, DAILY_BUDGET_USD
-from modes import MODES
-from context_loader import load_fast_context, load_snapshot, load_file_contents, load_inventory
-from snapshot import snapshot_is_stale, build_snapshot
-from git_utils import get_diff_summary
-from client_claude import call_claude, call_claude_web, MODEL as CLAUDE_MODEL
-from client_openai import call_openai
-from logger import check_budget
-from display import print_progress
-from utils import compress
+
+from askr.utils.config import BASE_SYSTEM_PROMPT, DEFAULT_MODE, DEFAULT_LLM, DAILY_BUDGET_USD
+from askr.utils.logger import check_budget
+from askr.utils.compress import compress
+from askr.utils.display import print_progress
+from askr.qa.modes import MODES
+from askr.qa.context_loader import load_fast_context, load_snapshot, load_file_contents, load_inventory
+from askr.qa.snapshot import snapshot_is_stale, build_snapshot
+from askr.utils.git_utils import get_diff_summary
+from askr.clients.claude import call_claude, call_claude_web
+from askr.clients.openai import call_openai
 
 MODE_PREFIXES = list(MODES.keys())
 HISTORY_FILE = ".askr_history"
 
-# Narrow, high-signal phrases that almost always need live web data.
-# Deliberately specific — generic words like "current" or "latest" alone
-# would hit codebase questions and trigger expensive Sonnet calls.
 _WEB_SIGNALS = [
     r"\bpric(e|ing|es)\b",
     r"\bcost per\b",
@@ -42,7 +39,6 @@ _WEB_SIGNALS = [
     r"\bwhat.s new in\b",
     r"\bwhen was .+ released\b",
 ]
-
 _WEB_PATTERN = re.compile("|".join(_WEB_SIGNALS), re.IGNORECASE)
 
 
@@ -65,11 +61,39 @@ def _save_history(query, mode, response):
         f.write(block)
 
 
-def _copy_to_clipboard(text):
-    try:
-        subprocess.run(["pbcopy"], input=text.encode(), check=True)
-    except Exception:
-        pass
+def _build_prompt(fast_ctx, inventory, snapshot, mode):
+    file_sections = []
+    file_contents = load_file_contents(snapshot)
+    for f in snapshot:
+        path = f.get("file", "")
+        parts = [
+            f"FILE: {path} (score:{f.get('_score', 0):.2f})",
+            f"PURPOSE: {f.get('purpose', '')}",
+        ]
+        components = f.get("key_components", [])
+        if components:
+            parts.append("IMPLEMENTS: " + ", ".join(components))
+        content = file_contents.get(path, "")
+        if content:
+            parts.append(f"---\n{content}")
+        file_sections.append("\n".join(parts))
+
+    git_context = ""
+    if mode == "debug":
+        diff = get_diff_summary()
+        if diff:
+            git_context = f"\nRECENT CHANGES:\n{diff}"
+
+    return f"""CONTEXT:
+{fast_ctx}
+
+ALL FILES:
+{inventory}
+
+TOP FILES:
+{chr(10).join(file_sections)}
+{git_context}
+"""
 
 
 def run(query, mode=None, llm=None):
@@ -79,8 +103,6 @@ def run(query, mode=None, llm=None):
     mode = mode or prefix_mode or DEFAULT_MODE
     llm = llm or DEFAULT_LLM
 
-    # Auto-upgrade to web search if query signals live data need,
-    # unless the user already set a non-default mode explicitly.
     if mode == DEFAULT_MODE and prefix_mode is None and _auto_web(query):
         mode = "web"
         print_progress("auto: web search triggered")
@@ -92,44 +114,9 @@ def run(query, mode=None, llm=None):
     fast_ctx = load_fast_context()
     inventory = load_inventory()
     snapshot = load_snapshot()
-    file_contents = load_file_contents(snapshot)
-
-    file_sections = []
-    for f in snapshot:
-        path = f.get("file", "")
-        parts = [f"FILE: {path} (score:{f.get('_score', 0):.2f})", f"PURPOSE: {f.get('purpose', '')}"]
-        components = f.get("key_components", [])
-        if components:
-            parts.append("IMPLEMENTS: " + ", ".join(components))
-        content = file_contents.get(path, "")
-        if content:
-            parts.append(f"---\n{content}")
-        file_sections.append("\n".join(parts))
-    file_context = "\n\n".join(file_sections)
-
-    git_context = ""
-    if mode == "debug":
-        diff = get_diff_summary()
-        if diff:
-            git_context = f"\nRECENT CHANGES:\n{diff}"
 
     system = f"{BASE_SYSTEM_PROMPT}\n{MODES.get(mode, MODES[DEFAULT_MODE])}"
-
-    prompt = f"""CONTEXT:
-{fast_ctx}
-
-ALL FILES (already implemented):
-{inventory}
-
-TOP FILES (detail):
-{file_context}
-{git_context}
-RUNTIME:
-date={datetime.now().strftime("%Y-%m-%d")}, model={CLAUDE_MODEL}, cost=$1.00/1M input tokens $5.00/1M output tokens
-
-QUESTION:
-{query}
-"""
+    prompt = _build_prompt(fast_ctx, inventory, snapshot, mode) + f"\nQUESTION:\n{query}"
 
     if mode == "web":
         res = call_claude_web(system, prompt, mode=mode, query_preview=query[:60])
@@ -141,5 +128,4 @@ QUESTION:
     max_lines = 14 if mode == "web" else (5 if mode == "default" else 8)
     result = compress(res, max_lines=max_lines)
     _save_history(query, mode, result)
-    _copy_to_clipboard(result)
     return result, mode
