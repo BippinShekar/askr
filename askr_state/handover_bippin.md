@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-02 17:56
+Last updated: 2026-06-02 17:59
 
 ## Objective
 
-one thing to consider is that the architecture.md file is also empty and made up of placeholders, despite askr init, the init should get a snap shot o
+what if we also implement a daily todo setup with askr? like it understand what the goals for today are and ensures they are completed through autonom
 
 ## Next Step
 
@@ -12,8 +12,6 @@ one thing to consider is that the architecture.md file is also empty and made up
 
 ## Completed This Session
 
-- Ran: echo '{"prompt": "building phase 1 state management", "sessi
-- Ran: git add -A && git commit -m "fix: absolute project path in c
 - Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
 - Ran: rm /Users/bippin/Desktop/askr/askr_state/architecture.md /Us
 - Ran: echo "bippin" | /Users/bippin/Desktop/askr/venv/bin/python a
