@@ -9,6 +9,15 @@ Last active: 2026-06-02 17:56
 
 ### In Progress
 
+- [18:03] Modified: /Users/bippin/Desktop/askr/askr/state/templates/goals_template.md
+- [18:03] Modified: /Users/bippin/Desktop/askr/askr/state/goals.py
+- [18:02] Ran: git add idea.md roadmap.md && git commit -m "docs: add goals system across Phase
+- [18:02] Modified: /Users/bippin/Desktop/askr/idea.md
+- [18:02] Modified: /Users/bippin/Desktop/askr/idea.md
+- [18:02] Modified: /Users/bippin/Desktop/askr/idea.md
+- [18:02] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [18:02] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [18:01] Modified: /Users/bippin/Desktop/askr/roadmap.md
 - [17:56] Ran: git add -A && git commit -m "feat: askr init generates real architecture.md and 
 - [17:56] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [17:56] Ran: cat /Users/bippin/Desktop/askr/askr_state/architecture.md && echo "===" && head 
