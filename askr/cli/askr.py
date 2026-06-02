@@ -8,7 +8,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.utils.display import console
-from askr.state.config import STATE_DIR, load_developer, save_developer, ensure_state_dir, state_path
+from askr.state.config import get_state_dir, load_developer, save_developer, ensure_state_dir, state_path, save_project_path
 
 ASKR_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 HOOKS_DIR = os.path.join(ASKR_DIR, "askr", "hooks")
@@ -133,7 +133,9 @@ def cmd_init():
 
     developer = raw if raw else existing_dev
     save_developer(developer)
+    save_project_path(os.getcwd())
     console.print(f"  [green]✓[/green] [dim]developer set to[/dim] [bold]{developer}[/bold]")
+    console.print(f"  [green]✓[/green] [dim]project path saved[/dim] [bold]{os.getcwd()}[/bold]")
     console.print()
 
     created, skipped = _create_state_files(developer)
@@ -153,7 +155,7 @@ def cmd_init():
 
     _update_gitignore()
 
-    console.print("  [dim]state files are in[/dim] [bold]askr/state/[/bold]")
+    console.print("  [dim]state files are in[/dim] [bold]askr_state/[/bold]")
     console.print("  [dim]commit them to git so your team shares the same ground truth[/dim]")
     console.print()
     console.print("  [green]done[/green]  - start Claude Code and Askr will track the session\n")
@@ -165,9 +167,9 @@ def cmd_status():
     console.rule("[bold]askr status[/]", style="dim")
     console.print()
     console.print(f"  [dim]developer[/dim]  [bold]{developer}[/bold]")
-    console.print(f"  [dim]state dir[/dim]  {'[green]found[/green]' if os.path.isdir(STATE_DIR) else '[red]not found - run askr init[/red]'}")
+    console.print(f"  [dim]state dir[/dim]  {'[green]found[/green]' if os.path.isdir(get_state_dir()) else '[red]not found - run askr init[/red]'}")
 
-    if os.path.isdir(STATE_DIR):
+    if os.path.isdir(get_state_dir()):
         handover = state_path(f"handover_{developer}.md")
         console.print(f"  [dim]handover[/dim]   {'[green]present[/green]' if os.path.exists(handover) else '[yellow]missing[/yellow]'}")
 

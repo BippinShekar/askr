@@ -16,14 +16,14 @@ import subprocess
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from askr.state.config import STATE_DIR, load_developer
+from askr.state.config import get_state_dir, load_developer
 
 
 def _git_commit_push(developer: str):
     try:
-        subprocess.run(["git", "add", STATE_DIR], capture_output=True)
+        subprocess.run(["git", "add", get_state_dir()], capture_output=True)
         result = subprocess.run(
-            ["git", "status", "--porcelain", STATE_DIR],
+            ["git", "status", "--porcelain", get_state_dir()],
             capture_output=True, text=True
         )
         if not result.stdout.strip():
@@ -46,7 +46,7 @@ def main():
     except Exception:
         payload = {}
 
-    if not os.path.isdir(STATE_DIR):
+    if not os.path.isdir(get_state_dir()):
         return
 
     developer = load_developer()

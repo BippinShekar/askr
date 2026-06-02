@@ -1,19 +1,35 @@
 # Handover: bippin
 
-Last updated: 2026-06-02 15:17
+Last updated: 2026-06-02 15:31
+
+## Objective
+
+[What we are working on]
 
 ## Next Step
 
-[Continue from where this session left off - check files changed below]
+[Exact next action - specific enough for Claude to start immediately without asking]
+
+## Completed This Session
+
+[Nothing yet]
 
 ## Decisions Made
 
-[Check decisions.md]
+[None this session]
+
+## Files Changed
+
+[None this session]
 
 ## Tests
 
-Unknown - check last Bash output
+Not run yet
 
 ## Blockers
 
-None noted
+None
+
+## Context
+
+[Anything Claude needs to continue without re-explaining]

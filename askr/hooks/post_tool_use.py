@@ -14,7 +14,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from askr.state.config import STATE_DIR, state_path, load_developer
+from askr.state.config import get_state_dir, state_path, load_developer
 
 _SKIP_TOOLS = {"Read", "Glob", "Grep", "LS", "WebSearch", "WebFetch", "TodoRead"}
 
@@ -79,7 +79,7 @@ def main():
     except Exception:
         return
 
-    if not os.path.isdir(STATE_DIR):
+    if not os.path.isdir(get_state_dir()):
         return
 
     tool_name = payload.get("tool_name", "")

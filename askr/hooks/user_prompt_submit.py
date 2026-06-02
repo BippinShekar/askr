@@ -13,7 +13,7 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.writer import write_current_task
-from askr.state.config import STATE_DIR
+from askr.state.config import get_state_dir
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
         print(json.dumps({"decision": "approve"}))
         return
 
-    if not os.path.isdir(STATE_DIR):
+    if not os.path.isdir(get_state_dir()):
         print(json.dumps({"decision": "approve"}))
         return
 

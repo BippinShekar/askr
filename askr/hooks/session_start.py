@@ -14,7 +14,7 @@ import subprocess
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.reader import build_context_injection
-from askr.state.config import STATE_DIR
+from askr.state.config import get_state_dir
 
 
 def git_pull():
@@ -34,7 +34,7 @@ def main():
     except Exception:
         payload = {}
 
-    if os.path.isdir(STATE_DIR):
+    if os.path.isdir(get_state_dir()):
         git_pull()
 
     context = build_context_injection()
