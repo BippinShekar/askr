@@ -8,3 +8,6 @@ __pycache__/
 # machine-specific hook config - each developer runs askr init to generate their own
 .claude/settings.json
 .claude/settings.local.json
+
+# askr
+.askr_history

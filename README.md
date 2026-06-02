@@ -169,30 +169,49 @@ Next: Complete refresh token rotation
 ## Project Structure
 
 ```
-askr/
-├── ask.py              # CLI entry point
-├── main.py             # core Q&A pipeline
-├── config.py           # model, token limits, daily budget
-├── modes.py            # response formats per mode
-├── snapshot.py         # incremental codebase indexer
-├── graph.py            # AST dependency graph
-├── git_utils.py        # git diff utilities
-├── context_loader.py   # loads README + ranked snapshot
-├── client_claude.py    # Anthropic SDK client
-├── client_openai.py    # OpenAI client (fallback)
-├── logger.py           # usage + cost tracking
-├── display.py          # terminal output
-├── utils.py            # output compression
-├── install.sh          # global CLI installer
-└── .env.example        # API key template
-```
+askr/                        # Python package (source code)
+  cli/
+    ask.py                   # ask command - Q&A
+    askr.py                  # askr command - session orchestration
+  qa/
+    pipeline.py              # Q&A core logic
+    snapshot.py              # incremental codebase indexer
+    graph.py                 # multi-language dependency graph
+    context_loader.py        # loads context for queries
+    modes.py                 # response formats per mode
+  clients/
+    claude.py                # Anthropic SDK client
+    openai.py                # OpenAI fallback client
+  hooks/                     # Claude Code hook scripts
+    session_start.py
+    user_prompt_submit.py
+    post_tool_use.py
+    stop.py
+    pre_compact.py
+  session/                   # session orchestration (Phase 2)
+    monitor.py
+    forecast.py
+    checkpoint.py
+    lifecycle.py
+    safe_pause.py
+  state/                     # state management code only
+    config.py
+    writer.py
+    reader.py
+    templates/
+  utils/
+    config.py, display.py, logger.py, env.py, compress.py, git_utils.py
 
-Session orchestration components (in development):
-```
-askr/
-├── daemon/             # session monitor + forecast engine
-├── hooks/              # Claude Code hook scripts
-└── state/              # project state files (per repo)
+askr_state/                  # project state data (markdown, per project)
+  handover_<dev>.md
+  current_task_<dev>.md
+  decisions.md
+  implementation_state.md
+  architecture.md
+  blockers.md
+
+ask.py                       # root entry point (thin wrapper)
+install.sh                   # global CLI installer
 ```
 
 ---

@@ -2,7 +2,7 @@ import os
 import json
 
 CONFIG_PATH = os.path.expanduser("~/.config/askr/config.json")
-STATE_DIR = "askr/state"
+STATE_DIR = "askr_state"
 
 
 def load_developer() -> str:
