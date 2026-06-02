@@ -1,10 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-06-02 17:59
-
-## Objective
-
-what if we also implement a daily todo setup with askr? like it understand what the goals for today are and ensures they are completed through autonom
+Last updated: 2026-06-02 18:34
 
 ## Next Step
 
@@ -12,16 +8,26 @@ what if we also implement a daily todo setup with askr? like it understand what 
 
 ## Completed This Session
 
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Ran: rm /Users/bippin/Desktop/askr/askr_state/architecture.md /Us
-- Ran: echo "bippin" | /Users/bippin/Desktop/askr/venv/bin/python a
-- Ran: cat /Users/bippin/Desktop/askr/askr_state/architecture.md &&
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Ran: git add -A && git commit -m "feat: askr init generates real 
+- Modified /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- Ran: /Users/bippin/Desktop/askr/venv/bin/python askr/cli/askr.py 
+- Modified /Users/bippin/Desktop/askr/askr/state/goals.py
+- Ran: /Users/bippin/Desktop/askr/venv/bin/python askr/cli/askr.py 
+- Ran: /Users/bippin/Desktop/askr/venv/bin/python askr/cli/askr.py 
+- Modified /Users/bippin/Desktop/askr/roadmap.md
+- Ran: git add -A && git commit -m "feat(p1-5c): hook integration f
 
 ## Files Changed
 
-- /Users/bippin/Desktop/askr/askr/cli/askr.py
+- /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- /Users/bippin/Desktop/askr/askr/state/goals.py
+- /Users/bippin/Desktop/askr/roadmap.md
 
 ## Decisions Made
 
