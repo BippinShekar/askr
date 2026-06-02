@@ -8,11 +8,15 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.utils.display import console
-from askr.state.config import get_state_dir, load_developer, save_developer, ensure_state_dir, state_path, save_project_path
+from askr.state.config import (
+    get_state_dir, load_developer, save_developer,
+    ensure_state_dir, state_path, save_project_path
+)
 
 ASKR_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 HOOKS_DIR = os.path.join(ASKR_DIR, "askr", "hooks")
 CLAUDE_SETTINGS = os.path.join(".claude", "settings.json")
+SNAPSHOT_PATH = os.path.join(".llm_snapshot", "summary.json")
 
 HOOK_MAP = {
     "SessionStart":       "session_start.py",
@@ -29,9 +33,7 @@ def _python_cmd() -> str:
 
 
 def _hook_command(hook_file: str) -> str:
-    python = _python_cmd()
-    script = os.path.join(HOOKS_DIR, hook_file)
-    return f"{python} {script}"
+    return f"{_python_cmd()} {os.path.join(HOOKS_DIR, hook_file)}"
 
 
 def _load_claude_settings() -> dict:
@@ -68,36 +70,33 @@ def _install_hooks():
     _save_claude_settings(settings)
 
 
-def _create_state_files(developer: str):
+def _create_skeleton_files(developer: str) -> tuple[list, list]:
     templates_dir = os.path.join(ASKR_DIR, "askr", "state", "templates")
     ensure_state_dir()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    file_map = {
-        f"handover_{developer}.md":       "handover_template.md",
-        f"current_task_{developer}.md":   "current_task_template.md",
-        "decisions.md":                   "decisions_template.md",
-        "implementation_state.md":        "implementation_state_template.md",
-        "architecture.md":                "architecture_template.md",
-        "blockers.md":                    "blockers_template.md",
+    # architecture.md and implementation_state.md get generated from the codebase
+    # only fall back to template if generation fails
+    template_only_files = {
+        f"handover_{developer}.md":     "handover_template.md",
+        f"current_task_{developer}.md": "current_task_template.md",
+        "decisions.md":                 "decisions_template.md",
+        "blockers.md":                  "blockers_template.md",
     }
 
     created = []
     skipped = []
 
-    for target, template in file_map.items():
+    for target, template in template_only_files.items():
         target_path = state_path(target)
-        template_path = os.path.join(templates_dir, template)
-
         if os.path.exists(target_path):
             skipped.append(target)
             continue
-
+        template_path = os.path.join(templates_dir, template)
         if os.path.exists(template_path):
             with open(template_path) as f:
                 content = f.read()
-            content = content.replace("{developer}", developer)
-            content = content.replace("{timestamp}", timestamp)
+            content = content.replace("{developer}", developer).replace("{timestamp}", timestamp)
             with open(target_path, "w") as f:
                 f.write(content)
             created.append(target)
@@ -105,10 +104,124 @@ def _create_state_files(developer: str):
     return created, skipped
 
 
+def _generate_architecture_from_snapshot(developer: str):
+    if not os.path.exists(SNAPSHOT_PATH):
+        return False
+
+    try:
+        import json as _json
+        with open(SNAPSHOT_PATH) as f:
+            snapshot = _json.load(f)
+
+        if not snapshot:
+            return False
+
+        from askr.qa.context_loader import load_fast_context
+        from askr.clients.claude import call_claude
+        from askr.state.writer import update_architecture, update_implementation_section
+
+        fast_ctx = load_fast_context()
+
+        inventory_lines = [
+            f"{e.get('file')} - {e.get('purpose', '')}"
+            for e in snapshot
+            if e.get("file") and e.get("purpose")
+        ]
+        inventory = "\n".join(inventory_lines)
+
+        # Generate architecture.md
+        arch_path = state_path("architecture.md")
+        if not os.path.exists(arch_path):
+            console.print("  [dim]generating architecture.md from codebase...[/dim]")
+
+            prompt = f"""Write architecture.md for this codebase. Be factual and brief. Only describe what is actually in the code.
+
+CONTEXT:
+{fast_ctx}
+
+ALL FILES:
+{inventory}
+
+Format exactly as:
+## System Overview
+[what this system does - 2 sentences max]
+
+## Modules
+[each module/package and what it owns - bullet list]
+
+## Key Patterns
+[auth, API style, data layer - only what is clearly visible]
+
+## External Dependencies
+[external services and libraries that matter architecturally]
+
+No placeholders. No speculation. Only what is in the code."""
+
+            arch_content = call_claude(
+                "You write concise, factual technical documentation.",
+                prompt,
+                mode="default",
+                query_preview="architecture.md generation"
+            )
+            # strip leading # Architecture header if LLM added one - writer adds its own
+            lines = arch_content.strip().splitlines()
+            if lines and lines[0].strip().lower().startswith("# architecture"):
+                arch_content = "\n".join(lines[1:]).lstrip()
+            update_architecture(arch_content)
+            console.print("  [green]✓[/green] [dim]architecture.md - generated from codebase[/dim]")
+        else:
+            console.print("  [dim]- skipped architecture.md (already exists)[/dim]")
+
+        # Populate implementation_state.md with what is already built
+        impl_path = state_path("implementation_state.md")
+        if not os.path.exists(impl_path):
+            top_files = sorted(snapshot, key=lambda x: x.get("_score", 0), reverse=True)[:25]
+            completed_lines = [
+                f"- {e.get('file')} - {e.get('purpose', '')}"
+                for e in top_files
+                if e.get("file") and e.get("purpose")
+            ]
+            completed = "\n".join(completed_lines) if completed_lines else "[nothing yet]"
+
+            update_implementation_section(
+                f"### In Progress\n\n[nothing - session not started]\n\n"
+                f"### Completed\n\n{completed}\n\n"
+                f"### Files Owned\n\n[not assigned yet]",
+                developer
+            )
+            console.print("  [green]✓[/green] [dim]implementation_state.md - populated from snapshot[/dim]")
+        else:
+            console.print("  [dim]- skipped implementation_state.md (already exists)[/dim]")
+
+        return True
+
+    except Exception as e:
+        console.print(f"  [yellow]⚠ snapshot generation failed: {e}[/yellow]")
+        return False
+
+
+def _create_fallback_generated_files(developer: str):
+    templates_dir = os.path.join(ASKR_DIR, "askr", "state", "templates")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    for target, template in [
+        ("architecture.md", "architecture_template.md"),
+        ("implementation_state.md", "implementation_state_template.md"),
+    ]:
+        target_path = state_path(target)
+        if not os.path.exists(target_path):
+            template_path = os.path.join(templates_dir, template)
+            if os.path.exists(template_path):
+                with open(template_path) as f:
+                    content = f.read()
+                content = content.replace("{developer}", developer).replace("{timestamp}", timestamp)
+                with open(target_path, "w") as f:
+                    f.write(content)
+
+
 def _update_gitignore():
     gitignore = ".gitignore"
-    entries = [".llm_snapshot/", ".askr_history", ".askr_log"]
-
+    entries = [".llm_snapshot/", ".askr_log"]
     if os.path.exists(gitignore):
         with open(gitignore) as f:
             existing = f.read()
@@ -124,7 +237,7 @@ def cmd_init():
     console.print()
 
     existing_dev = load_developer()
-    console.print(f"  [dim]developer name[/dim] [dim](current: {existing_dev})[/dim]")
+    console.print(f"  [dim]developer name (current: {existing_dev})[/dim]")
     try:
         raw = input("  enter name (or press enter to keep): ").strip()
     except (KeyboardInterrupt, EOFError):
@@ -134,31 +247,43 @@ def cmd_init():
     developer = raw if raw else existing_dev
     save_developer(developer)
     save_project_path(os.getcwd())
-    console.print(f"  [green]✓[/green] [dim]developer set to[/dim] [bold]{developer}[/bold]")
-    console.print(f"  [green]✓[/green] [dim]project path saved[/dim] [bold]{os.getcwd()}[/bold]")
+    console.print(f"  [green]✓[/green] [dim]developer:[/dim] [bold]{developer}[/bold]")
+    console.print(f"  [green]✓[/green] [dim]project:[/dim] [bold]{os.getcwd()}[/bold]")
     console.print()
 
-    created, skipped = _create_state_files(developer)
-
+    # Create session-specific files from templates
+    created, skipped = _create_skeleton_files(developer)
     for f in created:
-        console.print(f"  [green]✓[/green] created  [dim]askr/state/{f}[/dim]")
+        console.print(f"  [green]✓[/green] created  [dim]{f}[/dim]")
     for f in skipped:
-        console.print(f"  [dim]- skipped askr/state/{f} (already exists)[/dim]")
+        console.print(f"  [dim]- skipped {f} (already exists)[/dim]")
+
+    # Generate architecture.md and implementation_state.md from codebase snapshot
+    has_snapshot = os.path.exists(SNAPSHOT_PATH)
+    if has_snapshot:
+        generated = _generate_architecture_from_snapshot(developer)
+        if not generated:
+            _create_fallback_generated_files(developer)
+    else:
+        console.print()
+        console.print("  [yellow]no codebase snapshot found[/yellow]")
+        console.print("  [dim]run[/dim] [bold]ask init[/bold] [dim]first to index your codebase,[/dim]")
+        console.print("  [dim]then re-run[/dim] [bold]askr init[/bold] [dim]to generate a real architecture.md[/dim]")
+        _create_fallback_generated_files(developer)
 
     console.print()
 
     _install_hooks()
     for event in HOOK_MAP:
-        console.print(f"  [green]✓[/green] hook registered  [dim]{event}[/dim]")
+        console.print(f"  [green]✓[/green] hook  [dim]{event}[/dim]")
 
     console.print()
-
     _update_gitignore()
 
-    console.print("  [dim]state files are in[/dim] [bold]askr_state/[/bold]")
-    console.print("  [dim]commit them to git so your team shares the same ground truth[/dim]")
+    console.print("  [dim]state files:[/dim] [bold]askr_state/[/bold]")
+    console.print("  [dim]commit askr_state/ to git so your team shares the same ground truth[/dim]")
     console.print()
-    console.print("  [green]done[/green]  - start Claude Code and Askr will track the session\n")
+    console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
 
 def cmd_status():
@@ -166,15 +291,16 @@ def cmd_status():
     console.print()
     console.rule("[bold]askr status[/]", style="dim")
     console.print()
-    console.print(f"  [dim]developer[/dim]  [bold]{developer}[/bold]")
-    console.print(f"  [dim]state dir[/dim]  {'[green]found[/green]' if os.path.isdir(get_state_dir()) else '[red]not found - run askr init[/red]'}")
+    console.print(f"  [dim]developer[/dim]   [bold]{developer}[/bold]")
+    console.print(f"  [dim]state dir[/dim]   {'[green]found[/green]' if os.path.isdir(get_state_dir()) else '[red]missing - run askr init[/red]'}")
+    console.print(f"  [dim]snapshot[/dim]    {'[green]found[/green]' if os.path.exists(SNAPSHOT_PATH) else '[yellow]missing - run ask init[/yellow]'}")
 
     if os.path.isdir(get_state_dir()):
         handover = state_path(f"handover_{developer}.md")
-        console.print(f"  [dim]handover[/dim]   {'[green]present[/green]' if os.path.exists(handover) else '[yellow]missing[/yellow]'}")
-
-        settings_ok = os.path.exists(CLAUDE_SETTINGS)
-        console.print(f"  [dim]hooks[/dim]      {'[green]configured[/green]' if settings_ok else '[yellow]not configured - run askr init[/yellow]'}")
+        arch = state_path("architecture.md")
+        console.print(f"  [dim]handover[/dim]    {'[green]present[/green]' if os.path.exists(handover) else '[yellow]missing[/yellow]'}")
+        console.print(f"  [dim]architecture[/dim] {'[green]present[/green]' if os.path.exists(arch) else '[yellow]missing[/yellow]'}")
+        console.print(f"  [dim]hooks[/dim]       {'[green]configured[/green]' if os.path.exists(CLAUDE_SETTINGS) else '[yellow]not configured - run askr init[/yellow]'}")
 
     console.print()
 
