@@ -9,6 +9,18 @@ Last active: 2026-06-02 17:56
 
 ### In Progress
 
+- [18:33] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [18:33] Ran: /Users/bippin/Desktop/askr/venv/bin/python askr/cli/askr.py goal done "Test goal
+- [18:08] Ran: /Users/bippin/Desktop/askr/venv/bin/python askr/cli/askr.py goal add "Test goals
+- [18:08] Modified: /Users/bippin/Desktop/askr/askr/state/goals.py
+- [18:05] Modified: /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- [18:05] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [18:04] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [18:04] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [18:04] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [18:04] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [18:04] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [18:04] Ran: git add -A && git commit -m "feat(p1-5b): askr goal add/done and askr goals comm
 - [18:04] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [18:03] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [18:03] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py

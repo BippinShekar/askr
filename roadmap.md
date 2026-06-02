@@ -81,19 +81,19 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Handle existing `.claude/settings.json` (merge, not overwrite) | ✅ Done |
 | `askr status` - show current session state | ✅ Done |
 
-**Stage P1-5: Goals tracking**
+**Stage P1-5: Goals tracking** - done
 
 | Task | Status |
 |---|---|
-| `askr_state/goals.md` format - shared, product-level, date-organized | 🔲 Todo |
-| `askr/state/goals.py` - add, complete, load, format for context | 🔲 Todo |
-| `askr goal add "..."` command | 🔲 Todo |
-| `askr goal done "..."` command | 🔲 Todo |
-| `askr goals` command - list open goals | 🔲 Todo |
-| `askr init` creates `goals.md` from template | 🔲 Todo |
-| `SessionStart` hook injects today's goals into Claude context | 🔲 Todo |
-| `Stop` hook infers goal completion from session transcript | 🔲 Todo |
-| `Notification` hook stub - HITL forwarding (Discord wired in Phase 3) | 🔲 Todo |
+| `askr_state/goals.md` format - shared, product-level, date-organized | ✅ Done |
+| `askr/state/goals.py` - add, complete, load, format for context | ✅ Done |
+| `askr goal add "..."` command | ✅ Done |
+| `askr goal done "..."` command | ✅ Done |
+| `askr goals` command - list open goals | ✅ Done |
+| `askr init` creates `goals.md` from template | ✅ Done |
+| `SessionStart` hook injects today's goals into Claude context | ✅ Done |
+| `Stop` hook infers goal completion from session transcript | ✅ Done |
+| `Notification` hook stub - HITL forwarding (Discord wired in Phase 3) | ✅ Done |
 
 **Done when:** Dev B opens a session, Claude knows today's goals without being told. Session ends, completed goals are marked done automatically.
 

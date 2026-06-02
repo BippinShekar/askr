@@ -90,7 +90,20 @@ def _summarize_session(transcript_entries: list[dict], developer: str) -> str:
     sections.append("## Tests\n\nUnknown - check last Bash output")
     sections.append("## Blockers\n\nNone noted")
 
-    return "\n\n".join(sections)
+    return "\n\n".join(sections), tool_actions
+
+
+def _infer_and_update_goals(tool_actions: list[str]):
+    try:
+        from askr.state.goals import load_today_goals, infer_completed_from_activity, complete_goal
+        goals = load_today_goals()
+        if not goals or not tool_actions:
+            return
+        completed = infer_completed_from_activity(tool_actions, goals)
+        for g in completed:
+            complete_goal(g)
+    except Exception:
+        pass
 
 
 def _git_commit_push(developer: str):
@@ -127,10 +140,12 @@ def main():
     transcript_path = payload.get("transcript_path", "")
     entries = _read_transcript(transcript_path)
 
-    summary = _summarize_session(entries, developer)
+    summary, tool_actions = _summarize_session(entries, developer)
 
     from askr.state.writer import write_handover
     write_handover(summary, developer)
+
+    _infer_and_update_goals(tool_actions)
 
     _git_commit_push(developer)
 

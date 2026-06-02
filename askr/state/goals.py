@@ -135,7 +135,7 @@ def format_for_context() -> str:
         for g in today_goals:
             parts.append(f"  - [ ] {g}")
     else:
-        parts.append("  [none set - add with: askr goal add \"...\""]
+        parts.append('  [none set - add with: askr goal add "..."]')
 
     if backlog:
         parts.append("\nBACKLOG (top 3):")
