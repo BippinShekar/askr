@@ -4,7 +4,7 @@ Building in public. Updated as work progresses.
 
 ---
 
-## Phase 0  - Complete ✅
+## Phase 0 - Complete ✅
 
 **The ask CLI + package restructure**
 
@@ -25,140 +25,137 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Package structure (`askr/`) | ✅ Done |
 | Concurrent snapshot (6x faster, ThreadPoolExecutor) | ✅ Done |
 | Multi-language dependency graph (TS/JS/Go/Ruby/Rust/Swift) | ✅ Done |
-| Clean pipeline (no hardcoded strings) | ✅ Done |
-| Log moved to `~/.config/askr/usage.log` (global, not per-project) | ✅ Done |
-| `askr` CLI stub (session orchestration placeholder) | ✅ Done |
+| Clean pipeline, no hardcoded strings | ✅ Done |
+| Log moved to `~/.config/askr/usage.log` | ✅ Done |
+| `askr` CLI entry point | ✅ Done |
 | Phase 1 module stubs (session/, hooks/, state/, notifications/) | ✅ Done |
 
 ---
 
-## Phase 1 - Core State Loop
+## Phase 1 - Complete ✅
 
 **Goal:** Both developers' Claude sessions always start informed. State persists across sessions via git. No manual handoff needed.
 
-**Conflict-resistant file design (built in from the start):**
+**Conflict-resistant file design:**
 
 | File | Design | Conflict risk |
 |---|---|---|
 | `handover_<dev>.md` | One file per developer | None |
 | `current_task_<dev>.md` | One file per developer | None |
-| `decisions.md` | Append-only, timestamped lines | None (git merges appends) |
+| `decisions.md` | Append-only, timestamped lines | None |
 | `implementation_state.md` | Fenced sections per developer | Minimal |
 | `architecture.md` | Shared, last-write-wins | Occasional, easy to resolve |
 | `blockers.md` | Shared, last-write-wins | Occasional, easy to resolve |
+| `goals.md` | Shared, Done section append-only | Minimal |
 
-**Stage P1-1: State file templates + developer config** - done
+**Stage P1-1: State file templates + developer config** ✅
 
 | Task | Status |
 |---|---|
-| `askr/state/templates/` with all 6 template files | ✅ Done |
-| `askr/state/config.py` - load developer name from `~/.config/askr/config.json` | ✅ Done |
+| `askr/state/templates/` with all 7 template files (incl. goals) | ✅ Done |
+| `askr/state/config.py` - developer name + absolute project path | ✅ Done |
+| Absolute project path stored in config - hooks work regardless of CWD | ✅ Done |
 
-**Stage P1-2: State writer + reader** - done
+**Stage P1-2: State writer + reader** ✅
 
 | Task | Status |
 |---|---|
 | `askr/state/writer.py` - write/append to all state files | ✅ Done |
 | `askr/state/reader.py` - load + format state for Claude context injection | ✅ Done |
+| `askr/state/goals.py` - add, complete, load, format goals for context | ✅ Done |
 
-**Stage P1-3: Claude Code hooks** - done
-
-| Task | Status |
-|---|---|
-| `SessionStart` hook - git pull, inject state into context | ✅ Done |
-| `UserPromptSubmit` hook - update `current_task_<dev>.md` | ✅ Done |
-| `PostToolUse` hook - update `implementation_state.md` developer section | ✅ Done |
-| `Stop` hook - generate `handover_<dev>.md`, git commit + push | ✅ Done |
-| `PreCompact` hook - emergency checkpoint fallback | ✅ Done |
-
-**Stage P1-4: askr init command** - done
+**Stage P1-3: Claude Code hooks** ✅
 
 | Task | Status |
 |---|---|
-| `askr init` - prompt for developer name, save to config | ✅ Done |
-| Create `askr/state/` directory from templates | ✅ Done |
-| Write hook commands into `.claude/settings.json` | ✅ Done |
-| Handle existing `.claude/settings.json` (merge, not overwrite) | ✅ Done |
-| `askr status` - show current session state | ✅ Done |
+| `SessionStart` - git pull, inject state + today's goals into context | ✅ Done |
+| `UserPromptSubmit` - strip IDE metadata tags, append to current_task (last 5) | ✅ Done |
+| `PostToolUse` - update implementation_state.md developer section | ✅ Done |
+| `Stop` - generate handover, infer goal completion, commit + push | ✅ Done |
+| `PreCompact` - emergency checkpoint fallback | ✅ Done |
+| `Notification` - HITL stub (Discord wired in Phase 3) | ✅ Done |
 
-**Stage P1-5: Goals tracking** - done
+**Stage P1-4: askr init command** ✅
 
 | Task | Status |
 |---|---|
-| `askr_state/goals.md` format - shared, product-level, date-organized | ✅ Done |
-| `askr/state/goals.py` - add, complete, load, format for context | ✅ Done |
-| `askr goal add "..."` command | ✅ Done |
-| `askr goal done "..."` command | ✅ Done |
-| `askr goals` command - list open goals | ✅ Done |
+| `askr init` - developer name, save absolute project path | ✅ Done |
+| `askr init` - generates real `architecture.md` from codebase snapshot | ✅ Done |
+| `askr init` - generates real `implementation_state.md` from snapshot | ✅ Done |
+| `askr init` - falls back to templates if no snapshot (prompts: run `ask init` first) | ✅ Done |
+| Hook commands written into `.claude/settings.json` (merge, not overwrite) | ✅ Done |
+| `askr status` - show state, snapshot, hooks, handover presence | ✅ Done |
+| `askr_state/` at project root, separate from Python package code | ✅ Done |
+
+**Stage P1-5: Goals tracking** ✅
+
+| Task | Status |
+|---|---|
+| `askr_state/goals.md` - shared, product-level, date-organized | ✅ Done |
+| `askr goal add "..."` - adds to today | ✅ Done |
+| `askr goal add "..." --backlog` - adds to backlog | ✅ Done |
+| `askr goal done "..."` - marks complete with timestamp | ✅ Done |
+| `askr goals` - list today, backlog, done today | ✅ Done |
 | `askr init` creates `goals.md` from template | ✅ Done |
-| `SessionStart` hook injects today's goals into Claude context | ✅ Done |
-| `Stop` hook infers goal completion from session transcript | ✅ Done |
-| `Notification` hook stub - HITL forwarding (Discord wired in Phase 3) | ✅ Done |
+| `SessionStart` injects today's goals into Claude context | ✅ Done |
+| `Stop` infers goal completion from session transcript via LLM | ✅ Done |
 
-**Done when:** Dev B opens a session, Claude knows today's goals without being told. Session ends, completed goals are marked done automatically.
+**Done when:** Dev B opens a session, Claude knows today's goals and last handover without being told. Session ends, completed goals marked done, state committed and pushed automatically.
 
 ---
 
-## Phase 2  - Session Orchestration
+## Phase 2 - Session Orchestration
 
-**Goal:** Askr intercepts before Claude degrades or quota runs out. Both triggers working autonomously.
-
-**Target:** 2 weeks after Phase 1
+**Goal:** Askr intercepts before Claude degrades or quota runs out. Both triggers working autonomously. Goals drive what Claude works on.
 
 | Feature | Status |
 |---|---|
 | JSONL session file monitoring (token growth per turn) | 🔲 Todo |
-| StatusLine integration (`remaining_percentage` from payload) | 🔲 Todo |
-| StatusLine display: `ctx:62%  quota:78%` | 🔲 Todo |
+| StatusLine integration (`remaining_percentage` from Claude payload) | 🔲 Todo |
+| StatusLine display: `ctx:62% quota:78%` | 🔲 Todo |
 | Quota burn rate calculation (tokens/min vs. 5-hour window) | 🔲 Todo |
-| Forecast engine: context ETA + quota ETA | 🔲 Todo |
+| Dual forecast engine: context ETA + quota ETA, whichever fires first | 🔲 Todo |
 | Safe pause detection (idle, no active writes, git clean) | 🔲 Todo |
-| **Trigger A:** ~90% context → checkpoint → new session immediately | 🔲 Todo |
-| **Trigger B:** quota low → checkpoint → wait → auto-resume | 🔲 Todo |
+| Trigger A: ~90% context → checkpoint → new session immediately | 🔲 Todo |
+| Trigger B: quota low → checkpoint → wait for reset → auto-resume | 🔲 Todo |
 | Exact reset timestamp from JSONL first-entry + 5h | 🔲 Todo |
-| `PreCompact` hook as emergency fallback | 🔲 Todo |
-| Real use: run overnight, verify unattended continuation | 🔲 Todo |
+| `askr launch` - start Claude targeting top open goal autonomously | 🔲 Todo |
+| Session marks goal done on completion, picks next goal | 🔲 Todo |
+| Real use: run overnight, verify unattended continuation + goal tracking | 🔲 Todo |
 
-| Goals-aware launch - `askr launch` picks top open goal, works on it autonomously | 🔲 Todo |
-| Session targets a goal, marks it done when complete, picks next | 🔲 Todo |
-
-**Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress. Goals updated automatically.
+**Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress with goals updated.
 
 ---
 
-## Phase 3  - Morning Report + Notifications
+## Phase 3 - Notifications + Morning Report
 
 **Goal:** The wow moment. The tweet screenshot. The thing that makes people want it.
 
-**Target:** 1 week after Phase 2
-
 | Feature | Status |
 |---|---|
-| Discord webhook configuration | 🔲 Todo |
+| Discord webhook configuration (`ASKR_DISCORD_WEBHOOK` in `.env`) | 🔲 Todo |
 | Checkpoint complete notification | 🔲 Todo |
 | Session resumed notification | 🔲 Todo |
-| Morning report generation (sessions, time saved, completed, decisions, next step) | 🔲 Todo |
+| Morning report (sessions, time saved, decisions made, goals completed, next step) | 🔲 Todo |
 | Time-saved analytics (per session, daily, weekly) | 🔲 Todo |
 | Goal completed notification (fires when stop hook marks a goal done) | 🔲 Todo |
-| HITL notification - forwards Claude permission requests to Discord overnight | 🔲 Todo |
-| Daily goal summary to Discord (what was completed, what is still open) | 🔲 Todo |
-| StatusLine: `Askr ↺ Resumed  saved:47min` | 🔲 Todo |
+| HITL notification - Notification hook forwards to Discord overnight | 🔲 Todo |
+| Daily goal summary (what completed, what still open) | 🔲 Todo |
+| StatusLine: `Askr ↺ Resumed saved:47min` | 🔲 Todo |
 
-**Done when:** First real overnight morning report screenshot taken and posted.
+**Done when:** First real overnight morning report screenshot taken and posted to Twitter/X.
 
 ---
 
-## Phase 4  - Public Launch
+## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
-
-**Target:** 1 week after Phase 3
 
 | Feature | Status |
 |---|---|
 | README polished with GIF/screenshot of morning report | 🔲 Todo |
 | GIF of StatusLine during session transition | 🔲 Todo |
-| Clean install story (`askr init` from scratch in < 2 min) | 🔲 Todo |
+| Clean install story (`ask init` + `askr init` from scratch in < 3 min) | 🔲 Todo |
 | GitHub release with changelog | 🔲 Todo |
 | Twitter/X launch thread | 🔲 Todo |
 | First external user onboarded | 🔲 Todo |
@@ -168,15 +165,15 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 5  - Hardening (Post-Launch)
+## Phase 5 - Hardening
 
 **Goal:** Zero misfires. Trust is the product.
 
 | Feature | Status |
 |---|---|
-| False positive audit (checkpoint should never fire mid-write, mid-test) | 🔲 Todo |
+| False positive audit (checkpoint never fires mid-write, mid-test) | 🔲 Todo |
 | Manual override: `askr pause` / `askr resume` | 🔲 Todo |
-| Per-project config (threshold percentages, Discord webhook, developer name) | 🔲 Todo |
+| Per-project config (thresholds, Discord webhook) | 🔲 Todo |
 | Linux support | 🔲 Todo |
 | Windows/WSL support | 🔲 Todo |
 | Test suite for hook scripts | 🔲 Todo |
@@ -185,16 +182,28 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ## Decisions Log
 
-**2026-06-02**
-- Autonomous Mode is primary. Companion Mode (VS Code/Desktop) deferred until core is stable.
-- Two triggers confirmed: Trigger A (context ~90%, immediate new session) and Trigger B (quota low, wait for reset).
-- 50% context = StatusLine warning only. Not a stop trigger.
-- handover.md is the primary resume mechanism. Claude reads it on session start.
-- State files committed to git. Team sync is a core feature, not an add-on.
-- `ask` CLI confirmed as the fallback Q&A layer during quota resets. Already shipped.
-- Per-developer file naming to prevent merge conflicts during simultaneous work.
-- decisions.md is append-only + timestamped  - conflict-free by design.
-- Business model: irrelevant for now. Build in public, get stars, establish reputation.
+**2026-06-02 - Planning session**
+- Autonomous Mode primary. Companion Mode (VS Code/Desktop) deferred - no stable session creation API.
+- Two triggers: Trigger A (context ~90%, immediate new session) and Trigger B (quota low, wait for reset).
+- 50% context = StatusLine warning only, not a stop trigger.
+- handover.md is the primary session resume mechanism.
+- State files committed to git. Team sync is core, not add-on.
+- `ask` CLI is the fallback Q&A layer during quota resets.
+- Per-developer file naming prevents merge conflicts.
+- decisions.md is append-only + timestamped - conflict-free by design.
+- Business model irrelevant for now. Build in public, get stars, establish reputation.
+
+**2026-06-02 - Phase 1 build decisions**
+- `askr_state/` moved to project root, separate from Python package (`askr/state/` is code only).
+- `.claude/settings.json` excluded from git - contains machine-specific absolute paths. Each developer runs `askr init` once.
+- Absolute project path stored in `~/.config/askr/config.json` during init - hooks use it so CWD never matters.
+- `askr init` runs a Claude Haiku call over the codebase snapshot to generate real `architecture.md`. Falls back to template if no snapshot.
+- `implementation_state.md` pre-populated from snapshot's top-ranked files on init.
+- `current_task_<dev>.md` changed from single-overwrite to append with last 5 entries + timestamps.
+- IDE metadata tags (`<ide_opened_file>`, `<ide_selection>`, etc.) stripped from prompts before writing current_task.
+- Goals feature added to Phase 1 (state + tracking), Phase 2 (autonomous execution), Phase 3 (Discord notifications).
+- `Notification` hook added for HITL forwarding - stub in Phase 1, Discord wired in Phase 3.
+- `.askr_history` removed from .gitignore - Q&A log is useful traceability for both developers.
 
 ---
 
@@ -202,8 +211,8 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 | Idea | Reason |
 |---|---|
-| Companion Mode (VS Code/Desktop) first | No stable session creation API. Autonomous Mode has all the value. |
-| Model-agnostic intelligence layer | Becomes Cursor without the IDE. Loses focus. |
+| Companion Mode first | No stable session creation API. Autonomous Mode has all the value. |
+| Model-agnostic intelligence layer | Becomes Cursor without the IDE. No structural advantage. |
 | Slack / email notifications | Ship one platform (Discord) perfectly first. |
-| Checkpoint at 50% context | That's the quality signal, not the action threshold. Action at ~90%. |
-| Autonomous overnight as the MVP | Core state loop must work first. Overnight is Phase 2. |
+| Checkpoint at 50% context | Quality signal only, not action threshold. Action at ~90%. |
+| Autonomous overnight as MVP | Core state loop had to work first. Overnight is Phase 2. |
