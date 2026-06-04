@@ -2,27 +2,34 @@
 """
 Phase 2 - Session Lifecycle Daemon
 
-Background process started by `askr launch`. Polls session stats every 30s.
-When a threshold is crossed and it's safe, checkpoints and transitions:
+Installed as a launchd service by `askr init`. Starts at login, runs silently.
+No manual start needed — it is always on.
 
-  Trigger A (context >= 90%):
-    checkpoint → kill claude → start new claude immediately
+Session liveness: detected from ~/.config/askr/session_stats.json mtime.
+  active  = updated within last 10 minutes (Claude session running)
+  idle    = stale or missing (no session)
 
-  Trigger B (quota >= 85%):
-    checkpoint → kill claude → sleep until reset → start new claude
+When session goes active:
+  → start caffeinate -i  (prevents system sleep, allows display to dim)
+  → poll every 30s for threshold breaches
 
-Started via: askr launch
-Stopped via: askr launch --stop (kills by PID file)
+When session goes idle:
+  → stop caffeinate  (device can sleep normally)
+  → poll every 60s
 
-Writes ~/.config/askr/daemon.pid while running.
-Writes ~/.config/askr/launch_mode.json to signal SessionStart hook about
-the active goal for the new session.
+Trigger A (context >= 90%):
+  safe_pause check → checkpoint → kill claude → start new claude immediately
+
+Trigger B (quota window <= 30 min remaining):
+  safe_pause check → checkpoint → kill claude → sleep until reset → start new claude
+
+Battery note: caffeinate -i cannot prevent sleep when lid is closed on battery.
+Plugging in is required for reliable overnight runs.
 """
 
 import os
 import sys
 
-# Ensure the askr package root is on sys.path when run as a subprocess
 _ASKR_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ASKR_ROOT not in sys.path:
     sys.path.insert(0, _ASKR_ROOT)
@@ -33,15 +40,22 @@ import signal
 import subprocess
 from datetime import datetime, timezone
 
-_PID_PATH        = os.path.expanduser("~/.config/askr/daemon.pid")
-_STATS_PATH      = os.path.expanduser("~/.config/askr/session_stats.json")
-_LAUNCH_MODE_PATH = os.path.expanduser("~/.config/askr/launch_mode.json")
-_LOG_PATH        = os.path.expanduser("~/.config/askr/daemon.log")
+_PID_PATH            = os.path.expanduser("~/.config/askr/daemon.pid")
+_CAFFEINATE_PID_PATH = os.path.expanduser("~/.config/askr/caffeinate.pid")
+_STATS_PATH          = os.path.expanduser("~/.config/askr/session_stats.json")
+_LAUNCH_MODE_PATH    = os.path.expanduser("~/.config/askr/launch_mode.json")
+_LOG_PATH            = os.path.expanduser("~/.config/askr/daemon.log")
 
-POLL_INTERVAL    = 30   # seconds between stats checks
-SAFE_RETRY_LIMIT = 3    # retries if not safe to pause
-SAFE_RETRY_WAIT  = 60   # seconds to wait between retries
+POLL_ACTIVE        = 30   # seconds when session is live
+POLL_IDLE          = 60   # seconds when no session
+SESSION_STALE_SECS = 600  # 10 min without update → session ended
+SAFE_RETRY_LIMIT   = 3
+SAFE_RETRY_WAIT    = 60
 
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 
 def _log(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -54,6 +68,10 @@ def _log(msg: str):
     except Exception:
         pass
 
+
+# ---------------------------------------------------------------------------
+# PID management
+# ---------------------------------------------------------------------------
 
 def _write_pid():
     os.makedirs(os.path.dirname(_PID_PATH), exist_ok=True)
@@ -68,13 +86,85 @@ def _clear_pid():
         pass
 
 
+# ---------------------------------------------------------------------------
+# Caffeinate
+# ---------------------------------------------------------------------------
+
+def _caffeinate_running() -> bool:
+    try:
+        if not os.path.exists(_CAFFEINATE_PID_PATH):
+            return False
+        with open(_CAFFEINATE_PID_PATH) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        try:
+            os.remove(_CAFFEINATE_PID_PATH)
+        except Exception:
+            pass
+        return False
+
+
+def _start_caffeinate():
+    if _caffeinate_running():
+        return
+    try:
+        proc = subprocess.Popen(
+            ["caffeinate", "-i"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        os.makedirs(os.path.dirname(_CAFFEINATE_PID_PATH), exist_ok=True)
+        with open(_CAFFEINATE_PID_PATH, "w") as f:
+            f.write(str(proc.pid))
+        _log("caffeinate -i started — system sleep prevented, display can dim")
+
+        # Warn if on battery
+        try:
+            r = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True)
+            if "Battery Power" in r.stdout:
+                _log("WARNING: on battery — close lid will sleep device regardless of caffeinate. Plug in for overnight runs.")
+        except Exception:
+            pass
+
+    except FileNotFoundError:
+        _log("WARNING: caffeinate not found — device may sleep during session")
+    except Exception as e:
+        _log(f"caffeinate start failed: {e}")
+
+
+def _stop_caffeinate():
+    if not _caffeinate_running():
+        return
+    try:
+        with open(_CAFFEINATE_PID_PATH) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, signal.SIGTERM)
+        try:
+            os.remove(_CAFFEINATE_PID_PATH)
+        except Exception:
+            pass
+        _log("caffeinate stopped — device can sleep normally")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Session liveness
+# ---------------------------------------------------------------------------
+
+def _session_is_active() -> bool:
+    try:
+        return time.time() - os.path.getmtime(_STATS_PATH) < SESSION_STALE_SECS
+    except Exception:
+        return False
+
+
 def _read_stats() -> dict:
     try:
-        if not os.path.exists(_STATS_PATH):
-            return {}
-        mtime = os.path.getmtime(_STATS_PATH)
-        # stale if not updated in 10 minutes (claude likely idle or stopped)
-        if time.time() - mtime > 600:
+        if not _session_is_active():
             return {}
         with open(_STATS_PATH) as f:
             return json.load(f)
@@ -82,33 +172,30 @@ def _read_stats() -> dict:
         return {}
 
 
-def _find_claude_pid() -> list:
-    """Return list of PIDs for running claude processes."""
+# ---------------------------------------------------------------------------
+# Claude process
+# ---------------------------------------------------------------------------
+
+def _find_claude_pids() -> list:
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", "claude"],
-            capture_output=True, text=True
-        )
-        return [int(p) for p in result.stdout.strip().splitlines() if p.strip().isdigit()]
+        r = subprocess.run(["pgrep", "-f", "claude"], capture_output=True, text=True)
+        return [int(p) for p in r.stdout.strip().splitlines() if p.strip().isdigit()]
     except Exception:
         return []
 
 
 def _kill_claude():
-    pids = _find_claude_pid()
-    for pid in pids:
+    for pid in _find_claude_pids():
         try:
             os.kill(pid, signal.SIGTERM)
             _log(f"sent SIGTERM to claude pid {pid}")
         except ProcessLookupError:
             pass
-    if pids:
+    if _find_claude_pids():
         time.sleep(2)
-        # SIGKILL any that didn't exit
-        for pid in _find_claude_pid():
+        for pid in _find_claude_pids():
             try:
                 os.kill(pid, signal.SIGKILL)
-                _log(f"sent SIGKILL to claude pid {pid}")
             except ProcessLookupError:
                 pass
 
@@ -124,47 +211,50 @@ def _start_claude(project_path: str):
         )
         _log(f"started new claude session in {project_path}")
     except FileNotFoundError:
-        _log("ERROR: 'claude' not found in PATH - cannot start new session")
+        _log("ERROR: 'claude' not found in PATH — cannot start new session")
 
 
 def _wait_for_reset(reset_at_iso: str):
     try:
         reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
-        wait_seconds = (reset_at - now).total_seconds()
-        if wait_seconds > 0:
-            _log(f"quota reset at {reset_at.strftime('%H:%M UTC')} — sleeping {int(wait_seconds)}s")
-            time.sleep(wait_seconds + 30)  # 30s buffer after reset
+        wait_secs = (reset_at - datetime.now(timezone.utc)).total_seconds()
+        if wait_secs > 0:
+            _log(f"quota reset at {reset_at.strftime('%H:%M UTC')} — sleeping {int(wait_secs)}s")
+            time.sleep(wait_secs + 30)
         else:
-            _log("quota reset already passed, resuming immediately")
-    except Exception as e:
-        _log(f"could not parse reset time: {e} — waiting 5 minutes as fallback")
+            _log("quota reset already passed — resuming immediately")
+    except Exception:
+        _log("could not parse reset time — waiting 5 min as fallback")
         time.sleep(300)
+
+
+def _get_next_goal() -> str:
+    try:
+        from askr.state.goals import load_today_goals, load_open_goals
+        today = load_today_goals()
+        if today:
+            return today[0]
+        return (load_open_goals() or [""])[0]
+    except Exception:
+        return ""
 
 
 def _write_launch_mode(goal: str = ""):
     try:
         os.makedirs(os.path.dirname(_LAUNCH_MODE_PATH), exist_ok=True)
         with open(_LAUNCH_MODE_PATH, "w") as f:
-            json.dump({"active": True, "goal": goal, "timestamp": datetime.now(timezone.utc).isoformat()}, f)
+            json.dump({
+                "active": True,
+                "goal": goal,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
     except Exception:
         pass
 
 
-def _get_next_goal() -> str:
-    try:
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-        from askr.state.goals import load_today_goals, load_open_goals
-        today = load_today_goals()
-        if today:
-            return today[0]
-        open_goals = load_open_goals()
-        if open_goals:
-            return open_goals[0]
-        return ""
-    except Exception:
-        return ""
-
+# ---------------------------------------------------------------------------
+# Trigger execution
+# ---------------------------------------------------------------------------
 
 def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.state.config import load_developer
@@ -182,36 +272,41 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
         if attempt < SAFE_RETRY_LIMIT:
             time.sleep(SAFE_RETRY_WAIT)
     else:
-        _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping checkpoint this cycle")
+        _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping this cycle")
         return
 
     _log("safe to pause — creating checkpoint")
     result = create_checkpoint(trigger_type=trigger, developer=developer)
-    _log(f"checkpoint done: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
+    _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
-    next_goal = _get_next_goal()
-    _write_launch_mode(next_goal)
-
+    _write_launch_mode(_get_next_goal())
     _kill_claude()
 
     if trigger == "quota":
         reset_at = stats.get("reset_at")
-        if reset_at:
-            _wait_for_reset(reset_at)
-        else:
-            _log("no reset_at in stats — waiting 5 minutes")
-            time.sleep(300)
+        _wait_for_reset(reset_at) if reset_at else time.sleep(300)
 
     _log("starting new claude session")
     _start_claude(project_path)
 
 
-def run_daemon(project_path: str):
+# ---------------------------------------------------------------------------
+# Main daemon loop
+# ---------------------------------------------------------------------------
+
+def run_daemon():
+    """
+    Always-on daemon. Installed via launchd; starts at login.
+    No project_path argument — reads from ~/.config/askr/config.json.
+    """
     _write_pid()
-    _log(f"daemon started — project={project_path} poll={POLL_INTERVAL}s")
+    _log("daemon started (always-on mode)")
+
+    was_active = False
 
     def _on_term(sig, frame):
-        _log("received SIGTERM — shutting down")
+        _log("received SIGTERM — stopping")
+        _stop_caffeinate()
         _clear_pid()
         sys.exit(0)
 
@@ -220,32 +315,51 @@ def run_daemon(project_path: str):
 
     try:
         while True:
-            stats = _read_stats()
-            if stats:
-                ctx_pct       = stats.get("context_pct", 0)
-                ctx_label     = stats.get("context_label", "ok")
-                q_eta_minutes = stats.get("quota_eta_minutes")
+            from askr.state.config import load_project_path
+            project_path = load_project_path()
 
-                context_hit = ctx_pct >= 0.90
-                quota_hit   = q_eta_minutes is not None and q_eta_minutes <= 30
+            active = _session_is_active()
 
-                if context_hit:
-                    _log(f"Trigger A: context={ctx_pct:.1%} >= 90% [{ctx_label}]")
-                    _execute_trigger("context", stats, project_path)
-                elif quota_hit:
-                    _log(f"Trigger B: quota window expiring in {q_eta_minutes:.0f}min")
-                    _execute_trigger("quota", stats, project_path)
-                else:
-                    q_info = f"q_eta={q_eta_minutes:.0f}min" if q_eta_minutes else "q_eta=?"
-                    _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_info}")
+            if active and not was_active:
+                _log(f"session active — project={project_path}")
+                _start_caffeinate()
+            elif not active and was_active:
+                _log("session ended or went idle")
+                _stop_caffeinate()
 
-            time.sleep(POLL_INTERVAL)
+            was_active = active
+
+            if active:
+                stats = _read_stats()
+                if stats:
+                    ctx_pct       = stats.get("context_pct", 0)
+                    ctx_label     = stats.get("context_label", "ok")
+                    q_eta_minutes = stats.get("quota_eta_minutes")
+
+                    if ctx_pct >= 0.90:
+                        _log(f"Trigger A: context={ctx_pct:.1%} [{ctx_label}]")
+                        _execute_trigger("context", stats, project_path)
+                    elif q_eta_minutes is not None and q_eta_minutes <= 30:
+                        _log(f"Trigger B: quota window expiring in {q_eta_minutes:.0f}min")
+                        _execute_trigger("quota", stats, project_path)
+                    else:
+                        q_info = f"q_eta={q_eta_minutes:.0f}min" if q_eta_minutes else "q_eta=?"
+                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_info}")
+
+                time.sleep(POLL_ACTIVE)
+            else:
+                time.sleep(POLL_IDLE)
+
     finally:
+        _stop_caffeinate()
         _clear_pid()
 
 
+# ---------------------------------------------------------------------------
+# Control helpers (used by CLI)
+# ---------------------------------------------------------------------------
+
 def stop_daemon() -> bool:
-    """Kill the running daemon. Returns True if a process was found."""
     if not os.path.exists(_PID_PATH):
         return False
     try:
@@ -265,7 +379,7 @@ def daemon_is_running() -> bool:
     try:
         with open(_PID_PATH) as f:
             pid = int(f.read().strip())
-        os.kill(pid, 0)  # signal 0 = existence check
+        os.kill(pid, 0)
         return True
     except (ProcessLookupError, ValueError, OSError):
         _clear_pid()
@@ -273,8 +387,4 @@ def daemon_is_running() -> bool:
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("project_path")
-    args = parser.parse_args()
-    run_daemon(args.project_path)
+    run_daemon()

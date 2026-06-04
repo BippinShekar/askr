@@ -105,6 +105,60 @@ def _install_ide_extension():
     return installed
 
 
+def _install_launchd() -> tuple[bool, str]:
+    """
+    Install and load a launchd agent so the lifecycle daemon starts at login.
+    Returns (success, plist_path).
+    """
+    plist_label = "com.askr.daemon"
+    plist_path  = os.path.expanduser(f"~/Library/LaunchAgents/{plist_label}.plist")
+    log_path    = os.path.expanduser("~/.config/askr/daemon.log")
+    lifecycle   = os.path.join(ASKR_DIR, "askr", "session", "lifecycle.py")
+
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{plist_label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{_python_cmd()}</string>
+        <string>{lifecycle}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{log_path}</string>
+</dict>
+</plist>"""
+
+    try:
+        os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+        with open(plist_path, "w") as f:
+            f.write(plist)
+
+        import subprocess as _sp
+        _sp.run(["launchctl", "unload", plist_path], capture_output=True)
+        result = _sp.run(["launchctl", "load", plist_path], capture_output=True, text=True)
+        return result.returncode == 0, plist_path
+    except Exception as e:
+        return False, str(e)
+
+
+def _power_source() -> str:
+    try:
+        import subprocess as _sp
+        r = _sp.run(["pmset", "-g", "batt"], capture_output=True, text=True)
+        return "ac" if "AC Power" in r.stdout else "battery"
+    except Exception:
+        return "unknown"
+
+
 def _create_skeleton_files(developer: str) -> tuple[list, list]:
     templates_dir = os.path.join(ASKR_DIR, "askr", "state", "templates")
     ensure_state_dir()
@@ -328,6 +382,18 @@ def cmd_init():
     else:
         console.print("  [dim]- IDE extension: no ~/.cursor/extensions or ~/.vscode/extensions found[/dim]")
 
+    ok, plist_path = _install_launchd()
+    if ok:
+        console.print("  [green]✓[/green] daemon → [dim]launchd (starts at login, always-on)[/dim]")
+    else:
+        console.print(f"  [yellow]⚠ launchd install failed:[/yellow] [dim]{plist_path}[/dim]")
+
+    power = _power_source()
+    if power == "battery":
+        console.print()
+        console.print("  [yellow]⚠ on battery[/yellow]  [dim]— caffeinate cannot prevent sleep if lid is closed.")
+        console.print("  [dim]  Plug in for reliable overnight runs.[/dim]")
+
     console.print()
     _update_gitignore()
 
@@ -498,46 +564,53 @@ def cmd_goal(args: list[str]):
 
 
 def cmd_launch(args: list):
-    from askr.session.lifecycle import daemon_is_running, stop_daemon, run_daemon
+    """
+    askr launch — show daemon status and session info.
+    The daemon runs automatically via launchd (installed by askr init).
+    Use --stop to manually kill it; it will restart at next login.
+    Use --restart to force an immediate restart.
+    """
+    from askr.session.lifecycle import daemon_is_running, stop_daemon
     import subprocess as _subprocess
 
-    project_path = load_project_path()
+    log_path = os.path.expanduser("~/.config/askr/daemon.log")
 
     if "--stop" in args:
         if stop_daemon():
-            console.print("\n  [green]✓[/green] daemon stopped\n")
+            console.print("\n  [green]✓[/green] daemon stopped")
+            console.print("  [dim]it will restart at next login (launchd managed)[/dim]")
+            console.print(f"  [dim]to disable permanently: launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist[/dim]\n")
         else:
             console.print("\n  [dim]no daemon running[/dim]\n")
         return
 
-    if daemon_is_running():
-        console.print("\n  [yellow]daemon already running[/yellow]")
-        console.print(f"  [dim]stop it with:[/dim] [bold]askr launch --stop[/bold]\n")
-        return
-
-    lifecycle_script = os.path.join(ASKR_DIR, "askr", "session", "lifecycle.py")
-    log_path = os.path.expanduser("~/.config/askr/daemon.log")
-
-    _subprocess.Popen(
-        [_python_cmd(), lifecycle_script, project_path],
-        stdout=open(log_path, "a"),
-        stderr=open(log_path, "a"),
-        start_new_session=True,
-    )
-
-    # brief pause to let daemon write its PID
-    import time as _time
-    _time.sleep(0.5)
+    if "--restart" in args:
+        stop_daemon()
+        import time as _time
+        _time.sleep(0.5)
+        lifecycle_script = os.path.join(ASKR_DIR, "askr", "session", "lifecycle.py")
+        _subprocess.Popen(
+            [_python_cmd(), lifecycle_script],
+            stdout=open(log_path, "a"),
+            stderr=open(log_path, "a"),
+            start_new_session=True,
+        )
+        _time.sleep(0.5)
 
     console.print()
     console.rule("[bold]askr launch[/]", style="dim")
     console.print()
 
-    if daemon_is_running():
-        console.print("  [green]✓[/green] daemon started")
+    running = daemon_is_running()
+    if running:
+        console.print("  [green]●[/green] daemon running  [dim](always-on via launchd)[/dim]")
     else:
-        console.print("  [yellow]⚠ daemon may not have started - check log[/yellow]")
-        console.print(f"  [dim]log:[/dim] {log_path}")
+        console.print("  [red]○[/red] daemon not running")
+        console.print("  [dim]reinstall:[/dim] [bold]askr init[/bold]  [dim]or restart:[/dim] [bold]askr launch --restart[/bold]")
+
+    power = _power_source()
+    if power == "battery":
+        console.print("  [yellow]⚠ on battery[/yellow]  [dim]— plug in for overnight runs[/dim]")
 
     try:
         from askr.state.goals import load_today_goals, load_open_goals
@@ -546,7 +619,7 @@ def cmd_launch(args: list):
         if goals:
             console.print(f"  [dim]next goal:[/dim] {goals[0]}")
         else:
-            console.print("  [dim]no goals set — add one:[/dim] [bold]askr goal add \"...\"[/bold]")
+            console.print("  [dim]no goals — add one:[/dim] [bold]askr goal add \"...\"[/bold]")
     except Exception:
         pass
 
@@ -554,7 +627,6 @@ def cmd_launch(args: list):
         console.print(f"  [dim]session:[/dim] {_statusline_text()}")
 
     console.print()
-    console.print("  [dim]monitoring thresholds: context 90% / quota 85%[/dim]")
     console.print(f"  [dim]log:[/dim] {log_path}")
     console.print(f"  [dim]stop:[/dim] [bold]askr launch --stop[/bold]")
     console.print()
@@ -569,8 +641,9 @@ def main():
         console.print("  [dim]askr goals               - show today's goals[/dim]")
         console.print("  [dim]askr goal add \"...\"      - add a goal for today[/dim]")
         console.print("  [dim]askr goal done \"...\"     - mark a goal complete[/dim]")
-        console.print("  [dim]askr launch              - start autonomous session daemon[/dim]")
-        console.print("  [dim]askr launch --stop       - stop the daemon[/dim]")
+        console.print("  [dim]askr launch              - show daemon status (always-on via launchd)[/dim]")
+        console.print("  [dim]askr launch --stop       - stop daemon manually[/dim]")
+        console.print("  [dim]askr launch --restart    - restart daemon now[/dim]")
         console.print("  [dim]askr log                 - session history (Phase 3)[/dim]")
         console.print()
         sys.exit(0)

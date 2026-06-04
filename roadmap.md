@@ -119,8 +119,11 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Trigger A: ~90% context → checkpoint → new session immediately | ✅ Done |
 | Trigger B: quota low → checkpoint → wait for reset → auto-resume | ✅ Done |
 | Exact reset timestamp from JSONL first-entry + 5h | ✅ Done |
-| `askr launch` - start daemon targeting top open goal autonomously | ✅ Done |
+| `askr launch` - daemon status, restart, stop | ✅ Done |
 | Session marks goal done on completion, picks next goal | ✅ Done |
+| launchd service — daemon starts at login, always-on, no manual step | ✅ Done |
+| `caffeinate -i` — auto when session active, releases when idle | ✅ Done |
+| Battery warning at init + daemon startup | ✅ Done |
 | Real use: run overnight, verify unattended continuation + goal tracking | 🔲 Verify |
 
 **Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress with goals updated.

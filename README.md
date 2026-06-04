@@ -60,6 +60,30 @@ Goals can be set manually or inferred automatically:
 - **During session**: Claude sees your goals in context and works toward them
 - **At session end**: Haiku infers which goals were completed based on what was actually built
 
+### Always-On Daemon + caffeinate
+
+`askr init` installs a launchd service (`com.askr.daemon`) that starts at login and runs silently in the background. No `askr launch` needed.
+
+**What it does automatically:**
+- Detects when a Claude Code session starts (by watching `session_stats.json` freshness)
+- Starts `caffeinate -i` — prevents system idle sleep, allows display to dim
+- Monitors context and quota thresholds every 30s
+- Fires Trigger A or B when thresholds are crossed
+- Releases caffeinate when the session ends or goes idle
+
+**Battery note:** `caffeinate -i` cannot prevent sleep when the lid is closed on battery. Plug in for overnight runs. Askr warns you at `askr init` and when a session starts on battery.
+
+```bash
+askr launch           # show daemon status + current session
+askr launch --stop    # kill daemon manually (restarts at next login)
+askr launch --restart # force restart now
+```
+
+To disable permanently:
+```bash
+launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist
+```
+
 ### IDE Status Bar
 
 Live context usage shown in Cursor / VS Code bottom status bar:
@@ -132,9 +156,10 @@ askr init                   # set up in this project
 askr status                 # show current state + session context %
 askr status --line          # one-line output for scripts / terminal
 
-# Autonomous mode
-askr launch                 # start lifecycle daemon + open claude
-askr launch --stop          # stop the daemon
+# Daemon (always-on via launchd — installed by askr init)
+askr launch                 # show daemon status + current session
+askr launch --stop          # kill daemon (restarts at next login)
+askr launch --restart       # force restart now
 
 # Goals
 askr goals                  # show today, backlog, done
