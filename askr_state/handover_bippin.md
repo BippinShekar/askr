@@ -1,10 +1,11 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 21:57
+Last updated: 2026-06-04 21:59
 
 ## Objective
 
-also, what do you think about this feature addition, or more like capability addition, to ensure we don't get sugar coated asnwers gassing up the user
+right, say we add this, how do we let the user know it;s enabaled? or let them enable it? or even better why even have it?
+LEt;s make sure askr can po
 
 ## Next Step
 
