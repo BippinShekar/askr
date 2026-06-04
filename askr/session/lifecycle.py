@@ -222,20 +222,28 @@ def run_daemon(project_path: str):
         while True:
             stats = _read_stats()
             if stats:
-                trigger = stats.get("next_trigger")
-                ctx_pct = stats.get("context_pct", 0)
-                q_pct   = stats.get("quota_pct", 0)
+                ctx_pct       = stats.get("context_pct", 0)
+                ctx_eta_turns = stats.get("context_eta_turns")
+                q_eta_minutes = stats.get("quota_eta_minutes")
 
-                threshold_hit = (
-                    (trigger == "context" and ctx_pct >= 0.90) or
-                    (trigger == "quota"   and q_pct   >= 0.85)
-                )
+                # Trigger A: context at or above 90%
+                context_hit = ctx_pct >= 0.90
 
-                if threshold_hit:
-                    _log(f"threshold hit: trigger={trigger} ctx={ctx_pct:.1%} quota={q_pct:.1%}")
-                    _execute_trigger(trigger, stats, project_path)
+                # Trigger B: quota window expiring within 30 minutes
+                # (quota_eta_minutes is time until reset scaled by usage — when it
+                # approaches 0 the window is nearly exhausted)
+                quota_hit = q_eta_minutes is not None and q_eta_minutes <= 30
+
+                if context_hit:
+                    _log(f"Trigger A: context={ctx_pct:.1%} >= 90%")
+                    _execute_trigger("context", stats, project_path)
+                elif quota_hit:
+                    _log(f"Trigger B: quota window expiring in {q_eta_minutes:.0f}min")
+                    _execute_trigger("quota", stats, project_path)
                 else:
-                    _log(f"ok: ctx={ctx_pct:.1%} quota={q_pct:.1%} trigger={trigger}")
+                    eta_info = f"ctx_eta={ctx_eta_turns}t" if ctx_eta_turns else "ctx_eta=?"
+                    q_info   = f"q_eta={q_eta_minutes:.0f}min" if q_eta_minutes else "q_eta=?"
+                    _log(f"ok: ctx={ctx_pct:.1%} {eta_info} {q_info}")
 
             time.sleep(POLL_INTERVAL)
     finally:

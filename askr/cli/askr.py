@@ -305,35 +305,47 @@ def cmd_init():
     console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
 
+def _reset_countdown(reset_at_iso: str) -> str:
+    """Format time remaining until quota reset as '↺2h34m' or '↺42m'."""
+    try:
+        from datetime import datetime, timezone
+        reset = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
+        remaining = (reset - datetime.now(timezone.utc)).total_seconds()
+        if remaining <= 0:
+            return "↺now"
+        h = int(remaining // 3600)
+        m = int((remaining % 3600) // 60)
+        return f"↺{h}h{m:02d}m" if h > 0 else f"↺{m}m"
+    except Exception:
+        return ""
+
+
 def _statusline_text() -> str:
-    """Compact one-line output for Claude Code's statusLine setting."""
+    """Compact one-line output for 'askr status --line'."""
     try:
         if not os.path.exists(_STATS_PATH):
             return "askr ·"
         with open(_STATS_PATH) as f:
             s = json.load(f)
 
-        ctx_pct  = int(round(s.get("context_pct", 0) * 100))
-        q_pct    = int(round(s.get("quota_pct", 0) * 100))
-        trigger  = s.get("next_trigger")
-        ctx_eta  = s.get("context_eta_turns")
-        q_eta    = s.get("quota_eta_minutes")
+        ctx_pct = int(round(s.get("context_pct", 0) * 100))
+        ctx_eta = s.get("context_eta_turns")
+        reset_at = s.get("reset_at", "")
 
         ctx_part   = f"ctx:{ctx_pct}%"
-        quota_part = f"quota:{q_pct}%"
+        reset_part = _reset_countdown(reset_at) if reset_at else ""
 
-        if trigger == "context" and ctx_pct >= 90:
+        if ctx_pct >= 90:
             suffix = " ⚠ checkpoint now"
-        elif trigger == "quota" and q_pct >= 85:
-            suffix = " ⚠ quota low"
-        elif trigger == "context" and ctx_eta:
-            suffix = f" ({ctx_eta}t)"
-        elif trigger == "quota" and q_eta:
-            suffix = f" ({int(q_eta)}min)"
+        elif ctx_eta and ctx_eta < 20:
+            suffix = f" ({ctx_eta}t left)"
         else:
             suffix = ""
 
-        return f"askr {ctx_part} {quota_part}{suffix}"
+        parts = ["askr", ctx_part]
+        if reset_part:
+            parts.append(reset_part)
+        return " ".join(parts) + suffix
     except Exception:
         return "askr ·"
 
@@ -361,8 +373,23 @@ def cmd_status(args: list = None):
         console.print(f"  [dim]hooks[/dim]       {'[green]configured[/green]' if os.path.exists(CLAUDE_SETTINGS) else '[yellow]not configured - run askr init[/yellow]'}")
 
     if os.path.exists(_STATS_PATH):
-        console.print()
-        console.print(f"  [dim]session[/dim]     {_statusline_text()}")
+        try:
+            with open(_STATS_PATH) as f:
+                s = json.load(f)
+            ctx_pct = int(round(s.get("context_pct", 0) * 100))
+            ctx_tokens = s.get("context_tokens", 0)
+            ctx_window = s.get("context_window", 200000)
+            ctx_eta = s.get("context_eta_turns")
+            reset_at = s.get("reset_at", "")
+            console.print()
+            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} tokens)" +
+                          (f"  [dim]~{ctx_eta} turns left[/dim]" if ctx_eta else ""))
+            if reset_at:
+                countdown = _reset_countdown(reset_at)
+                console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")
+        except Exception:
+            console.print()
+            console.print(f"  [dim]session[/dim]     {_statusline_text()}")
 
     console.print()
 

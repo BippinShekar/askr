@@ -92,11 +92,8 @@ def _write_session_stats():
 
         payload = {
             "context_pct": round(stats.context_pct, 4),
-            "quota_pct": round(forecast.quota_pct, 4),
             "context_tokens": stats.context_tokens,
             "context_window": stats.context_window,
-            "output_tokens_last_5h": stats.output_tokens_last_5h,
-            "quota_limit": forecast.quota_limit,
             "turns": stats.turns,
             "next_trigger": forecast.next_trigger,
             "context_eta_turns": forecast.context_eta_turns,
