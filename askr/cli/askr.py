@@ -507,16 +507,20 @@ def _statusline_text() -> str:
             s = json.load(f)
 
         ctx_pct    = int(round(s.get("context_pct", 0) * 100))
+        quota_pct  = s.get("quota_pct")
         ctx_label  = s.get("context_label", "ok")
         reset_at   = s.get("reset_at", "")
 
         ctx_part   = f"ctx:{ctx_pct}%"
+        quota_part = f"q:{int(round(quota_pct * 100))}%" if quota_pct is not None else ""
         reset_part = _reset_countdown(reset_at) if reset_at else ""
 
         label_suffix = {"checkpoint": " ⚠", "near limit": " !", "high": ""}
         suffix = label_suffix.get(ctx_label, "")
 
         parts = ["askr", ctx_part]
+        if quota_part:
+            parts.append(quota_part)
         if reset_part:
             parts.append(reset_part)
         return " ".join(parts) + suffix
@@ -571,9 +575,14 @@ def cmd_status(args: list = None):
                 ctx_tokens = s.get("context_tokens", 0)
                 ctx_window = s.get("context_window", 200000)
                 ctx_label  = s.get("context_label", "ok")
-                label_map = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
-                label_str = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
+                quota_pct  = s.get("quota_pct")
+                label_map  = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
+                label_str  = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
                 console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} — this chat only){label_str}")
+                if quota_pct is not None:
+                    q_pct = int(round(quota_pct * 100))
+                    q_color = "red" if q_pct >= 85 else "yellow" if q_pct >= 50 else "green"
+                    console.print(f"  [dim]quota used[/dim]   [{q_color}]{q_pct}%[/{q_color}] [dim]of 5h window  (trigger at 85%)[/dim]")
             if reset_at:
                 countdown = _reset_countdown(reset_at)
                 console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")

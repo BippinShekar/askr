@@ -41,7 +41,7 @@ function timeAgo(ms) {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-function buildTooltip(s, ctxPct, resetInfo, staleMs) {
+function buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs) {
   const ctxTokens  = (s.context_tokens || 0).toLocaleString();
   const ctxWindow  = (s.context_window || 200000).toLocaleString();
   const ctxLabel   = s.context_label || 'ok';
@@ -61,11 +61,17 @@ function buildTooltip(s, ctxPct, resetInfo, staleMs) {
   };
   const ctxEtaLine = labelMessages[ctxLabel] || '';
 
+  let quotaLine = '';
+  if (quotaPct !== null) {
+    const qBar = quotaPct >= 85 ? '🔴' : quotaPct >= 50 ? '🟡' : '🟢';
+    quotaLine = `\n\n---\n\n${qBar} **${quotaPct}% of 5h quota used**\n\n`
+      + `Rolling output token window (resets every 5 hours). `
+      + `At 85%, askr checkpoints and waits for reset before resuming.`;
+  }
+
   let resetLine = '';
   if (resetInfo) {
-    resetLine = `\n\n---\n\n**↺ resets ${resetInfo.text.replace('↺', '')}** — 5-hour Anthropic quota window\n\n`
-      + `Not per-chat — this is the rolling usage window across all chats.\n`
-      + `After reset, your quota refreshes. Check **claude.ai → Settings → Usage** for your actual %.`;
+    resetLine = `\n\n**↺ quota resets ${resetInfo.text.replace('↺', '')}** — check **claude.ai → Settings → Usage** for the exact %.`;
   }
 
   const md = new vscode.MarkdownString(
@@ -74,10 +80,10 @@ function buildTooltip(s, ctxPct, resetInfo, staleMs) {
     + `---\n\n`
     + `**${ctxPct}% — this chat's context window**\n\n`
     + `${ctxTokens} / ${ctxWindow} tokens in the **current conversation** (${model}).\n\n`
-    + `Each chat has its own 200k token window. This counter resets when you open a **new chat**, `
-    + `not when the quota resets. At 90%, askr checkpoints state and starts a new chat automatically.`
+    + `Resets when you open a new chat. At 90%, askr checkpoints and starts a new chat automatically.`
     + ctxEtaLine
     + `\n\n${turns} turns · session \`${sessionId}\``
+    + quotaLine
     + resetLine
     + `\n\n---\n*Click to run \`askr status\` in terminal*`
   );
@@ -96,21 +102,23 @@ function readStats() {
     if (staleMs > 7_200_000) return null;
 
     const ctxPct    = Math.round((s.context_pct || 0) * 100);
+    const quotaPct  = s.quota_pct != null ? Math.round(s.quota_pct * 100) : null;
     const ctxLabel  = s.context_label || 'ok';
     const resetInfo = s.reset_at ? resetCountdown(s.reset_at) : null;
     const resetStr  = resetInfo ? ` ${resetInfo.text}` : '';
     const isLive    = staleMs < 120_000;
 
     const labelSuffix = { 'checkpoint': ' ⚠', 'near limit': ' !', 'high': '' };
-    let label = `askr ${ctxPct}%${resetStr}${labelSuffix[ctxLabel] || ''}`;
-    if (!isLive) label += ' …';  // trailing … signals no active session
+    const quotaStr  = quotaPct !== null ? ` q:${quotaPct}%` : '';
+    let label = `askr ${ctxPct}%${quotaStr}${resetStr}${labelSuffix[ctxLabel] || ''}`;
+    if (!isLive) label += ' …';
 
     const color = isLive ? ctxColor(ctxPct) : COLOR_IDLE;
 
     return {
       label,
       color,
-      tooltip: buildTooltip(s, ctxPct, resetInfo, staleMs),
+      tooltip: buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs),
     };
   } catch {
     return null;
