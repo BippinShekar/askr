@@ -388,6 +388,17 @@ def cmd_init():
     else:
         console.print(f"  [yellow]⚠ launchd install failed:[/yellow] [dim]{plist_path}[/dim]")
 
+    # Claude CLI check — required for autonomous session restarts
+    import shutil as _shutil
+    if _shutil.which("claude"):
+        console.print("  [green]✓[/green] claude CLI  [dim](autonomous restarts enabled)[/dim]")
+    else:
+        console.print()
+        console.print("  [red]✗ claude CLI not found[/red]  — autonomous session restarts will be disabled")
+        console.print("  [dim]  Install it to enable hands-free context/quota cycling:[/dim]")
+        console.print("  [bold]  npm install -g @anthropic-ai/claude-code[/bold]")
+        console.print("  [dim]  Then re-run[/dim] [bold]askr init[/bold] [dim]to verify.[/dim]")
+
     power = _power_source()
     if power == "battery":
         console.print()
@@ -465,6 +476,11 @@ def cmd_status(args: list = None):
         console.print(f"  [dim]handover[/dim]    {'[green]present[/green]' if os.path.exists(handover) else '[yellow]missing[/yellow]'}")
         console.print(f"  [dim]architecture[/dim] {'[green]present[/green]' if os.path.exists(arch) else '[yellow]missing[/yellow]'}")
         console.print(f"  [dim]hooks[/dim]       {'[green]configured[/green]' if os.path.exists(CLAUDE_SETTINGS) else '[yellow]not configured - run askr init[/yellow]'}")
+        import shutil as _shutil
+        if _shutil.which("claude"):
+            console.print(f"  [dim]claude CLI[/dim]  [green]found[/green]  [dim](autonomous restarts enabled)[/dim]")
+        else:
+            console.print(f"  [dim]claude CLI[/dim]  [red]not found[/red]  [dim]— install: npm install -g @anthropic-ai/claude-code[/dim]")
 
     if os.path.exists(_STATS_PATH):
         try:

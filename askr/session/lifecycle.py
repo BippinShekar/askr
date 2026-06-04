@@ -37,11 +37,13 @@ if _ASKR_ROOT not in sys.path:
 import json
 import time
 import signal
+import shutil
 import subprocess
 from datetime import datetime, timezone
 
 _PID_PATH             = os.path.expanduser("~/.config/askr/daemon.pid")
 _CAFFEINATE_PID_PATH  = os.path.expanduser("~/.config/askr/caffeinate.pid")
+_CLAUDE_PID_PATH      = os.path.expanduser("~/.config/askr/claude_session.pid")
 _STATS_PATH           = os.path.expanduser("~/.config/askr/session_stats.json")
 _LAUNCH_MODE_PATH     = os.path.expanduser("~/.config/askr/launch_mode.json")
 _NOTIFICATION_PATH    = os.path.expanduser("~/.config/askr/notification.json")
@@ -177,42 +179,72 @@ def _read_stats() -> dict:
 # Claude process
 # ---------------------------------------------------------------------------
 
-def _find_claude_pids() -> list:
+def _claude_cli_available() -> bool:
+    return shutil.which("claude") is not None
+
+
+def _write_claude_pid(pid: int):
     try:
-        # -x = exact process name match; avoids killing Cursor extension hosts
-        # whose cmdlines contain ".cursor/extensions/anthropic.claude-code-..."
-        r = subprocess.run(["pgrep", "-x", "claude"], capture_output=True, text=True)
-        return [int(p) for p in r.stdout.strip().splitlines() if p.strip().isdigit()]
+        os.makedirs(os.path.dirname(_CLAUDE_PID_PATH), exist_ok=True)
+        with open(_CLAUDE_PID_PATH, "w") as f:
+            f.write(str(pid))
     except Exception:
-        return []
+        pass
+
+
+def _read_claude_pid() -> int | None:
+    try:
+        with open(_CLAUDE_PID_PATH) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)  # verify still alive
+        return pid
+    except Exception:
+        return None
+
+
+def _clear_claude_pid():
+    try:
+        os.remove(_CLAUDE_PID_PATH)
+    except Exception:
+        pass
 
 
 def _kill_claude():
-    for pid in _find_claude_pids():
-        try:
-            os.kill(pid, signal.SIGTERM)
-            _log(f"sent SIGTERM to claude pid {pid}")
-        except ProcessLookupError:
-            pass
-    if _find_claude_pids():
-        time.sleep(2)
-        for pid in _find_claude_pids():
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+    """Kill only the tracked claude PID we launched. Never blindly kills by name."""
+    pid = _read_claude_pid()
+    if pid is None:
+        _log("no tracked claude PID to kill — skipping")
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+        _log(f"sent SIGTERM to claude pid {pid}")
+    except ProcessLookupError:
+        pass
+    time.sleep(2)
+    try:
+        os.kill(pid, 0)
+        os.kill(pid, signal.SIGKILL)
+        _log(f"sent SIGKILL to claude pid {pid}")
+    except ProcessLookupError:
+        pass
+    _clear_claude_pid()
 
 
 def _start_claude(project_path: str):
+    if not _claude_cli_available():
+        _log("ERROR: 'claude' CLI not found in PATH — cannot start new session. "
+             "Install with: npm install -g @anthropic-ai/claude-code")
+        return
     try:
-        subprocess.Popen(
+        proc = subprocess.Popen(
             ["claude"],
             cwd=project_path,
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        _log(f"started new claude session in {project_path}")
+        _write_claude_pid(proc.pid)
+        _log(f"started new claude session in {project_path} (pid={proc.pid})")
     except FileNotFoundError:
         _log("ERROR: 'claude' not found in PATH — cannot start new session")
 
@@ -287,6 +319,12 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
     from askr.session.checkpoint import create_checkpoint
+
+    # Hard gate: never kill a session we cannot restart — user would be left with nothing
+    if not _claude_cli_available():
+        _log("WARN: 'claude' CLI not in PATH — skipping trigger. "
+             "Install with: npm install -g @anthropic-ai/claude-code")
+        return
 
     developer = load_developer()
     _log(f"trigger={trigger} — checking safe pause")
