@@ -150,6 +150,26 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
+## Phase 3.5 - Implementation Guard
+
+**Goal:** Catch architectural holes and bad implementation approaches before Claude writes a single line — not after an hour of debugging to revert.
+
+The problem: Claude sounds confident even when the approach has structural gaps. By the time you realise it's wrong, you've already got half a feature implemented the wrong way. This phase puts a lightweight reviewer between Claude's plan and Claude's first edit.
+
+| Feature | Status |
+|---|---|
+| Pre-tool-use hook detects implementation start (batch writes/edits, new file creation) | 🔲 Todo |
+| Haiku cross-check: plan vs. `architecture.md` + `handover.md` for contradictions | 🔲 Todo |
+| Flags: missing dependencies, API surface mismatches, assumptions that conflict with real codebase | 🔲 Todo |
+| Warning surfaced via IDE popup (notification.json) + Discord (Phase 3 channel) | 🔲 Todo |
+| Non-blocking — user sees warning, decides whether to proceed | 🔲 Todo |
+| Smart trigger: only fires for structurally significant changes (new files, shared interface edits, >N file batches) | 🔲 Todo |
+| `askr_state/guard_log.md` — append-only log of warnings raised + user decisions | 🔲 Todo |
+
+**Done when:** Claude proposes a plan with a real architectural hole, askr surfaces a warning before the first file is touched, developer avoids a 30-minute revert.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.

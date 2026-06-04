@@ -2,14 +2,15 @@
 
 **Autonomous session orchestration for Claude Code. Built for developers who ship with Claude.**
 
-Two problems. One tool.
+Three problems. One tool.
 
 1. **Session exhaustion** — Claude hits context or quota limits mid-task. Work stops. Recovery is manual.
 2. **Team drift** — your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
+3. **Implementation holes** — Claude sounds confident, you approve the approach, an hour later you're reverting because it conflicted with something already built.
 
-Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps project state in git so both developers always start informed — no Slack, no standups, no re-explaining.
+Askr fixes all three. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, keeps project state in git so both developers always start informed, and catches architectural mistakes before the first file is touched.
 
-> Claude may stop. Work must not.
+> Claude may stop. Work must not. And what it builds must be right.
 
 ---
 
@@ -261,12 +262,24 @@ askr_state/                  # project state data (committed to git)
 
 ---
 
-## Coming Next (Phase 3)
+## Coming Next
 
+### Phase 3 — Notifications + Morning Report
 - Discord webhook notifications (checkpoint done, session resumed, goal completed)
 - Morning report (sessions run, time saved, decisions made, goals completed)
 - Time-saved analytics
+
+### Phase 3.5 — Implementation Guard
+- Pre-tool-use hook detects when Claude is about to start a significant implementation
+- Haiku cross-checks the proposed approach against `architecture.md` and `handover.md`
+- Flags architectural holes, missing dependencies, API mismatches — before the first file is touched
+- Non-blocking: surfaces as an IDE popup and Discord warning, developer decides whether to proceed
+- `guard_log.md` tracks every warning raised and what the developer chose to do
+
+### Phase 4 — Public Launch
 - `brew install askr`
+- Polished README with GIF of status bar + morning report
+- GitHub release + Twitter/X launch thread
 
 ---
 
