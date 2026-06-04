@@ -1,6 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 20:28
+Last updated: 2026-06-04 20:31
+
+## Objective
+
+Also, one more actually useful thing to add is, ensure the user's device stays on due to installation of askr, cause if they want work to be continual
 
 ## Next Step
 
