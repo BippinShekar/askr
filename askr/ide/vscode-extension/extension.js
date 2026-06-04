@@ -1,84 +1,120 @@
 const vscode = require('vscode');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const fs     = require('fs');
+const path   = require('path');
+const os     = require('os');
 
 const STATS_PATH        = path.join(os.homedir(), '.config', 'askr', 'session_stats.json');
 const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
 
-const COLOR_OK   = '#98c379';  // green  — < 50%
-const COLOR_WARN = '#e5c07b';  // amber  — 50–75%
-const COLOR_HIGH = '#e06c75';  // red    — 75–90%
-const COLOR_CRIT = '#ff5555';  // bright red — ≥ 90%
-const COLOR_IDLE = '#6b7280';  // grey   — stale session
+// Colours — applied to the entire status bar item
+const COLOR_OK   = '#98c379';  // green
+const COLOR_WARN = '#e5c07b';  // amber
+const COLOR_HIGH = '#e06c75';  // red-orange
+const COLOR_CRIT = '#ff5555';  // bright red
+const COLOR_IDLE = '#6b7280';  // grey — no active session
 
-function ctxColor(pct) {
+function severityColor(pct) {
   if (pct >= 90) return COLOR_CRIT;
-  if (pct >= 75) return COLOR_HIGH;
-  if (pct >= 50) return COLOR_WARN;
+  if (pct >= 80) return COLOR_HIGH;
+  if (pct >= 60) return COLOR_WARN;
   return COLOR_OK;
 }
 
-function resetCountdown(resetAtIso) {
+function resetCountdown(isoStr) {
   try {
-    const reset = new Date(resetAtIso);
-    const remainMs = reset - Date.now();
-    if (remainMs <= 0) return { text: '↺now', h: 0, m: 0 };
-    const h = Math.floor(remainMs / 3600000);
-    const m = Math.floor((remainMs % 3600000) / 60000);
-    return { text: h > 0 ? `↺${h}h${String(m).padStart(2, '0')}m` : `↺${m}m`, h, m };
+    const remainMs = new Date(isoStr) - Date.now();
+    if (remainMs <= 0) return 'resets now';
+    const h = Math.floor(remainMs / 3_600_000);
+    const m = Math.floor((remainMs % 3_600_000) / 60_000);
+    return h > 0 ? `resets in ${h}h ${m}m` : `resets in ${m}m`;
   } catch {
     return null;
   }
 }
 
-function timeAgo(ms) {
-  const s = Math.floor(ms / 1000);
-  if (s < 60)  return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60)  return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
+function shortCountdown(isoStr) {
+  try {
+    const remainMs = new Date(isoStr) - Date.now();
+    if (remainMs <= 0) return '↺now';
+    const h = Math.floor(remainMs / 3_600_000);
+    const m = Math.floor((remainMs % 3_600_000) / 60_000);
+    return h > 0 ? `↺${h}h${String(m).padStart(2, '0')}m` : `↺${m}m`;
+  } catch {
+    return null;
+  }
 }
 
-function buildTooltip(s, ctxPct, resetInfo, staleMs) {
-  const ctxTokens  = (s.context_tokens || 0).toLocaleString();
-  const ctxWindow  = (s.context_window || 200000).toLocaleString();
-  const ctxLabel   = s.context_label || 'ok';
-  const turns      = s.turns || 0;
-  const model      = s.model || 'claude';
-  const sessionId  = s.session_id ? s.session_id.slice(0, 8) + '…' : '?';
+function buildLabel(ctxPct, quotaPct, quotaResetIso, isLive, ctxLabel) {
+  // Format: "askr  quota 32% ↺4h10m  chat 68%"
+  // Warnings appended when either hits 80%+
+  const parts = ['askr'];
 
-  const isLive = staleMs < 120_000;
-  const freshnessLine = isLive
-    ? `🟢 **Live** — last updated just now`
-    : `🟡 **Last active chat** (updated ${timeAgo(staleMs)}) — no active Claude Code session`;
+  // Quota section — most important (causes waits when exhausted)
+  if (quotaPct !== null) {
+    const warn = quotaPct >= 90 ? ' ⚠' : quotaPct >= 80 ? ' !' : '';
+    const reset = quotaResetIso ? (' ' + shortCountdown(quotaResetIso)) : '';
+    parts.push(`quota ${quotaPct.toFixed(0)}%${warn}${reset}`);
+  }
 
-  const labelMessages = {
-    'checkpoint':  '\n\n⚠ **Checkpoint imminent** — askr will save state and start a new chat.',
-    'near limit':  '\n\n🔴 **Near limit** — approaching 90%. Askr will checkpoint soon.',
-    'high':        '\n\n🟡 **High** — past 75%. Monitor usage.',
+  // Context section — per-chat window
+  const ctxWarn = ctxLabel === 'checkpoint' ? ' ⚠' : ctxLabel === 'near limit' ? ' !' : '';
+  parts.push(`chat ${ctxPct}%${ctxWarn}`);
+
+  // Stale indicator
+  if (!isLive) parts.push('…');
+
+  return parts.join('  ');
+}
+
+function buildTooltip(s, ctxPct, isLive) {
+  const ctxTokens = (s.context_tokens  || 0).toLocaleString();
+  const ctxWindow = (s.context_window  || 200_000).toLocaleString();
+  const ctxLabel  = s.context_label    || 'ok';
+  const quotaPct  = s.quota_pct        ?? null;
+  const quota7d   = s.quota_7d_pct     ?? null;
+  const resetIso  = s.quota_reset_at   || null;
+  const model     = s.model            || 'claude';
+  const turns     = s.turns            || 0;
+
+  const statusLine = isLive
+    ? '🟢 **Active session**'
+    : '🟡 **No active session** — stats from last open chat';
+
+  // Chat context block
+  const ctxAlerts = {
+    'checkpoint':  '\n\n⚠️ **About to checkpoint** — askr will save state and open a new chat.',
+    'near limit':  '\n\n🔴 **Near limit** — at 90% askr checkpoints automatically.',
+    'high':        '\n\n🟡 **Getting full** — above 75%.',
   };
-  const ctxEtaLine = labelMessages[ctxLabel] || '';
+  const ctxAlert = ctxAlerts[ctxLabel] || '';
 
-  let resetLine = '';
-  if (resetInfo) {
-    resetLine = `\n\n---\n\n**↺ quota resets ${resetInfo.text.replace('↺', '')}** — 5-hour Anthropic usage window.\n\n`
-      + `Check **claude.ai → Settings → Usage** for exact % consumed.\n`
-      + `Askr checkpoints automatically when ≤ 30 min remain.`;
+  // Quota block
+  let quotaBlock = '';
+  if (quotaPct !== null) {
+    const resetStr  = resetIso ? resetCountdown(resetIso) : null;
+    const resetLine = resetStr ? `\n\n⏱ **${resetStr}** (5-hour Anthropic usage window)` : '';
+    const q7dLine   = quota7d !== null ? `\n\n7-day usage: **${quota7d.toFixed(0)}%**` : '';
+    const qAlert    = quotaPct >= 90
+      ? '\n\n⚠️ **Quota near limit** — askr will checkpoint and wait for reset.'
+      : quotaPct >= 80
+      ? '\n\n🟡 **Quota getting high** — approaching 90% threshold.'
+      : '';
+    quotaBlock = `\n\n---\n\n**Session quota: ${quotaPct.toFixed(0)}% used**${q7dLine}${resetLine}${qAlert}`;
+  } else {
+    quotaBlock = '\n\n---\n\n*Session quota: loading…*';
   }
 
   const md = new vscode.MarkdownString(
     `**Askr** — Claude Code session tracker\n\n`
-    + `${freshnessLine}\n\n`
+    + `${statusLine}\n\n`
     + `---\n\n`
-    + `**${ctxPct}% — this chat's context window**\n\n`
-    + `${ctxTokens} / ${ctxWindow} tokens in the **current conversation** (${model}).\n\n`
-    + `Resets when you open a new chat. At 90%, askr checkpoints and starts a new chat automatically.`
-    + ctxEtaLine
-    + `\n\n${turns} turns · session \`${sessionId}\``
-    + resetLine
-    + `\n\n---\n*Click to run \`askr status\` in terminal*`
+    + `**This chat: ${ctxPct}% full** (${ctxTokens} / ${ctxWindow} tokens)\n\n`
+    + `Each new chat starts at 0%. At 90%, askr saves your work and opens a fresh chat automatically.`
+    + ctxAlert
+    + `\n\n${turns} turns · model: ${model}`
+    + quotaBlock
+    + `\n\n---\n\n*Click to run \`askr status\` in terminal*`
   );
   md.isTrusted = true;
   return md;
@@ -86,30 +122,26 @@ function buildTooltip(s, ctxPct, resetInfo, staleMs) {
 
 function readStats() {
   try {
-    const raw  = fs.readFileSync(STATS_PATH, 'utf8');
-    const s    = JSON.parse(raw);
-    const mtime = fs.statSync(STATS_PATH).mtimeMs;
-    const staleMs = Date.now() - mtime;
+    const raw     = fs.readFileSync(STATS_PATH, 'utf8');
+    const s       = JSON.parse(raw);
+    const staleMs = Date.now() - fs.statSync(STATS_PATH).mtimeMs;
 
-    // Hide entirely if last update was more than 2 hours ago
-    if (staleMs > 7_200_000) return null;
+    if (staleMs > 7_200_000) return null;  // hide if > 2h stale
 
-    const ctxPct    = Math.round((s.context_pct || 0) * 100);
-    const ctxLabel  = s.context_label || 'ok';
-    const resetInfo = s.reset_at ? resetCountdown(s.reset_at) : null;
-    const resetStr  = resetInfo ? ` ${resetInfo.text}` : '';
-    const isLive    = staleMs < 120_000;
+    const ctxPct       = Math.round((s.context_pct || 0) * 100);
+    const ctxLabel     = s.context_label  || 'ok';
+    const quotaPct     = s.quota_pct      ?? null;
+    const quotaResetIso = s.quota_reset_at || null;
+    const isLive       = staleMs < 120_000;
 
-    const labelSuffix = { 'checkpoint': ' ⚠', 'near limit': ' !', 'high': '' };
-    let label = `askr ${ctxPct}%${resetStr}${labelSuffix[ctxLabel] || ''}`;
-    if (!isLive) label += ' …';
-
-    const color = isLive ? ctxColor(ctxPct) : COLOR_IDLE;
+    // Colour driven by whichever metric is more critical
+    const maxPct = Math.max(ctxPct, quotaPct ?? 0);
+    const color  = isLive ? severityColor(maxPct) : COLOR_IDLE;
 
     return {
-      label,
+      label:   buildLabel(ctxPct, quotaPct, quotaResetIso, isLive, ctxLabel),
       color,
-      tooltip: buildTooltip(s, ctxPct, resetInfo, staleMs),
+      tooltip: buildTooltip(s, ctxPct, isLive),
     };
   } catch {
     return null;
@@ -119,29 +151,21 @@ function readStats() {
 function checkNotification() {
   try {
     if (!fs.existsSync(NOTIFICATION_PATH)) return;
-    const raw = fs.readFileSync(NOTIFICATION_PATH, 'utf8');
-    const n = JSON.parse(raw);
+    const n = JSON.parse(fs.readFileSync(NOTIFICATION_PATH, 'utf8'));
     if (n.shown) return;
 
-    // Mark shown before displaying so a crash doesn't loop notifications
     n.shown = true;
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
-    const actions = n.type === 'context'
-      ? ['Open New Chat', 'Dismiss']
-      : ['Dismiss'];
-
+    const actions = n.type === 'context' ? ['Open New Chat', 'Dismiss'] : ['Dismiss'];
     vscode.window.showWarningMessage(`Askr: ${n.message}`, ...actions).then(action => {
       if (action === 'Open New Chat') {
-        // Open a terminal so user can start a fresh session
         const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
         terminal.show();
         terminal.sendText('claude');
       }
     });
-  } catch {
-    // notification file unreadable — skip silently
-  }
+  } catch {}
 }
 
 function activate(context) {
@@ -182,7 +206,7 @@ function activate(context) {
       });
       context.subscriptions.push({ dispose: () => watcher.close() });
     }
-  } catch { /* polling fallback */ }
+  } catch {}
 }
 
 function deactivate() {}
