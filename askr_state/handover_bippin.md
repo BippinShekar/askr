@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 20:31
+Last updated: 2026-06-04 20:34
 
 ## Objective
 
-Also, one more actually useful thing to add is, ensure the user's device stays on due to installation of askr, cause if they want work to be continual
+but why would sue be doing askr launch when we are deciding for autonomous work continuation? or are we not doing that?
 
 ## Next Step
 
@@ -12,7 +12,6 @@ Also, one more actually useful thing to add is, ensure the user's device stays o
 
 ## Completed This Session
 
-- Modified /Users/bippin/Desktop/askr/askr/state/goals.py
 - Modified /Users/bippin/Desktop/askr/askr/hooks/session_start.py
 - Modified /Users/bippin/Desktop/askr/roadmap.md
 - Modified /Users/bippin/Desktop/askr/README.md
@@ -24,7 +23,6 @@ from askr.state.goals import suggest_go
 
 - /Users/bippin/Desktop/askr/README.md
 - /Users/bippin/Desktop/askr/askr/hooks/session_start.py
-- /Users/bippin/Desktop/askr/askr/state/goals.py
 - /Users/bippin/Desktop/askr/roadmap.md
 
 ## Decisions Made
