@@ -1,15 +1,16 @@
 # Architecture
 
-Last updated: 2026-06-04 19:36
+Last updated: 2026-06-04 21:07
 
 ## System Overview
 
-Askr monitors Claude Code sessions to prevent context exhaustion and quota limits from interrupting work. It checkpoints session state before Claude degrades, resumes automatically, and syncs project state to git for team continuity.
+Askr is a background daemon that monitors Claude Code sessions via JSONL transcripts and automatically checkpoints work before context/quota limits are exceeded. It persists session state to git and injects project context on session resumption to maintain continuity across developer handoffs.
 
 ## Modules
 
-- **cli/** - Command-line interface. `ask.py` provides a code Q&A system; `askr.py` manages hook installation and configuration.
-- **session/** - Session lifecycle management. `forecast.py` predicts token burn rates; `monitor.py` tracks real-time usage; `checkpoint.py` persists state; `lifecycle.py` handles resumption; `safe_pause.py` validates interruption safety.
-- **hooks/** - Claude Code lifecycle hooks. `pre_compact.py` checkpoints before auto-compaction; `stop.py` generates handover docs and commits state; `session_start.py` injects context on startup; `user_prompt_submit.py` extracts active objectives.
-- **state/** - Persistent state management. `reader.py` loads developer context from files; `writer.py` manages handover and task state files; `config.py` handles state configuration.
-- **qa/** - Code analysis for context injection. `context_loader.py` loads project context; `graph.py` extracts import dependencies; `modes
+- **cli/** — Entry points for the askr CLI (`ask.py` for Q&A, `askr.py` for hook management)
+- **session/** — Core orchestration: `monitor.py` tracks token usage, `forecast.py` predicts which limit hits first, `checkpoint.py` saves state, `lifecycle.py` manages resumption triggers, `safe_pause.py` validates interrupt safety
+- **hooks/** — Claude Code integration points: `session_start.py` injects context on resume, `user_prompt_submit.py` extracts active objectives, `stop.py` generates handover docs on session end, `pre_compact.py` emergency checkpoint before auto-compact
+- **state/** — Persistence layer: `reader.py` loads developer context from files, `writer.py` saves state/tasks/decisions, `config.py` manages state configuration
+- **clients/** — API wrappers: `claude.py` for Anthropic API, `openai.py` for OpenAI API
+- **
