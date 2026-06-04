@@ -9,6 +9,10 @@ Last active: 2026-06-04 21:07
 
 ### In Progress
 
+- [21:26] Ran: git push origin main
+- [21:26] Ran: git commit -m "$(cat <<'EOF'
+fix: pgrep exact match, stale context display, and 
+- [21:26] Ran: git add askr/cli/askr.py askr/ide/vscode-extension/extension.js askr/session/lif
 - [21:26] Ran: git diff askr/cli/askr.py askr/session/lifecycle.py askr/session/monitor.py
 - [21:26] Ran: git diff --stat && git status
 - [21:25] Ran: python3 -c "
