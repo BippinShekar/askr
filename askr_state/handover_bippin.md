@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 21:52
+Last updated: 2026-06-04 21:57
 
 ## Objective
 
-do we create website for askr? cause I would like to have one, but I also would like know if I should make one I need brutal honesty bro, for example 
+also, what do you think about this feature addition, or more like capability addition, to ensure we don't get sugar coated asnwers gassing up the user
 
 ## Next Step
 
