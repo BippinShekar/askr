@@ -40,11 +40,9 @@ def _load_quota_limit() -> int:
 class Forecast:
     next_trigger: Optional[str]        # "context", "quota", or None
     context_pct: float                 # current 0.0-1.0
-    quota_pct: float                   # estimated 0.0-1.0
     context_label: str                 # "ok" | "high" | "near limit" | "checkpoint"
-    quota_eta_minutes: Optional[float]
+    quota_eta_minutes: Optional[float] # minutes until 5h window resets
     reset_at: Optional[datetime]       # session_start + 5h
-    quota_limit: int
 
 
 def get_forecast(stats: SessionStats) -> Forecast:
@@ -58,7 +56,9 @@ def get_forecast(stats: SessionStats) -> Forecast:
     context_eta_turns = None
 
     # --- Quota ---
-    quota_pct = stats.output_tokens_last_5h / quota_limit if quota_limit > 0 else 0.0
+    # We do NOT calculate quota_pct from output tokens — Anthropic's formula is
+    # internal and any hardcoded limit produces wildly wrong numbers.
+    # Trigger B fires purely on time: ≤ 30 min left in the 5h window.
     quota_eta_minutes = None
     reset_at = None
 
@@ -66,17 +66,13 @@ def get_forecast(stats: SessionStats) -> Forecast:
         reset_at = stats.session_start + timedelta(hours=5)
         now = datetime.now(timezone.utc)
         window_remaining_minutes = (reset_at - now).total_seconds() / 60
-        if window_remaining_minutes > 0 and quota_pct < QUOTA_TRIGGER_PCT:
-            # time remaining scaled by how far we are from the trigger threshold
-            fraction_used = quota_pct / QUOTA_TRIGGER_PCT if quota_pct > 0 else 0.0
-            quota_eta_minutes = window_remaining_minutes * (1.0 - fraction_used)
+        if window_remaining_minutes > 0:
+            quota_eta_minutes = window_remaining_minutes
 
     # --- Determine next trigger ---
     immediate = []
     if context_pct >= CONTEXT_TRIGGER_PCT:
         immediate.append("context")
-    if quota_pct >= QUOTA_TRIGGER_PCT:
-        immediate.append("quota")
 
     if immediate:
         next_trigger = immediate[0]
@@ -100,9 +96,7 @@ def get_forecast(stats: SessionStats) -> Forecast:
     return Forecast(
         next_trigger=next_trigger,
         context_pct=context_pct,
-        quota_pct=quota_pct,
         context_label=context_label,
         quota_eta_minutes=quota_eta_minutes,
         reset_at=reset_at,
-        quota_limit=quota_limit,
     )

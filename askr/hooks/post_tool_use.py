@@ -97,8 +97,6 @@ def _write_session_stats():
             "context_label": forecast.context_label,
             "turns": stats.turns,
             "next_trigger": forecast.next_trigger,
-            "quota_pct": round(forecast.quota_pct, 4),
-            "quota_limit": forecast.quota_limit,
             "quota_eta_minutes": round(forecast.quota_eta_minutes, 1) if forecast.quota_eta_minutes else None,
             "reset_at": forecast.reset_at.isoformat() if forecast.reset_at else None,
             "model": stats.model,

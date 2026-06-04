@@ -41,7 +41,7 @@ function timeAgo(ms) {
   return `${Math.floor(m / 60)}h ago`;
 }
 
-function buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs) {
+function buildTooltip(s, ctxPct, resetInfo, staleMs) {
   const ctxTokens  = (s.context_tokens || 0).toLocaleString();
   const ctxWindow  = (s.context_window || 200000).toLocaleString();
   const ctxLabel   = s.context_label || 'ok';
@@ -61,17 +61,11 @@ function buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs) {
   };
   const ctxEtaLine = labelMessages[ctxLabel] || '';
 
-  let quotaLine = '';
-  if (quotaPct !== null) {
-    const qBar = quotaPct >= 85 ? '🔴' : quotaPct >= 50 ? '🟡' : '🟢';
-    quotaLine = `\n\n---\n\n${qBar} **${quotaPct}% of 5h quota used**\n\n`
-      + `Rolling output token window (resets every 5 hours). `
-      + `At 85%, askr checkpoints and waits for reset before resuming.`;
-  }
-
   let resetLine = '';
   if (resetInfo) {
-    resetLine = `\n\n**↺ quota resets ${resetInfo.text.replace('↺', '')}** — check **claude.ai → Settings → Usage** for the exact %.`;
+    resetLine = `\n\n---\n\n**↺ quota resets ${resetInfo.text.replace('↺', '')}** — 5-hour Anthropic usage window.\n\n`
+      + `Check **claude.ai → Settings → Usage** for exact % consumed.\n`
+      + `Askr checkpoints automatically when ≤ 30 min remain.`;
   }
 
   const md = new vscode.MarkdownString(
@@ -83,7 +77,6 @@ function buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs) {
     + `Resets when you open a new chat. At 90%, askr checkpoints and starts a new chat automatically.`
     + ctxEtaLine
     + `\n\n${turns} turns · session \`${sessionId}\``
-    + quotaLine
     + resetLine
     + `\n\n---\n*Click to run \`askr status\` in terminal*`
   );
@@ -102,15 +95,13 @@ function readStats() {
     if (staleMs > 7_200_000) return null;
 
     const ctxPct    = Math.round((s.context_pct || 0) * 100);
-    const quotaPct  = s.quota_pct != null ? Math.round(s.quota_pct * 100) : null;
     const ctxLabel  = s.context_label || 'ok';
     const resetInfo = s.reset_at ? resetCountdown(s.reset_at) : null;
     const resetStr  = resetInfo ? ` ${resetInfo.text}` : '';
     const isLive    = staleMs < 120_000;
 
     const labelSuffix = { 'checkpoint': ' ⚠', 'near limit': ' !', 'high': '' };
-    const quotaStr  = quotaPct !== null ? ` q:${quotaPct}%` : '';
-    let label = `askr ${ctxPct}%${quotaStr}${resetStr}${labelSuffix[ctxLabel] || ''}`;
+    let label = `askr ${ctxPct}%${resetStr}${labelSuffix[ctxLabel] || ''}`;
     if (!isLive) label += ' …';
 
     const color = isLive ? ctxColor(ctxPct) : COLOR_IDLE;
@@ -118,7 +109,7 @@ function readStats() {
     return {
       label,
       color,
-      tooltip: buildTooltip(s, ctxPct, quotaPct, resetInfo, staleMs),
+      tooltip: buildTooltip(s, ctxPct, resetInfo, staleMs),
     };
   } catch {
     return null;
