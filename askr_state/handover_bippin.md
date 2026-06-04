@@ -1,10 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 20:23
-
-## Objective
-
-right, now one question I have is, the goal settng aspect, will I as the user have to setup my goals or are they infered and verified by askr via clau
+Last updated: 2026-06-04 20:28
 
 ## Next Step
 
@@ -12,19 +8,20 @@ right, now one question I have is, the goal settng aspect, will I as the user ha
 
 ## Completed This Session
 
-- Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
-- Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Modified /Users/bippin/Desktop/askr/askr/session/lifecycle.py
-- Ran: echo '{"tool_name":"Read","tool_input":{"file_path":"/tmp/x"
-- Ran: venv/bin/python askr/cli/askr.py status
-- Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/exte
+- Modified /Users/bippin/Desktop/askr/askr/state/goals.py
+- Modified /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- Modified /Users/bippin/Desktop/askr/roadmap.md
+- Modified /Users/bippin/Desktop/askr/README.md
+- Ran: venv/bin/python -c "
+from askr.state.goals import suggest_go
+- Ran: git add askr/state/goals.py askr/hooks/session_start.py road
 
 ## Files Changed
 
-- /Users/bippin/Desktop/askr/askr/cli/askr.py
-- /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
-- /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- /Users/bippin/Desktop/askr/README.md
+- /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- /Users/bippin/Desktop/askr/askr/state/goals.py
+- /Users/bippin/Desktop/askr/roadmap.md
 
 ## Decisions Made
 

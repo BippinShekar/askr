@@ -9,6 +9,14 @@ Last active: 2026-06-04 19:36
 
 ### In Progress
 
+- [20:28] Ran: git add askr/state/goals.py askr/hooks/session_start.py roadmap.md README.md && 
+- [20:27] Ran: venv/bin/python -c "
+from askr.state.goals import suggest_goals_from_handover
+su
+- [20:27] Modified: /Users/bippin/Desktop/askr/README.md
+- [20:26] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [20:26] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [20:26] Modified: /Users/bippin/Desktop/askr/askr/state/goals.py
 - [20:19] Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js ~/.cursor/e
 - [20:19] Ran: venv/bin/python askr/cli/askr.py status
 - [20:19] Ran: echo '{"tool_name":"Read","tool_input":{"file_path":"/tmp/x"}}' | venv/bin/pytho
