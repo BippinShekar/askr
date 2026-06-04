@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 21:44
+Last updated: 2026-06-04 21:52
 
 ## Objective
 
-let's update the roadmap and readme accordingly, and ensure it is commited and pushed without claude as co-collab
+do we create website for askr? cause I would like to have one, but I also would like know if I should make one I need brutal honesty bro, for example 
 
 ## Next Step
 
