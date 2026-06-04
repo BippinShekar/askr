@@ -76,9 +76,33 @@ def _install_hooks():
 def _install_statusline():
     settings = _load_claude_settings()
     cmd = f"{_python_cmd()} {os.path.join(ASKR_DIR, 'askr', 'cli', 'askr.py')} status --line"
-    if settings.get("statusLine", {}).get("command") != cmd:
-        settings["statusLine"] = {"command": cmd}
+    existing = settings.get("statusLine", {})
+    if existing.get("command") != cmd or existing.get("type") != "command":
+        settings["statusLine"] = {"type": "command", "command": cmd}
         _save_claude_settings(settings)
+
+
+def _install_ide_extension():
+    """Install the status bar extension into VS Code and Cursor extension directories."""
+    import shutil
+
+    src = os.path.join(ASKR_DIR, "askr", "ide", "vscode-extension")
+    ext_name = "askr.askr-status-1.0.0"
+    installed = []
+
+    candidates = [
+        os.path.expanduser("~/.cursor/extensions"),
+        os.path.expanduser("~/.vscode/extensions"),
+    ]
+
+    for ext_dir in candidates:
+        if not os.path.isdir(ext_dir):
+            continue
+        dest = os.path.join(ext_dir, ext_name)
+        shutil.copytree(src, dest, dirs_exist_ok=True)
+        installed.append(ext_dir)
+
+    return installed
 
 
 def _create_skeleton_files(developer: str) -> tuple[list, list]:
@@ -294,7 +318,15 @@ def cmd_init():
         console.print(f"  [green]✓[/green] hook  [dim]{event}[/dim]")
 
     _install_statusline()
-    console.print("  [green]✓[/green] statusLine [dim]ctx:X% quota:Y%[/dim]")
+    console.print("  [green]✓[/green] statusLine [dim](Claude Code terminal pane)[/dim]")
+
+    installed_dirs = _install_ide_extension()
+    if installed_dirs:
+        for d in installed_dirs:
+            ide = "Cursor" if "cursor" in d.lower() else "VS Code"
+            console.print(f"  [green]✓[/green] status bar extension → [dim]{ide}[/dim]  [yellow](reload window to activate)[/yellow]")
+    else:
+        console.print("  [dim]- IDE extension: no ~/.cursor/extensions or ~/.vscode/extensions found[/dim]")
 
     console.print()
     _update_gitignore()

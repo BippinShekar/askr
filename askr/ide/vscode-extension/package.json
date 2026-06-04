@@ -1,0 +1,19 @@
+{
+  "name": "askr-status",
+  "displayName": "Askr Status",
+  "description": "Shows Claude Code session context usage and quota reset in the IDE status bar",
+  "version": "1.0.0",
+  "publisher": "askr",
+  "engines": { "vscode": "^1.60.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "askr.openStatus",
+        "title": "Askr: Show Session Status"
+      }
+    ]
+  }
+}
