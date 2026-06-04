@@ -9,6 +9,9 @@ Last active: 2026-06-04 21:07
 
 ### In Progress
 
+- [01:24] Ran: git log --oneline -10
+- [01:24] Ran: cat ~/.config/askr/daemon.log | tail -40
+- [01:24] Ran: cat askr_state/handover_bippin.md
 - [22:28] Ran: # Add a one-time debug dump to see the full stop hook payload - check the most r
 - [22:28] Ran: # Check the Stop hook payload - look for what's passed to our stop.py
 grep -n "r
