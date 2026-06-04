@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 01:38
+Last updated: 2026-06-05 01:47
 
 ## Objective
 
-everything is wrong with it, askr keeps shutting down my claude code session randonly calling it claude code ran out of session and saved checkpoint. 
+remove trigger makes askr pointless for me to ever use, cause the in chat context window, I myself change chats every 10 essages from my side, so usin
 
 ## Next Step
 
@@ -12,8 +12,6 @@ everything is wrong with it, askr keeps shutting down my claude code session ran
 
 ## Completed This Session
 
-- Ran: ps aux | grep lifecycle.py | grep -v grep
-- Ran: cat /Users/bippin/Desktop/askr/askr/session/lifecycle.py
 - Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | head -30
 - Ran: cat /Users/bippin/Desktop/askr/askr/hooks/stop.py && echo "-
 - Ran: cat /Users/bippin/Desktop/askr/askr/session/safe_pause.py 2>
