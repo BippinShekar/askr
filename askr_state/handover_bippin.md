@@ -1,6 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 22:29
+Last updated: 2026-06-04 22:32
+
+## Objective
+
+[Image: original 3008x1664, displayed at 2000x1106. Multiply coordinates by 1.50 to map to original image.]
 
 ## Next Step
 
@@ -8,11 +12,6 @@ Last updated: 2026-06-04 22:29
 
 ## Completed This Session
 
-- Ran: # Token is stored in macOS keychain for IDE-based Claude Cod
-- Ran: # Try keychain with different service names Claude Code migh
-- Ran: # Check what data PostToolUse hook actually receives - look 
-- Ran: # Claude Code passes JSON to the statusLine command via stdi
-- Ran: find ~/.cursor/extensions/anthropic.claude-code-2.1.162-darw
 - Ran: grep -o "rate_limit[^\"']*\|five_hour[^\"']*\|utilization[^\
 - Ran: grep -o "statusLine[^;{]*" ~/.cursor/extensions/anthropic.cl
 - Ran: # Find the fetchUsageData and the OAuth endpoint call
