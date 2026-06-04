@@ -1,10 +1,12 @@
 # Handover: bippin
 
-Last updated: 2026-06-02 18:45
+Last updated: 2026-06-04 19:03
 
 ## Objective
 
-now, is the roadmap file up-to date with current imporvements? and on track with askr's building?
+do we get to building phase 2 now? of prediction and session orchestration? 
+Also, how will that work?
+SAy after impl of phase 2, I do askr init, and 
 
 ## Next Step
 
@@ -12,19 +14,8 @@ now, is the roadmap file up-to date with current imporvements? and on track with
 
 ## Completed This Session
 
-- Ran: echo '{"prompt": "<ide_opened_file>The user opened the file 
-- Modified /Users/bippin/Desktop/askr/askr_state/current_task_bippin.md
-- Modified /Users/bippin/Desktop/askr/askr/state/templates/current_task_template.md
-- Ran: git add -A && git commit -m "fix: strip IDE metadata tags fr
-- Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | grep -v 
-- Modified /Users/bippin/Desktop/askr/roadmap.md
-- Ran: git add roadmap.md && git commit -m "docs: sync roadmap with
-
-## Files Changed
-
-- /Users/bippin/Desktop/askr/askr/state/templates/current_task_template.md
-- /Users/bippin/Desktop/askr/askr_state/current_task_bippin.md
-- /Users/bippin/Desktop/askr/roadmap.md
+- Ran: find /Users/bippin/Desktop/askr -name "*.md" | head -20 && l
+- Ran: find /Users/bippin/Desktop/askr/askr/session -name "*.py" | 
 
 ## Decisions Made
 
