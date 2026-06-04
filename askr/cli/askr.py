@@ -27,6 +27,8 @@ HOOK_MAP = {
     "Notification":       "notification.py",
 }
 
+_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
+
 
 def _python_cmd() -> str:
     venv_python = os.path.join(ASKR_DIR, "venv", "bin", "python")
@@ -69,6 +71,14 @@ def _install_hooks():
             hooks[event] = existing + [{"hooks": [entry]}]
 
     _save_claude_settings(settings)
+
+
+def _install_statusline():
+    settings = _load_claude_settings()
+    cmd = f"{_python_cmd()} {os.path.join(ASKR_DIR, 'askr', 'cli', 'askr.py')} status --line"
+    if settings.get("statusLine", {}).get("command") != cmd:
+        settings["statusLine"] = {"command": cmd}
+        _save_claude_settings(settings)
 
 
 def _create_skeleton_files(developer: str) -> tuple[list, list]:
@@ -283,6 +293,9 @@ def cmd_init():
     for event in HOOK_MAP:
         console.print(f"  [green]✓[/green] hook  [dim]{event}[/dim]")
 
+    _install_statusline()
+    console.print("  [green]✓[/green] statusLine [dim]ctx:X% quota:Y%[/dim]")
+
     console.print()
     _update_gitignore()
 
@@ -292,7 +305,46 @@ def cmd_init():
     console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
 
-def cmd_status():
+def _statusline_text() -> str:
+    """Compact one-line output for Claude Code's statusLine setting."""
+    try:
+        if not os.path.exists(_STATS_PATH):
+            return "askr ·"
+        with open(_STATS_PATH) as f:
+            s = json.load(f)
+
+        ctx_pct  = int(round(s.get("context_pct", 0) * 100))
+        q_pct    = int(round(s.get("quota_pct", 0) * 100))
+        trigger  = s.get("next_trigger")
+        ctx_eta  = s.get("context_eta_turns")
+        q_eta    = s.get("quota_eta_minutes")
+
+        ctx_part   = f"ctx:{ctx_pct}%"
+        quota_part = f"quota:{q_pct}%"
+
+        if trigger == "context" and ctx_pct >= 90:
+            suffix = " ⚠ checkpoint now"
+        elif trigger == "quota" and q_pct >= 85:
+            suffix = " ⚠ quota low"
+        elif trigger == "context" and ctx_eta:
+            suffix = f" ({ctx_eta}t)"
+        elif trigger == "quota" and q_eta:
+            suffix = f" ({int(q_eta)}min)"
+        else:
+            suffix = ""
+
+        return f"askr {ctx_part} {quota_part}{suffix}"
+    except Exception:
+        return "askr ·"
+
+
+def cmd_status(args: list = None):
+    args = args or []
+
+    if "--line" in args:
+        print(_statusline_text())
+        return
+
     developer = load_developer()
     console.print()
     console.rule("[bold]askr status[/]", style="dim")
@@ -307,6 +359,10 @@ def cmd_status():
         console.print(f"  [dim]handover[/dim]    {'[green]present[/green]' if os.path.exists(handover) else '[yellow]missing[/yellow]'}")
         console.print(f"  [dim]architecture[/dim] {'[green]present[/green]' if os.path.exists(arch) else '[yellow]missing[/yellow]'}")
         console.print(f"  [dim]hooks[/dim]       {'[green]configured[/green]' if os.path.exists(CLAUDE_SETTINGS) else '[yellow]not configured - run askr init[/yellow]'}")
+
+    if os.path.exists(_STATS_PATH):
+        console.print()
+        console.print(f"  [dim]session[/dim]     {_statusline_text()}")
 
     console.print()
 
@@ -405,7 +461,7 @@ def main():
     if cmd == "init":
         cmd_init()
     elif cmd == "status":
-        cmd_status()
+        cmd_status(rest)
     elif cmd == "goals":
         cmd_goals()
     elif cmd == "goal":

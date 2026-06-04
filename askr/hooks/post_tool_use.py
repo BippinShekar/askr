@@ -4,17 +4,20 @@ Claude Code Hook - PostToolUse
 
 Fires after every tool execution.
 Tracks file writes and command runs into implementation_state.md.
+Also runs the session monitor + forecast and writes stats for StatusLine.
 """
 
 import sys
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, state_path, load_developer
+
+_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
 
 _SKIP_TOOLS = {"Read", "Glob", "Grep", "LS", "WebSearch", "WebFetch", "TodoRead"}
 
@@ -73,6 +76,42 @@ def _append_to_section(dev: str, entry: str):
             f.write(updated)
 
 
+def _write_session_stats():
+    try:
+        from askr.state.config import load_project_path
+        from askr.session.monitor import get_session_stats
+        from askr.session.forecast import get_forecast
+
+        project_path = load_project_path()
+        stats = get_session_stats(project_path)
+        if not stats:
+            return
+
+        forecast = get_forecast(stats)
+        os.makedirs(os.path.dirname(_STATS_PATH), exist_ok=True)
+
+        payload = {
+            "context_pct": round(stats.context_pct, 4),
+            "quota_pct": round(forecast.quota_pct, 4),
+            "context_tokens": stats.context_tokens,
+            "context_window": stats.context_window,
+            "output_tokens_last_5h": stats.output_tokens_last_5h,
+            "quota_limit": forecast.quota_limit,
+            "turns": stats.turns,
+            "next_trigger": forecast.next_trigger,
+            "context_eta_turns": forecast.context_eta_turns,
+            "quota_eta_minutes": round(forecast.quota_eta_minutes, 1) if forecast.quota_eta_minutes else None,
+            "reset_at": forecast.reset_at.isoformat() if forecast.reset_at else None,
+            "model": stats.model,
+            "session_id": stats.session_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(_STATS_PATH, "w") as f:
+            json.dump(payload, f, indent=2)
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -86,12 +125,14 @@ def main():
     tool_input = payload.get("tool_input", {})
 
     activity = _extract_activity(tool_name, tool_input)
-    if not activity:
-        return
 
     dev = load_developer()
     ts = datetime.now().strftime("%H:%M")
-    _append_to_section(dev, f"- [{ts}] {activity}")
+
+    if activity:
+        _append_to_section(dev, f"- [{ts}] {activity}")
+
+    _write_session_stats()
 
 
 if __name__ == "__main__":
