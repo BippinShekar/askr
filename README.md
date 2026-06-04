@@ -1,96 +1,94 @@
 # askr
 
-**Autonomous session orchestration for Claude Code. Built for co-founders who use Claude Code to build.**
+**Autonomous session orchestration for Claude Code. Built for developers who ship with Claude.**
 
 Two problems. One tool.
 
-1. **Session exhaustion**  - Claude hits context or quota limits mid-task. Work stops. Recovery is manual and painful.
-2. **Team drift**  - your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
+1. **Session exhaustion** — Claude hits context or quota limits mid-task. Work stops. Recovery is manual.
+2. **Team drift** — your co-founder doesn't know what you built last night. You explain it again. On Slack. Like animals.
 
-Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps your project state in git so both developers are always in sync  - no Slack, no standups, no re-explaining.
+Askr fixes both. It monitors your sessions, checkpoints before Claude degrades, resumes automatically, and keeps project state in git so both developers always start informed — no Slack, no standups, no re-explaining.
 
 > Claude may stop. Work must not.
 
 ---
 
-## How It Works
+## What's Shipped
 
-Askr runs two things in parallel:
+### Session Orchestration (Phase 2 ✅)
 
-**Session Orchestration**  - hooks into Claude Code's lifecycle. Monitors context fill and quota burn rate simultaneously. Intercepts before Claude's lossy auto-compaction fires. Writes a complete `handover.md`. Starts a fresh session immediately (context reset) or waits for quota reset and resumes automatically.
-
-**Project State**  - maintains a set of structured markdown files (architecture, decisions, current task, implementation state) that get committed to git on every checkpoint. Both developers pull this state at session start. Claude reads it automatically. Your co-founder's Claude knows what you built last night.
-
----
-
-## Two Triggers
+Askr runs a background daemon that watches your Claude Code session via the JSONL transcript file. Two triggers:
 
 **Trigger A: Context near compaction (~90%)**
 ```
-Context approaching limit
-→ Askr intercepts before lossy auto-compact
-→ Writes handover.md
-→ Stops session
-→ Starts new session immediately (no waiting)
+Context window approaching limit
+→ Askr intercepts before lossy auto-compact fires
+→ Writes handover.md with full session state
+→ Commits + pushes to git
+→ Stops session, starts new one immediately
 → Claude continues from exact next step
 ```
 
-**Trigger B: Quota running low**
+**Trigger B: Quota window nearly exhausted**
 ```
-5-hour window nearly exhausted
+5-hour usage window running low
 → Askr checkpoints + commits
 → Stops session
-→ Waits for quota reset (exact time known from JSONL)
+→ Waits for exact reset time (derived from JSONL first-entry + 5h)
 → Auto-resumes after reset
 → Claude continues from exact next step
 ```
 
-The 50% context mark is a StatusLine warning only. No interruption.
+### Project State (Phase 1 ✅)
 
----
+Structured markdown files committed to git on every checkpoint. Both developers pull this state at session start. Claude reads it automatically.
 
-## The ask CLI (Already Shipped)
+| File | What it tracks |
+|---|---|
+| `handover_<dev>.md` | Last session's objective, next step, files changed |
+| `current_task_<dev>.md` | Last 5 user prompts with timestamps |
+| `decisions.md` | Append-only timestamped decision log |
+| `implementation_state.md` | Per-developer in-progress + completed work |
+| `architecture.md` | System overview, modules, patterns |
+| `goals.md` | Today's goals, backlog, done — tracked across sessions |
 
-During quota resets, the `ask` CLI fills dead time with grounded answers:
+### Goals (auto-managed)
+
+Goals can be set manually or inferred automatically:
+
+- **At session start**: if today has no goals, Haiku reads your last handover and suggests 1-2 goals, added automatically
+- **During session**: Claude sees your goals in context and works toward them
+- **At session end**: Haiku infers which goals were completed based on what was actually built
+
+### IDE Status Bar
+
+Live context usage shown in Cursor / VS Code bottom status bar:
+
+```
+askr 45% ↺3h42m          ← normal (green)
+askr 76% ↺2h10m          ← high usage (amber)
+askr 88% ↺1h30m !        ← near limit (red)
+askr 93% ↺0h55m ⚠        ← checkpoint imminent (bright red)
+askr 67% ↺1h20m …        ← stale, no active session (grey)
+```
+
+Hover shows: current chat context (tokens used / 200k), quota reset countdown, and what each number means.
+
+### The `ask` CLI
+
+During quota resets, `ask` fills dead time with grounded answers from your codebase:
 
 ```bash
 ask "cto: best way to structure the auth layer?"
 ask "debug: getting a 401 on every login attempt"
-ask "ceo: should we build this or use Auth0?"
+ask "quick: what does buildContextInjection return?"
 ```
 
-Fast, low-token (~$0.001/query), grounded in your actual codebase snapshot. Works from any project directory.
+Fast (~$0.001/query), grounded in your codebase snapshot, works from any directory.
 
 ---
 
-## Current State
-
-The `ask` CLI is shipped and working. Session orchestration is in active development.
-
-**Working now:**
-- `ask`  - codebase Q&A via Claude Haiku or OpenAI
-- Incremental codebase snapshots
-- Multi-mode responses (cto / ceo / debug / sales / deep / quick / web)
-- Usage + cost tracking
-- Git diff integration for debug mode
-
-**Building now:**
-- Claude Code hooks (SessionStart, UserPromptSubmit, PostToolUse, Stop)
-- State files (handover.md, decisions.md, architecture.md, current_task.md)
-- Dual-limit monitoring (context% + quota burn rate)
-- Predictive checkpointing (Trigger A + Trigger B)
-- Autonomous session recreation
-- Team sync via git
-
-**Coming next:**
-- StatusLine (live context% + quota%)
-- Morning report to Discord
-- Time-saved analytics
-- `brew install askr`
-
----
-
-## Install (ask CLI)
+## Install
 
 ```bash
 git clone https://github.com/BippinShekar/askr.git
@@ -99,69 +97,91 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# add your API keys to .env
+# add ANTHROPIC_API_KEY to .env
 bash install.sh
 source ~/.zshrc
 ```
 
-Now `ask` works from any directory.
-
 ---
 
-## Using the ask CLI
+## Setup (per project)
 
 ```bash
 cd ~/your-project
-ask init             # index your codebase (run once)
-
-ask "cto: ..."       # architectural decision
-ask "ceo: ..."       # product/business decision
-ask "debug: ..."     # bug fix (includes recent git diff)
-ask "deep: ..."      # thorough explanation
-ask "quick: ..."     # one-liner answer
-ask "web: ..."       # live web search
-
-ask snap             # force snapshot rebuild
-ask log              # show usage + cost this week
+ask init       # index codebase — generates snapshot for architecture.md
+askr init      # configure for this project, install hooks + IDE extension
 ```
 
-Responses are auto-copied to clipboard. Every Q&A saved to `.askr_history`.
+`askr init` does in one step:
+- Saves developer name + project path
+- Generates `askr_state/architecture.md` from codebase snapshot (Haiku)
+- Creates all state files from templates
+- Installs Claude Code hooks (SessionStart, UserPromptSubmit, PostToolUse, Stop, PreCompact)
+- Wires the statusLine command into `.claude/settings.json`
+- Installs the status bar extension to `~/.cursor/extensions/` and `~/.vscode/extensions/`
+
+Reload your IDE window after `askr init` to activate the status bar.
 
 ---
 
-## StatusLine (Coming Soon)
+## Commands
 
-```
-Askr ✓  ctx:62%  quota:78%          ← normal
-Askr ⚠  ctx:88%  quota:71%          ← approaching
-Askr ⚙ Checkpointing                ← active
-Askr ⏳ Reset in 1h 42m             ← waiting
-Askr ↺ Resumed  saved:47min         ← restored
+```bash
+# Session
+askr init                   # set up in this project
+askr status                 # show current state + session context %
+askr status --line          # one-line output for scripts / terminal
+
+# Autonomous mode
+askr launch                 # start lifecycle daemon + open claude
+askr launch --stop          # stop the daemon
+
+# Goals
+askr goals                  # show today, backlog, done
+askr goal add "..."         # add a goal for today
+askr goal add "..." --backlog   # add to backlog
+askr goal done "..."        # mark a goal complete
+
+# Codebase Q&A
+ask "cto: ..."              # architectural decision
+ask "ceo: ..."              # product/business framing
+ask "debug: ..."            # bug fix (includes recent git diff)
+ask "deep: ..."             # thorough explanation
+ask "quick: ..."            # one-liner answer
+ask "web: ..."              # live web search
+ask init                    # index codebase
+ask snap                    # force snapshot rebuild
+ask log                     # show usage + cost this week
 ```
 
 ---
 
-## Morning Report (Coming Soon)
+## Session Lifecycle
 
 ```
-Askr  - Night Report
-
-Sessions:    6
-Duration:    4h 23m
-Time saved:  ~2h 10m
-
-Completed:
-  Auth middleware rewrite
-  JWT validation (47 tests passing)
-
-In Progress:
-  Refresh token rotation (60%)
-
-Decisions:
-  Token storage → httpOnly cookies
-  OAuth deferred to next sprint
-
-Next: Complete refresh token rotation
+Developer opens Claude Code
+         ↓
+SessionStart hook fires
+  → git pull (get teammate's latest state)
+  → inject handover + goals into context
+  → if no goals today: Haiku suggests from last handover
+         ↓
+Developer works with Claude
+  → PostToolUse hook: updates implementation_state.md
+                      writes session_stats.json for status bar
+  → UserPromptSubmit hook: records last 5 prompts to current_task.md
+         ↓
+Daemon polls session_stats.json every 30s
+  → context ≥ 90%  → Trigger A
+  → quota window ≤ 30min → Trigger B
+         ↓
+On trigger: safe_pause check → checkpoint → git commit+push
+  Trigger A: start new Claude immediately
+  Trigger B: sleep until reset, then start new Claude
+         ↓
+New session starts
+  → SessionStart fires again
+  → Claude reads handover, continues from next step
 ```
 
 ---
@@ -169,64 +189,73 @@ Next: Complete refresh token rotation
 ## Project Structure
 
 ```
-askr/                        # Python package (source code)
+askr/                        # Python package
   cli/
-    ask.py                   # ask command - Q&A
-    askr.py                  # askr command - session orchestration
-  qa/
-    pipeline.py              # Q&A core logic
-    snapshot.py              # incremental codebase indexer
-    graph.py                 # multi-language dependency graph
-    context_loader.py        # loads context for queries
-    modes.py                 # response formats per mode
+    ask.py                   # ask command — codebase Q&A
+    askr.py                  # askr command — session orchestration
+  hooks/                     # Claude Code hook scripts
+    session_start.py         # git pull + context injection + goal suggestion
+    user_prompt_submit.py    # strip IDE tags, record last 5 prompts
+    post_tool_use.py         # track activity + write session stats
+    stop.py                  # generate handover, commit, push
+    pre_compact.py           # emergency checkpoint fallback
+    notification.py          # HITL stub (Discord in Phase 3)
+  session/                   # session orchestration
+    monitor.py               # read JSONL → context%, session start time
+    forecast.py              # context label (ok/high/near limit/checkpoint)
+    checkpoint.py            # handover + git commit+push, shared by stop + lifecycle
+    lifecycle.py             # background daemon: poll, trigger, kill, resume
+    safe_pause.py            # check git clean, no tests running, no active writes
+  state/                     # state file management
+    config.py                # developer name, project path
+    writer.py                # write/append to all state files
+    reader.py                # build context injection for Claude
+    goals.py                 # goals CRUD + Haiku inference
+    templates/               # markdown templates for state files
+  qa/                        # ask CLI pipeline
+    pipeline.py, snapshot.py, graph.py, context_loader.py, modes.py
   clients/
     claude.py                # Anthropic SDK client
-    openai.py                # OpenAI fallback client
-  hooks/                     # Claude Code hook scripts
-    session_start.py
-    user_prompt_submit.py
-    post_tool_use.py
-    stop.py
-    pre_compact.py
-  session/                   # session orchestration (Phase 2)
-    monitor.py
-    forecast.py
-    checkpoint.py
-    lifecycle.py
-    safe_pause.py
-  state/                     # state management code only
-    config.py
-    writer.py
-    reader.py
-    templates/
+    openai.py                # OpenAI fallback
+  ide/
+    vscode-extension/        # status bar extension (Cursor + VS Code)
+      extension.js
+      package.json
   utils/
-    config.py, display.py, logger.py, env.py, compress.py, git_utils.py
+    config.py, display.py, logger.py, env.py
 
-askr_state/                  # project state data (markdown, per project)
+askr_state/                  # project state data (committed to git)
   handover_<dev>.md
   current_task_<dev>.md
   decisions.md
   implementation_state.md
   architecture.md
   blockers.md
-
-ask.py                       # root entry point (thin wrapper)
-install.sh                   # global CLI installer
+  goals.md
 ```
 
 ---
 
-## Limitations (Current)
+## Coming Next (Phase 3)
 
-- Snapshot quality depends on LLM file summaries
-- AST graph is static, not runtime
-- macOS only for clipboard (`pbcopy`)
-- Session orchestration not yet shipped
+- Discord webhook notifications (checkpoint done, session resumed, goal completed)
+- Morning report (sessions run, time saved, decisions made, goals completed)
+- Time-saved analytics
+- `brew install askr`
+
+---
+
+## Limitations
+
+- macOS only (uses `pbcopy` for clipboard, `lsof` for write detection)
+- Quota reset time derived from JSONL session start + 5h (accurate but indirect)
+- IDE status bar requires Cursor or VS Code; reload window after `askr init`
+- Autonomous overnight mode requires `askr launch` to be running
 
 ---
 
 ## Building in Public
 
-Following development on [Twitter/X](https://x.com)  - real usage, real numbers, real problems.
+Following development on [Twitter/X](https://x.com) — real usage, real numbers, real problems.
 
 Contributions welcome. Open an issue or PR.

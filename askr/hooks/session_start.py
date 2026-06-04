@@ -4,6 +4,10 @@ Claude Code Hook - SessionStart
 
 Fires at the start of every Claude Code session.
 Pulls latest state from git, then injects project context.
+
+Goal suggestion: if today has no goals set, calls Haiku with the last
+handover to suggest 1-2 actionable goals and adds them automatically.
+
 If started by the lifecycle daemon (launch_mode.json present), injects
 the next goal as an explicit task directive.
 """
@@ -18,27 +22,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.reader import build_context_injection
 from askr.state.goals import format_for_context as goals_context
-from askr.state.config import get_state_dir
+from askr.state.config import get_state_dir, load_developer
 
 _LAUNCH_MODE_PATH = os.path.expanduser("~/.config/askr/launch_mode.json")
 
 
 def git_pull():
     try:
-        subprocess.run(
-            ["git", "pull", "--quiet"],
-            capture_output=True,
-            timeout=15
-        )
+        subprocess.run(["git", "pull", "--quiet"], capture_output=True, timeout=15)
     except Exception:
         pass
 
 
 def _read_launch_mode() -> dict:
-    """
-    Returns launch mode dict if daemon started this session recently (within 5 min).
-    Clears the file after reading so it doesn't persist across manual sessions.
-    """
     try:
         if not os.path.exists(_LAUNCH_MODE_PATH):
             return {}
@@ -49,15 +45,31 @@ def _read_launch_mode() -> dict:
         ts = data.get("timestamp", "")
         if ts:
             written = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            age = datetime.now(timezone.utc) - written
-            if age > timedelta(minutes=5):
-                return {}  # stale - manual session, not daemon-started
-        # consume the flag so next manual session isn't affected
+            if datetime.now(timezone.utc) - written > timedelta(minutes=5):
+                return {}
         with open(_LAUNCH_MODE_PATH, "w") as f:
             json.dump({"active": False}, f)
         return data
     except Exception:
         return {}
+
+
+def _maybe_suggest_goals(developer: str) -> list[str]:
+    """
+    If today has no goals, suggest 1-2 from the last handover via Haiku.
+    Adds them to goals.md and returns the list (empty if skipped/failed).
+    Never blocks session start — all errors are swallowed.
+    """
+    try:
+        from askr.state.goals import load_today_goals, suggest_goals_from_handover, add_goal
+        if load_today_goals():
+            return []  # user already has goals — don't touch them
+        suggestions = suggest_goals_from_handover(developer)
+        for g in suggestions:
+            add_goal(g, "today")
+        return suggestions
+    except Exception:
+        return []
 
 
 def main():
@@ -69,6 +81,9 @@ def main():
     if os.path.isdir(get_state_dir()):
         git_pull()
 
+    developer = load_developer()
+    suggested_goals = _maybe_suggest_goals(developer)
+
     state_context = build_context_injection()
     goals = goals_context()
     launch_mode = _read_launch_mode()
@@ -78,6 +93,15 @@ def main():
         parts.append(state_context)
     if goals:
         parts.append(goals)
+
+    if suggested_goals:
+        goal_list = "\n".join(f"- {g}" for g in suggested_goals)
+        parts.append(
+            f"## Goals Auto-Suggested\n\n"
+            f"No goals were set for today. Askr inferred these from your last session's handover "
+            f"and added them automatically:\n\n{goal_list}\n\n"
+            f"Run `askr goals` to review or `askr goal add \"...\"` to add more."
+        )
 
     if launch_mode.get("goal"):
         goal_text = launch_mode["goal"]

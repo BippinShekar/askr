@@ -99,6 +99,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | `askr init` creates `goals.md` from template | ✅ Done |
 | `SessionStart` injects today's goals into Claude context | ✅ Done |
 | `Stop` infers goal completion from session transcript via LLM | ✅ Done |
+| `SessionStart` auto-suggests goals from handover when none set | ✅ Done |
 
 **Done when:** Dev B opens a session, Claude knows today's goals and last handover without being told. Session ends, completed goals marked done, state committed and pushed automatically.
 

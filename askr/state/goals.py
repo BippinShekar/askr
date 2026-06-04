@@ -145,6 +145,57 @@ def format_for_context() -> str:
     return "\n".join(parts)
 
 
+def suggest_goals_from_handover(developer: str) -> list[str]:
+    """
+    Call Haiku to extract 1-2 suggested goals from the developer's last handover.
+    Only called when today has no goals set. Returns [] if handover is missing,
+    empty, or the Haiku call fails — so session start is never blocked.
+    """
+    try:
+        from askr.state.config import state_path as _state_path
+        handover_path = _state_path(f"handover_{developer}.md")
+        if not os.path.exists(handover_path):
+            return []
+
+        with open(handover_path) as f:
+            handover = f.read().strip()
+
+        if len(handover) < 50:
+            return []
+
+        from askr.clients.claude import call_claude
+        import json as _json
+
+        prompt = f"""A developer's last Claude Code session ended with this handover:
+
+{handover[:2000]}
+
+Suggest 1-2 specific, actionable goals for their next session based on the Next Step and what was left in progress.
+
+Reply with a JSON array of short goal strings (under 80 chars each). Be concrete.
+Example: ["Complete lifecycle daemon sleep/resume logic", "Add quota reset timestamp parsing"]
+If the handover is empty or unclear, return []."""
+
+        result = call_claude(
+            "You extract actionable goals from session handovers. Reply with valid JSON only.",
+            prompt,
+            mode="default",
+            query_preview="goal suggestion from handover"
+        )
+
+        result = result.strip()
+        if result.startswith("```"):
+            result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+        suggested = _json.loads(result)
+        if not isinstance(suggested, list):
+            return []
+        return [str(g).strip()[:80] for g in suggested[:2] if g and str(g).strip()]
+
+    except Exception:
+        return []
+
+
 def infer_completed_from_activity(activity_lines: list[str], goals: list[str]) -> list[str]:
     """
     Use LLM to infer which goals were completed based on session activity.
