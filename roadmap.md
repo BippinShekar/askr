@@ -104,24 +104,23 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 2 - Session Orchestration
+## Phase 2 - Session Orchestration ✅
 
 **Goal:** Askr intercepts before Claude degrades or quota runs out. Both triggers working autonomously. Goals drive what Claude works on.
 
 | Feature | Status |
 |---|---|
-| JSONL session file monitoring (token growth per turn) | 🔲 Todo |
-| StatusLine integration (`remaining_percentage` from Claude payload) | 🔲 Todo |
-| StatusLine display: `ctx:62% quota:78%` | 🔲 Todo |
-| Quota burn rate calculation (tokens/min vs. 5-hour window) | 🔲 Todo |
-| Dual forecast engine: context ETA + quota ETA, whichever fires first | 🔲 Todo |
-| Safe pause detection (idle, no active writes, git clean) | 🔲 Todo |
-| Trigger A: ~90% context → checkpoint → new session immediately | 🔲 Todo |
-| Trigger B: quota low → checkpoint → wait for reset → auto-resume | 🔲 Todo |
-| Exact reset timestamp from JSONL first-entry + 5h | 🔲 Todo |
-| `askr launch` - start Claude targeting top open goal autonomously | 🔲 Todo |
-| Session marks goal done on completion, picks next goal | 🔲 Todo |
-| Real use: run overnight, verify unattended continuation + goal tracking | 🔲 Todo |
+| JSONL session file monitoring (token growth per turn) | ✅ Done |
+| StatusLine display: `ctx:X% quota:Y%` with ETA suffix | ✅ Done |
+| Quota burn rate calculation (output tokens vs. 5-hour window) | ✅ Done |
+| Dual forecast engine: context ETA + quota ETA, whichever fires first | ✅ Done |
+| Safe pause detection (git clean, no test runners, no active writes) | ✅ Done |
+| Trigger A: ~90% context → checkpoint → new session immediately | ✅ Done |
+| Trigger B: quota low → checkpoint → wait for reset → auto-resume | ✅ Done |
+| Exact reset timestamp from JSONL first-entry + 5h | ✅ Done |
+| `askr launch` - start daemon targeting top open goal autonomously | ✅ Done |
+| Session marks goal done on completion, picks next goal | ✅ Done |
+| Real use: run overnight, verify unattended continuation + goal tracking | 🔲 Verify |
 
 **Done when:** Claude Code session hits quota at midnight. Askr checkpoints. Resumes at reset. Developer wakes up to continued progress with goals updated.
 
