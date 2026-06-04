@@ -1,11 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 21:59
+Last updated: 2026-06-04 22:03
 
 ## Objective
 
-right, say we add this, how do we let the user know it;s enabaled? or let them enable it? or even better why even have it?
-LEt;s make sure askr can po
+right, let's do it, also my git commit and pushes without claude as co-collab must also be a understood behavioural facet by now rigt? cause anytime I
 
 ## Next Step
 
@@ -13,15 +12,13 @@ LEt;s make sure askr can po
 
 ## Completed This Session
 
-- Modified /Users/bippin/Desktop/askr/roadmap.md
-- Modified /Users/bippin/Desktop/askr/README.md
-- Modified /Users/bippin/Desktop/askr/README.md
-- Ran: git add roadmap.md README.md && git commit -m "$(cat <<'EOF'
+- Modified /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/memory/MEMORY.md
+- Modified /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/memory/feedback_git_no_coauthor.md
 
 ## Files Changed
 
-- /Users/bippin/Desktop/askr/README.md
-- /Users/bippin/Desktop/askr/roadmap.md
+- /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/memory/MEMORY.md
+- /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/memory/feedback_git_no_coauthor.md
 
 ## Decisions Made
 
