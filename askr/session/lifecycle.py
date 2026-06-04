@@ -21,6 +21,12 @@ the active goal for the new session.
 
 import os
 import sys
+
+# Ensure the askr package root is on sys.path when run as a subprocess
+_ASKR_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _ASKR_ROOT not in sys.path:
+    sys.path.insert(0, _ASKR_ROOT)
+
 import json
 import time
 import signal

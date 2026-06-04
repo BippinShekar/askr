@@ -15,6 +15,28 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from askr.state.config import get_state_dir, load_developer
 
 
+def _advance_launch_goal():
+    """If daemon is running, update launch_mode.json with the next open goal."""
+    try:
+        from askr.session.lifecycle import daemon_is_running
+        if not daemon_is_running():
+            return
+        from askr.session.lifecycle import _get_next_goal, _write_launch_mode, _LAUNCH_MODE_PATH
+        import os as _os, json as _json
+        active = False
+        try:
+            if _os.path.exists(_LAUNCH_MODE_PATH):
+                with open(_LAUNCH_MODE_PATH) as f:
+                    active = _json.load(f).get("active", False)
+        except Exception:
+            pass
+        if active:
+            next_goal = _get_next_goal()
+            _write_launch_mode(next_goal)
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -33,6 +55,8 @@ def main():
         developer=developer,
         transcript_path=transcript_path,
     )
+
+    _advance_launch_goal()
 
 
 if __name__ == "__main__":

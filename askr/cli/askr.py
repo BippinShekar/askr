@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from askr.utils.display import console
 from askr.state.config import (
     get_state_dir, load_developer, save_developer,
-    ensure_state_dir, state_path, save_project_path
+    ensure_state_dir, state_path, save_project_path, load_project_path
 )
 
 ASKR_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -441,17 +441,81 @@ def cmd_goal(args: list[str]):
         console.print("  [dim]use: add / done[/dim]\n")
 
 
+def cmd_launch(args: list):
+    from askr.session.lifecycle import daemon_is_running, stop_daemon, run_daemon
+    import subprocess as _subprocess
+
+    project_path = load_project_path()
+
+    if "--stop" in args:
+        if stop_daemon():
+            console.print("\n  [green]✓[/green] daemon stopped\n")
+        else:
+            console.print("\n  [dim]no daemon running[/dim]\n")
+        return
+
+    if daemon_is_running():
+        console.print("\n  [yellow]daemon already running[/yellow]")
+        console.print(f"  [dim]stop it with:[/dim] [bold]askr launch --stop[/bold]\n")
+        return
+
+    lifecycle_script = os.path.join(ASKR_DIR, "askr", "session", "lifecycle.py")
+    log_path = os.path.expanduser("~/.config/askr/daemon.log")
+
+    _subprocess.Popen(
+        [_python_cmd(), lifecycle_script, project_path],
+        stdout=open(log_path, "a"),
+        stderr=open(log_path, "a"),
+        start_new_session=True,
+    )
+
+    # brief pause to let daemon write its PID
+    import time as _time
+    _time.sleep(0.5)
+
+    console.print()
+    console.rule("[bold]askr launch[/]", style="dim")
+    console.print()
+
+    if daemon_is_running():
+        console.print("  [green]✓[/green] daemon started")
+    else:
+        console.print("  [yellow]⚠ daemon may not have started - check log[/yellow]")
+        console.print(f"  [dim]log:[/dim] {log_path}")
+
+    try:
+        from askr.state.goals import load_today_goals, load_open_goals
+        today = load_today_goals()
+        goals = today or load_open_goals()
+        if goals:
+            console.print(f"  [dim]next goal:[/dim] {goals[0]}")
+        else:
+            console.print("  [dim]no goals set — add one:[/dim] [bold]askr goal add \"...\"[/bold]")
+    except Exception:
+        pass
+
+    if os.path.exists(_STATS_PATH):
+        console.print(f"  [dim]session:[/dim] {_statusline_text()}")
+
+    console.print()
+    console.print("  [dim]monitoring thresholds: context 90% / quota 85%[/dim]")
+    console.print(f"  [dim]log:[/dim] {log_path}")
+    console.print(f"  [dim]stop:[/dim] [bold]askr launch --stop[/bold]")
+    console.print()
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]session orchestration for Claude Code[/dim]")
         console.print()
-        console.print("  [dim]askr init               - set up in this project[/dim]")
-        console.print("  [dim]askr status             - show current state[/dim]")
-        console.print("  [dim]askr goals              - show today's goals[/dim]")
-        console.print("  [dim]askr goal add \"...\"     - add a goal for today[/dim]")
-        console.print("  [dim]askr goal done \"...\"    - mark a goal complete[/dim]")
-        console.print("  [dim]askr launch             - autonomous session (Phase 2)[/dim]")
-        console.print("  [dim]askr log                - session history (Phase 3)[/dim]")
+        console.print("  [dim]askr init                - set up in this project[/dim]")
+        console.print("  [dim]askr status              - show current state[/dim]")
+        console.print("  [dim]askr goals               - show today's goals[/dim]")
+        console.print("  [dim]askr goal add \"...\"      - add a goal for today[/dim]")
+        console.print("  [dim]askr goal done \"...\"     - mark a goal complete[/dim]")
+        console.print("  [dim]askr launch              - start autonomous session daemon[/dim]")
+        console.print("  [dim]askr launch --stop       - stop the daemon[/dim]")
+        console.print("  [dim]askr log                 - session history (Phase 3)[/dim]")
         console.print()
         sys.exit(0)
 
@@ -466,6 +530,8 @@ def main():
         cmd_goals()
     elif cmd == "goal":
         cmd_goal(rest)
+    elif cmd == "launch":
+        cmd_launch(rest)
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
