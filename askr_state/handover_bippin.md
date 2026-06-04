@@ -1,6 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 20:19
+Last updated: 2026-06-04 20:23
+
+## Objective
+
+right, now one question I have is, the goal settng aspect, will I as the user have to setup my goals or are they infered and verified by askr via clau
 
 ## Next Step
 
@@ -8,9 +12,6 @@ Last updated: 2026-06-04 20:19
 
 ## Completed This Session
 
-- Modified /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
 - Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
@@ -22,7 +23,6 @@ Last updated: 2026-06-04 20:19
 ## Files Changed
 
 - /Users/bippin/Desktop/askr/askr/cli/askr.py
-- /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
 - /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - /Users/bippin/Desktop/askr/askr/session/lifecycle.py
 
