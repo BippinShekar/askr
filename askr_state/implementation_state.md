@@ -9,6 +9,12 @@ Last active: 2026-06-04 19:36
 
 ### In Progress
 
+- [20:18] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
+- [20:18] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [20:17] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
+- [20:17] Modified: /Users/bippin/Desktop/askr/askr/session/forecast.py
+- [20:17] Modified: /Users/bippin/Desktop/askr/askr/session/forecast.py
+- [20:17] Modified: /Users/bippin/Desktop/askr/askr/session/forecast.py
 - [20:13] Ran: git add askr/ide/vscode-extension/extension.js askr/cli/askr.py && git commit -m
 - [20:13] Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js ~/.cursor/e
 - [20:13] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
