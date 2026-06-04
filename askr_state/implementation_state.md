@@ -9,6 +9,13 @@ Last active: 2026-06-04 21:07
 
 ### In Progress
 
+- [21:34] Ran: grep -n "ctx_pct\|context_pct\|0\.90\|>= 0\.\|>= 90\|POLL_ACTIVE\|30\b" /Users/b
+- [21:34] Ran: grep -n "showWarning\|notification\|shown\|_NOTIFICATION_PATH\|notification.json
+- [21:34] Ran: grep -n "ctx_pct\|50\|context_pct\|COLOR\|statusBar\|backgroundColor\|color" /Us
+- [21:34] Ran: grep -n "ctx_pct\|context_pct\|50\|color\|statusLine\|COLOR_WARN\|COLOR_HIGH\|CO
+- [21:34] Ran: grep -n "context_pct\|0\.90\|trigger\|ctx_pct\|context_label\|checkpoint" /Users
+- [21:34] Ran: grep -n "context_label\|ctx_label\|high\|near limit\|checkpoint\|ctx_pct\|90\|85
+- [21:34] Ran: grep -n "context_pct\|0\.50\|0\.75\|0\.85\|0\.90\|CONTEXT_TRIGGER\|context_label
 - [21:31] Ran: git add askr/session/lifecycle.py askr/cli/askr.py && git commit -m "$(cat <<'EO
 - [21:31] Ran: python3 -c "
 import ast, sys

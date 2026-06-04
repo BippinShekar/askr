@@ -1,6 +1,7 @@
 # Current Task: bippin
 
 ## Recent Objectives
+- [2026-06-04 21:34] now give me a run down what will askr do, once this exact chat hits over 50, 70, 80 and 90% respectively.
 - [2026-06-04 21:29] we can't issues like that break the user's trust, so we need to ensure there are wrongly killed claude session, with no restarts, also if the user doesn't have claude code in terminal installed we won
 - [2026-06-04 21:26] commit and the changes and ensure it is pushed without claude as co-collab
 - [2026-06-04 21:21] brotha, how is askr showing wrong things?
