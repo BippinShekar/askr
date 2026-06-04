@@ -1,15 +1,10 @@
+# Goals
+
 ## Today - 2026-06-05
 
 - [ ] Verify test status from last Bash output and fix any failures
 
 - [ ] Review files changed since last session and check decisions.md
-
-# Goals
-
-## Today - 2026-06-04
-
-- [ ] Verify test status from last Bash output and fix any failures
-
 
 [Add today's goals with: askr goal add "..."]
 
@@ -18,5 +13,4 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
-[2026-06-04 21:26] Review files changed since last session and check decisions.md
 
