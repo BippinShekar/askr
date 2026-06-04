@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [02:12] Ran: git add askr/ide/vscode-extension/extension.js && git commit -m "fix: IDE status
+- [02:12] Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js ~/.cursor/e
 - [02:12] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - [02:11] Ran: cat /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - [02:11] Ran: ls /Users/bippin/Desktop/askr/askr/ide/vscode-extension/
