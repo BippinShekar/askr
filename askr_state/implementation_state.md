@@ -9,6 +9,45 @@ Last active: 2026-06-02 17:56
 
 ### In Progress
 
+- [19:24] Modified: /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py
+- [19:23] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [19:23] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [19:23] Ran: git add askr/session/safe_pause.py && git commit -m "$(cat <<'EOF'
+feat(p2-4): s
+- [19:23] Ran: venv/bin/python -c "
+from askr.session.safe_pause import is_safe_to_pause
+import
+- [19:22] Modified: /Users/bippin/Desktop/askr/askr/session/safe_pause.py
+- [19:22] Ran: git add askr/hooks/post_tool_use.py askr/cli/askr.py && git commit -m "$(cat <<'
+- [19:22] Ran: # Test that the hook correctly writes stats and that early-return for non-tracke
+- [19:22] Ran: venv/bin/python askr/cli/askr.py status --line
+- [19:18] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [19:18] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [19:18] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [19:17] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [19:17] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [19:17] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
+- [19:17] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
+- [19:16] Ran: git add askr/session/forecast.py && git commit -m "$(cat <<'EOF'
+feat(p2-2): dua
+- [19:16] Ran: venv/bin/python -c "
+import os
+from askr.session.monitor import get_session_stat
+- [19:16] Modified: /Users/bippin/Desktop/askr/askr/session/forecast.py
+- [19:15] Ran: git add askr/session/monitor.py && git commit -m "$(cat <<'EOF'
+feat(p2-1): JSON
+- [19:15] Ran: venv/bin/python -c "
+from askr.session.monitor import get_session_stats
+import o
+- [19:15] Modified: /Users/bippin/Desktop/askr/askr/session/monitor.py
+- [19:12] Ran: python3 -c "
+import json
+path = '/Users/bippin/.claude/projects/-Users-bippin-De
+- [19:12] Ran: python3 -c "
+import json
+path = '/Users/bippin/.claude/projects/-Users-bippin-De
+- [19:12] Ran: ls ~/.claude/projects/-Users-bippin-Desktop-askr/ 2>/dev/null | head -5 && ls -l
+- [19:12] Ran: ls ~/.claude/projects/ 2>/dev/null | head -5 && ls ~/.claude/projects/ | wc -l
 - [19:02] Ran: find /Users/bippin/Desktop/askr/askr/session -name "*.py" | sort
 - [19:02] Ran: find /Users/bippin/Desktop/askr -name "*.md" | head -20 && ls /Users/bippin/Desk
 - [18:45] Ran: git add roadmap.md && git commit -m "docs: sync roadmap with actual build state 
