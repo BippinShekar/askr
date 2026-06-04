@@ -414,8 +414,8 @@ def cmd_status(args: list = None):
             ctx_eta = s.get("context_eta_turns")
             reset_at = s.get("reset_at", "")
             console.print()
-            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} tokens)" +
-                          (f"  [dim]~{ctx_eta} turns left[/dim]" if ctx_eta else ""))
+            eta_note = f"  [dim]~{ctx_eta} turns until 90% (est.)[/dim]" if ctx_eta else ""
+            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} tokens — this chat only){eta_note}")
             if reset_at:
                 countdown = _reset_countdown(reset_at)
                 console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")

@@ -6,11 +6,11 @@ const os = require('os');
 const STATS_PATH = path.join(os.homedir(), '.config', 'askr', 'session_stats.json');
 const POLL_MS = 5000;
 
-// Color thresholds for context %
-const COLOR_OK      = '#98c379';  // green  — < 50%
-const COLOR_WARN    = '#e5c07b';  // amber  — 50–75%
-const COLOR_HIGH    = '#e06c75';  // red    — 75–90%
-const COLOR_CRIT    = '#ff5555';  // bright red — ≥ 90%
+const COLOR_OK   = '#98c379';  // green  — < 50%
+const COLOR_WARN = '#e5c07b';  // amber  — 50–75%
+const COLOR_HIGH = '#e06c75';  // red    — 75–90%
+const COLOR_CRIT = '#ff5555';  // bright red — ≥ 90%
+const COLOR_IDLE = '#6b7280';  // grey   — stale session
 
 function ctxColor(pct) {
   if (pct >= 90) return COLOR_CRIT;
@@ -32,33 +32,53 @@ function resetCountdown(resetAtIso) {
   }
 }
 
-function buildTooltip(s, ctxPct, resetInfo) {
+function timeAgo(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60)  return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60)  return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ago`;
+}
+
+function buildTooltip(s, ctxPct, resetInfo, staleMs) {
   const ctxTokens = (s.context_tokens || 0).toLocaleString();
   const ctxWindow = (s.context_window || 200000).toLocaleString();
-  const ctxEta = s.context_eta_turns;
-  const turns = s.turns || 0;
-  const model = s.model || 'claude';
+  const ctxEta    = s.context_eta_turns;
+  const turns     = s.turns || 0;
+  const model     = s.model || 'claude';
+  const sessionId = s.session_id ? s.session_id.slice(0, 8) + '…' : '?';
 
-  let ctxStatus = '';
-  if (ctxPct >= 90) ctxStatus = '⚠ **checkpoint imminent**';
-  else if (ctxEta && ctxEta < 20) ctxStatus = `⚠ ~${ctxEta} turns until checkpoint`;
-  else if (ctxEta) ctxStatus = `~${ctxEta} turns remaining`;
+  // Session freshness header
+  const isLive = staleMs < 120_000;  // updated within 2 min = actively running
+  const freshnessLine = isLive
+    ? `🟢 **Live** — last updated just now`
+    : `🟡 **Last active chat** (updated ${timeAgo(staleMs)}) — no active Claude Code session`;
+
+  // Context ETA with explanation of how it's estimated
+  let ctxEtaLine = '';
+  if (ctxPct >= 90) {
+    ctxEtaLine = '\n\n⚠ **Checkpoint imminent** — askr will start a new chat at 90%.';
+  } else if (ctxEta) {
+    ctxEtaLine = `\n\n~${ctxEta} turns until 90% threshold *(rolling avg token growth over last 6 turns)*`;
+  }
 
   let resetLine = '';
   if (resetInfo) {
-    resetLine = `\n\n**↺ ${resetInfo.text.replace('↺', '')}** — quota window resets\n`
-      + `This is your 5-hour Anthropic usage window. After reset, your quota refreshes.\n`
-      + `Check **claude.ai → Settings → Usage** for your exact % used.`;
+    resetLine = `\n\n---\n\n**↺ resets ${resetInfo.text.replace('↺', '')}** — 5-hour Anthropic quota window\n\n`
+      + `Not per-chat — this is the rolling usage window across all chats.\n`
+      + `After reset, your quota refreshes. Check **claude.ai → Settings → Usage** for your actual %.`;
   }
 
   const md = new vscode.MarkdownString(
     `**Askr** — Claude Code session tracker\n\n`
+    + `${freshnessLine}\n\n`
     + `---\n\n`
-    + `**${ctxPct}% context** — *this chat only*\n\n`
-    + `${ctxTokens} / ${ctxWindow} tokens used in the current conversation (${model}).\n`
-    + `This resets when you start a **new chat**. At 90%, askr checkpoints and opens a fresh chat so nothing is lost.\n`
-    + (ctxStatus ? `\n${ctxStatus}\n` : '')
-    + `\n${turns} turns so far.`
+    + `**${ctxPct}% — this chat's context window**\n\n`
+    + `${ctxTokens} / ${ctxWindow} tokens in the **current conversation** (${model}).\n\n`
+    + `Each chat has its own 200k token window. This counter resets when you open a **new chat**, `
+    + `not when the quota resets. At 90%, askr checkpoints state and starts a new chat automatically.`
+    + ctxEtaLine
+    + `\n\n${turns} turns · session \`${sessionId}\``
     + resetLine
     + `\n\n---\n*Click to run \`askr status\` in terminal*`
   );
@@ -68,32 +88,40 @@ function buildTooltip(s, ctxPct, resetInfo) {
 
 function readStats() {
   try {
-    const raw = fs.readFileSync(STATS_PATH, 'utf8');
-    const s = JSON.parse(raw);
-
+    const raw  = fs.readFileSync(STATS_PATH, 'utf8');
+    const s    = JSON.parse(raw);
     const mtime = fs.statSync(STATS_PATH).mtimeMs;
-    if (Date.now() - mtime > 600_000) return null;  // stale — session idle/ended
+    const staleMs = Date.now() - mtime;
 
-    const ctxPct = Math.round((s.context_pct || 0) * 100);
-    const ctxEta = s.context_eta_turns;
+    // Hide entirely if last update was more than 2 hours ago
+    if (staleMs > 7_200_000) return null;
+
+    const ctxPct    = Math.round((s.context_pct || 0) * 100);
+    const ctxEta    = s.context_eta_turns;
     const resetInfo = s.reset_at ? resetCountdown(s.reset_at) : null;
-    const resetStr = resetInfo ? ` ${resetInfo.text}` : '';
+    const resetStr  = resetInfo ? ` ${resetInfo.text}` : '';
+    const isLive    = staleMs < 120_000;
 
+    // Label
     let label = `askr ${ctxPct}%${resetStr}`;
-    if (ctxPct >= 90) label += ' ⚠';
+    if (ctxPct >= 90)              label += ' ⚠';
     else if (ctxEta && ctxEta < 20) label += ` (${ctxEta}t)`;
+    if (!isLive)                   label += ' …';  // trailing … signals stale
 
-    return { label, color: ctxColor(ctxPct), tooltip: buildTooltip(s, ctxPct, resetInfo) };
+    const color = isLive ? ctxColor(ctxPct) : COLOR_IDLE;
+
+    return {
+      label,
+      color,
+      tooltip: buildTooltip(s, ctxPct, resetInfo, staleMs),
+    };
   } catch {
     return null;
   }
 }
 
 function activate(context) {
-  const item = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    1000
-  );
+  const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
   item.command = 'askr.openStatus';
 
   context.subscriptions.push(
@@ -107,8 +135,8 @@ function activate(context) {
   function refresh() {
     const result = readStats();
     if (result) {
-      item.text = result.label;
-      item.color = result.color;
+      item.text    = result.label;
+      item.color   = result.color;
       item.tooltip = result.tooltip;
       item.show();
     } else {
@@ -118,7 +146,6 @@ function activate(context) {
 
   refresh();
   const timer = setInterval(refresh, POLL_MS);
-
   context.subscriptions.push(item);
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
@@ -130,9 +157,7 @@ function activate(context) {
       });
       context.subscriptions.push({ dispose: () => watcher.close() });
     }
-  } catch {
-    // fs.watch unavailable — polling is the fallback
-  }
+  } catch { /* polling fallback */ }
 }
 
 function deactivate() {}
