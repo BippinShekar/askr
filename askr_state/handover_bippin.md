@@ -1,6 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-04 20:06
+Last updated: 2026-06-04 20:10
+
+## Objective
+
+[Image: original 2024x1542, displayed at 2000x1524. Multiply coordinates by 1.01 to map to original image.]
 
 ## Next Step
 
@@ -8,28 +12,15 @@ Last updated: 2026-06-04 20:06
 
 ## Completed This Session
 
-- Ran: ls ~/.cursor/extensions/anthropic.claude-code-2.1.162-darwin
-- Ran: cat ~/.cursor/extensions/anthropic.claude-code-2.1.162-darwi
-- Ran: mkdir -p /Users/bippin/Desktop/askr/askr/ide/vscode-extensio
-- Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/package.json
-- Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Modified /Users/bippin/Desktop/askr/askr/cli/askr.py
-- Ran: venv/bin/python -c "
-import json
-settings_path = '.claude/se
-- Ran: venv/bin/python -c "
-import shutil, os
-src = 'askr/ide/vscod
-- Ran: ls ~/.cursor/extensions/askr.askr-status-1.0.0/
 - Ran: git add askr/ide/vscode-extension/ askr/cli/askr.py .claude/
 - Ran: git add askr/ide/vscode-extension/ askr/cli/askr.py && git c
+- Modified /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
+- Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/exte
+- Ran: git add askr/ide/vscode-extension/extension.js && git commit
 
 ## Files Changed
 
-- /Users/bippin/Desktop/askr/askr/cli/askr.py
 - /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
-- /Users/bippin/Desktop/askr/askr/ide/vscode-extension/package.json
 
 ## Decisions Made
 
