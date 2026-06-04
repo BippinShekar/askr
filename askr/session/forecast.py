@@ -38,12 +38,12 @@ def _load_quota_limit() -> int:
 
 @dataclass
 class Forecast:
-    next_trigger: Optional[str]       # "context", "quota", or None
-    context_pct: float                # current 0.0-1.0
-    quota_pct: float                  # estimated 0.0-1.0
-    context_eta_turns: Optional[int]  # turns until context trigger threshold
+    next_trigger: Optional[str]        # "context", "quota", or None
+    context_pct: float                 # current 0.0-1.0
+    quota_pct: float                   # estimated 0.0-1.0
+    context_label: str                 # "ok" | "high" | "near limit" | "checkpoint"
     quota_eta_minutes: Optional[float]
-    reset_at: Optional[datetime]      # session_start + 5h
+    reset_at: Optional[datetime]       # session_start + 5h
     quota_limit: int
 
 
@@ -52,20 +52,10 @@ def get_forecast(stats: SessionStats) -> Forecast:
 
     # --- Context ---
     context_pct = stats.context_pct
+    # Turn-based ETA removed: rolling averages are too noisy (a turn reading files
+    # vs a turn giving a short answer can differ 10x in token growth). The % and
+    # threshold labels are the honest signal; a turn count implies false precision.
     context_eta_turns = None
-
-    if context_pct < CONTEXT_TRIGGER_PCT and len(stats.tokens_per_turn) >= 2:
-        recent = stats.tokens_per_turn[-6:]
-        deltas = [
-            recent[i] - recent[i - 1]
-            for i in range(1, len(recent))
-            if recent[i] > recent[i - 1]
-        ]
-        if deltas:
-            avg_delta = sum(deltas) / len(deltas)
-            remaining = (CONTEXT_TRIGGER_PCT * stats.context_window) - stats.context_tokens
-            if avg_delta > 0 and remaining > 0:
-                context_eta_turns = max(1, int(remaining / avg_delta))
 
     # --- Quota ---
     quota_pct = stats.output_tokens_last_5h / quota_limit if quota_limit > 0 else 0.0
@@ -98,11 +88,20 @@ def get_forecast(stats: SessionStats) -> Forecast:
     else:
         next_trigger = None
 
+    if context_pct >= CONTEXT_TRIGGER_PCT:
+        context_label = "checkpoint"
+    elif context_pct >= 0.85:
+        context_label = "near limit"
+    elif context_pct >= 0.75:
+        context_label = "high"
+    else:
+        context_label = "ok"
+
     return Forecast(
         next_trigger=next_trigger,
         context_pct=context_pct,
         quota_pct=quota_pct,
-        context_eta_turns=context_eta_turns,
+        context_label=context_label,
         quota_eta_minutes=quota_eta_minutes,
         reset_at=reset_at,
         quota_limit=quota_limit,

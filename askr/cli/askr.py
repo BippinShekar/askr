@@ -360,19 +360,15 @@ def _statusline_text() -> str:
         with open(_STATS_PATH) as f:
             s = json.load(f)
 
-        ctx_pct = int(round(s.get("context_pct", 0) * 100))
-        ctx_eta = s.get("context_eta_turns")
-        reset_at = s.get("reset_at", "")
+        ctx_pct    = int(round(s.get("context_pct", 0) * 100))
+        ctx_label  = s.get("context_label", "ok")
+        reset_at   = s.get("reset_at", "")
 
         ctx_part   = f"ctx:{ctx_pct}%"
         reset_part = _reset_countdown(reset_at) if reset_at else ""
 
-        if ctx_pct >= 90:
-            suffix = " ⚠ checkpoint now"
-        elif ctx_eta and ctx_eta < 20:
-            suffix = f" ({ctx_eta}t left)"
-        else:
-            suffix = ""
+        label_suffix = {"checkpoint": " ⚠", "near limit": " !", "high": ""}
+        suffix = label_suffix.get(ctx_label, "")
 
         parts = ["askr", ctx_part]
         if reset_part:
@@ -408,14 +404,15 @@ def cmd_status(args: list = None):
         try:
             with open(_STATS_PATH) as f:
                 s = json.load(f)
-            ctx_pct = int(round(s.get("context_pct", 0) * 100))
+            ctx_pct    = int(round(s.get("context_pct", 0) * 100))
             ctx_tokens = s.get("context_tokens", 0)
             ctx_window = s.get("context_window", 200000)
-            ctx_eta = s.get("context_eta_turns")
-            reset_at = s.get("reset_at", "")
+            ctx_label  = s.get("context_label", "ok")
+            reset_at   = s.get("reset_at", "")
             console.print()
-            eta_note = f"  [dim]~{ctx_eta} turns until 90% (est.)[/dim]" if ctx_eta else ""
-            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} tokens — this chat only){eta_note}")
+            label_map = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
+            label_str = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
+            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} — this chat only){label_str}")
             if reset_at:
                 countdown = _reset_countdown(reset_at)
                 console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")

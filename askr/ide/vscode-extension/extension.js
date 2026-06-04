@@ -41,26 +41,24 @@ function timeAgo(ms) {
 }
 
 function buildTooltip(s, ctxPct, resetInfo, staleMs) {
-  const ctxTokens = (s.context_tokens || 0).toLocaleString();
-  const ctxWindow = (s.context_window || 200000).toLocaleString();
-  const ctxEta    = s.context_eta_turns;
-  const turns     = s.turns || 0;
-  const model     = s.model || 'claude';
-  const sessionId = s.session_id ? s.session_id.slice(0, 8) + '…' : '?';
+  const ctxTokens  = (s.context_tokens || 0).toLocaleString();
+  const ctxWindow  = (s.context_window || 200000).toLocaleString();
+  const ctxLabel   = s.context_label || 'ok';
+  const turns      = s.turns || 0;
+  const model      = s.model || 'claude';
+  const sessionId  = s.session_id ? s.session_id.slice(0, 8) + '…' : '?';
 
-  // Session freshness header
-  const isLive = staleMs < 120_000;  // updated within 2 min = actively running
+  const isLive = staleMs < 120_000;
   const freshnessLine = isLive
     ? `🟢 **Live** — last updated just now`
     : `🟡 **Last active chat** (updated ${timeAgo(staleMs)}) — no active Claude Code session`;
 
-  // Context ETA with explanation of how it's estimated
-  let ctxEtaLine = '';
-  if (ctxPct >= 90) {
-    ctxEtaLine = '\n\n⚠ **Checkpoint imminent** — askr will start a new chat at 90%.';
-  } else if (ctxEta) {
-    ctxEtaLine = `\n\n~${ctxEta} turns until 90% threshold *(rolling avg token growth over last 6 turns)*`;
-  }
+  const labelMessages = {
+    'checkpoint':  '\n\n⚠ **Checkpoint imminent** — askr will save state and start a new chat.',
+    'near limit':  '\n\n🔴 **Near limit** — approaching 90%. Askr will checkpoint soon.',
+    'high':        '\n\n🟡 **High** — past 75%. Monitor usage.',
+  };
+  const ctxEtaLine = labelMessages[ctxLabel] || '';
 
   let resetLine = '';
   if (resetInfo) {
@@ -97,16 +95,14 @@ function readStats() {
     if (staleMs > 7_200_000) return null;
 
     const ctxPct    = Math.round((s.context_pct || 0) * 100);
-    const ctxEta    = s.context_eta_turns;
+    const ctxLabel  = s.context_label || 'ok';
     const resetInfo = s.reset_at ? resetCountdown(s.reset_at) : null;
     const resetStr  = resetInfo ? ` ${resetInfo.text}` : '';
     const isLive    = staleMs < 120_000;
 
-    // Label
-    let label = `askr ${ctxPct}%${resetStr}`;
-    if (ctxPct >= 90)              label += ' ⚠';
-    else if (ctxEta && ctxEta < 20) label += ` (${ctxEta}t)`;
-    if (!isLive)                   label += ' …';  // trailing … signals stale
+    const labelSuffix = { 'checkpoint': ' ⚠', 'near limit': ' !', 'high': '' };
+    let label = `askr ${ctxPct}%${resetStr}${labelSuffix[ctxLabel] || ''}`;
+    if (!isLive) label += ' …';  // trailing … signals no active session
 
     const color = isLive ? ctxColor(ctxPct) : COLOR_IDLE;
 
