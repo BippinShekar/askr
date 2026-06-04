@@ -105,6 +105,67 @@ def _install_ide_extension():
     return installed
 
 
+_CLAUDE_MD_MARKER_START = "<!-- askr:behavioral-start -->"
+_CLAUDE_MD_MARKER_END   = "<!-- askr:behavioral-end -->"
+
+_CLAUDE_MD_SECTION = """\
+<!-- askr:behavioral-start -->
+## Askr — Behavioral Instructions
+
+These instructions are written by `askr init`. Edit freely — askr will never
+overwrite content outside the fenced markers.
+
+- **Be direct.** No preamble, no "Great question!", no "Certainly!". Lead with
+  the answer or the action.
+- **Flag problems first.** If an approach has a flaw, a missing dependency, or
+  conflicts with the existing architecture — say so explicitly *before*
+  implementing anything. Do not bury it after paragraphs of praise.
+- **No sycophancy.** Do not validate an idea just because the user suggested it.
+  If it is wrong or suboptimal, say so plainly and explain why.
+- **Concise by default.** One clear sentence beats a paragraph. Use bullet
+  points for lists of things. Never pad to appear thorough.
+- **Honest uncertainty.** If you do not know, say so. Do not fabricate
+  confidence.
+<!-- askr:behavioral-end -->"""
+
+
+def _install_claude_md() -> str:
+    """
+    Write (or update) the askr behavioral section in CLAUDE.md.
+    Preserves all user-written content outside the askr markers.
+    Returns 'created', 'updated', or 'unchanged'.
+    """
+    claude_md_path = "CLAUDE.md"
+
+    if os.path.exists(claude_md_path):
+        with open(claude_md_path) as f:
+            existing = f.read()
+
+        if _CLAUDE_MD_MARKER_START in existing:
+            # Replace the existing askr section
+            import re
+            new_content = re.sub(
+                rf"{re.escape(_CLAUDE_MD_MARKER_START)}.*?{re.escape(_CLAUDE_MD_MARKER_END)}",
+                _CLAUDE_MD_SECTION,
+                existing,
+                flags=re.DOTALL,
+            )
+            if new_content == existing:
+                return "unchanged"
+            with open(claude_md_path, "w") as f:
+                f.write(new_content)
+            return "updated"
+        else:
+            # Append to existing file
+            with open(claude_md_path, "a") as f:
+                f.write(f"\n\n{_CLAUDE_MD_SECTION}\n")
+            return "updated"
+    else:
+        with open(claude_md_path, "w") as f:
+            f.write(f"{_CLAUDE_MD_SECTION}\n")
+        return "created"
+
+
 def _install_launchd() -> tuple[bool, str]:
     """
     Install and load a launchd agent so the lifecycle daemon starts at login.
@@ -371,6 +432,14 @@ def cmd_init():
     for event in HOOK_MAP:
         console.print(f"  [green]✓[/green] hook  [dim]{event}[/dim]")
 
+    claude_md_result = _install_claude_md()
+    if claude_md_result == "created":
+        console.print("  [green]✓[/green] CLAUDE.md  [dim]created with behavioral instructions[/dim]")
+    elif claude_md_result == "updated":
+        console.print("  [green]✓[/green] CLAUDE.md  [dim]behavioral section updated[/dim]")
+    else:
+        console.print("  [dim]- CLAUDE.md  behavioral section already up to date[/dim]")
+
     _install_statusline()
     console.print("  [green]✓[/green] statusLine [dim](Claude Code terminal pane)[/dim]")
 
@@ -481,6 +550,11 @@ def cmd_status(args: list = None):
             console.print(f"  [dim]claude CLI[/dim]  [green]found[/green]  [dim](autonomous restarts enabled)[/dim]")
         else:
             console.print(f"  [dim]claude CLI[/dim]  [red]not found[/red]  [dim]— install: npm install -g @anthropic-ai/claude-code[/dim]")
+        has_behavioral = (
+            os.path.exists("CLAUDE.md") and
+            _CLAUDE_MD_MARKER_START in open("CLAUDE.md").read()
+        )
+        console.print(f"  [dim]CLAUDE.md[/dim]   {'[green]behavioral instructions active[/green]' if has_behavioral else '[yellow]missing — run askr init[/yellow]'}")
 
     if os.path.exists(_STATS_PATH):
         try:
