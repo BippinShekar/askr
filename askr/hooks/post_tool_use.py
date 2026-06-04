@@ -76,6 +76,20 @@ def _append_to_section(dev: str, entry: str):
             f.write(updated)
 
 
+_QUOTA_REFRESH_SECS = 120  # call usage API at most once every 2 minutes
+
+
+def _quota_needs_refresh(existing: dict) -> bool:
+    qa = existing.get("quota_updated_at")
+    if not qa:
+        return True
+    try:
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(qa)).total_seconds()
+        return age > _QUOTA_REFRESH_SECS
+    except Exception:
+        return True
+
+
 def _write_session_stats():
     try:
         from askr.state.config import load_project_path
@@ -90,6 +104,31 @@ def _write_session_stats():
         forecast = get_forecast(stats)
         os.makedirs(os.path.dirname(_STATS_PATH), exist_ok=True)
 
+        # Load existing stats to carry over quota cache when within throttle window
+        existing = {}
+        try:
+            with open(_STATS_PATH) as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+
+        quota_pct      = existing.get("quota_pct")
+        quota_reset_at = existing.get("quota_reset_at")
+        quota_7d_pct   = existing.get("quota_7d_pct")
+        quota_updated  = existing.get("quota_updated_at")
+
+        if _quota_needs_refresh(existing):
+            try:
+                from askr.session.usage_api import get_quota_status
+                qs = get_quota_status()
+                if qs is not None:
+                    quota_pct      = round(qs.five_hour_pct, 1)
+                    quota_reset_at = qs.five_hour_reset.isoformat()
+                    quota_7d_pct   = round(qs.seven_day_pct, 1)
+                    quota_updated  = datetime.now(timezone.utc).isoformat()
+            except Exception:
+                pass
+
         payload = {
             "context_pct": round(stats.context_pct, 4),
             "context_tokens": stats.context_tokens,
@@ -97,8 +136,10 @@ def _write_session_stats():
             "context_label": forecast.context_label,
             "turns": stats.turns,
             "next_trigger": forecast.next_trigger,
-            "quota_eta_minutes": round(forecast.quota_eta_minutes, 1) if forecast.quota_eta_minutes else None,
-            "reset_at": forecast.reset_at.isoformat() if forecast.reset_at else None,
+            "quota_pct": quota_pct,
+            "quota_reset_at": quota_reset_at,
+            "quota_7d_pct": quota_7d_pct,
+            "quota_updated_at": quota_updated,
             "model": stats.model,
             "session_id": stats.session_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),

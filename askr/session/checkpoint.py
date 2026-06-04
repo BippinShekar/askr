@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Phase 2 - Checkpoint Engine
+Checkpoint Engine
 
 Generates handover documentation, updates state files, and commits+pushes.
-Called by both stop.py (normal session end) and lifecycle.py (threshold triggers).
+Called by stop.py (normal session end) and lifecycle.py (threshold triggers).
 
-Writes ~/.config/askr/checkpoint_result.json so the lifecycle daemon knows
-the checkpoint succeeded and can proceed with the session transition.
+Handover is written by Haiku from the actual transcript — not from mechanical
+parsing of file names and bash commands. The result is actionable context for
+the next session to continue work without manual recovery.
 """
 
 import os
@@ -16,13 +17,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 _RESULT_PATH = os.path.expanduser("~/.config/askr/checkpoint_result.json")
+_MAX_TRANSCRIPT_ENTRIES = 60  # enough to capture a substantial work session
 
 
 # ---------------------------------------------------------------------------
-# Transcript helpers (shared with stop.py)
+# Transcript reading
 # ---------------------------------------------------------------------------
 
-def read_transcript(transcript_path: str, max_entries: int = 40) -> list:
+def read_transcript(transcript_path: str) -> list:
     if not transcript_path or not os.path.exists(transcript_path):
         return []
     entries = []
@@ -35,88 +37,187 @@ def read_transcript(transcript_path: str, max_entries: int = 40) -> list:
                 entries.append(json.loads(line))
             except Exception:
                 pass
-    return entries[-max_entries:]
+    return entries[-_MAX_TRANSCRIPT_ENTRIES:]
 
 
-def build_handover_summary(transcript_entries: list) -> tuple:
-    """
-    Returns (summary_markdown: str, tool_actions: list[str]).
-    Shared between stop.py and checkpoint.py.
-    """
-    tool_actions = []
-    user_prompts = []
-
-    for entry in transcript_entries:
+def _extract_tool_actions(entries: list) -> list[str]:
+    actions = []
+    for entry in entries:
         msg = entry.get("message", {})
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content", [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            name = block.get("name", "")
+            inp  = block.get("input", {})
+            if name in ("Write", "Edit", "MultiEdit"):
+                path = inp.get("file_path") or inp.get("path", "")
+                if path:
+                    actions.append(f"Modified {path}")
+            elif name == "Bash":
+                cmd = inp.get("command", "")[:80]
+                if cmd:
+                    actions.append(f"Ran: {cmd}")
+    return actions
+
+
+def _build_transcript_text(entries: list) -> str:
+    """
+    Flatten the transcript to a readable text format for the LLM.
+    Includes user messages and assistant text+tool actions — skips hook payloads.
+    """
+    lines = []
+    for entry in entries:
+        msg  = entry.get("message", {})
         role = msg.get("role", "")
+        if role not in ("user", "assistant"):
+            continue
         content = msg.get("content", [])
 
         if role == "user":
             if isinstance(content, str) and len(content) > 5:
-                user_prompts.append(content[:150])
+                lines.append(f"USER: {content[:400]}")
             elif isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "text":
                         text = block.get("text", "").strip()
                         if text and len(text) > 5:
-                            user_prompts.append(text[:150])
+                            lines.append(f"USER: {text[:400]}")
 
-        if role == "assistant":
+        elif role == "assistant":
             if isinstance(content, list):
                 for block in content:
-                    if isinstance(block, dict) and block.get("type") == "tool_use":
-                        name = block.get("name", "")
-                        inp = block.get("input", {})
-                        if name in ("Write", "Edit", "MultiEdit"):
-                            path = inp.get("file_path") or inp.get("path", "")
-                            if path:
-                                tool_actions.append(f"Modified {path}")
-                        elif name == "Bash":
-                            cmd = inp.get("command", "")[:60]
-                            if cmd:
-                                tool_actions.append(f"Ran: {cmd}")
+                    if isinstance(block, dict):
+                        if block.get("type") == "text":
+                            text = block.get("text", "").strip()
+                            if text:
+                                lines.append(f"ASSISTANT: {text[:300]}")
+                        elif block.get("type") == "tool_use":
+                            name = block.get("name", "")
+                            inp  = block.get("input", {})
+                            if name in ("Write", "Edit", "MultiEdit"):
+                                path = inp.get("file_path") or inp.get("path", "")
+                                lines.append(f"TOOL: {name}({path})")
+                            elif name == "Bash":
+                                cmd = inp.get("command", "")[:80]
+                                lines.append(f"TOOL: Bash({cmd})")
+                            else:
+                                lines.append(f"TOOL: {name}")
+    return "\n".join(lines)
+
+
+def _generate_handover_with_llm(transcript_text: str) -> Optional[str]:
+    """
+    Call Haiku to generate a real handover summary from the transcript.
+    Returns markdown string or None if unavailable.
+    """
+    if not transcript_text.strip():
+        return None
+    try:
+        from askr.clients.claude import call_claude
+        prompt = f"""You are writing a handover document for a Claude Code session that just ended.
+A new Claude session will read this to pick up the work immediately.
+
+SESSION TRANSCRIPT (most recent {_MAX_TRANSCRIPT_ENTRIES} entries):
+{transcript_text}
+
+Write a handover document in exactly this format. Be concrete and specific — no placeholders:
+
+## What Was Being Done
+[1-2 sentences: what task or feature was being worked on]
+
+## Current State
+[1-3 bullet points: what is done, what is partially done, what is broken or untested]
+
+## Next Step
+[The single most important concrete action to take next — specific file, function, or command]
+
+## Files Changed This Session
+[bullet list of files that were modified — omit if none]
+
+## Blockers
+[any known issues or blockers — write "None" if none]
+
+Be direct. No boilerplate. The reader will act on this immediately."""
+
+        return call_claude(
+            "You write concise technical handover documentation.",
+            prompt,
+            mode="checkpoint",
+            query_preview="handover generation",
+        )
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Fallback: mechanical summary when LLM is unavailable
+# ---------------------------------------------------------------------------
+
+def _build_fallback_summary(entries: list) -> tuple[str, list]:
+    """Returns (summary_markdown, tool_actions) via mechanical parsing."""
+    tool_actions = _extract_tool_actions(entries)
+    user_prompts = []
+
+    for entry in entries:
+        msg = entry.get("message", {})
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", [])
+        if isinstance(content, str) and len(content) > 5:
+            user_prompts.append(content[:200])
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "").strip()
+                    if text and len(text) > 5:
+                        user_prompts.append(text[:200])
 
     files_changed = sorted(set(
         a.replace("Modified ", "") for a in tool_actions if a.startswith("Modified")
     ))
 
     sections = []
-
     if user_prompts:
-        sections.append(f"## Objective\n\n{user_prompts[-1]}")
+        sections.append(f"## What Was Being Done\n\n{user_prompts[-1]}")
+    else:
+        sections.append("## What Was Being Done\n\nUnknown — no user messages found in transcript.")
 
-    sections.append("## Next Step\n\n[Continue from where this session left off - check files changed below]")
+    sections.append("## Current State\n\n- Check implementation_state.md for in-progress items")
 
-    if tool_actions:
-        completed = "\n".join(f"- {a}" for a in tool_actions[-20:])
-        sections.append(f"## Completed This Session\n\n{completed}")
+    sections.append("## Next Step\n\nReview files changed below and continue from last known state.")
 
     if files_changed:
         files = "\n".join(f"- {f}" for f in files_changed[:20])
-        sections.append(f"## Files Changed\n\n{files}")
+        sections.append(f"## Files Changed This Session\n\n{files}")
 
-    sections.append("## Decisions Made\n\n[Check decisions.md]")
-    sections.append("## Tests\n\nUnknown - check last Bash output")
     sections.append("## Blockers\n\nNone noted")
 
     return "\n\n".join(sections), tool_actions
 
+
+# ---------------------------------------------------------------------------
+# Git
+# ---------------------------------------------------------------------------
 
 def git_commit_push(state_dir: str, developer: str, trigger_type: str):
     try:
         subprocess.run(["git", "add", state_dir], capture_output=True)
         result = subprocess.run(
             ["git", "status", "--porcelain", state_dir],
-            capture_output=True, text=True
+            capture_output=True, text=True,
         )
         if not result.stdout.strip():
             return
-
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
         label = "checkpoint" if trigger_type in ("context", "quota", "manual") else trigger_type
         subprocess.run(
             ["git", "commit", "-m", f"askr: {label} [{developer}] {ts}"],
-            capture_output=True
+            capture_output=True,
         )
         subprocess.run(["git", "push", "--quiet"], capture_output=True, timeout=30)
     except Exception:
@@ -124,7 +225,7 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
 
 
 # ---------------------------------------------------------------------------
-# Main checkpoint entry point
+# Main entry point
 # ---------------------------------------------------------------------------
 
 def create_checkpoint(
@@ -137,26 +238,34 @@ def create_checkpoint(
     Generate handover, update state files, commit and push.
 
     trigger_type: "context", "quota", "manual", "emergency", "stop"
-    Returns result dict written to _RESULT_PATH.
     """
     from askr.state.config import get_state_dir as _get_state_dir
     if state_dir is None:
         state_dir = _get_state_dir()
 
     entries = read_transcript(transcript_path)
-    summary, tool_actions = build_handover_summary(entries)
 
     if trigger_type == "emergency":
         summary = (
-            f"## Objective\n\nEmergency checkpoint - triggered by {trigger_type}.\n\n"
-            f"## Next Step\n\nReview recent work and continue from last known state.\n\n"
-            f"## Context\n\nCheck implementation_state.md for what was in progress."
+            "## What Was Being Done\n\nEmergency checkpoint triggered.\n\n"
+            "## Current State\n\n- Check implementation_state.md for what was in progress\n\n"
+            "## Next Step\n\nReview recent git diff and implementation_state.md, then continue.\n\n"
+            "## Blockers\n\nNone noted"
         )
+        tool_actions = _extract_tool_actions(entries)
+    else:
+        # Try LLM-generated handover first; fall back to mechanical if unavailable
+        transcript_text = _build_transcript_text(entries)
+        llm_summary = _generate_handover_with_llm(transcript_text)
+        if llm_summary:
+            summary = llm_summary
+            tool_actions = _extract_tool_actions(entries)
+        else:
+            summary, tool_actions = _build_fallback_summary(entries)
 
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer)
 
-    # Infer goal completions
     try:
         from askr.state.goals import load_today_goals, infer_completed_from_activity, complete_goal
         goals = load_today_goals()

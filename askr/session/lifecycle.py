@@ -1,30 +1,20 @@
 #!/usr/bin/env python3
 """
-Phase 2 - Session Lifecycle Daemon
+Session Lifecycle Daemon
 
 Installed as a launchd service by `askr init`. Starts at login, runs silently.
-No manual start needed — it is always on.
 
 Session liveness: detected from ~/.config/askr/session_stats.json mtime.
-  active  = updated within last 10 minutes (Claude session running)
-  idle    = stale or missing (no session)
+  active = updated within last 10 minutes (Claude session running)
+  idle   = stale or missing (no session)
 
-When session goes active:
-  → start caffeinate -i  (prevents system sleep, allows display to dim)
-  → poll every 30s for threshold breaches
-
-When session goes idle:
-  → stop caffeinate  (device can sleep normally)
-  → poll every 60s
-
-Trigger A (context >= 90%):
+Trigger A — context >= 90%:
+  Read from session_stats.json (accurate: parsed from JSONL token counts)
   safe_pause check → checkpoint → kill claude → start new claude immediately
 
-Trigger B (quota window <= 30 min remaining):
+Trigger B — quota >= 90%:
+  Read from session_stats.json (accurate: from Anthropic's /api/oauth/usage endpoint)
   safe_pause check → checkpoint → kill claude → sleep until reset → start new claude
-
-Battery note: caffeinate -i cannot prevent sleep when lid is closed on battery.
-Plugging in is required for reliable overnight runs.
 """
 
 import os
@@ -49,27 +39,23 @@ _LAUNCH_MODE_PATH     = os.path.expanduser("~/.config/askr/launch_mode.json")
 _NOTIFICATION_PATH    = os.path.expanduser("~/.config/askr/notification.json")
 _LOG_PATH             = os.path.expanduser("~/.config/askr/daemon.log")
 
-POLL_ACTIVE        = 30   # seconds when session is live
-POLL_IDLE          = 60   # seconds when no session
-SESSION_STALE_SECS = 600  # 10 min without update → session ended
+POLL_ACTIVE        = 30    # seconds when session is live
+POLL_IDLE          = 60    # seconds when no session
+SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
+CONTEXT_TRIGGER    = 0.90  # fire when context reaches 90%
+QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging — stdout only; launchd plist captures stdout to daemon.log.
+# Never write directly to the file here to avoid double-logging.
 # ---------------------------------------------------------------------------
 
 def _log(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{ts}] {msg}"
-    print(line, flush=True)
-    try:
-        os.makedirs(os.path.dirname(_LOG_PATH), exist_ok=True)
-        with open(_LOG_PATH, "a") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
+    print(f"[{ts}] {msg}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -122,18 +108,15 @@ def _start_caffeinate():
         os.makedirs(os.path.dirname(_CAFFEINATE_PID_PATH), exist_ok=True)
         with open(_CAFFEINATE_PID_PATH, "w") as f:
             f.write(str(proc.pid))
-        _log("caffeinate -i started — system sleep prevented, display can dim")
-
-        # Warn if on battery
+        _log("caffeinate started")
         try:
             r = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True)
             if "Battery Power" in r.stdout:
-                _log("WARNING: on battery — close lid will sleep device regardless of caffeinate. Plug in for overnight runs.")
+                _log("WARNING: on battery — lid close will sleep device regardless of caffeinate")
         except Exception:
             pass
-
     except FileNotFoundError:
-        _log("WARNING: caffeinate not found — device may sleep during session")
+        _log("WARNING: caffeinate not found")
     except Exception as e:
         _log(f"caffeinate start failed: {e}")
 
@@ -149,13 +132,13 @@ def _stop_caffeinate():
             os.remove(_CAFFEINATE_PID_PATH)
         except Exception:
             pass
-        _log("caffeinate stopped — device can sleep normally")
+        _log("caffeinate stopped")
     except Exception:
         pass
 
 
 # ---------------------------------------------------------------------------
-# Session liveness
+# Session liveness — based on stats file mtime
 # ---------------------------------------------------------------------------
 
 def _session_is_active() -> bool:
@@ -166,17 +149,29 @@ def _session_is_active() -> bool:
 
 
 def _read_stats() -> dict:
+    """
+    Read session_stats.json. Returns {} if the file is missing or stale.
+    Stats are written by post_tool_use.py after every tool execution.
+    """
     try:
         if not _session_is_active():
             return {}
         with open(_STATS_PATH) as f:
-            return json.load(f)
+            data = json.load(f)
+        # Extra guard: reject stats whose updated_at is older than SESSION_STALE_SECS
+        # (mtime and updated_at should agree, but belt-and-suspenders)
+        ua = data.get("updated_at", "")
+        if ua:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(ua)).total_seconds()
+            if age > SESSION_STALE_SECS:
+                return {}
+        return data
     except Exception:
         return {}
 
 
 # ---------------------------------------------------------------------------
-# Claude process
+# Claude process management
 # ---------------------------------------------------------------------------
 
 def _claude_cli_available() -> bool:
@@ -196,7 +191,7 @@ def _read_claude_pid() -> int | None:
     try:
         with open(_CLAUDE_PID_PATH) as f:
             pid = int(f.read().strip())
-        os.kill(pid, 0)  # verify still alive
+        os.kill(pid, 0)
         return pid
     except Exception:
         return None
@@ -232,8 +227,7 @@ def _kill_claude():
 
 def _start_claude(project_path: str):
     if not _claude_cli_available():
-        _log("ERROR: 'claude' CLI not found in PATH — cannot start new session. "
-             "Install with: npm install -g @anthropic-ai/claude-code")
+        _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
     try:
         proc = subprocess.Popen(
@@ -246,15 +240,16 @@ def _start_claude(project_path: str):
         _write_claude_pid(proc.pid)
         _log(f"started new claude session in {project_path} (pid={proc.pid})")
     except FileNotFoundError:
-        _log("ERROR: 'claude' not found in PATH — cannot start new session")
+        _log("ERROR: 'claude' not in PATH — cannot start new session")
 
 
 def _wait_for_reset(reset_at_iso: str):
+    """Sleep until the exact quota reset time from the API."""
     try:
         reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
         wait_secs = (reset_at - datetime.now(timezone.utc)).total_seconds()
         if wait_secs > 0:
-            _log(f"quota reset at {reset_at.strftime('%H:%M UTC')} — sleeping {int(wait_secs)}s")
+            _log(f"quota resets at {reset_at.strftime('%H:%M UTC')} — sleeping {int(wait_secs)}s")
             time.sleep(wait_secs + 30)
         else:
             _log("quota reset already passed — resuming immediately")
@@ -288,16 +283,12 @@ def _write_launch_mode(goal: str = ""):
 
 
 def _write_notification(trigger: str, goal: str = ""):
-    """
-    Write a notification for the IDE extension to surface as a VS Code alert.
-    The extension polls this file and shows showWarningMessage() when seen.
-    """
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         if trigger == "context":
             msg = "Context at 90% — state saved to git. Open a new chat to continue."
         else:
-            msg = "Quota window low — state saved to git. Waiting for reset, then resuming."
+            msg = "Quota at 90% — state saved to git. Waiting for reset, then resuming."
         payload = {
             "type": trigger,
             "message": msg,
@@ -320,10 +311,8 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.session.safe_pause import is_safe_to_pause
     from askr.session.checkpoint import create_checkpoint
 
-    # Hard gate: never kill a session we cannot restart — user would be left with nothing
     if not _claude_cli_available():
-        _log("WARN: 'claude' CLI not in PATH — skipping trigger. "
-             "Install with: npm install -g @anthropic-ai/claude-code")
+        _log("WARN: 'claude' not in PATH — skipping trigger (would leave user with nothing)")
         return
 
     developer = load_developer()
@@ -350,8 +339,11 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     _kill_claude()
 
     if trigger == "quota":
-        reset_at = stats.get("reset_at")
-        _wait_for_reset(reset_at) if reset_at else time.sleep(300)
+        reset_at = stats.get("quota_reset_at")
+        if reset_at:
+            _wait_for_reset(reset_at)
+        else:
+            time.sleep(300)
 
     _log("starting new claude session")
     _start_claude(project_path)
@@ -362,12 +354,8 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 # ---------------------------------------------------------------------------
 
 def run_daemon():
-    """
-    Always-on daemon. Installed via launchd; starts at login.
-    No project_path argument — reads from ~/.config/askr/config.json.
-    """
     _write_pid()
-    _log("daemon started (always-on mode)")
+    _log("daemon started")
 
     was_active = False
 
@@ -399,19 +387,20 @@ def run_daemon():
             if active:
                 stats = _read_stats()
                 if stats:
-                    ctx_pct       = stats.get("context_pct", 0)
-                    ctx_label     = stats.get("context_label", "ok")
-                    q_eta_minutes = stats.get("quota_eta_minutes")
+                    ctx_pct    = stats.get("context_pct", 0)
+                    ctx_label  = stats.get("context_label", "ok")
+                    quota_pct  = stats.get("quota_pct")    # real % from /api/oauth/usage
+                    reset_at   = stats.get("quota_reset_at", "")
 
-                    if ctx_pct >= 0.90:
+                    if ctx_pct >= CONTEXT_TRIGGER:
                         _log(f"Trigger A: context={ctx_pct:.1%} [{ctx_label}]")
                         _execute_trigger("context", stats, project_path)
-                    elif q_eta_minutes is not None and q_eta_minutes <= 30:
-                        _log(f"Trigger B: quota window expiring in {q_eta_minutes:.0f}min")
+                    elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
+                        _log(f"Trigger B: quota={quota_pct:.1f}% (real API)")
                         _execute_trigger("quota", stats, project_path)
                     else:
-                        q_info = f"q_eta={q_eta_minutes:.0f}min" if q_eta_minutes else "q_eta=?"
-                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_info}")
+                        q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
+                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str}")
 
                 time.sleep(POLL_ACTIVE)
             else:

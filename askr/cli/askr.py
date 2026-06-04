@@ -506,17 +506,23 @@ def _statusline_text() -> str:
         with open(_STATS_PATH) as f:
             s = json.load(f)
 
-        ctx_pct    = int(round(s.get("context_pct", 0) * 100))
-        ctx_label  = s.get("context_label", "ok")
-        reset_at   = s.get("reset_at", "")
+        ctx_pct   = int(round(s.get("context_pct", 0) * 100))
+        ctx_label = s.get("context_label", "ok")
+        quota_pct = s.get("quota_pct")
+        reset_at  = s.get("quota_reset_at", "")
 
         ctx_part   = f"ctx:{ctx_pct}%"
+        quota_part = f"quota:{quota_pct:.0f}%" if quota_pct is not None else ""
         reset_part = _reset_countdown(reset_at) if reset_at else ""
 
-        label_suffix = {"checkpoint": " ⚠", "near limit": " !", "high": ""}
-        suffix = label_suffix.get(ctx_label, "")
+        label_suffix = {"checkpoint": " ⚠", "near limit": " !"}
+        quota_warn   = " ⚠" if quota_pct is not None and quota_pct >= 90 else (
+                       " !" if quota_pct is not None and quota_pct >= 80 else "")
+        suffix = label_suffix.get(ctx_label, "") or quota_warn
 
         parts = ["askr", ctx_part]
+        if quota_part:
+            parts.append(quota_part)
         if reset_part:
             parts.append(reset_part)
         return " ".join(parts) + suffix
@@ -562,7 +568,6 @@ def cmd_status(args: list = None):
             stats_age = _time.time() - os.path.getmtime(_STATS_PATH)
             with open(_STATS_PATH) as f:
                 s = json.load(f)
-            reset_at = s.get("reset_at", "")
             console.print()
             if stats_age > 600:
                 console.print(f"  [dim]context[/dim]     [dim]no active session[/dim]")
@@ -574,9 +579,19 @@ def cmd_status(args: list = None):
                 label_map  = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
                 label_str  = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
                 console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} — this chat only){label_str}")
-            if reset_at:
+
+            quota_pct  = s.get("quota_pct")
+            reset_at   = s.get("quota_reset_at", "")
+            q7d        = s.get("quota_7d_pct")
+            if quota_pct is not None:
+                countdown = _reset_countdown(reset_at) if reset_at else ""
+                q_color   = "bold red" if quota_pct >= 90 else ("yellow" if quota_pct >= 80 else "bold")
+                q7d_str   = f"  [dim]7d: {q7d:.0f}%[/dim]" if q7d is not None else ""
+                reset_str = f"  [dim]{countdown}[/dim]" if countdown else ""
+                console.print(f"  [dim]quota (5h)[/dim]  [{q_color}]{quota_pct:.0f}%[/{q_color}]{q7d_str}{reset_str}")
+            elif reset_at:
                 countdown = _reset_countdown(reset_at)
-                console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")
+                console.print(f"  [dim]quota reset[/dim]  {countdown}")
         except Exception:
             console.print()
             console.print(f"  [dim]session[/dim]     {_statusline_text()}")
@@ -727,6 +742,110 @@ def cmd_launch(args: list):
     console.print()
 
 
+def cmd_uninstall():
+    """
+    Remove all askr traces from this machine:
+      - Unload and delete the launchd plist
+      - Remove hooks and statusLine from .claude/settings.json
+      - Delete ~/.config/askr/ (daemon state, stats, logs)
+      - Optionally remove askr_state/ from the project
+    """
+    import shutil as _shutil
+    import subprocess as _sp
+
+    console.print()
+    console.rule("[bold red]askr uninstall[/]", style="red")
+    console.print()
+
+    # 1. Launchd daemon
+    plist_path = os.path.expanduser("~/Library/LaunchAgents/com.askr.daemon.plist")
+    if os.path.exists(plist_path):
+        _sp.run(["launchctl", "unload", plist_path], capture_output=True)
+        os.remove(plist_path)
+        console.print("  [green]✓[/green] launchd daemon unloaded and plist removed")
+    else:
+        console.print("  [dim]- launchd plist not found (already removed)[/dim]")
+
+    # Kill daemon process if still running
+    try:
+        from askr.session.lifecycle import stop_daemon
+        if stop_daemon():
+            console.print("  [green]✓[/green] daemon process stopped")
+    except Exception:
+        pass
+
+    # 2. Claude Code hooks + statusLine
+    if os.path.exists(CLAUDE_SETTINGS):
+        settings = _load_claude_settings()
+        changed = False
+
+        # Remove hooks that point to askr
+        hooks = settings.get("hooks", {})
+        for event in list(hooks.keys()):
+            original = hooks[event]
+            filtered = [
+                group for group in original
+                if not any(
+                    "askr" in h.get("command", "").lower()
+                    for h in group.get("hooks", [])
+                )
+            ]
+            if filtered != original:
+                hooks[event] = filtered
+                changed = True
+            if not hooks[event]:
+                del hooks[event]
+                changed = True
+
+        # Remove statusLine if it points to askr
+        sl = settings.get("statusLine", {})
+        if "askr" in sl.get("command", "").lower():
+            del settings["statusLine"]
+            changed = True
+
+        if changed:
+            _save_claude_settings(settings)
+            console.print("  [green]✓[/green] hooks and statusLine removed from .claude/settings.json")
+        else:
+            console.print("  [dim]- no askr hooks found in .claude/settings.json[/dim]")
+
+    # 3. Askr config/state directory
+    askr_config = os.path.expanduser("~/.config/askr")
+    if os.path.isdir(askr_config):
+        _shutil.rmtree(askr_config)
+        console.print(f"  [green]✓[/green] removed ~/.config/askr/")
+    else:
+        console.print("  [dim]- ~/.config/askr/ not found[/dim]")
+
+    # 4. IDE extension
+    ext_name = "askr.askr-status-1.0.0"
+    for ext_base in [os.path.expanduser("~/.cursor/extensions"), os.path.expanduser("~/.vscode/extensions")]:
+        ext_path = os.path.join(ext_base, ext_name)
+        if os.path.isdir(ext_path):
+            _shutil.rmtree(ext_path)
+            ide = "Cursor" if "cursor" in ext_base else "VS Code"
+            console.print(f"  [green]✓[/green] removed IDE extension from {ide}")
+
+    # 5. Optionally remove askr_state/
+    state_dir = get_state_dir()
+    if os.path.isdir(state_dir):
+        console.print()
+        console.print(f"  [yellow]askr_state/[/yellow] exists at [dim]{state_dir}[/dim]")
+        console.print("  [dim]This contains your project state files (handover, architecture, goals).[/dim]")
+        try:
+            raw = input("  Remove askr_state/ too? [y/N]: ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            raw = "n"
+        if raw == "y":
+            _shutil.rmtree(state_dir)
+            console.print(f"  [green]✓[/green] removed {state_dir}")
+        else:
+            console.print("  [dim]kept askr_state/ — remove manually if needed[/dim]")
+
+    console.print()
+    console.print("  [green]done[/green] — askr fully removed\n")
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]session orchestration for Claude Code[/dim]")
@@ -739,6 +858,7 @@ def main():
         console.print("  [dim]askr launch              - show daemon status (always-on via launchd)[/dim]")
         console.print("  [dim]askr launch --stop       - stop daemon manually[/dim]")
         console.print("  [dim]askr launch --restart    - restart daemon now[/dim]")
+        console.print("  [dim]askr uninstall           - remove all askr traces from this machine[/dim]")
         console.print("  [dim]askr log                 - session history (Phase 3)[/dim]")
         console.print()
         sys.exit(0)
@@ -756,6 +876,8 @@ def main():
         cmd_goal(rest)
     elif cmd == "launch":
         cmd_launch(rest)
+    elif cmd == "uninstall":
+        cmd_uninstall()
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
