@@ -1,14 +1,12 @@
 # Goals
 
-## Today - 2026-06-02
+## Today - 2026-06-04
 
-- [ ] Complete Phase 1 implementation
-
+[Add today's goals with: askr goal add "..."]
 
 ## Backlog
 
-- [ ] Ship Phase 2 session orchestration
+[Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
-[2026-06-02 18:33] Test goals feature end to end
 
