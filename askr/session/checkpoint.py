@@ -112,40 +112,40 @@ def _build_transcript_text(entries: list) -> str:
 
 def _generate_handover_with_llm(transcript_text: str) -> Optional[str]:
     """
-    Call Haiku to generate a real handover summary from the transcript.
-    Returns markdown string or None if unavailable.
+    Call Haiku to generate an action-ready handover from the transcript.
+    The output is read by a Claude Code session, not a human — it must be
+    specific enough to act on without any additional context.
     """
     if not transcript_text.strip():
         return None
     try:
         from askr.clients.claude import call_claude
-        prompt = f"""You are writing a handover document for a Claude Code session that just ended.
-A new Claude session will read this to pick up the work immediately.
+        prompt = f"""A Claude Code session just ended. You are writing a handover document that the NEXT Claude Code session will read as its first instruction. It has no memory of this session. It needs to know exactly what to do and where — not a summary for a human.
 
-SESSION TRANSCRIPT (most recent {_MAX_TRANSCRIPT_ENTRIES} entries):
+SESSION TRANSCRIPT:
 {transcript_text}
 
-Write a handover document in exactly this format. Be concrete and specific — no placeholders:
+Write the handover in this exact format. No emojis. No markdown decorations. No boilerplate phrases like "continue from where we left off" or "check implementation_state.md". Every line must be concrete and immediately actionable.
 
-## What Was Being Done
-[1-2 sentences: what task or feature was being worked on]
+## Task
+[One sentence: what specific coding task was in progress — name the feature, bug, or file]
 
-## Current State
-[1-3 bullet points: what is done, what is partially done, what is broken or untested]
+## Status
+[Bullet list: what exact state each relevant file or component is in. Use file paths. Example: "askr/session/lifecycle.py — Trigger B logic rewritten, not yet tested". If something is broken or partially done, say so explicitly.]
 
-## Next Step
-[The single most important concrete action to take next — specific file, function, or command]
+## Failed Approaches
+[Bullet list of approaches that were tried and did not work, with brief reason. Write "None" if none. This prevents the next session from repeating failures.]
 
-## Files Changed This Session
-[bullet list of files that were modified — omit if none]
+## Next Action
+[The single next thing to do — specific enough that Claude can start immediately. Include the exact file path and what change to make, or the exact command to run. One action only.]
 
-## Blockers
-[any known issues or blockers — write "None" if none]
+## Open Questions
+[Bullet list of unresolved decisions or unknowns blocking progress. Write "None" if none.]
 
-Be direct. No boilerplate. The reader will act on this immediately."""
+If the transcript does not contain enough information to fill a section, write "Unknown" — do not invent content."""
 
         return call_claude(
-            "You write concise technical handover documentation.",
+            "You write precise technical handover documents for autonomous AI coding agents. Output only the document — no preamble, no explanation.",
             prompt,
             mode="checkpoint",
             query_preview="handover generation",
@@ -159,7 +159,10 @@ Be direct. No boilerplate. The reader will act on this immediately."""
 # ---------------------------------------------------------------------------
 
 def _build_fallback_summary(entries: list) -> tuple[str, list]:
-    """Returns (summary_markdown, tool_actions) via mechanical parsing."""
+    """
+    Mechanical fallback when LLM is unavailable.
+    Still avoids useless boilerplate — only writes what is actually known.
+    """
     tool_actions = _extract_tool_actions(entries)
     user_prompts = []
 
@@ -169,33 +172,37 @@ def _build_fallback_summary(entries: list) -> tuple[str, list]:
             continue
         content = msg.get("content", [])
         if isinstance(content, str) and len(content) > 5:
-            user_prompts.append(content[:200])
+            user_prompts.append(content[:300])
         elif isinstance(content, list):
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
                     text = block.get("text", "").strip()
                     if text and len(text) > 5:
-                        user_prompts.append(text[:200])
+                        user_prompts.append(text[:300])
 
     files_changed = sorted(set(
         a.replace("Modified ", "") for a in tool_actions if a.startswith("Modified")
     ))
 
     sections = []
-    if user_prompts:
-        sections.append(f"## What Was Being Done\n\n{user_prompts[-1]}")
-    else:
-        sections.append("## What Was Being Done\n\nUnknown — no user messages found in transcript.")
 
-    sections.append("## Current State\n\n- Check implementation_state.md for in-progress items")
-
-    sections.append("## Next Step\n\nReview files changed below and continue from last known state.")
+    task = user_prompts[-1] if user_prompts else "Unknown — transcript unavailable"
+    sections.append(f"## Task\n\n{task}")
 
     if files_changed:
-        files = "\n".join(f"- {f}" for f in files_changed[:20])
-        sections.append(f"## Files Changed This Session\n\n{files}")
+        status_lines = "\n".join(f"- {f} — modified this session, verify state" for f in files_changed[:20])
+        sections.append(f"## Status\n\n{status_lines}")
+    else:
+        sections.append("## Status\n\nUnknown — no file modifications found in transcript")
 
-    sections.append("## Blockers\n\nNone noted")
+    sections.append("## Failed Approaches\n\nUnknown — LLM handover unavailable, review transcript manually")
+
+    if files_changed:
+        sections.append(f"## Next Action\n\nInspect {files_changed[-1]} — last file modified this session")
+    else:
+        sections.append("## Next Action\n\nUnknown — run `git diff HEAD~1` to see what changed last session")
+
+    sections.append("## Open Questions\n\nUnknown")
 
     return "\n\n".join(sections), tool_actions
 

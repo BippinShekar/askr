@@ -15,9 +15,9 @@ const COLOR_CRIT = '#ff5555';  // bright red
 const COLOR_IDLE = '#6b7280';  // grey — no active session
 
 function severityColor(pct) {
-  if (pct >= 90) return COLOR_CRIT;
-  if (pct >= 80) return COLOR_HIGH;
-  if (pct >= 60) return COLOR_WARN;
+  if (pct >= 75) return COLOR_CRIT;   // checkpoint fires here
+  if (pct >= 60) return COLOR_HIGH;   // getting full
+  if (pct >= 40) return COLOR_WARN;
   return COLOR_OK;
 }
 
@@ -58,7 +58,7 @@ function buildLabel(ctxPct, quotaPct, quotaResetIso, isLive, ctxLabel) {
   }
 
   // Context section — per-chat window
-  const ctxWarn = ctxLabel === 'checkpoint' ? ' ⚠' : ctxLabel === 'near limit' ? ' !' : '';
+  const ctxWarn = ctxLabel === 'checkpoint' ? ' ⚠' : ctxLabel === 'getting full' ? ' !' : '';
   parts.push(`chat ${ctxPct}%${ctxWarn}`);
 
   // Stale indicator
@@ -77,32 +77,27 @@ function buildTooltip(s, ctxPct, isLive) {
   const model     = s.model            || 'claude';
   const turns     = s.turns            || 0;
 
-  const statusLine = isLive
-    ? '🟢 **Active session**'
-    : '🟡 **No active session** — stats from last open chat';
+  const statusLine = isLive ? '**Active session**' : '**No active session** — stats from last open chat';
 
-  // Chat context block
   const ctxAlerts = {
-    'checkpoint':  '\n\n⚠️ **About to checkpoint** — askr will save state and open a new chat.',
-    'near limit':  '\n\n🔴 **Near limit** — at 90% askr checkpoints automatically.',
-    'high':        '\n\n🟡 **Getting full** — above 75%.',
+    'checkpoint':   '\n\nCheckpointing now — askr saves state and opens a new chat.',
+    'getting full': '\n\nPast 60%. Askr checkpoints at 75% before quality degrades further.',
   };
   const ctxAlert = ctxAlerts[ctxLabel] || '';
 
-  // Quota block
   let quotaBlock = '';
   if (quotaPct !== null) {
     const resetStr  = resetIso ? resetCountdown(resetIso) : null;
-    const resetLine = resetStr ? `\n\n⏱ **${resetStr}** (5-hour Anthropic usage window)` : '';
+    const resetLine = resetStr ? `\n\n${resetStr} (5-hour Anthropic window)` : '';
     const q7dLine   = quota7d !== null ? `\n\n7-day usage: **${quota7d.toFixed(0)}%**` : '';
     const qAlert    = quotaPct >= 90
-      ? '\n\n⚠️ **Quota near limit** — askr will checkpoint and wait for reset.'
+      ? '\n\nAt limit — askr will checkpoint and wait for reset.'
       : quotaPct >= 80
-      ? '\n\n🟡 **Quota getting high** — approaching 90% threshold.'
+      ? '\n\nApproaching limit — checkpoint will fire at 90%.'
       : '';
     quotaBlock = `\n\n---\n\n**Session quota: ${quotaPct.toFixed(0)}% used**${q7dLine}${resetLine}${qAlert}`;
   } else {
-    quotaBlock = '\n\n---\n\n*Session quota: loading…*';
+    quotaBlock = '\n\n---\n\n*Session quota: loading...*';
   }
 
   const md = new vscode.MarkdownString(
@@ -110,9 +105,9 @@ function buildTooltip(s, ctxPct, isLive) {
     + `${statusLine}\n\n`
     + `---\n\n`
     + `**This chat: ${ctxPct}% full** (${ctxTokens} / ${ctxWindow} tokens)\n\n`
-    + `Each new chat starts at 0%. At 90%, askr saves your work and opens a fresh chat automatically.`
+    + `Each new chat starts at 0%. Askr checkpoints at 75% — research shows quality degrades well before 90%.`
     + ctxAlert
-    + `\n\n${turns} turns · model: ${model}`
+    + `\n\n${turns} turns · ${model}`
     + quotaBlock
     + `\n\n---\n\n*Click to run \`askr status\` in terminal*`
   );
