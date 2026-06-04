@@ -57,6 +57,54 @@ def _find_active_jsonl(project_path: str) -> Optional[str]:
     return max(jsonl_files, key=os.path.getmtime)
 
 
+def _find_quota_window_start(_project_path: str = "") -> Optional[datetime]:
+    """
+    The Claude Pro quota window is a rolling 5-hour window. Find the earliest
+    message timestamp across ALL JSONL files in ~/.claude/projects/ touched in
+    the last 5 hours. Scans all projects so sessions from other directories or
+    earlier chats in the same window are included.
+    """
+    if not os.path.isdir(CLAUDE_PROJECTS_DIR):
+        return None
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=5)
+    earliest: Optional[datetime] = None
+
+    for project_dir in os.listdir(CLAUDE_PROJECTS_DIR):
+        sessions_dir = os.path.join(CLAUDE_PROJECTS_DIR, project_dir)
+        if not os.path.isdir(sessions_dir):
+            continue
+        for fname in os.listdir(sessions_dir):
+            if not fname.endswith(".jsonl"):
+                continue
+            fpath = os.path.join(sessions_dir, fname)
+            try:
+                if os.path.getmtime(fpath) < cutoff.timestamp():
+                    continue
+            except Exception:
+                continue
+            try:
+                with open(fpath) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            e = json.loads(line)
+                        except Exception:
+                            continue
+                        ts = _parse_iso(e.get("timestamp", ""))
+                        if ts and ts >= cutoff:
+                            if earliest is None or ts < earliest:
+                                earliest = ts
+                            break  # first entry per file is sufficient
+            except Exception:
+                continue
+
+    return earliest
+
+
 def _parse_iso(ts: str) -> Optional[datetime]:
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00"))
@@ -128,10 +176,15 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
     context_window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
     context_pct = context_tokens / context_window if context_window > 0 else 0.0
 
+    # Use the earliest message across all recent JSONL files as the quota window
+    # start — more accurate than session_start when the user has had prior sessions
+    # within the same rolling 5-hour window.
+    quota_window_start = _find_quota_window_start() or first_ts
+
     return SessionStats(
         session_id=session_id,
         session_path=jsonl_path,
-        session_start=first_ts,
+        session_start=quota_window_start,
         context_tokens=context_tokens,
         context_window=context_window,
         context_pct=context_pct,

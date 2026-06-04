@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const STATS_PATH = path.join(os.homedir(), '.config', 'askr', 'session_stats.json');
+const STATS_PATH        = path.join(os.homedir(), '.config', 'askr', 'session_stats.json');
+const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
 
 const COLOR_OK   = '#98c379';  // green  — < 50%
@@ -116,6 +117,34 @@ function readStats() {
   }
 }
 
+function checkNotification() {
+  try {
+    if (!fs.existsSync(NOTIFICATION_PATH)) return;
+    const raw = fs.readFileSync(NOTIFICATION_PATH, 'utf8');
+    const n = JSON.parse(raw);
+    if (n.shown) return;
+
+    // Mark shown before displaying so a crash doesn't loop notifications
+    n.shown = true;
+    fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
+
+    const actions = n.type === 'context'
+      ? ['Open New Chat', 'Dismiss']
+      : ['Dismiss'];
+
+    vscode.window.showWarningMessage(`Askr: ${n.message}`, ...actions).then(action => {
+      if (action === 'Open New Chat') {
+        // Open a terminal so user can start a fresh session
+        const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
+        terminal.show();
+        terminal.sendText('claude');
+      }
+    });
+  } catch {
+    // notification file unreadable — skip silently
+  }
+}
+
 function activate(context) {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
   item.command = 'askr.openStatus';
@@ -129,6 +158,7 @@ function activate(context) {
   );
 
   function refresh() {
+    checkNotification();
     const result = readStats();
     if (result) {
       item.text    = result.label;

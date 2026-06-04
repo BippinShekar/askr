@@ -9,8 +9,23 @@ UNSAFE: active file writes in project, tests running, deploy/migration in progre
 """
 
 import os
+import re
 import subprocess
 from typing import Tuple
+
+# Matches actual write-mode file descriptors: "1w", "2W", "10u" (read+write).
+# Excludes: "cwd", "txt", "mem", "rtd" etc. which contain "w" but aren't write handles.
+_WRITE_FD_RE = re.compile(r'^\d+[wWu]$')
+
+# IDE / editor processes that legitimately hold write handles on project files.
+# Their presence does NOT mean a file is being actively modified — the editor
+# just keeps handles open. Exclude them from the lsof write-handle check.
+_EDITOR_PROCESS_NAMES = {
+    "cursor", "code", "code-oss", "code-insiders",
+    "electron", "node",
+    "webstorm", "intellij", "idea", "pycharm", "goland", "clion",
+    "vim", "nvim", "emacs",
+}
 
 _TEST_PROCESS_NAMES = [
     "pytest", "py.test",
@@ -74,8 +89,20 @@ def _no_active_writes(project_path: str) -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=5
         )
         lines = [l for l in result.stdout.splitlines() if l]
-        # filter to write-mode open files (mode contains 'w' or 'W')
-        write_lines = [l for l in lines[1:] if len(l.split()) > 4 and "w" in l.split()[3].lower()]
+        write_lines = []
+        for l in lines[1:]:
+            parts = l.split()
+            if len(parts) <= 4:
+                continue
+            # only flag actual write-mode FDs (e.g. "1w", "2W", "10u")
+            # "cwd", "txt", "mem" etc. contain 'w' but are not write handles
+            if not _WRITE_FD_RE.match(parts[3]):
+                continue
+            # skip IDE/editor processes — they legitimately hold write handles
+            process_name = parts[0].lower()
+            if any(editor in process_name for editor in _EDITOR_PROCESS_NAMES):
+                continue
+            write_lines.append(l)
         if write_lines:
             return False, f"active file write in project ({len(write_lines)} handle(s))"
         return True, ""
@@ -87,11 +114,12 @@ def is_safe_to_pause(project_path: str) -> Tuple[bool, str]:
     """
     Returns (True, "") if safe to checkpoint now.
     Returns (False, reason) if unsafe.
-    """
-    clean, reason = _git_is_clean(project_path)
-    if not clean:
-        return False, reason
 
+    Note: git cleanliness is intentionally NOT checked. Uncommitted code
+    changes are normal — Claude writes incrementally. The checkpoint commits
+    only askr_state/, not source files. Blocking on uncommitted files would
+    mean the checkpoint almost never fires.
+    """
     procs = _get_process_list()
     ok, reason = _active_process_check(procs)
     if not ok:

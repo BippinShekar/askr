@@ -40,11 +40,12 @@ import signal
 import subprocess
 from datetime import datetime, timezone
 
-_PID_PATH            = os.path.expanduser("~/.config/askr/daemon.pid")
-_CAFFEINATE_PID_PATH = os.path.expanduser("~/.config/askr/caffeinate.pid")
-_STATS_PATH          = os.path.expanduser("~/.config/askr/session_stats.json")
-_LAUNCH_MODE_PATH    = os.path.expanduser("~/.config/askr/launch_mode.json")
-_LOG_PATH            = os.path.expanduser("~/.config/askr/daemon.log")
+_PID_PATH             = os.path.expanduser("~/.config/askr/daemon.pid")
+_CAFFEINATE_PID_PATH  = os.path.expanduser("~/.config/askr/caffeinate.pid")
+_STATS_PATH           = os.path.expanduser("~/.config/askr/session_stats.json")
+_LAUNCH_MODE_PATH     = os.path.expanduser("~/.config/askr/launch_mode.json")
+_NOTIFICATION_PATH    = os.path.expanduser("~/.config/askr/notification.json")
+_LOG_PATH             = os.path.expanduser("~/.config/askr/daemon.log")
 
 POLL_ACTIVE        = 30   # seconds when session is live
 POLL_IDLE          = 60   # seconds when no session
@@ -178,7 +179,9 @@ def _read_stats() -> dict:
 
 def _find_claude_pids() -> list:
     try:
-        r = subprocess.run(["pgrep", "-f", "claude"], capture_output=True, text=True)
+        # -x = exact process name match; avoids killing Cursor extension hosts
+        # whose cmdlines contain ".cursor/extensions/anthropic.claude-code-..."
+        r = subprocess.run(["pgrep", "-x", "claude"], capture_output=True, text=True)
         return [int(p) for p in r.stdout.strip().splitlines() if p.strip().isdigit()]
     except Exception:
         return []
@@ -252,6 +255,30 @@ def _write_launch_mode(goal: str = ""):
         pass
 
 
+def _write_notification(trigger: str, goal: str = ""):
+    """
+    Write a notification for the IDE extension to surface as a VS Code alert.
+    The extension polls this file and shows showWarningMessage() when seen.
+    """
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        if trigger == "context":
+            msg = "Context at 90% — state saved to git. Open a new chat to continue."
+        else:
+            msg = "Quota window low — state saved to git. Waiting for reset, then resuming."
+        payload = {
+            "type": trigger,
+            "message": msg,
+            "goal": goal,
+            "shown": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump(payload, f)
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Trigger execution
 # ---------------------------------------------------------------------------
@@ -279,7 +306,9 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     result = create_checkpoint(trigger_type=trigger, developer=developer)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
-    _write_launch_mode(_get_next_goal())
+    next_goal = _get_next_goal()
+    _write_launch_mode(next_goal)
+    _write_notification(trigger, next_goal)
     _kill_claude()
 
     if trigger == "quota":

@@ -468,17 +468,22 @@ def cmd_status(args: list = None):
 
     if os.path.exists(_STATS_PATH):
         try:
+            import time as _time
+            stats_age = _time.time() - os.path.getmtime(_STATS_PATH)
             with open(_STATS_PATH) as f:
                 s = json.load(f)
-            ctx_pct    = int(round(s.get("context_pct", 0) * 100))
-            ctx_tokens = s.get("context_tokens", 0)
-            ctx_window = s.get("context_window", 200000)
-            ctx_label  = s.get("context_label", "ok")
-            reset_at   = s.get("reset_at", "")
+            reset_at = s.get("reset_at", "")
             console.print()
-            label_map = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
-            label_str = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
-            console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} — this chat only){label_str}")
+            if stats_age > 600:
+                console.print(f"  [dim]context[/dim]     [dim]no active session[/dim]")
+            else:
+                ctx_pct    = int(round(s.get("context_pct", 0) * 100))
+                ctx_tokens = s.get("context_tokens", 0)
+                ctx_window = s.get("context_window", 200000)
+                ctx_label  = s.get("context_label", "ok")
+                label_map = {"high": "[yellow]high[/yellow]", "near limit": "[red]near limit[/red]", "checkpoint": "[bold red]checkpoint[/bold red]"}
+                label_str = f"  {label_map[ctx_label]}" if ctx_label in label_map else ""
+                console.print(f"  [dim]context[/dim]     [bold]{ctx_pct}%[/bold] ({ctx_tokens:,} / {ctx_window:,} — this chat only){label_str}")
             if reset_at:
                 countdown = _reset_countdown(reset_at)
                 console.print(f"  [dim]quota reset[/dim]  {countdown}  [dim](check claude.ai/settings for actual %)[/dim]")
