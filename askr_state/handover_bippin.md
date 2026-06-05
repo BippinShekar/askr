@@ -1,22 +1,28 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 15:07
+Last updated: 2026-06-05 15:08
 
 ## Task
-Evaluate whether Discord notification system should be added to askr roadmap, and if yes, determine which phase and add it.
+Add Discord notification system to askr roadmap Phase 3 and commit changes to git.
 
 ## Status
-- roadmap.md — Phase 3 updated with project_brief.md addition for team collaboration. Committed and pushed to git.
-- Discord notification feature — Not yet in roadmap. Decision pending on: (1) whether to add it at all, (2) which phase if added.
-- Team collaboration context — askr currently lacks real-time team update mechanism. Phase 3 morning report exists but is metrics-only, not actionable team sync.
+- roadmap.md — Discord webhook configuration and notification types (checkpoint complete, session resumed, goal completed, HITL notification) added to Phase 3 Todo section
+- Git repository at /Users/bippin/Desktop/askr — roadmap.md staged, committed, and pushed with Discord notification feature additions
 
 ## Failed Approaches
-None.
+None
 
 ## Next Action
-Open /Users/bippin/Desktop/askr/roadmap.md and add Discord notification system to Phase 4 (or appropriate phase based on dependency analysis). Feature description: "Automated Discord notifications sent at session end or daily digest containing completed goals, built features, and session summary. Replaces manual standup updates and partial Jira/Slack overhead for small teams." Then commit and push without claude as co-collaborator.
+Implement Discord webhook integration in Phase 3. Start by creating askr/notifications/discord.py with functions to:
+1. Initialize Discord webhook client using ASKR_DISCORD_WEBHOOK env variable
+2. Send checkpoint_complete_notification(checkpoint_data)
+3. Send session_resumed_notification(session_id)
+4. Send goal_completed_notification(goal_data)
+5. Send hitl_notification(hitl_context)
+
+Reference the webhook configuration already documented in roadmap.md Phase 3.
 
 ## Open Questions
-- Which roadmap phase is appropriate for Discord integration — Phase 4 or later?
-- Should notification trigger be per-session-end or daily digest or both?
-- Does Discord integration require authentication/token setup that blocks earlier phases?
+- Should HITL notifications be enabled by default or require explicit opt-in per workspace?
+- What Discord message format/embed structure is preferred for each notification type?
+- Should notification batching be implemented for high-frequency events (multiple goals completed in quick succession)?
