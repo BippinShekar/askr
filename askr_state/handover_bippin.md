@@ -1,27 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 14:38
+Last updated: 2026-06-05 15:07
 
 ## Task
-Add Discord notification system to Phase 3 of askr roadmap to enable team collaboration updates, replacing Slack/Jira dependency for small teams.
+Evaluate whether Discord notification system should be added to askr roadmap, and if yes, determine which phase and add it.
 
 ## Status
-- roadmap.md — Phase 3 updated with `project_brief.md` addition for co-founder/intern handoff clarity. Committed and pushed to git.
-- askr core architecture — Session continuity and goal tracking functional. Morning report metrics exist but lack team distribution mechanism.
-- Discord integration — Not yet implemented. Concept validated in discussion but no code written.
+- roadmap.md — Phase 3 updated with project_brief.md addition for team collaboration. Committed and pushed to git.
+- Discord notification feature — Not yet in roadmap. Decision pending on: (1) whether to add it at all, (2) which phase if added.
+- Team collaboration context — askr currently lacks real-time team update mechanism. Phase 3 morning report exists but is metrics-only, not actionable team sync.
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Create askr/notifications/discord_integration.py with a Discord webhook handler that:
-1. Triggers post-session when user session limit reached or at end-of-day
-2. Sends formatted message to Discord channel containing: goals completed, session summary, user who ran session
-3. Make it configurable via environment variable for Discord webhook URL
-Start with skeleton implementation that accepts session data dict and formats/sends to Discord.
+Open /Users/bippin/Desktop/askr/roadmap.md and add Discord notification system to Phase 4 (or appropriate phase based on dependency analysis). Feature description: "Automated Discord notifications sent at session end or daily digest containing completed goals, built features, and session summary. Replaces manual standup updates and partial Jira/Slack overhead for small teams." Then commit and push without claude as co-collaborator.
 
 ## Open Questions
-- Which Discord channel should notifications post to by default (configurable per team)?
-- Should notifications include code diffs or only high-level goal/task summaries?
-- Does this feature belong in Phase 3 or should it be Phase 4 (timing/scope)?
-- How to handle authentication/permissions for multiple team members
+- Which roadmap phase is appropriate for Discord integration — Phase 4 or later?
+- Should notification trigger be per-session-end or daily digest or both?
+- Does Discord integration require authentication/token setup that blocks earlier phases?
