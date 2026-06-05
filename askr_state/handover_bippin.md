@@ -1,17 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 15:50
+Last updated: 2026-06-05 15:51
 
 ## Task
-Fix the SessionStart handover mechanism so users see visible confirmation that context was loaded into Claude, and ensure the daemon runs with correct PATH so claude command is available.
+Fix askr Claude Code extension to auto-continue work in new sessions by passing initial prompt to claude CLI, and display visible checkpoint header in terminal before Claude starts.
 
 ## Status
-- askr/session/lifecycle.py — _write_notification() now passes actual percentage value instead of hardcoded "90%". Daemon reloaded and running (pid=28935). PATH fixed in launchctl environment. File committed.
-- askr/ide/vscode-extension/extension.js — Updated to print visible header "=== ASKR CONTEXT LOADED ===" to terminal when SessionStart hook fires. Change made to both source file and installed extension at /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js. File committed.
-- Cursor editor — Still running old extension code in memory. Requires window reload to pick up the updated extension.js changes.
+- askr/ide/vscode-extension/extension.js — Updated to pass handover prompt to `claude` command and print checkpoint header. Changes committed to git.
+- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Same changes applied to installed extension. Committed.
+- askr/session/lifecycle.py — SessionStart hook injects handover silently into context (working as designed).
+- daemon.log — New session started (pid=28935), PATH fixed, no errors.
 
 ## Failed Approaches
-- Silent context injection via SessionStart hook — users could not see that handover was loaded, appeared as blank Claude session.
+- Relying on silent context injection alone — user sees blank Claude session with no indication context was loaded, does not auto-continue work.
+- Showing notification instead of terminal header — user cannot see it in time, Claude still waits for input.
 
 ## Next Action
-Reload Cursor window with Cmd+Shift+P → "Reload Window" to activate the updated extension.js that prints the visible header. Then test by triggering a new session and verify the terminal shows "=== ASKR CONTEXT LOADED ===" before Claude starts.
+Reload Cursor window (`Cmd+Shift+P` → "Reload Window") to load the updated extension.js from disk. Verify that the next Claude Code session opens with a visible checkpoint header in the terminal and auto-continues with the injected prompt without waiting for user input.
+
+## Open Questions
+- What is the current
