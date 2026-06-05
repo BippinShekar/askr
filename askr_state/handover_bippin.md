@@ -1,22 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 12:08
+Last updated: 2026-06-05 12:09
 
 ## Task
-Determine the optimal usage pattern for askr between IDE extension (Cursor) and terminal interfaces.
+Determine optimal usage patterns for Claude to maximize askr's functionality and context tracking capabilities.
 
 ## Status
-- /Users/bippin/Desktop/askr/ — Project structure examined, README and CLAUDE.md reviewed
-- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ — Extension files inspected, extension.js analyzed
-- No implementation changes made; analysis phase only
+- /Users/bippin/Desktop/askr/ — Project structure examined, contains CLAUDE.md and README.md
+- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ — IDE extension installed, extension.js reviewed
+- /Users/bippin/Desktop/askr/askr/hooks/stop.py — Examined, hook mechanism identified
+- /Users/bippin/Desktop/askr/askr/session/checkpoint.py — Examined, session state capture mechanism identified
+- /Users/bippin/Desktop/askr/askr/state/reader.py — Examined, state reading mechanism identified
+- session_stats.json — Polled every 5s by IDE extension, contains context%, quota%, reset countdown
 
 ## Failed Approaches
-None
+- Initial assumption that IDE extension and terminal tool serve the same purpose — they do not. IDE extension is read-only status display only.
 
 ## Next Action
-Read the full CLAUDE.md file at /Users/bippin/Desktop/askr/CLAUDE.md to extract the intended usage patterns and design philosophy, then synthesize a recommendation comparing IDE extension workflow versus terminal workflow based on the project's documented best practices.
+Read /Users/bippin/Desktop/askr/CLAUDE.md completely to identify what behavioral patterns or Claude interaction modes askr's hooks and checkpoints are designed to capture, then provide specific guidance on how to structure Claude requests to maximize askr's tracking and context efficiency.
 
 ## Open Questions
-- What specific use cases does askr optimize for (real-time feedback, batch processing, integration with other tools)?
-- Does the extension.js implementation reveal constraints or advantages of the IDE extension approach?
-- Are there performance or feature differences between the two interfaces that should drive the recommendation?

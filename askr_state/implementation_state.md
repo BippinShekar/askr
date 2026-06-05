@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [12:09] Ran: cat /Users/bippin/Desktop/askr/askr/state/reader.py
+- [12:09] Ran: cat /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [12:08] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [12:08] Ran: ls /Users/bippin/Desktop/askr/askr/hooks/ && cat /Users/bippin/Desktop/askr/askr
 - [12:07] Ran: cat /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
 - [12:07] Ran: cat /Users/bippin/Desktop/askr/README.md
 - [12:07] Ran: ls /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/
