@@ -9,6 +9,17 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [03:29] Ran: git push && askr launch --restart 2>/dev/null; sleep 3 && tail -5 ~/.config/askr
+- [03:29] Ran: git add askr/session/lifecycle.py && git commit -m "$(cat <<'EOF'
+fix: restore t
+- [03:29] Ran: venv/bin/python -c "from askr.session.lifecycle import CONTEXT_TRIGGER, QUOTA_TR
+- [03:29] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [03:29] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [03:28] Ran: git log --oneline -10
+- [03:28] Ran: tail -30 ~/.config/askr/daemon.log 2>/dev/null || echo "no daemon log"
+- [03:27] Ran: venv/bin/python -c "from askr.session.lifecycle import CONTEXT_TRIGGER, QUOTA_TR
+- [03:26] Ran: tail -20 askr_state/notifications.log
+- [03:26] Ran: git diff HEAD askr/session/lifecycle.py
 - [03:26] Ran: ls tests/ 2>/dev/null || echo "no tests dir" && ls . | grep -i test
 - [03:26] Ran: find . -name "test_*.py" -o -name "*_test.py" | grep -v __pycache__ | grep -v ve
 - [03:26] Ran: find . -name "test_*.py" -o -name "*_test.py" | grep -v __pycache__ | head -20
