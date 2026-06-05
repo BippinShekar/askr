@@ -144,6 +144,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | Goal completed notification (fires when stop hook marks a goal done) | 🔲 Todo |
 | HITL notification - Notification hook forwards to Discord overnight | 🔲 Todo |
 | Daily goal summary (what completed, what still open) | 🔲 Todo |
+| End-of-session team broadcast — Discord summary of goals completed + files changed, replaces "what did you work on today" standup | 🔲 Todo |
 | StatusLine: `Askr ↺ Resumed saved:47min` | 🔲 Todo |
 | `askr_state/project_brief.md` — human-readable team brief, regenerated at every checkpoint | 🔲 Todo |
 
