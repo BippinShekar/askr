@@ -69,7 +69,7 @@ POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.75  # fire when context reaches 75% — research shows degradation well before 90%
+CONTEXT_TRIGGER    = 0.40  # TEMP TEST: lowered from 0.75 to verify trigger fires
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 
 
@@ -307,13 +307,14 @@ def _write_launch_mode(goal: str = ""):
         pass
 
 
-def _write_notification(trigger: str, goal: str = ""):
+def _write_notification(trigger: str, goal: str = "", pct: float = 0.0):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        pct_str = f"{round(pct * 100)}%" if trigger == "context" else f"{round(pct)}%"
         if trigger == "context":
-            msg = "Context at 90% — state saved to git. Open a new chat to continue."
+            msg = f"Context at {pct_str} — state saved to git. Opening new chat."
         else:
-            msg = "Quota at 90% — state saved to git. Waiting for reset, then resuming."
+            msg = f"Quota at {pct_str} — state saved to git. Waiting for reset, then resuming."
         payload = {
             "type": trigger,
             "message": msg,
@@ -360,7 +361,8 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
-    _write_notification(trigger, next_goal)
+    pct = stats.get("context_pct", 0.0) if trigger == "context" else stats.get("quota_pct", 0.0)
+    _write_notification(trigger, next_goal, pct)
     _kill_claude()
 
     if trigger == "quota":
