@@ -154,6 +154,9 @@ function checkNotification() {
 
     if (n.type === 'context') {
       const goal = n.goal ? `Picking up: ${n.goal}` : 'Continuing from last session.';
+      const continuePrompt = n.goal
+        ? `Read the handover and continue autonomously. Work on: ${n.goal}`
+        : 'Read the handover and continue from the Next Action autonomously.';
       const header = [
         `printf "\\033[36m━━━ askr checkpoint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"`,
         `printf "  Context saved to git. Handover loaded — no context lost.\\n"`,
@@ -162,7 +165,7 @@ function checkNotification() {
       ].join(' && ');
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
-      terminal.sendText(`${header} && claude`);
+      terminal.sendText(`${header} && claude "${continuePrompt}"`);
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
