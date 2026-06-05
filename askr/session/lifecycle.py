@@ -19,10 +19,35 @@ Trigger B — quota >= 90%:
 
 import os
 import sys
+import subprocess as _bootstrap_sp
 
 _ASKR_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _ASKR_ROOT not in sys.path:
     sys.path.insert(0, _ASKR_ROOT)
+
+# launchd starts with a minimal PATH that won't include user-installed CLIs like claude.
+# Source the full shell PATH before anything else so shutil.which and Popen work correctly.
+def _patch_path():
+    try:
+        result = _bootstrap_sp.run(
+            ["zsh", "-l", "-c", "echo $PATH"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            os.environ["PATH"] = result.stdout.strip()
+            return
+    except Exception:
+        pass
+    # fallback: prepend the most common user-install locations
+    extras = ":".join([
+        os.path.expanduser("~/.local/bin"),
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+    ])
+    os.environ["PATH"] = extras + ":" + os.environ.get("PATH", "")
+
+_patch_path()
 
 import json
 import time

@@ -176,6 +176,17 @@ def _install_launchd() -> tuple[bool, str]:
     log_path    = os.path.expanduser("~/.config/askr/daemon.log")
     lifecycle   = os.path.join(ASKR_DIR, "askr", "session", "lifecycle.py")
 
+    # Capture the user's full shell PATH so launchd (which starts with minimal PATH)
+    # can find user-installed CLIs like claude.
+    try:
+        import subprocess as _sp2
+        _shell_path = _sp2.run(
+            ["zsh", "-l", "-c", "echo $PATH"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip() or os.environ.get("PATH", "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin")
+    except Exception:
+        _shell_path = os.environ.get("PATH", "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin")
+
     plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -187,6 +198,11 @@ def _install_launchd() -> tuple[bool, str]:
         <string>{_python_cmd()}</string>
         <string>{lifecycle}</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{_shell_path}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
