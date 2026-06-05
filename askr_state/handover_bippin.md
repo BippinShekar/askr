@@ -1,16 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 12:15
+Last updated: 2026-06-05 12:24
 
 ## Task
-Understand how askr (a token/quota tracking system for Claude Code sessions) works and determine the optimal way to use Claude to maximize askr's functionality, particularly regarding token bloat prevention and session continuity.
+Design and implement token bloat mitigation and session continuity features for askr — an open-source project replacing Slack/Jira/Kanban tracking with git-based code state capture.
 
 ## Status
-- /Users/bippin/Desktop/askr/ — Project structure examined. Contains hooks/, session/, state/ subdirectories and README.md
-- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js — IDE extension reviewed. Passive status bar that polls session_stats.json every 5s, displays context%, quota%, reset countdown
-- /Users/bippin/Desktop/askr/askr/hooks/stop.py — Examined
-- /Users/bippin/Desktop/askr/askr/session/checkpoint.py — Examined. Reads last 60 transcript entries, uses Haiku to populate: Task, Status (with file paths), Failed Approaches, Next Action, Open Questions
-- /Users/bippin/Desktop/askr/askr/state/reader.py — Examined
-- /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py — Examined
-- /Users/bippin/Desktop/askr/askr/state/writer.py — Examined
-- Understanding
+- askr/hooks/post_tool_use.py — Captures tool calls (Edit, Write, Bash) with timestamps
+- askr/hooks/stop.py — Triggers checkpoint creation at session end
+- askr/session/checkpoint.py — Uses Haiku to summarize last 60 transcript entries into Task, Status, Failed Approaches, Next Action, Open Questions sections
+- askr/state/reader.py — Injects state files at session start
+- askr/state/writer.py — Appends timestamped lines to implementation_state.md
+- implementation_state.md — Grows unbounded with every tool call; no pruning or rotation mechanism exists
+- IDE extension (askr.askr-status-1.0.0/extension.js) — Read-only status bar polling session_stats.json every 5s; shows context%, quota%, reset countdown
+- Core problem identified: implementation_state.md token bloat after many sessions; no mechanism to provide full project understanding without manual inspection
+
+## Failed Approaches
+- None documented in transcript.
+
+## Next Action
+Implement a rotation/pruning
