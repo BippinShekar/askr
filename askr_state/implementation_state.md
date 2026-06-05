@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [12:07] Ran: cat /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [12:07] Ran: cat /Users/bippin/Desktop/askr/README.md
+- [12:07] Ran: ls /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/
+- [12:07] Ran: ls /Users/bippin/Desktop/askr/ && cat /Users/bippin/Desktop/askr/CLAUDE.md
 - [11:38] Ran: launchctl list | grep askr && cat ~/Library/LaunchAgents/com.askr.daemon.plist 2
 - [11:38] Ran: venv/bin/python askr/cli/askr.py status 2>/dev/null
 - [11:38] Ran: cat ~/.config/askr/config.json 2>/dev/null && echo "---" && cat ~/.claude/projec
