@@ -1,28 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 15:08
+Last updated: 2026-06-05 15:13
 
 ## Task
-Add Discord notification system to askr roadmap Phase 3 and commit changes to git.
+Set up Discord webhook for askr notifications and verify auto-chat finish/continuation logic works at 75% and 90% session thresholds.
 
 ## Status
-- roadmap.md — Discord webhook configuration and notification types (checkpoint complete, session resumed, goal completed, HITL notification) added to Phase 3 Todo section
-- Git repository at /Users/bippin/Desktop/askr — roadmap.md staged, committed, and pushed with Discord notification feature additions
+- askr/roadmap.md — Phase 3 includes Discord webhook configuration and notification features (checkpoint complete, session resumed, goal completed). File committed and pushed.
+- askr/session/lifecycle.py — File exists but content not reviewed in this session. Auto-chat finish and continuation logic at 75%/90% thresholds status unknown.
+- Discord webhook — Not yet created. Requires latest setup instructions via web search.
+- .env file — ASKR_DISCORD_WEBHOOK environment variable referenced but not configured.
 
 ## Failed Approaches
-None
+None.
 
 ## Next Action
-Implement Discord webhook integration in Phase 3. Start by creating askr/notifications/discord.py with functions to:
-1. Initialize Discord webhook client using ASKR_DISCORD_WEBHOOK env variable
-2. Send checkpoint_complete_notification(checkpoint_data)
-3. Send session_resumed_notification(session_id)
-4. Send goal_completed_notification(goal_data)
-5. Send hitl_notification(hitl_context)
-
-Reference the webhook configuration already documented in roadmap.md Phase 3.
+Run web search for latest Discord webhook creation setup (2024), then create a Discord webhook in the user's Discord server and document the exact steps. Store the webhook URL in .env as ASKR_DISCORD_WEBHOOK. After that, examine askr/session/lifecycle.py to locate the 75% and 90% session threshold logic and create a test script to verify auto-chat finish and continuation actually triggers at those points.
 
 ## Open Questions
-- Should HITL notifications be enabled by default or require explicit opt-in per workspace?
-- What Discord message format/embed structure is preferred for each notification type?
-- Should notification batching be implemented for high-frequency events (multiple goals completed in quick succession)?
+- What is the exact threshold logic currently implemented in lifecycle.py for 75% and 90% session limits?
+- Should the Discord notifications include goal metadata, session duration
