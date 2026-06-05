@@ -8,7 +8,7 @@ Session liveness: detected from ~/.config/askr/session_stats.json mtime.
   active = updated within last 10 minutes (Claude session running)
   idle   = stale or missing (no session)
 
-Trigger A — context >= 90%:
+Trigger A — context >= 75%:
   Read from session_stats.json (accurate: parsed from JSONL token counts)
   safe_pause check → checkpoint → kill claude → start new claude immediately
 
@@ -69,7 +69,7 @@ POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.40  # TEMP TEST: lowered from 0.75 to verify trigger fires
+CONTEXT_TRIGGER    = 0.75  # fire when context reaches 75% — research shows degradation well before 90%
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 
 
