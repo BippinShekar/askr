@@ -1,19 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 02:23
-
-# HANDOVER DOCUMENT
+Last updated: 2026-06-05 11:38
 
 ## Task
-Implement context-aware session lifecycle management with 75% context utilization trigger for chat closure and handover generation. Remove emojis/icons from handover documents and checkpoint system. Update IDE extension thresholds to match new 75% trigger instead of 90%.
+Update askr codebase to remove emojis from user-facing text, standardize context threshold trigger to 75%, and establish working installation/initialization flow.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` — Rewritten with 75% trigger logic, not yet tested
-- `/Users/bippin/Desktop/askr/askr/session/forecast.py` — Created to calculate context utilization forecasts
-- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py` — Updated to generate plain-text handover prompts without emojis, fallback summary also updated
-- `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js` — Tooltip emojis removed, context threshold labels updated to "getting full" (75% trigger), severity color thresholds adjusted
-- Git changes staged but not yet committed
+- askr/session/lifecycle.py — Read and edited, trigger logic reviewed
+- askr/session/forecast.py — Created/written
+- askr/session/checkpoint.py — Edited twice: handover prompt rewritten (no emojis), fallback summary fixed for API unavailability
+- askr/ide/vscode-extension/extension.js — Edited multiple times: emojis removed from tooltips, "near limit" label replaced with "getting full", color thresholds updated to reflect 75% trigger point
+- ~/.cursor/e — extension.js copied to Cursor config directory
+- Git staging incomplete: attempted `git add` command truncated in transcript (checkpoi incomplete)
+- ~/.config/askr/config.json — Status unknown, checked but output not shown
+- Daemon (com.askr.daemon.plist) — Status unknown, checked but output not shown
 
 ## Failed Approaches
-- 90% context utilization trigger — research consensus is 70–80%, Anthropic documentation indicates 95% is already in performance-degraded zone
-- Emoji/icon usage in handover.md and checkpoint files — creates noise
+- None documented in transcript
+
+## Next Action
+Complete the git commit and push cycle: run `git add askr/session/lifecycle.py askr/session/forecast.py askr/session/checkpoint.py askr/ide/vscode

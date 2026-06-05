@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [11:38] Ran: launchctl list | grep askr && cat ~/Library/LaunchAgents/com.askr.daemon.plist 2
+- [11:38] Ran: venv/bin/python askr/cli/askr.py status 2>/dev/null
+- [11:38] Ran: cat ~/.config/askr/config.json 2>/dev/null && echo "---" && cat ~/.claude/projec
 - [02:23] Ran: git add askr/session/lifecycle.py askr/session/forecast.py askr/session/checkpoi
 - [02:23] Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js ~/.cursor/e
 - [02:23] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
