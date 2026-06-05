@@ -1,20 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 03:30
+Last updated: 2026-06-06 03:31
 
 ## Task
-Restore production values for session lifecycle trigger thresholds in askr/session/lifecycle.py and verify daemon functionality.
+Fix the autonomous handover mechanism so that when Claude Code opens a new terminal session after a checkpoint, it receives a properly formatted handover document and continues work without user input.
 
 ## Status
-- askr/session/lifecycle.py — QUOTA_TRIGGER restored to 90.0 (was 52.0 temp test value), CONTEXT_TRIGGER at 0.75 (correct), docstring fixed. Changes committed and pushed.
-- Daemon — Restarted after commit. Last log entries show context trigger test fired correctly at 50.6% quota usage.
-- Git — Clean working directory after commit "fix: restore trigger thresholds to production values".
+- askr/ide/vscode-extension/extension.js — Updated to pass initial prompt to claude command; changes pushed to git
+- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Same update applied
+- askr/session/lifecycle.py — CONTEXT_TRIGGER set to 0.75, QUOTA_TRIGGER set to 0.52; daemon reloaded
+- Daemon log shows quota reset to 3% and context at 9.4% after lifecycle restart
+- New Claude Code session opened in terminal but: (1) did not close the original terminal, (2) handover document was not created or was malformed, (3) new session received only a generic prompt fragment ("Read the handover and continue autonomously...") instead of structured handover content
 
 ## Failed Approaches
-None
+- Relying on SessionStart hook to inject handover — hook fired but handover was not properly formatted or passed to claude command
+- Assuming pre-filled prompt alone would trigger autonomous continuation — new session opened but lacked concrete task context and file state
 
 ## Next Action
-Verify daemon is running and monitoring correctly by checking the daemon log for any errors in the last 10 lines: `tail -10 ~/.config/askr/daemon.log`. If daemon is running without errors, the task is complete. If daemon crashed or shows errors, restart with `askr launch --restart` and check logs again.
-
-## Open Questions
-None
+Create a handover document generator function in askr/
