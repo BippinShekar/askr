@@ -1,22 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 12:09
+Last updated: 2026-06-05 12:13
 
 ## Task
-Determine optimal usage patterns for Claude to maximize askr's functionality and context tracking capabilities.
+Determine the optimal usage pattern for Claude (IDE extension vs terminal) to maximize askr's functionality and context tracking.
 
 ## Status
-- /Users/bippin/Desktop/askr/ — Project structure examined, contains CLAUDE.md and README.md
-- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ — IDE extension installed, extension.js reviewed
-- /Users/bippin/Desktop/askr/askr/hooks/stop.py — Examined, hook mechanism identified
-- /Users/bippin/Desktop/askr/askr/session/checkpoint.py — Examined, session state capture mechanism identified
-- /Users/bippin/Desktop/askr/askr/state/reader.py — Examined, state reading mechanism identified
-- session_stats.json — Polled every 5s by IDE extension, contains context%, quota%, reset countdown
+askr is a dual-interface tool with:
+- IDE extension (Cursor) at /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ — read-only status bar polling session_stats.json every 5s, displays context%, quota%, reset countdown
+- Terminal CLI at /Users/bippin/Desktop/askr/ — active command interface
+- Checkpoint system in askr/session/checkpoint.py — reads last 60 transcript entries, uses Haiku to populate Task, Status, Failed Approaches, Next Action, Open Questions sections
+- Hook system in askr/hooks/stop.py — captures Claude behavior at session boundaries
+- State reader in askr/state/reader.py — parses session state
 
 ## Failed Approaches
-- Initial assumption that IDE extension and terminal tool serve the same purpose — they do not. IDE extension is read-only status display only.
+- Treating IDE extension as active control interface — it is passive read-only only
+- Assuming user must manually manage file names and state in handover documents — handover generation should automatically actualize user intent
 
 ## Next Action
-Read /Users/bippin/Desktop/askr/CLAUDE.md completely to identify what behavioral patterns or Claude interaction modes askr's hooks and checkpoints are designed to capture, then provide specific guidance on how to structure Claude requests to maximize askr's tracking and context efficiency.
-
-## Open Questions
+Clarify with user: does askr's checkpoint system automatically extract task context from Claude conversation transcripts without requiring explicit file/task naming from the user? If yes, document the exact mechanism by which checkpoint.py converts raw transcript
