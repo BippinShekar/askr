@@ -1,19 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-05 15:47
+Last updated: 2026-06-05 15:50
 
 ## Task
-Fix daemon notification message to display actual trigger threshold percentage instead of hardcoded "90%", and ensure daemon reloads properly with updated extension code.
+Fix the SessionStart handover mechanism so users see visible confirmation that context was loaded into Claude, and ensure the daemon runs with correct PATH so claude command is available.
 
 ## Status
-- askr/session/lifecycle.py — _write_notification() function signature updated to accept threshold parameter; call site updated to pass actual percentage value; changes staged but not yet committed
-- ~/Library/LaunchAgents/com.askr.daemon.plist — PATH environment variable correctly set; daemon reloaded and running (pid=28935)
-- Cursor extension — old code still loaded in running Cursor window; requires window reload to pick up updated lifecycle.py changes
-- Git repository — askr/session/lifecycle.py staged for commit; commit command interrupted before completion
+- askr/session/lifecycle.py — _write_notification() now passes actual percentage value instead of hardcoded "90%". Daemon reloaded and running (pid=28935). PATH fixed in launchctl environment. File committed.
+- askr/ide/vscode-extension/extension.js — Updated to print visible header "=== ASKR CONTEXT LOADED ===" to terminal when SessionStart hook fires. Change made to both source file and installed extension at /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js. File committed.
+- Cursor editor — Still running old extension code in memory. Requires window reload to pick up the updated extension.js changes.
 
 ## Failed Approaches
-- Relying on launchd auto-restart without explicit unload/load cycle — resulted in two daemon instances running simultaneously with stale code
-- Assuming PATH fix in plist would persist without daemon reload — required explicit launchctl unload/load sequence
+- Silent context injection via SessionStart hook — users could not see that handover was loaded, appeared as blank Claude session.
 
 ## Next Action
-Complete the git commit: run `git -C /Users/bippin/Desktop/askr commit -m "Fix daemon notification to display actual threshold percentage"` to finalize the staged changes, then instruct user to reload Cursor window with Cmd+Shift+P → "Reload Window" to pick up the updated extension code
+Reload Cursor window with Cmd+Shift+P → "Reload Window" to activate the updated extension.js that prints the visible header. Then test by triggering a new session and verify the terminal shows "=== ASKR CONTEXT LOADED ===" before Claude starts.
