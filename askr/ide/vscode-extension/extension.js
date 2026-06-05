@@ -153,11 +153,16 @@ function checkNotification() {
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
     if (n.type === 'context') {
-      // Auto-open — no permission needed, this is the whole point of askr
+      const goal = n.goal ? `Picking up: ${n.goal}` : 'Continuing from last session.';
+      const header = [
+        `printf "\\033[36m━━━ askr checkpoint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"`,
+        `printf "  Context saved to git. Handover loaded — no context lost.\\n"`,
+        `printf "  ${goal}\\n"`,
+        `printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\033[0m\\n\\n"`,
+      ].join(' && ');
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
-      terminal.sendText('claude');
-      vscode.window.showInformationMessage('Askr: Context saved to git. New chat opened — no context lost.');
+      terminal.sendText(`${header} && claude`);
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
