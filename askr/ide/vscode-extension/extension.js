@@ -152,14 +152,16 @@ function checkNotification() {
     n.shown = true;
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
-    const actions = n.type === 'context' ? ['Open New Chat', 'Dismiss'] : ['Dismiss'];
-    vscode.window.showWarningMessage(`Askr: ${n.message}`, ...actions).then(action => {
-      if (action === 'Open New Chat') {
-        const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
-        terminal.show();
-        terminal.sendText('claude');
-      }
-    });
+    if (n.type === 'context') {
+      // Auto-open — no permission needed, this is the whole point of askr
+      const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
+      terminal.show();
+      terminal.sendText('claude');
+      vscode.window.showInformationMessage('Askr: Context saved to git. New chat opened — no context lost.');
+    } else {
+      // Quota exhausted — daemon will auto-resume after reset, just inform
+      vscode.window.showInformationMessage(`Askr: ${n.message}`);
+    }
   } catch {}
 }
 
