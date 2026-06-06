@@ -514,9 +514,32 @@ def _reset_countdown(reset_at_iso: str) -> str:
         return ""
 
 
+_RESUMED_PATH = os.path.expanduser("~/.config/askr/resumed.json")
+
+
+def _pop_resumed_marker() -> dict:
+    """Read and delete the resumed marker if present."""
+    try:
+        if not os.path.exists(_RESUMED_PATH):
+            return {}
+        with open(_RESUMED_PATH) as f:
+            data = json.load(f)
+        os.remove(_RESUMED_PATH)
+        return data
+    except Exception:
+        return {}
+
+
 def _statusline_text() -> str:
     """Compact one-line output for 'askr status --line'."""
     try:
+        resumed = _pop_resumed_marker()
+        if resumed:
+            from askr.state.analytics import _fmt
+            saved = resumed.get("saved_seconds", 0)
+            saved_str = f" saved:{_fmt(saved)}" if saved else ""
+            return f"askr ↺ Resumed{saved_str}"
+
         if not os.path.exists(_STATS_PATH):
             return "askr ·"
         with open(_STATS_PATH) as f:

@@ -370,6 +370,17 @@ def _notify_discord_resumed(trigger: str, goal: str):
         pass
 
 
+def _write_resumed_marker(trigger: str, saved_seconds: int):
+    try:
+        _RESUMED_PATH = os.path.expanduser("~/.config/askr/resumed.json")
+        os.makedirs(os.path.dirname(_RESUMED_PATH), exist_ok=True)
+        with open(_RESUMED_PATH, "w") as f:
+            import json as _json
+            _json.dump({"trigger": trigger, "saved_seconds": saved_seconds}, f)
+    except Exception:
+        pass
+
+
 def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
@@ -416,6 +427,12 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     _log("starting new claude session")
     _start_claude(project_path)
     _notify_discord_resumed(trigger, next_goal)
+    try:
+        from askr.state.analytics import today_summary
+        saved = today_summary().get("total_seconds", 0)
+        _write_resumed_marker(trigger, saved)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
