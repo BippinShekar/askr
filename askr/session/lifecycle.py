@@ -231,9 +231,37 @@ def _clear_claude_pid():
         pass
 
 
-def _kill_claude():
-    """Kill only the tracked claude PID we launched. Never blindly kills by name."""
+def _find_claude_pid_by_project(project_path: str) -> int | None:
+    """Find a running 'claude' process whose cwd matches project_path."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-x", "claude"],
+            capture_output=True, text=True,
+        )
+        for pid_str in result.stdout.strip().splitlines():
+            try:
+                pid = int(pid_str)
+                lsof_result = subprocess.run(
+                    ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-F", "n"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                for line in lsof_result.stdout.splitlines():
+                    if line.startswith("n") and line[1:] == project_path:
+                        return pid
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _kill_claude(project_path: str = ""):
+    """Kill the tracked claude PID, or fall back to finding it by project cwd."""
     pid = _read_claude_pid()
+    if pid is None and project_path:
+        pid = _find_claude_pid_by_project(project_path)
+        if pid:
+            _log(f"no tracked PID — found claude pid {pid} by cwd")
     if pid is None:
         _log("no tracked claude PID to kill — skipping")
         return
@@ -415,7 +443,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
     _write_notification(trigger, next_goal, pct, handover_has_content)
-    _kill_claude()
+    _kill_claude(project_path)
 
     if trigger == "quota":
         reset_at = stats.get("quota_reset_at")
@@ -482,11 +510,11 @@ def _wait_for_exchange_end_then_kill(project_path: str):
             idle_since  = time.time()
         elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
             _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
-            _kill_claude()
+            _kill_claude(project_path)
             return
 
     _log("exchange wait timed out — killing Claude anyway")
-    _kill_claude()
+    _kill_claude(project_path)
 
 
 def run_daemon():
