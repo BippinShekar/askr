@@ -292,7 +292,7 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     # Open a visible Terminal.app window so the session is watchable.
     try:
         safe_prompt = prompt_arg.replace("'", "").replace('"', "")
-        cmd = f"cd {project_path} && {claude_bin} \\"{safe_prompt}\\""
+        cmd = f'cd {project_path} && {claude_bin} "{safe_prompt}"'
         script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
