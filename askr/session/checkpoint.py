@@ -11,6 +11,7 @@ the next session to continue work without manual recovery.
 """
 
 import os
+import re
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -65,6 +66,27 @@ def _extract_tool_actions(entries: list) -> list[str]:
     return actions
 
 
+_SECRET_PATTERNS = [
+    # Discord webhook URLs
+    (re.compile(r'https://discord\.com/api/webhooks/\d+/[\w-]+'), '[DISCORD_WEBHOOK]'),
+    # Anthropic API keys
+    (re.compile(r'sk-ant-[A-Za-z0-9_-]{20,}'), '[ANTHROPIC_KEY]'),
+    # OpenAI API keys
+    (re.compile(r'sk-proj-[A-Za-z0-9_-]{20,}'), '[OPENAI_KEY]'),
+    (re.compile(r'sk-[A-Za-z0-9]{40,}'), '[OPENAI_KEY]'),
+    # Generic bearer/auth tokens in URLs or headers
+    (re.compile(r'Bearer\s+[A-Za-z0-9_\-\.]{20,}'), 'Bearer [TOKEN]'),
+    # Generic long hex/base64 tokens that look like secrets (40+ chars of random)
+    (re.compile(r'(?<![a-zA-Z0-9/])[A-Za-z0-9+/]{40,}={0,2}(?![a-zA-Z0-9/])'), '[REDACTED]'),
+]
+
+
+def _scrub_secrets(text: str) -> str:
+    for pattern, replacement in _SECRET_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def _build_transcript_text(entries: list) -> str:
     """
     Flatten the transcript to a readable text format for the LLM.
@@ -80,13 +102,13 @@ def _build_transcript_text(entries: list) -> str:
 
         if role == "user":
             if isinstance(content, str) and len(content) > 5:
-                lines.append(f"USER: {content[:400]}")
+                lines.append(f"USER: {_scrub_secrets(content[:400])}")
             elif isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "text":
                         text = block.get("text", "").strip()
                         if text and len(text) > 5:
-                            lines.append(f"USER: {text[:400]}")
+                            lines.append(f"USER: {_scrub_secrets(text[:400])}")
 
         elif role == "assistant":
             if isinstance(content, list):
@@ -95,7 +117,7 @@ def _build_transcript_text(entries: list) -> str:
                         if block.get("type") == "text":
                             text = block.get("text", "").strip()
                             if text:
-                                lines.append(f"ASSISTANT: {text[:300]}")
+                                lines.append(f"ASSISTANT: {_scrub_secrets(text[:300])}")
                         elif block.get("type") == "tool_use":
                             name = block.get("name", "")
                             inp  = block.get("input", {})
@@ -103,7 +125,7 @@ def _build_transcript_text(entries: list) -> str:
                                 path = inp.get("file_path") or inp.get("path", "")
                                 lines.append(f"TOOL: {name}({path})")
                             elif name == "Bash":
-                                cmd = inp.get("command", "")[:80]
+                                cmd = _scrub_secrets(inp.get("command", "")[:80])
                                 lines.append(f"TOOL: Bash({cmd})")
                             else:
                                 lines.append(f"TOOL: {name}")

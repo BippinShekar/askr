@@ -149,6 +149,41 @@ Reload your IDE window after `askr init` to activate the status bar.
 
 ---
 
+## Discord Notifications (optional)
+
+Askr can send checkpoints, goal completions, and session events to a Discord channel. Solo developers and teams both supported.
+
+### Solo setup (personal server)
+
+1. Create a Discord server (e.g. "askr notifications")
+2. Go to **Server Settings → Integrations → Webhooks → New Webhook**
+3. Name it, select the channel (e.g. `#general`), click **Copy Webhook URL**
+4. Add to your `.env`:
+   ```
+   ASKR_DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+   ```
+
+### Team setup (shared channel)
+
+1. In your shared Discord server, create a `#dev-activity` channel
+2. Go to **Channel Settings → Integrations → Webhooks → New Webhook**
+3. Each developer adds that same webhook URL to their own `.env`
+
+All team members' session events (checkpoints, goals completed, session resumes) post to the shared channel — a passive async standup feed. No duplicate notifications: each developer's askr instance posts its own events only.
+
+### What gets posted
+
+| Event | Message |
+|---|---|
+| Checkpoint (context/quota hit) | Trigger type, developer, timestamp |
+| Session resumed | Reason + next goal |
+| Goal completed | Goal text |
+| Session ended | Goals completed + files changed (standup replacement) |
+| Claude notification (HITL) | Forwarded overnight so you don't miss it |
+| `askr report` | Full daily summary on demand |
+
+---
+
 ## Commands
 
 ```bash
@@ -167,6 +202,9 @@ askr goals                  # show today, backlog, done
 askr goal add "..."         # add a goal for today
 askr goal add "..." --backlog   # add to backlog
 askr goal done "..."        # mark a goal complete
+
+# Notifications
+askr report                 # send daily report to Discord (sessions, time saved, next goal)
 
 # Codebase Q&A
 ask "cto: ..."              # architectural decision
