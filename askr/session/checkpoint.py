@@ -309,4 +309,23 @@ def create_checkpoint(
     except Exception:
         pass
 
+    _notify_discord_checkpoint(trigger_type, developer, result)
+
     return result
+
+
+def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
+    try:
+        from askr.clients.discord import send_message
+        label = {
+            "context": "Context limit",
+            "quota":   "Quota limit",
+            "manual":  "Manual checkpoint",
+            "stop":    "Session ended",
+            "emergency": "Emergency checkpoint",
+        }.get(trigger_type, trigger_type.capitalize())
+        ts = result.get("timestamp", "")[:16].replace("T", " ")
+        msg = f"**[askr] {label}** — {developer} @ {ts} UTC\nState saved to git. Handover ready."
+        send_message(msg)
+    except Exception:
+        pass
