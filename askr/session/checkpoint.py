@@ -283,12 +283,13 @@ def create_checkpoint(
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer)
 
+    completed_goals = []
     try:
         from askr.state.goals import load_today_goals, infer_completed_from_activity, complete_goal
         goals = load_today_goals()
         if goals and tool_actions:
-            completed = infer_completed_from_activity(tool_actions, goals)
-            for g in completed:
+            completed_goals = infer_completed_from_activity(tool_actions, goals)
+            for g in completed_goals:
                 complete_goal(g)
     except Exception:
         pass
@@ -310,8 +311,20 @@ def create_checkpoint(
         pass
 
     _notify_discord_checkpoint(trigger_type, developer, result)
+    _notify_discord_goals_completed(completed_goals)
 
     return result
+
+
+def _notify_discord_goals_completed(goals: list):
+    if not goals:
+        return
+    try:
+        from askr.clients.discord import send_message
+        lines = "\n".join(f"✓ {g}" for g in goals)
+        send_message(f"**[askr] Goal{'s' if len(goals) > 1 else ''} completed**\n{lines}")
+    except Exception:
+        pass
 
 
 def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
