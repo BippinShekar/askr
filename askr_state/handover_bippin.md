@@ -1,22 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 15:39
-
-# Handover Document
+Last updated: 2026-06-06 15:44
 
 ## Task
-Fix daemon trigger cooldown and session tracking to prevent multiple autonomous sessions from spinning up against the same chat when stats file continues updating.
+Fix daemon re-triggering bug by implementing session PID tracking and killing, replacing the cooldown workaround.
 
 ## Status
-- **checkpoint.py**: Modified to make prompt session-type-aware so testing/debugging sessions produce meaningful task descriptions instead of "Unknown" when no file edits occur
-- **vscode-extension/extension.js**: Removed handover quality gate (>200 byte check) — handovers now reliable enough to not need workaround
-- **.cursor/extensions/askr.askr-status-1.0.0/extension.js**: Same removal of handover quality gate
-- **lifecycle.py**: Previous session added 300s trigger cooldown and handover quality gate; both now being refined
-- **session_stats.json**: Already contains session ID; can be used with `lsof` to find PID of process holding JSONL transcript file open
-- Daemon reload and commits pending — files staged but git operations incomplete in transcript
+Implementation session. Changes made:
+- askr/session/checkpoint.py: Modified to make prompt session-type-aware so testing/debugging sessions produce meaningful status output instead of "Unknown"
+- askr/ide/vscode-extension/extension.js: Removed handover quality gate (>200 bytes check) since handover creation is now reliable
+- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js: Same removal as above
+- All three files committed to git
+
+Current problem identified: daemon cannot kill user's session because it has no tracked PID. Session stats file continues updating after daemon fires, causing re-trigger on next poll. Session ID already exists in session_stats.json and JSONL transcript file path.
+
+Proposed solution: use lsof to find PID of process holding the JSONL file open for that session ID, then kill it. Concern flagged: this approach is dangerous for IDE sessions and killing is wrong behavior for interactive use anyway — checkpoint and notify is correct approach instead.
 
 ## Failed Approaches
-- 300s blanket cooldown after trigger fires — too crude, doesn't address root cause that running session's stats file keeps updating
-- Handover quality gate (>200 byte check) in extensions — workaround for unreliable handover creation; should be removed once handover creation is fixed
-
-## Next Action
+- Handover quality gate (>200 bytes check) as workaround — removed because root cause (session tracking) should be fixed instead
+-

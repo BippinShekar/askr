@@ -9,6 +9,18 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/stop.py && echo "===" && cat /Users/bi
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:40] Ran: ls /Users/bippin/Desktop/askr/askr/notifications/ && cat /Users/bippin/Desktop/a
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/notifications/discord.py 2>/dev/null || echo
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/askr_state/goals.md 2>/dev/null | head -50
+- [15:40] Ran: tail -30 ~/.config/askr/daemon.log 2>/dev/null || echo "no daemon log"
+- [15:40] Ran: cat /Users/bippin/Desktop/askr/roadmap.md
+- [15:40] Ran: git show e515d41 --stat && echo "===" && git diff e515d41~1 e515d41 -- askr/sess
+- [15:40] Ran: git diff HEAD~2 --stat
+- [15:39] Ran: git diff HEAD~1 --stat
+- [15:39] Ran: git log --oneline -10
 - [15:39] Ran: git -C /Users/bippin/Desktop/askr add askr/session/checkpoint.py askr/ide/vscode
 - [15:39] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
 - [15:39] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
