@@ -196,6 +196,54 @@ If the handover is empty or unclear, return []."""
         return []
 
 
+def archive_stale_goals() -> int:
+    """
+    Move uncompleted goals from past-dated Today sections to Backlog.
+    Called at every session start — prevents stale goals from driving new sessions.
+    Returns count of goals archived.
+    """
+    content = _read()
+    if not content:
+        return 0
+
+    today = _today()
+    lines = content.split('\n')
+    result_lines = []
+    stale_goals = []
+    in_stale = False
+
+    for line in lines:
+        m = re.match(r'^## Today - (\d{4}-\d{2}-\d{2})$', line.strip())
+        if m:
+            if m.group(1) != today:
+                in_stale = True
+                continue  # drop the stale header
+            else:
+                in_stale = False
+        elif line.strip().startswith('## '):
+            in_stale = False
+
+        if in_stale:
+            if line.strip().startswith('- [ ]'):
+                stale_goals.append(line.strip())
+            continue  # drop all lines in stale section
+
+        result_lines.append(line)
+
+    if not stale_goals:
+        return 0
+
+    content = '\n'.join(result_lines)
+    insert = '\n'.join(stale_goals) + '\n'
+    if '## Backlog' in content:
+        content = content.replace('## Backlog\n', f'## Backlog\n{insert}', 1)
+    else:
+        content = content.rstrip() + '\n\n## Backlog\n\n' + insert
+
+    _write(content)
+    return len(stale_goals)
+
+
 def infer_completed_from_activity(activity_lines: list[str], goals: list[str]) -> list[str]:
     """
     Use LLM to infer which goals were completed based on session activity.

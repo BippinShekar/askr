@@ -154,9 +154,7 @@ function checkNotification() {
 
     if (n.type === 'context') {
       const goal = n.goal ? `Picking up: ${n.goal}` : 'Continuing from last session.';
-      const continuePrompt = n.goal
-        ? `Read the handover and continue autonomously. Work on: ${n.goal}`
-        : 'Read the handover and continue from the Next Action autonomously.';
+      const continuePrompt = 'Read the handover and start on the Next Action immediately. Work autonomously.';
       const header = [
         `printf "\\033[36m━━━ askr checkpoint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"`,
         `printf "  Context saved to git. Handover loaded — no context lost.\\n"`,

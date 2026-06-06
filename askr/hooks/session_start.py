@@ -54,6 +54,18 @@ def _read_launch_mode() -> dict:
         return {}
 
 
+def _archive_stale_goals():
+    """
+    Move uncompleted goals from past-dated sections to backlog.
+    Runs before goal suggestion so stale goals don't block inference.
+    """
+    try:
+        from askr.state.goals import archive_stale_goals
+        archive_stale_goals()
+    except Exception:
+        pass
+
+
 def _maybe_suggest_goals(developer: str) -> list[str]:
     """
     If today has no goals, suggest 1-2 from the last handover via Haiku.
@@ -82,6 +94,7 @@ def main():
         git_pull()
 
     developer = load_developer()
+    _archive_stale_goals()
     suggested_goals = _maybe_suggest_goals(developer)
 
     state_context = build_context_injection()
