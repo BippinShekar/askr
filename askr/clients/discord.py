@@ -24,7 +24,10 @@ def send_message(text: str) -> bool:
     req = urllib.request.Request(
         url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "askr/1.0 (session orchestration)",
+        },
         method="POST",
     )
     try:
