@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:36] Ran: python3 -c "
+import json
+with open('/Users/users/bippin/.config/askr/session_sta
 - [21:34] Ran: askr goal --help 2>/dev/null; askr goals --help 2>/dev/null; which askr && askr 
 - [21:33] Ran: python3 -m askr --help 2>/dev/null || askr --help 2>/dev/null | head -40
 - [21:33] Ran: find /Users/bippin/Desktop/askr -name "cli.py" -o -name "__main__.py" 2>/dev/nul
