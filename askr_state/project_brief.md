@@ -1,23 +1,25 @@
-Last updated: 2026-06-06 22:43
+Last updated: 2026-06-06 23:01
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so any developer can resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
 
 ## What's In Flight
 
-- End-to-end testing of Stage 10 project brief generation with real checkpoint flow
-- Verification of test suite status and fixing any failures from last Bash output
-- Authentication diagnosis for the askr project itself (API keys, Discord bot credentials, or other systems) — last session identified environment files but needs actual error messages to proceed
-- Review of files changed since last session and decisions.md alignment
+- Stage 10: End-to-end testing of project brief generation with real checkpoint workflow
+- Verification of test suite status and fixing any failures from last session
+- Review of file changes and decisions.md to understand what was completed in the previous session
 
 ## Key Decisions Made
 
-- State persisted in git as append-only decision log and structured state files (tasks, progress, context snapshots) rather than external database
-- Session monitoring split into discrete modules: token forecasting predicts which limit hits first, safe_pause validates interruption points, checkpoint persists before exhaustion
-- Claude Code integration via hooks at session start, prompt submission, session end, and pre-compaction — not via direct API polling
-- Handover documents generated on session stop to orient next developer without requiring state file parsing
+- State is persisted to git as the single source of truth for handoffs between developers and sessions
+- Session monitoring is split into discrete modules: token forecasting, safe pause detection, checkpoint generation, and resumption orchestration
+- Claude Code integration happens via hooks at key lifecycle points (session start, prompt submit, session stop, pre-compact)
+- Handover documents are auto-generated on session end to capture task, status, failed approaches, and open questions
+- State files store developer context, active objectives, task progress, and decisions in append-only format
 
 ## Open Goals
 
-- Fix test failures and verify Stage 10
+- Test Stage 10 project brief generation end-to-end with real checkpoint
+- Verify test status from last Bash output and fix any failures
+- Review files changed since last session
