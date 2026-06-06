@@ -1,20 +1,18 @@
-Last updated: 2026-06-06 22:05
+Last updated: 2026-06-06 22:07
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and generating handover documents that let anyone resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context, objectives, and progress in version control. The core problem: Claude Code sessions end abruptly when limits hit, losing work and context. Askr prevents that by predicting exhaustion, pausing safely, and resuming with full state restored.
 
 ## What's In Flight
 
-- End-to-end testing of goal functionality with Discord screenshot verification to validate the core feature works in practice
-- Integration tests for all 4 stages (7-10) in the CI pipeline to ensure checkpoint and resumption flows don't break
-- Stage 10 project brief generation tested end-to-end with real checkpoint data
-- Verification of test status from recent Bash output and fixing any failures
-- Review of files changed since last session and alignment with decisions.md
+- Autonomous error correction in the guard engine: when Discord alerts fire about Claude mistakes, the system should autonomously help Claude understand proper structure, then send before/after screenshot comparisons to Discord with summaries.
+- End-to-end testing of Discord alert functionality to verify guard engine goal detection works in practice.
+- Integration tests for all 4 stages (7-10) in CI pipeline; Stage 10 project brief generation needs real checkpoint validation.
+- Review of files changed since last session and verification against decisions.md.
 
 ## Key Decisions Made
 
-- State is append-only and persisted to git; decisions.md is never edited, only appended to, ensuring audit trail
-- Session lifecycle is split into discrete hooks (start, prompt submit, stop, pre-compact) that integrate with Claude Code without modifying its core
-- Forecast module predicts which limit (context or quota) hits first to trigger checkpoint at the right moment
-- Quote escaping in goal prompt injection is handled by stripping apostrophes from comment text before subprocess execution, not
+- State persists in git via append-only decision logs and state files; developers can pick up mid-session with full context.
+- Guard engine uses Haiku cross-checks on significant operations before execution; alerts route to both IDE popups and Discord async.
+- Quote-stripping applied to goal prompts
