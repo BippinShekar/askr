@@ -1,6 +1,7 @@
 ## Today - 2026-06-06
 
 
+
 - [ ] Add integration tests for all 4 stages (7-10) in CI pipeline <!-- added: 2026-06-06T17:31 -->
 
 - [ ] Test Stage 10 project brief generation end-to-end with real checkpoint <!-- added: 2026-06-06T17:31 -->
@@ -18,5 +19,6 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-06 21:45] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
 [2026-06-06 21:42] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
 

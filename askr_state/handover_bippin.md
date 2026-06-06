@@ -1,23 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:43
+Last updated: 2026-06-06 21:46
 
 ## Task
-Implement autonomous session auto-launch: when a user runs `askr goal add`, immediately start a new Claude session to work on that goal without requiring manual session creation.
+Make the `askr goal add` command visibly demonstrate autonomous Claude session execution by opening a real iTerm2 terminal window instead of running headless.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Modified `goal add` command to always start a new session immediately (no check for existing session)
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Added `_maybe_autolaunch` method to daemon's idle loop to start sessions when goals exist but no session is active
-- Daemon reload tested and working
-- End-to-end CLI path verified: `askr goal add` → goal stored → new session starts automatically
-- Existing test goal discarded to allow fresh demo
-- Changes committed to git with message "feat: askr [auto-launch feature]"
+- `askr/session/lifecycle.py`: Modified `_start_claude()` to open a visible iTerm2 window instead of redirecting stdout/stderr to devnull
+- `askr/cli/askr.py`: Committed with lifecycle changes
+- LaunchAgent daemon (com.askr.daemon.plist) unloaded to prevent background interference
+- Goal "run end to end testing with proper discord screenshots work o..." discarded to prepare clean demo state
+- Headless Claude process (pid 54231) killed
+- Changes committed to git
 
 ## Failed Approaches
-- Checking for existing session before starting new one on `goal add` — reversed to always start new session per final instruction
+- Running `askr goal add` with headless Claude process — user could not see session activity or progress
+- Using stdout/stderr devnull redirection — made autonomous work invisible to user
 
 ## Next Action
-Open new terminal and run `askr goal add "build the login page"` to verify the full flow works: goal is added, confirmation message appears, and new Claude session window opens automatically to begin work.
+Open a new terminal and run `askr goal add "build the login page"` to verify the iTerm2 window opens visibly and shows Claude working autonomously on the goal.
 
 ## Open Questions
 None
