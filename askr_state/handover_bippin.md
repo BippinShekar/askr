@@ -1,26 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 23:02
-
-# HANDOVER DOCUMENT
+Last updated: 2026-06-06 23:11
 
 ## Task
-Verify that the checkpoint and project brief generation system works end-to-end, including both manual trigger and automatic "stop" trigger paths, then commit the implementation.
+Fix the goal_launch notification fallback mechanism in askr so that VS Code extension integration attempts first, but Terminal.app always launches as guaranteed fallback.
 
 ## Status
-- Checkpoint system fully implemented and tested in `/Users/bippin/Desktop/askr/askr/__main__.py`
-- Project brief generation (`project_brief.md`) confirmed working and last updated at 22:43
-- Manual checkpoint trigger tested: passes
-- Automatic "stop" trigger path tested: passes
-- Goal "Test Stage 10 project brief generation" marked done via `askr goal done`
-- State files auto-committed by checkpoint system (askr_state/goals.md, askr_state/implementation_state.md)
-- Final commit pushed to remote with `.askr_history` and state updates included
+- /Users/bippin/Desktop/askr/askr/session/lifecycle.py: Modified `_start_claude` to write `goal_launch` notification AND launch Terminal.app (removed early return that prevented fallback execution)
+- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js: Added `goal_launch` handler to polling loop that opens integrated terminal tab when notification detected
+- Fallback chain now: attempt VS Code notification → always launch Terminal.app → headless as final layer
+- Test execution: `askr goal add "ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited"` confirmed notification written but extension did not intercept (unidentified notification issue)
+- Confirmed: `ask` is Phase 0 CLI for natural language Q&A; `askr` is Phase 1+ session orchestration with subcommands only (`goal`, `status`, `goals`, etc.)
 
 ## Failed Approaches
-None.
-
-## Next Action
-No action required. The checkpoint and brief generation system is complete, tested, and committed. The next session should begin with a new task or feature request.
-
-## Open Questions
-None.
+- Writing notification and returning early (prevented Terminal.app fallback from executing)
+- Relying solely on VS Code extension notification pickup without guaranteed fallback
