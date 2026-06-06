@@ -1,20 +1,20 @@
-Last updated: 2026-06-06 21:39
+Last updated: 2026-06-06 21:42
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task state, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so work can resume without losing context.
 
 ## What's In Flight
 
-- Autonomous session launch on goal creation: modify `askr goal add` to immediately spawn a new session with the goal as opening prompt, rather than waiting for context overflow at 75%
-- End-to-end testing of goal functionality with Discord screenshots to verify the feature works as intended
-- Integration tests for all 4 stages (7-10) in CI pipeline
-- Stage 10 project brief generation end-to-end with real checkpoint data
+- Auto-launch of sessions when goals are added via CLI (`cmd_goal` in askr.py) — completed and tested end-to-end.
+- Daemon auto-start of sessions when idle with pending goals (`_maybe_autolaunch` in lifecycle.py) — implemented and deployed via launchctl.
+- Integration tests for all 4 stages (7-10) in CI pipeline — not yet written.
+- Stage 10 project brief generation end-to-end test with real checkpoint — not yet validated.
+- Incomplete git commit from last session needs to be finished.
 
 ## Key Decisions Made
 
-- Goals inject into SessionStart context at the top of each session; they do not trigger new sessions on creation (current design being changed to support immediate execution)
-- State persists in git via append-only decision logs and structured state files (goals.md, tasks.md, progress.md)
-- Session lifecycle is managed by four modules: monitor (token tracking), forecast (limit prediction), checkpoint (state persistence), lifecycle (resumption orchestration)
-- Safe interruption validation happens before any checkpoint to prevent mid-operation pauses
-- Handover documents are auto-generated
+- State is append-only and persisted to git; decisions.md is never edited, only appended to.
+- Session lifecycle is split into four stages: start (inject context), prompt (extract objectives), stop (generate handover), and pre-compact (emergency checkpoint).
+- Daemon runs continuously and monitors token usage via forecast.py to predict which limit hits first.
+- Handover documents

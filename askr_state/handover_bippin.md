@@ -1,24 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:39
+Last updated: 2026-06-06 21:42
 
 # Handover Document
 
 ## Task
-Implement immediate autonomous session launch when a goal is added via `askr goal add`, rather than waiting for context overflow at 75%.
+Implement auto-launch of sessions when goals are added via CLI, and ensure the daemon auto-starts sessions when idle with pending goals.
 
 ## Status
-- User added goal: "run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not"
-- Goal was stored in goals.md but did not trigger immediate autonomous session
-- Current design confirmed: goals inject into SessionStart context at top of each session, they do NOT trigger new sessions on creation
-- User explicitly needs goal to execute immediately to demonstrate functionality to friend
-- Codebase location: /Users/bippin/Desktop/askr/
-- CLI entry point: /Users/bippin/bin/askr (wrapper script)
-- Goal storage: /Users/users/bippin/.config/askr/session_state (contains goals.md)
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Added `_maybe_launch_for_goal` function and modified `cmd_goal` to always start a new session on `goal add` without checking for existing sessions.
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Added `_maybe_autolaunch` function in the daemon's idle loop to start sessions when no session is active but goals exist.
+- Daemon reloaded via `launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist`.
+- Changes staged and committed with message "feat: askr" (commit incomplete at session end).
+- End-to-end CLI path tested and verified working.
+- Existing goal discarded to prepare for fresh demo.
 
 ## Failed Approaches
-- Waiting for context overflow at 75% — user rejected this, needs immediate execution
-- Relying on SessionStart injection alone — does not satisfy requirement for autonomous execution on goal creation
+- Initial implementation checked for existing sessions before launching on `goal add` — reversed to always launch new session unconditionally.
 
 ## Next Action
-Modify the goal add command handler in /Users/bippin/Desktop/askr/askr/cli to spawn a new autonomous session immediately after goal creation, passing the new goal as the opening prompt to that session. Verify the session launches
+Complete the git commit that was started (run `git commit -m "feat: askr auto-launch sessions on goal add and daemon idle"` or similar message to
