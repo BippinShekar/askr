@@ -127,6 +127,11 @@ SESSION TRANSCRIPT:
 
 Write the handover in this exact format. No emojis. No markdown decorations. No boilerplate phrases like "continue from where we left off" or "check implementation_state.md". Every line must be concrete and immediately actionable.
 
+Critical rules — read carefully before writing:
+- FINAL STATE ONLY. The transcript may contain suggestions that were later reversed or superseded. Only the final settled conclusion counts. If an approach was raised and then explicitly rejected or decided against later in the same session, put it in Failed Approaches — never in Next Action.
+- ANSWERED QUESTIONS ARE NOT OPEN. If a question was asked AND answered in the transcript, it is resolved. Do not list it in Open Questions. Open Questions are only for things that remain genuinely unresolved at session end.
+- LAST EXCHANGE WINS. When the final exchange in the transcript contradicts or overrides an earlier one, the earlier one is irrelevant. The handover reflects where things ended up, not where they passed through.
+
 Sessions vary in type — implementation, testing/debugging, exploration, or discussion. Adapt the Status section accordingly:
 - Implementation session: list file paths and their current state
 - Testing/debugging session: list what was tested, what passed/failed, what system state was confirmed
@@ -139,13 +144,13 @@ Sessions vary in type — implementation, testing/debugging, exploration, or dis
 [Bullet list: concrete current state. For implementation: file paths and what changed. For testing: what was verified and what the outcome was. For debugging: what was found. Never write "Unknown" if the transcript contains relevant information — extract it.]
 
 ## Failed Approaches
-[Bullet list of approaches that were tried and did not work, with brief reason. Write "None" if none.]
+[Bullet list of approaches that were tried and did not work OR were suggested and then rejected, with brief reason. Write "None" if none.]
 
 ## Next Action
-[The single next thing to do — specific enough that Claude can start immediately. For testing sessions this might be "run X test" or "verify Y behavior". For implementation it's a file path and change. One action only.]
+[The single next thing to do — specific enough that Claude can start immediately. Must reflect the FINAL state of the session, not any intermediate suggestion that was later reversed. For testing sessions this might be "run X test" or "verify Y behavior". For implementation it's a file path and change. One action only.]
 
 ## Open Questions
-[Bullet list of unresolved decisions or unknowns blocking progress. Write "None" if none.]
+[Bullet list of genuinely unresolved decisions or unknowns that were NOT answered during this session. If a question was raised and answered in the transcript, do not list it here. Write "None" if none.]
 
 If a section truly has no information in the transcript, write "Unknown" — but exhaust the transcript first before concluding that."""
 
