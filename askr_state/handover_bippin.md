@@ -1,21 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 05:23
+Last updated: 2026-06-06 13:50
 
 ## Task
-Implement automatic goal inference for autonomous Claude Code sessions so users don't manually specify goals each time, improving adoption and reducing friction in the askr workflow.
+Fix goal lifecycle management in askr: auto-archive stale goals at session start and remove stale goals from continuation prompts to prevent adoption friction from manual goal management.
 
 ## Status
-- askr/ide/vscode-extension/extension.js — Updated to pass `claude "Read the handover and continue autonomously..."` command with goal placeholder
-- askr/ide/vscode-extension/extension.js (Cursor extensions copy) — Same update applied
-- askr/session/lifecycle.py — CONTEXT_TRIGGER set to 0.75, QUOTA_TRIGGER set to 0.52; daemon reloaded and tested
-- Daemon checkpoint flow — Working: terminal opens with cyan header, SessionStart hook injects handover, pre-filled prompt triggers Claude
-- Goal inference mechanism — Not yet implemented; currently requires manual goal specification in the claude command
-- Quota/context trigger testing — Quota resets between sessions (currently at 3%), blocking realistic trigger testing
+- askr/state/goals.py — `archive_stale_goals()` function implemented, moves uncompleted goals from past-dated sections to backlog
+- askr/hooks/session_start.py — modified to call `archive_stale_goals()` before goal suggestion logic
+- askr/ide/vscode-extension/extension.js — stale goal removed from continuation prompt
+- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js — stale goal removed from continuation prompt
+- askr_state/goals.md — two stale goals ("Verify test status", one other) already archived to backlog via manual execution of `archive_stale_goals()`
+- Changes committed and pushed to git
 
 ## Failed Approaches
-- Relying on user to manually specify goal in each checkpoint — confirmed to reduce adoption and adds friction on top of normal Claude usage
-- Testing quota trigger at 52% — quota resets when daemon cycles, preventing sustained testing window
+None
 
 ## Next Action
-Implement goal inference in askr/session/lifecycle.py by extracting the last user message or active task context from the session state file
+Run the full test suite to verify that session_start.py correctly triggers goal archival on next session initialization and that the extension loads without errors. Command: `source venv/bin/activate && python3 -m pytest askr/hooks/test_session_start.py -v`
+
+## Open Questions
+- Whether goal inference logic in session_
