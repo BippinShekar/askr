@@ -9,6 +9,13 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [17:57] Ran: git push --quiet
+- [17:57] Ran: git add askr/cli/askr.py roadmap.md && git commit -m "fix: Stop/PreCompact defau
+- [17:57] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [17:57] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [17:57] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [17:56] Ran: grep -n "HOOK_MAP" /Users/bippin/Desktop/askr/askr/cli/askr.py | head -5
+- [17:56] Ran: grep -n "timeout" /Users/bippin/Desktop/askr/askr/cli/askr.py | head -20
 - [17:53] Ran: git push --quiet
 - [17:53] Ran: git add askr/state/writer.py && git commit -m "fix: write_handover returns path;
 - [17:52] Modified: /Users/bippin/Desktop/askr/askr/state/writer.py
