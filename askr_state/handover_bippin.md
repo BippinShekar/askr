@@ -2,20 +2,24 @@
 
 Last updated: 2026-06-06 23:16
 
-Task
-Draft and post a Twitter/X message about the core problem askr solves: context loss when Claude pauses mid-workflow.
+# Handover Document
 
-Status
-- Tweet draft finalized: "claude makes you cracked at building. then quota hits. train of thought gone. flow gone. anyone else?"
-- Message intent confirmed: sharing the problem, not promoting a solution (product not yet built)
-- Tone locked: concise, problem-focused, inviting community validation
-- `askr` CLI structure confirmed: `askr` handles subcommands (goal, status, goals, etc.); `ask` handles natural language Q&A (Phase 0)
-- Fallback mechanism fixed in /Users/bippin/Desktop/askr/askr/session/lifecycle.py: write notification AND always launch Terminal.app; if Terminal.app fails, run headless
-- launchctl daemon reloaded after lifecycle.py edit
+## Task
+Draft and finalize a Twitter post about the context-loss problem Claude users face when quota resets, positioning it as a problem statement to engage followers before building the solution product.
 
-Failed Approaches
-- Calling `askr "question"` for natural language — returns "not yet implemented"; use `ask "question"` instead
-- Relying solely on VS Code extension notification without Terminal.app fallback — caused incomplete terminal launch; now both notification and Terminal.app launch, with headless as final fallback
+## Status
+- Twitter post drafted and finalized through iterative refinement
+- Final version settled: "claude makes you cracked at building. then quota hits. train of thought gone. flow gone. anyone else?"
+- Post is problem-focused, not product-focused (as requested)
+- Hashtag decision pending (user asked about adding hashtags but no final decision was made)
+- askr codebase: lifecycle.py modified to remove `return` after notification write so Terminal.app always launches as fallback
+- launchctl daemon reloaded to apply changes
+- Phase 1 functionality clarified: `ask` is the natural language Q&A CLI; `askr` is the session orchestration tool with subcommands only
+- Roadmap.md exists and contains Phase 3.6 completion status
 
-Next Action
-Post the finalized tweet to Twitter/X: "claude makes you cracked at building. then quota hits.
+## Failed Approaches
+- Including "shipping" in the tweet — user corrected to "building" to avoid conflating writing with actual shipping
+- Longer, more explanatory versions of the tweet — user requested conciseness
+- Notification flow without Terminal.app fallback — changed to always launch Terminal.app regardless of VS Code notification pickup
+
+## Next
