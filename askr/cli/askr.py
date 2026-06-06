@@ -705,7 +705,7 @@ def _maybe_launch_for_goal(goal_text: str):
 
         project_path = load_project_path()
         _write_launch_mode(goal_text)
-        _start_claude(project_path)
+        _start_claude(project_path, initial_prompt=f"Read the handover and work on this goal autonomously: {goal_text}")
         console.print("  [green]→[/green] starting autonomous session for this goal\n")
     except Exception:
         pass

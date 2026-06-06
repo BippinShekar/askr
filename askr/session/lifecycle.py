@@ -281,15 +281,17 @@ def _kill_claude(project_path: str = ""):
     _clear_claude_pid()
 
 
-def _start_claude(project_path: str):
+def _start_claude(project_path: str, initial_prompt: str = ""):
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
 
-    # Open a visible Terminal.app window so the session is watchable
     claude_bin = shutil.which("claude") or "claude"
+    prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
+
+    # Open a visible Terminal.app window so the session is watchable
     try:
-        cmd = f"cd {shlex.quote(project_path)} && {claude_bin}"
+        cmd = f"cd {shlex.quote(project_path)} && {claude_bin} {shlex.quote(prompt_arg)}"
         script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -301,7 +303,7 @@ def _start_claude(project_path: str):
     # Fallback: headless background process
     try:
         proc = subprocess.Popen(
-            ["claude"],
+            ["claude", prompt_arg],
             cwd=project_path,
             start_new_session=True,
             stdout=subprocess.DEVNULL,
