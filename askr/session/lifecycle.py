@@ -290,8 +290,6 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
     # Signal the VS Code/Cursor extension to open an integrated terminal.
-    # The extension polls notification.json and handles goal_launch by opening
-    # a terminal inside the editor and sending the prompt to claude.
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
@@ -301,24 +299,37 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
-        _log(f"wrote goal_launch notification for VS Code extension")
-        return
+        _log("wrote goal_launch notification for VS Code extension")
     except Exception as e:
         _log(f"notification write failed: {e}")
 
-    # Fallback: headless background process
+    # Always also open a Terminal.app window as fallback — extension may not be active.
     try:
-        proc = subprocess.Popen(
-            ["claude", prompt_arg],
-            cwd=project_path,
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        safe_prompt = prompt_arg.replace("'", "").replace('"', "")
+        cmd = f"cd {project_path} && {claude_bin} '{safe_prompt}'"
+        script = (
+            f'tell application "Terminal"\n'
+            f'  do script "{cmd}"\n'
+            f'  activate\n'
+            f'end tell'
         )
-        _write_claude_pid(proc.pid)
-        _log(f"started new claude session in {project_path} (pid={proc.pid})")
-    except FileNotFoundError:
-        _log("ERROR: 'claude' not in PATH — cannot start new session")
+        subprocess.run(["osascript", "-e", script], check=True, timeout=5,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _log(f"opened Terminal window for claude in {project_path}")
+    except Exception as e:
+        _log(f"Terminal launch failed: {e} — falling back to headless")
+        try:
+            proc = subprocess.Popen(
+                ["claude", prompt_arg],
+                cwd=project_path,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _write_claude_pid(proc.pid)
+            _log(f"started headless claude session (pid={proc.pid})")
+        except FileNotFoundError:
+            _log("ERROR: 'claude' not in PATH — cannot start new session")
 
 
 def _wait_for_reset(reset_at_iso: str):
