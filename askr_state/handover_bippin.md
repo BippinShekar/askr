@@ -1,25 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:24
-
-# Handover Document
+Last updated: 2026-06-06 21:27
 
 ## Task
-Demonstrate autonomous session transfer capabilities by generating context usage from 67% to over 75% threshold, triggering daemon checkpoint and Discord notification to initiate new session handover.
+Fix the context trigger checkpoint mechanism in askr daemon — the Stop hook was not firing because the daemon sets `checkpoint_pending.json` but never kills the Claude process to trigger the hook.
 
 ## Status
-- Context usage at 73% after final status check
-- Completed file audits: askr.py (1016 lines), goals.py, state files, and remaining core modules
-- All read operations and status checks executed successfully
-- Daemon monitoring active; pending flag will trigger on 75%+ threshold
-- Stop hook configured to fire checkpoint and Discord ping upon session end
-- PostToolUse stats file confirmed updating correctly (refreshes within 2 minutes of first tool call in new session)
+- Root cause identified: Stop hook fires on Claude Code process exit, not after each turn. Daemon was writing `checkpoint_pending.json` but had no mechanism to kill Claude after the exchange completed.
+- Solution implemented in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: added `_wait_for_exchange_end_then_kill` function that polls the JSONL for quiet state, then kills Claude to trigger Stop hook.
+- Changes committed and pushed to git.
+- Daemon reloaded via launchctl unload/load with the fix.
 
 ## Failed Approaches
-None.
+- Initial assumption that Stop hook fires after each turn — it only fires on process exit.
 
 ## Next Action
-Continue reading remaining unaudited files in /Users/bippin/Desktop/askr/askr until context usage exceeds 75%, then allow session to end naturally so daemon fires checkpoint, sets pending flag, and sends Discord notification to initiate new session with this handover.
+Manually trigger a context checkpoint to verify the daemon now correctly kills Claude after exchange completion and the Stop hook fires to consume `checkpoint_pending.json`.
 
 ## Open Questions
 None.
