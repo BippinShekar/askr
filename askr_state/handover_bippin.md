@@ -1,24 +1,26 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 17:08
+Last updated: 2026-06-06 17:20
 
 # Handover Document
 
 ## Task
-Decide whether to build Phase 3 features now or wait until overnight autonomous run testing completes to verify askr's unattended behavior.
+Design and stage Phase 3 (notifications system) for askr, with each stage independently committed and pushed, webhook integration deferred until Discord webhook URL is provided.
 
 ## Status
-- Phase 2 implementation complete and verified
-- Daemon checkpoint system working: context trigger writes `checkpoint_pending.json`, stop hook consumes flag and creates checkpoint
-- Handover prompt fixed with three rules: final state only, answered questions are not open, last exchange wins
-- Changes committed and pushed to main
-- Screen sleep behavior clarified: display sleep does not affect autonomous operation; CPU/processes/network continue running
+- Phase 1 (daemon lifecycle) and Phase 2 (overnight autonomous run verification) complete
+- Daemon log confirmed full cycle working at 15:50:00
+- Handover prompt fixed to enforce final-state-only, answered-questions-not-open, and last-exchange-wins rules
+- .env file exists at /Users/bippin/Desktop/askr/.env
+- Phase 3 implementation approach: staged commits without Claude as co-author, each stage independently testable
+- Discord webhook URL: not yet provided by user
 
 ## Failed Approaches
-- `caffeinate -i` alone for preventing screen sleep — insufficient because it only prevents system idle sleep, not display sleep. Rejected in favor of not addressing it (display sleep is irrelevant to autonomous operation).
+- Running overnight autonomous test as a gate for Phase 3 — rejected in favor of starting Phase 3 now while overnight test runs as parallel real-world stress test
 
 ## Next Action
-Decide: proceed with Phase 3 feature development, or run overnight autonomous test first to verify askr completes unattended tasks before adding new features. This is a project planning decision, not a code task.
+List all Phase 3 stages in sequence (notification types, delivery mechanism, integration points, testing strategy) and present to user for approval before implementation begins. Do not add webhook placeholder to .env until user provides Discord webhook URL.
 
 ## Open Questions
-- Should Phase 3 development start now, or should overnight autonomous testing run first to validate Phase 2 behavior at scale?
+- What is the Discord webhook URL for notifications? (User will provide)
+- What notification events should Phase 3 cover (task completion, errors, status updates,
