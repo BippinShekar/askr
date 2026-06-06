@@ -69,8 +69,9 @@ POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.65  # TEMP TEST: lowered from 0.75
+CONTEXT_TRIGGER    = 0.75  # fire when context reaches 75% — research shows degradation well before 90%
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
+TRIGGER_COOLDOWN   = 300   # seconds to ignore further triggers after one fires
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +308,7 @@ def _write_launch_mode(goal: str = ""):
         pass
 
 
-def _write_notification(trigger: str, goal: str = "", pct: float = 0.0):
+def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         pct_str = f"{round(pct * 100)}%" if trigger == "context" else f"{round(pct)}%"
@@ -319,6 +320,7 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0):
             "type": trigger,
             "message": msg,
             "goal": goal,
+            "handover_ready": handover_ready,
             "shown": False,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
@@ -362,7 +364,10 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
     pct = stats.get("context_pct", 0.0) if trigger == "context" else stats.get("quota_pct", 0.0)
-    _write_notification(trigger, next_goal, pct)
+    handover_path = result.get("handover_path", "")
+    handover_has_content = bool(handover_path and os.path.exists(handover_path) and
+                                os.path.getsize(handover_path) > 200)
+    _write_notification(trigger, next_goal, pct, handover_has_content)
     _kill_claude()
 
     if trigger == "quota":
@@ -397,6 +402,7 @@ def run_daemon():
     _log("daemon started")
 
     was_active = False
+    last_trigger_at = 0.0  # epoch seconds — prevents re-firing on the same session
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -431,12 +437,19 @@ def run_daemon():
                     quota_pct  = stats.get("quota_pct")    # real % from /api/oauth/usage
                     reset_at   = stats.get("quota_reset_at", "")
 
-                    if ctx_pct >= CONTEXT_TRIGGER:
+                    in_cooldown = (time.time() - last_trigger_at) < TRIGGER_COOLDOWN
+
+                    if in_cooldown:
+                        remaining = int(TRIGGER_COOLDOWN - (time.time() - last_trigger_at))
+                        _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} quota={quota_pct or 0:.1f}%")
+                    elif ctx_pct >= CONTEXT_TRIGGER:
                         _log(f"Trigger A: context={ctx_pct:.1%} [{ctx_label}]")
                         _execute_trigger("context", stats, project_path)
+                        last_trigger_at = time.time()
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API)")
                         _execute_trigger("quota", stats, project_path)
+                        last_trigger_at = time.time()
                     else:
                         q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
                         _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str}")
