@@ -2,17 +2,17 @@
 """
 Claude Code Hook - PreToolUse
 
-Fires before every tool execution. Tracks write operations per session and
-writes guard_trigger.json when a significance threshold is crossed, signalling
-the guard engine (Stage 2) to run a Haiku architecture cross-check.
+Fires before every tool execution. On significant write operations runs a
+synchronous guard check. If architectural issues are found, blocks the write
+and surfaces the reason directly to Claude so it can self-correct.
 
 Significance thresholds:
   - First new file creation (Write to a path that doesn't exist yet)
   - 3rd file edit in a session (batch implementation detected)
   - Edit to a file listed as a core/shared interface in architecture.md
 
-Non-blocking: always exits 0 so Claude's tool is never prevented here.
-The guard engine runs asynchronously in Stage 3.
+Blocking: outputs {"decision": "block", "reason": "..."} + exits 2 when
+guard detects a real architectural contradiction. Exits 0 (allow) otherwise.
 """
 
 import sys
@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 _GUARD_SESSION_PATH  = os.path.expanduser("~/.config/askr/guard_session.json")
-_GUARD_TRIGGER_PATH  = os.path.expanduser("~/.config/askr/guard_trigger.json")
 _GUARD_COOLDOWN_SECS = 300  # don't re-trigger within 5 minutes
 _BATCH_THRESHOLD     = 3    # N file edits before a batch trigger fires
 
@@ -80,7 +79,6 @@ def _is_shared_interface(path: str) -> bool:
         with open(arch_path) as f:
             content = f.read()
         filename = os.path.basename(path)
-        # Flag if the filename appears in architecture.md in a "core" or "shared" context
         lower = content.lower()
         name_lower = filename.lower()
         idx = lower.find(name_lower)
@@ -92,18 +90,10 @@ def _is_shared_interface(path: str) -> bool:
         return False
 
 
-def _write_trigger(reason: str, tool_name: str, file_path: str):
-    try:
-        os.makedirs(os.path.dirname(_GUARD_TRIGGER_PATH), exist_ok=True)
-        with open(_GUARD_TRIGGER_PATH, "w") as f:
-            json.dump({
-                "reason": reason,
-                "tool": tool_name,
-                "file_path": file_path,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, f)
-    except Exception:
-        pass
+def _block_tool(reason: str):
+    """Output block decision to stdout and exit 2 to prevent the tool from running."""
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(2)
 
 
 def main():
@@ -153,28 +143,53 @@ def main():
         trigger_reason = "shared_interface"
 
     if trigger_reason:
-        session["last_trigger_at"] = datetime.now(timezone.utc).isoformat()
-        _write_trigger(trigger_reason, tool_name, file_path)
-        _spawn_guard_runner()
+        trigger = {
+            "reason": trigger_reason,
+            "tool": tool_name,
+            "file_path": file_path,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        result = _run_guard(trigger)
+
+        if not result.get("clean", True):
+            # Do NOT update last_trigger_at — blocked writes must not enter cooldown
+            # so the corrected retry will also be checked.
+            _save_session(session)
+            _on_block(result, file_path, trigger_reason)
+            # _on_block calls _block_tool which exits — nothing below runs on block
+        else:
+            session["last_trigger_at"] = datetime.now(timezone.utc).isoformat()
 
     _save_session(session)
     sys.exit(0)
 
 
-def _spawn_guard_runner():
-    """Launch guard_runner.py detached so Claude's tool is not blocked."""
+def _run_guard(trigger: dict) -> dict:
+    """Run guard check synchronously. Returns {"clean": True} on any failure."""
     try:
-        import subprocess
-        runner = os.path.join(os.path.dirname(__file__), "guard_runner.py")
-        python = sys.executable
-        subprocess.Popen(
-            [python, runner],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        from askr.state.config import load_developer, get_state_dir
+        from askr.session.guard import run_guard_check
+        developer = load_developer()
+        state_dir = get_state_dir()
+        return run_guard_check(trigger, developer, state_dir)
     except Exception:
-        pass
+        return {"clean": True}
+
+
+def _on_block(result: dict, file_path: str, trigger_reason: str):
+    """Format and emit the block signal. Does not return (exits 2)."""
+    issues  = result.get("issues", [])
+    summary = result.get("summary", "Architectural issue detected.")
+
+    issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
+    block_reason = (
+        f"Guard blocked: {summary}"
+        + (f"\n\n{issues_text}" if issues_text else "")
+        + "\n\nRevise your approach to address these architectural concerns before proceeding."
+    )
+
+    _block_tool(block_reason)
 
 
 if __name__ == "__main__":
