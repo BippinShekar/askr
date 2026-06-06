@@ -191,7 +191,7 @@ The problem with Phase 3.5: the guard warns but doesn't act. Claude proceeds wit
 | Discord pre-block alert — "guard blocked write to X — reason: ..." sent before Claude retries | ✅ Done |
 | Discord resolution alert — after Claude retries and write succeeds, send "resolved — what changed" diff summary | 🔲 Todo |
 | Block audit trail — `guard_log.md` records blocked attempts + resolution outcome | ✅ Done |
-| Escape hatch — if Claude retries the same blocked write 2x, unblock and escalate to Discord as unresolved | 🔲 Todo |
+| Escape hatch — if Claude retries the same blocked write 2x, unblock and escalate to Discord as unresolved | ✅ Done |
 
 **Done when:** Guard catches a real architectural mistake, blocks the write, Claude self-corrects without developer input, Discord shows the full incident (blocked → corrected) automatically.
 

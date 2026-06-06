@@ -23,8 +23,10 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 _GUARD_SESSION_PATH  = os.path.expanduser("~/.config/askr/guard_session.json")
+_GUARD_BLOCKS_PATH   = os.path.expanduser("~/.config/askr/guard_blocks.json")
 _GUARD_COOLDOWN_SECS = 300  # don't re-trigger within 5 minutes
 _BATCH_THRESHOLD     = 3    # N file edits before a batch trigger fires
+_ESCAPE_HATCH_COUNT  = 2    # allow through + escalate after this many consecutive blocks
 
 
 def _load_session() -> dict:
@@ -90,6 +92,25 @@ def _is_shared_interface(path: str) -> bool:
         return False
 
 
+def _load_blocks() -> dict:
+    try:
+        if os.path.exists(_GUARD_BLOCKS_PATH):
+            with open(_GUARD_BLOCKS_PATH) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_blocks(blocks: dict):
+    try:
+        os.makedirs(os.path.dirname(_GUARD_BLOCKS_PATH), exist_ok=True)
+        with open(_GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+    except Exception:
+        pass
+
+
 def _block_tool(reason: str):
     """Output block decision to stdout and exit 2 to prevent the tool from running."""
     print(json.dumps({"decision": "block", "reason": reason}))
@@ -123,12 +144,15 @@ def main():
         sys.exit(0)
 
     session = _load_session()
+    blocks  = _load_blocks()
 
     # Reset counter if it's a new day
     if session.get("session_date") != _today():
         session = {"write_count": 0, "last_trigger_at": None, "session_date": _today()}
 
-    if _in_cooldown(session):
+    # Previously-blocked files bypass the cooldown so retries are always checked
+    previously_blocked = file_path in blocks
+    if _in_cooldown(session) and not previously_blocked:
         sys.exit(0)
 
     session["write_count"] = session.get("write_count", 0) + 1
@@ -141,8 +165,20 @@ def main():
         trigger_reason = "batch_writes"
     elif _is_shared_interface(file_path):
         trigger_reason = "shared_interface"
+    elif previously_blocked:
+        # Retry of a previously-blocked file — re-check regardless of standard triggers
+        trigger_reason = blocks[file_path].get("trigger_reason", "retry")
 
     if trigger_reason:
+        # Escape hatch: if blocked too many times, allow through and escalate
+        block_count = blocks.get(file_path, {}).get("count", 0)
+        if block_count >= _ESCAPE_HATCH_COUNT:
+            _on_escape_hatch(file_path, blocks[file_path])
+            del blocks[file_path]
+            _save_blocks(blocks)
+            _save_session(session)
+            sys.exit(0)
+
         trigger = {
             "reason": trigger_reason,
             "tool": tool_name,
@@ -155,6 +191,12 @@ def main():
         if not result.get("clean", True):
             # Do NOT update last_trigger_at — blocked writes must not enter cooldown
             # so the corrected retry will also be checked.
+            blocks.setdefault(file_path, {"count": 0})
+            blocks[file_path]["count"] = blocks[file_path].get("count", 0) + 1
+            blocks[file_path]["last_blocked"] = datetime.now(timezone.utc).isoformat()
+            blocks[file_path]["trigger_reason"] = trigger_reason
+            blocks[file_path]["issues"] = result.get("issues", [])
+            _save_blocks(blocks)
             _save_session(session)
             _on_block(result, file_path, trigger_reason)
             # _on_block calls _block_tool which exits — nothing below runs on block
@@ -234,6 +276,45 @@ def _append_guard_log_block(file_path: str, reason_label: str, summary: str, iss
         if not os.path.exists(log_path):
             header = "# Guard Log\n\nAppend-only log of architectural warnings raised during implementation.\n"
 
+        with open(log_path, "a") as f:
+            if header:
+                f.write(header)
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        pass
+
+
+def _on_escape_hatch(file_path: str, block_entry: dict):
+    """Blocked too many times — allow the write but escalate to Discord as unresolved."""
+    count  = block_entry.get("count", _ESCAPE_HATCH_COUNT)
+    issues = block_entry.get("issues", [])
+    try:
+        from askr.clients.discord import send_message
+        issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
+        msg = (
+            f"🚨 **[askr guard] Unresolved** — `{os.path.basename(file_path)}`\n"
+            f"Blocked {count}x without correction. Allowing write through.\n"
+            f"**Requires manual review.**"
+            + (f"\n{issues_text}" if issues_text else "")
+        )
+        send_message(msg)
+    except Exception:
+        pass
+
+    try:
+        from askr.state.config import get_state_dir
+        log_path = os.path.join(get_state_dir(), "guard_log.md")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        lines = [
+            f"\n## {ts} — Escape hatch [UNRESOLVED]",
+            f"**File:** `{file_path}`",
+            f"Blocked {count}x — Claude did not self-correct. Write allowed through.",
+            "**Outcome:** Escalated — requires manual review",
+            "",
+        ]
+        header = ""
+        if not os.path.exists(log_path):
+            header = "# Guard Log\n\nAppend-only log of architectural warnings raised during implementation.\n"
         with open(log_path, "a") as f:
             if header:
                 f.write(header)
