@@ -1,18 +1,18 @@
-Last updated: 2026-06-06 22:18
+Last updated: 2026-06-06 22:24
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress so work can resume without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress snapshots that survive session interruptions.
 
 ## What's In Flight
 
-- Terminal integration: switching goal launch from AppleScript (Terminal.app) to VS Code/Cursor integrated terminal via extension notification system. Extension handler exists; lifecycle.py needs to write notification file instead of spawning osascript.
-- Stage 10: end-to-end test of project brief generation with real checkpoint. Verify test status from last bash output and fix failures.
-- Handover review: check files changed since last session and validate decisions.md is current.
+- Guard rail system for pre/post tool use hooks: retry tracking, escape hatch escalation on repeated blocks, and resolution detection when previously-blocked files succeed. All 4 stages implemented and committed.
+- End-to-end testing of Stage 10 project brief generation with real checkpoint flow.
+- Verification of test suite status and fixing any failures from last session.
 
 ## Key Decisions Made
 
-- State persisted to git, not database. Enables version control, diffs, and handoffs without external infrastructure.
-- Append-only decisions log. Never edit existing lines; new decisions appended with timestamp and reason. Maintains audit trail.
-- Checkpoint triggered before exhaustion, not after. Safe pause validation ensures interruption happens at stable points (end of function, test pass).
-- Extension notification system for terminal launch, not AppleScript. Keeps askr in VS Code/Cursor context instead of spawning separate Terminal.app
+- State persists in git as append-only decision logs and structured state files (tasks, progress, context snapshots) rather than in-memory or external databases. Enables offline handoffs and full audit trail.
+- Checkpoint triggered by forecast module predicting exhaustion, not reactive to hard limits. Allows graceful pause before Claude Code auto-compacts context.
+- Guard blocks tracked per-file in `guard_blocks.json` with cooldown bypass on repeat offenders. Escape hatch (allow + Discord alert) fires at 2 blocks per file to unblock developer while escalating to human review.
+- Session hooks (

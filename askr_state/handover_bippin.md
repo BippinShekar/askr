@@ -1,19 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:18
+Last updated: 2026-06-06 22:24
 
-# Handover: askr Goal Launch Terminal Integration
+# Handover Document
 
 ## Task
-Integrate askr goal launch into VS Code/Cursor's integrated terminal instead of opening a separate Terminal.app window, using the extension notification system.
+Implement a 4-stage guard rail system for the askr pre/post tool use hooks with retry tracking, escape hatch escalation, and resolution detection.
 
 ## Status
-- Extension file: `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` — has context trigger handlers (lines 158-160) that open VS Code terminals via notification system; needs new `goal_launch` handler added
-- Lifecycle file: `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` — currently uses AppleScript (`osascript`) to launch Terminal.app; needs to switch to writing a notification file instead
-- Daemon: launchctl unload completed for `com.askr.daemon.plist`
-- Test goal: "let's implement phase 3.6 in stages, ensure each stage is committed and pushed without claude as co-collaborator" — was discarded to prevent auto-launch during testing
-- Current behavior: goal launch opens Terminal.app in background; desired behavior: goal launch opens integrated terminal in VS Code/Cursor with Claude session visible
+- `/Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py`: Implemented retry tracking via `guard_blocks.json` file. Added `_on_block()` function that logs blocks per file, bypasses cooldown if file was previously blocked, and triggers escape hatch (allow through + Discord escalation) when block count ≥ 2. Updated `main()` to use blocks state for cooldown bypass logic.
+- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py`: Implemented `_on_escape_hatch()` function for resolution detection. When a previously-blocked file is successfully written, sends Discord resolution alert and updates guard_log.
+- `/Users/bippin/Desktop/askr/roadmap.md`: Updated to mark all 4 stages complete (Stage 1: cooldown, Stage 2: block tracking, Stage 3: escape hatch, Stage 4: resolution detection).
+- All changes committed and pushed to git.
 
 ## Failed Approaches
-- Using AppleScript to open Terminal.app — opens in background, not visible, wrong application context
-- Relying on Terminal.app as
+None.
+
+## Next Action
+Verify the roadmap shows all Phase
