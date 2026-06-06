@@ -1,17 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 23:11
+Last updated: 2026-06-06 23:12
 
 ## Task
-Fix the goal_launch notification fallback mechanism in askr so that VS Code extension integration attempts first, but Terminal.app always launches as guaranteed fallback.
+Compose and post a Twitter/X message about askr's core problem statement to warm up followers before public launch, framing the issue of context loss and flow interruption when switching between AI tools.
 
 ## Status
-- /Users/bippin/Desktop/askr/askr/session/lifecycle.py: Modified `_start_claude` to write `goal_launch` notification AND launch Terminal.app (removed early return that prevented fallback execution)
-- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js: Added `goal_launch` handler to polling loop that opens integrated terminal tab when notification detected
-- Fallback chain now: attempt VS Code notification → always launch Terminal.app → headless as final layer
-- Test execution: `askr goal add "ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited"` confirmed notification written but extension did not intercept (unidentified notification issue)
-- Confirmed: `ask` is Phase 0 CLI for natural language Q&A; `askr` is Phase 1+ session orchestration with subcommands only (`goal`, `status`, `goals`, etc.)
+- No draft tweet exists yet in codebase or project files
+- Session ended with user articulating the core message: Claude makes you productive, but switching to a different tool (paused context) breaks flow and loses train of thought
+- User wants to position this as the problem askr solves
+- No previous tweet drafts found in filesystem or .claude/projects
 
 ## Failed Approaches
-- Writing notification and returning early (prevented Terminal.app fallback from executing)
-- Relying solely on VS Code extension notification pickup without guaranteed fallback
+- Searching codebase for existing Twitter/social media content — none found
+- Attempting to retrieve from previous session memory — not available
+
+## Next Action
+Draft a Twitter/X post (280 characters or less) that frames the problem: using Claude gets you in flow, but pausing mid-thought to switch tools breaks that flow. Position askr as the solution. Example angle: "Claude gets you cracked. Then you pause. Context lost. Flow gone. What if you never had to switch?" Refine based on user feedback, then post to Twitter/X.
+
+## Open Questions
+- Exact tone preference (technical, casual, narrative)
+- Whether to mention askr by name in the first tweet or keep it problem-focused
+- Target audience segment (developers, AI users,

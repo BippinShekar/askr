@@ -1,15 +1,17 @@
-Last updated: 2026-06-06 23:11
+Last updated: 2026-06-06 23:12
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control. The core problem: Claude Code sessions end abruptly when limits hit, losing work and context; Askr prevents that by predicting exhaustion and orchestrating safe pauses and resumptions.
+Askr is a daemon and CLI tool that solves context loss and flow interruption when developers pause Claude Code sessions. It monitors token usage, detects when context or quota limits are about to be exhausted, automatically checkpoints project state to git, and enables seamless resumption in new sessions. The core problem: Claude gets you productive, but switching tools or pausing mid-thought breaks flow and loses your train of thought. Askr keeps your context alive across session boundaries.
 
 ## What's In Flight
 
-- Goal launch notification fallback mechanism: VS Code extension attempts to intercept `goal_launch` notifications and open integrated terminal; Terminal.app always launches as guaranteed fallback if extension doesn't respond. Currently debugging why extension notification handler isn't firing despite notification being written to disk.
-- Session lifecycle hooks fully wired: `session_start.py` injects context, `user_prompt_submit.py` captures objectives, `stop.py` generates handover docs and commits state, `pre_compact.py` emergency checkpoints before context auto-compaction.
-- State persistence layer (`askr/state/`) reading and writing task/decision/progress files correctly; handover documents auto-generated on session end.
+- Social media launch campaign: drafting Twitter/X post framing the problem statement (context loss on tool switching) before public launch. No draft exists yet; waiting on tone/positioning decisions.
+- Test suite verification: checking status from last Bash output and fixing any failures.
+- Session state handover: reviewing files changed since last session and validating decisions.md consistency.
 
 ## Key Decisions Made
 
-- Askr is Phase 1+ only: subcommands only (`goal`, `status`, `goals`, etc.). The `
+- Append-only decision log: all decisions timestamped and reasoned; never edited retroactively. Ensures audit trail and prevents context loss between handoffs.
+- Git as source of truth for project state: checkpoints persist tasks, decisions, and progress to version control, enabling developer handoffs without external databases.
+- Hook-based integration with Claude Code: session lifecycle is managed through five integration points (start, prompt submit, stop, pre-compact, resume) rather than monkey-
