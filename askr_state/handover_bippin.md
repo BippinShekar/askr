@@ -1,21 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 15:44
+Last updated: 2026-06-06 15:46
+
+# Handover Document
 
 ## Task
-Fix daemon re-triggering bug by implementing session PID tracking and killing, replacing the cooldown workaround.
+Fix the daemon's session tracking and cooldown mechanism to prevent re-firing when a session's stats file is being actively updated by a running process, and improve handover quality by making the checkpoint prompt session-type-aware.
 
 ## Status
-Implementation session. Changes made:
-- askr/session/checkpoint.py: Modified to make prompt session-type-aware so testing/debugging sessions produce meaningful status output instead of "Unknown"
-- askr/ide/vscode-extension/extension.js: Removed handover quality gate (>200 bytes check) since handover creation is now reliable
-- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js: Same removal as above
-- All three files committed to git
-
-Current problem identified: daemon cannot kill user's session because it has no tracked PID. Session stats file continues updating after daemon fires, causing re-trigger on next poll. Session ID already exists in session_stats.json and JSONL transcript file path.
-
-Proposed solution: use lsof to find PID of process holding the JSONL file open for that session ID, then kill it. Concern flagged: this approach is dangerous for IDE sessions and killing is wrong behavior for interactive use anyway — checkpoint and notify is correct approach instead.
-
-## Failed Approaches
-- Handover quality gate (>200 bytes check) as workaround — removed because root cause (session tracking) should be fixed instead
--
+- Modified `/Users/bippin/Desktop/askr/askr/session/checkpoint.py` to make the handover prompt session-type-aware so testing/debugging sessions produce accurate "what was being worked on" output instead of defaulting to "Unknown"
+- Removed the handover quality gate from `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js` and `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` — handovers should now be reliable without workarounds
+- Identified root cause of re-firing bug: when daemon spawns a new Claude session, that session writes its own low-context stats to `~/.config/askr/session_stats.json`, overwriting the original session's stats. Daemon then watches the wrong session and sees artificially low context percentage, triggering re-fires
+- Session ID is already present in `session_stats.json` and JSONL transcript file paths contain session ID — infrastructure exists to track sessions uniquely
+- Current

@@ -9,6 +9,13 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [15:46] Ran: tail -3 ~/.config/askr/daemon.log && cat ~/.config/askr/session_stats.json | pyt
+- [15:45] Ran: ps aux | grep "claude" | grep -v grep | grep -v "lifecycle"
+- [15:45] Ran: cat ~/.config/askr/session_stats.json | python3 -c "import json,sys; s=json.load
+- [15:45] Ran: git diff HEAD~3 HEAD --stat 2>/dev/null | head -20
+- [15:45] Ran: git diff HEAD~1 --stat && echo "===" && git diff HEAD~2 HEAD~1 --stat
+- [15:45] Ran: git log --oneline -10
+- [15:45] Ran: tail -5 ~/.config/askr/daemon.log
 - [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/stop.py && echo "===" && cat /Users/bi
 - [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/session/checkpoint.py
 - [15:40] Ran: cat /Users/bippin/Desktop/askr/askr/session/lifecycle.py
