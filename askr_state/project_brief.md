@@ -1,20 +1,19 @@
-Last updated: 2026-06-06 21:42
+Last updated: 2026-06-06 21:43
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so work can resume without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Auto-launch of sessions when goals are added via CLI (`cmd_goal` in askr.py) — completed and tested end-to-end.
-- Daemon auto-start of sessions when idle with pending goals (`_maybe_autolaunch` in lifecycle.py) — implemented and deployed via launchctl.
-- Integration tests for all 4 stages (7-10) in CI pipeline — not yet written.
-- Stage 10 project brief generation end-to-end test with real checkpoint — not yet validated.
-- Incomplete git commit from last session needs to be finished.
+- Autonomous session auto-launch: `askr goal add` now immediately starts a new Claude session without manual intervention. End-to-end flow verified; awaiting final demo confirmation.
+- Integration test suite for all 4 checkpoint/resumption stages (7-10 tests) in CI pipeline.
+- Stage 10 project brief generation end-to-end validation with real checkpoint data.
+- Review of files changed since last session and verification against decisions log.
 
 ## Key Decisions Made
 
-- State is append-only and persisted to git; decisions.md is never edited, only appended to.
-- Session lifecycle is split into four stages: start (inject context), prompt (extract objectives), stop (generate handover), and pre-compact (emergency checkpoint).
-- Daemon runs continuously and monitors token usage via forecast.py to predict which limit hits first.
-- Handover documents
+- State persists in git as append-only decision log and task/progress files; enables full audit trail and cross-developer handoffs.
+- Session lifecycle split into four stages: monitor (detect exhaustion), forecast (predict which limit hits first), checkpoint (safe pause and commit), resume (inject context on restart).
+- Claude Code integration via hooks at session start, user prompt submit, session stop, and pre-compaction; allows non-invasive monitoring.
+- Auto-launch on `goal add` always creates new session; no check for existing session to
