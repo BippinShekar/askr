@@ -1,18 +1,23 @@
-Last updated: 2026-06-06 22:07
+Last updated: 2026-06-06 22:08
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context, objectives, and progress in version control. The core problem: Claude Code sessions end abruptly when limits hit, losing work and context. Askr prevents that by predicting exhaustion, pausing safely, and resuming with full state restored.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Autonomous error correction in the guard engine: when Discord alerts fire about Claude mistakes, the system should autonomously help Claude understand proper structure, then send before/after screenshot comparisons to Discord with summaries.
-- End-to-end testing of Discord alert functionality to verify guard engine goal detection works in practice.
-- Integration tests for all 4 stages (7-10) in CI pipeline; Stage 10 project brief generation needs real checkpoint validation.
-- Review of files changed since last session and verification against decisions.md.
+- Phase 3.6: Autonomous guard feedback loop — designing bidirectional communication from guard subprocess back into active Claude conversations to inject correction strategies, with pre/post-fix screenshots and Discord reporting
+- End-to-end testing of guard functionality with Discord integration to verify goal detection and correction workflows
+- Integration tests for all 4 checkpoint/resumption stages (7-10) in CI pipeline
+- Stage 10 project brief generation validation with real checkpoint data
 
 ## Key Decisions Made
 
-- State persists in git via append-only decision logs and state files; developers can pick up mid-session with full context.
-- Guard engine uses Haiku cross-checks on significant operations before execution; alerts route to both IDE popups and Discord async.
-- Quote-stripping applied to goal prompts
+- Guard engine runs as detached subprocess outside active conversation (Phase 3.5 complete) — enables async Haiku cross-checks and IDE/Discord notifications without blocking Claude
+- State persists in git via append-only decision logs and handover documents — enables context recovery across session boundaries and developer handoffs
+- Checkpoint triggered before context auto-compaction (pre_compact hook) — prevents silent state loss during Claude's internal optimization
+- Safe pause validation required before interruption — ensures checkpoints occur at stable points in execution
+
+## Open Goals
+
+- Run end-to-end
