@@ -1,26 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 17:20
-
-# Handover Document
+Last updated: 2026-06-06 17:30
 
 ## Task
-Design and stage Phase 3 (notifications system) for askr, with each stage independently committed and pushed, webhook integration deferred until Discord webhook URL is provided.
+Implement the final 4 stages (7–10) of the askr project: report command, HITL Discord notification, resumed session indicator, and auto-generated project brief.
 
 ## Status
-- Phase 1 (daemon lifecycle) and Phase 2 (overnight autonomous run verification) complete
-- Daemon log confirmed full cycle working at 15:50:00
-- Handover prompt fixed to enforce final-state-only, answered-questions-not-open, and last-exchange-wins rules
-- .env file exists at /Users/bippin/Desktop/askr/.env
-- Phase 3 implementation approach: staged commits without Claude as co-author, each stage independently testable
-- Discord webhook URL: not yet provided by user
-
-## Failed Approaches
-- Running overnight autonomous test as a gate for Phase 3 — rejected in favor of starting Phase 3 now while overnight test runs as parallel real-world stress test
-
-## Next Action
-List all Phase 3 stages in sequence (notification types, delivery mechanism, integration points, testing strategy) and present to user for approval before implementation begins. Do not add webhook placeholder to .env until user provides Discord webhook URL.
-
-## Open Questions
-- What is the Discord webhook URL for notifications? (User will provide)
-- What notification events should Phase 3 cover (task completion, errors, status updates,
+- Stage 7 (Report Command): `askr/cli/askr.py` — added `report` command for morning review. Committed and pushed.
+- Stage 8 (HITL Notification): `askr/hooks/notification.py` — wired `Notification` hook to Discord forwarding. Committed and pushed.
+- Stage 9 (Resumed Indicator): Implemented two-file persistence pattern:
+  - `askr/session/lifecycle.py` — writes `~/.config/askr/resumed.json` marker when session resumes.
+  - `askr/cli/askr.py` — `status --line` reads marker, displays `↺ Resumed X saved`, clears marker after display.
+  - Tested with `venv/bin/python askr/cli/askr.py status --line`. Committed and pushed.
+- Stage 10 (Project Brief): `askr/session/checkpoint.py` — added `_generate_project_brief()` function to auto-generate `project_brief.md` at every checkpoint via Haiku. Committed and pushed
