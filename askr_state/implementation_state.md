@@ -9,6 +9,20 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [15:56] Modified: /Users/bippin/Desktop/askr/askr_state/goals.md
+- [15:56] Ran: ls -la ~/.config/askr/checkpoint_pending.json 2>/dev/null && cat ~/.config/askr/
+- [15:56] Ran: tail -30 ~/.config/askr/daemon.log
+- [15:56] Ran: cat /Users/bippin/Desktop/askr/.claude/settings.json 2>/dev/null || echo "no pro
+- [15:56] Ran: cat ~/.claude/settings.json 2>/dev/null | python3 -c "import json,sys; d=json.lo
+- [15:55] Ran: grep -n -A 10 "createTerminal\|notification\|launch_mode\|shown" /Users/bippin/.
+- [15:55] Ran: grep -n "notification\|launch_mode\|start.*claude\|new.*session\|openNew\|spawn"
+- [15:55] Ran: find /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0 -type f | head -20
+- [15:55] Ran: find /Users/bippin/Desktop/askr -name "*.py" | xargs grep -l "notification" | he
+- [15:55] Ran: git diff askr_state/goals.md askr_state/implementation_state.md
+- [15:55] Ran: launchctl list com.askr.daemon 2>&1; cat ~/.config/askr/daemon.pid 2>/dev/null &
+- [15:50] Ran: git log --oneline -5
+- [15:50] Ran: git status && git diff --staged
+- [15:50] Ran: find /Users/bippin/Desktop/askr -name "*.md" | grep -i handover | head -5; ls /U
 - [15:50] Ran: git -C /Users/bippin/Desktop/askr add askr/session/lifecycle.py askr/hooks/stop.
 - [15:50] Ran: launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist && launchctl load 
 - [15:49] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
