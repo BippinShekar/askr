@@ -289,23 +289,22 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     claude_bin = shutil.which("claude") or "claude"
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
-    # Open a visible Terminal.app window so the session is watchable.
+    # Signal the VS Code/Cursor extension to open an integrated terminal.
+    # The extension polls notification.json and handles goal_launch by opening
+    # a terminal inside the editor and sending the prompt to claude.
     try:
-        safe_prompt = prompt_arg.replace("'", "").replace('"', "")
-        cmd = f"cd {project_path} && {claude_bin} '{safe_prompt}'"
-        script = (
-            f'tell application "Terminal"\n'
-            f'  do script "{cmd}"\n'
-            f'  activate\n'
-            f'end tell'
-        )
-        subprocess.run(["osascript", "-e", script], check=True, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _log(f"opened Terminal window for claude in {project_path}")
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump({
+                "type": "goal_launch",
+                "goal": initial_prompt or prompt_arg,
+                "shown": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
+        _log(f"wrote goal_launch notification for VS Code extension")
         return
     except Exception as e:
-        _log(f"Terminal launch failed: {e}")
-        pass
+        _log(f"notification write failed: {e}")
 
     # Fallback: headless background process
     try:
