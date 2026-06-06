@@ -32,15 +32,12 @@ def _log_notification(message: str, level: str):
 
 
 def _send_discord(message: str, level: str):
-    # Phase 3 - wire Discord webhook here
-    # webhook_url = os.getenv("ASKR_DISCORD_WEBHOOK")
-    # if not webhook_url:
-    #     return
-    # import urllib.request, urllib.parse
-    # payload = json.dumps({"content": f"**Askr {level}**\n{message}"}).encode()
-    # req = urllib.request.Request(webhook_url, data=payload, headers={"Content-Type": "application/json"})
-    # urllib.request.urlopen(req, timeout=5)
-    pass
+    try:
+        from askr.clients.discord import send_message
+        emoji = {"ERROR": "🔴", "WARNING": "🟡"}.get(level, "🔔")
+        send_message(f"{emoji} **[askr] Claude notification ({level})**\n{message}")
+    except Exception:
+        pass
 
 
 def main():
