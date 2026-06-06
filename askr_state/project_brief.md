@@ -1,18 +1,18 @@
-Last updated: 2026-06-07 05:16
+Last updated: 2026-06-07 05:20
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, eliminating the friction of manual context recovery.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It solves the problem of losing work and context when a Claude Code session runs out of tokens mid-task, enabling seamless handoffs between developers and sessions.
 
 ## What's In Flight
 
-- Phase 1 validation: End-to-end test of morning report screenshot delivery mechanism. Currently unconfirmed whether screenshots actually arrive to user.
-- Session orchestration subcommands (goal, status, goals, etc.) are operational and integrated with Claude Code hooks.
-- Lifecycle notification flow: VS Code notification as primary, Terminal.app as fallback, headless as final layer. launchctl daemon currently unloaded.
-- Token usage monitoring shows zero burnage due to auto chat window switching with pre-context summarization; user has not approached 90% session limit.
+- Phase 1 notification system: three-layer reliability (VS Code extension, Terminal.app fallback, direct logging) for alerting developers before context exhaustion.
+- Phase 3 screenshot/report delivery: morning report system exists but untested in production; needs validation that Discord delivery and graph-adjacent formatting work end-to-end.
+- Context limit stress-testing: user has not naturally approached 75% usage due to auto-summarization; need to artificially stress-test to verify checkpoint triggers fire correctly.
+- Phase 4 decision pending: determine whether to proceed with advanced features or first validate Phase 3 delivery and stress-testing.
 
 ## Key Decisions Made
 
-- State persisted to git via append-only decision log and handover documents, enabling developer handoffs without context loss.
-- Four-layer architecture: session lifecycle (monitor, forecast, checkpoint, safe pause), Claude Code hooks (start, prompt submit, stop, pre-compact), persistent state (reader, writer, config), and code analysis (context loader, graph).
-- Lifecycle notifications use layered fallback strategy: VS Code first,
+- Natural language Q&A routed through `ask` command, not `askr`; `askr` reserved for subcommands only (goal, status, goals, etc.).
+- CONTEXT_TRIGGER threshold in lifecycle.py currently set above natural usage levels to avoid false positives during normal work.
+- Append-
