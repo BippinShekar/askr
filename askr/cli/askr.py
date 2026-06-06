@@ -27,6 +27,12 @@ HOOK_MAP = {
     "Notification":       "notification.py",
 }
 
+# Stop and PreCompact make a Haiku API call for handover generation — need more headroom
+HOOK_TIMEOUTS = {
+    "Stop":        60,
+    "PreCompact":  60,
+}
+
 _STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
 
 
@@ -58,7 +64,7 @@ def _install_hooks():
 
     for event, hook_file in HOOK_MAP.items():
         cmd = _hook_command(hook_file)
-        entry = {"type": "command", "command": cmd, "timeout": 15}
+        entry = {"type": "command", "command": cmd, "timeout": HOOK_TIMEOUTS.get(event, 15)}
 
         existing = hooks.get(event, [])
         already_installed = any(
