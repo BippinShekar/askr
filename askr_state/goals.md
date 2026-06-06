@@ -1,5 +1,7 @@
 ## Today - 2026-06-06
 
+- [ ] run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not <!-- added: 2026-06-06T21:54 -->
+
 
 
 

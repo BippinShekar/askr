@@ -1,17 +1,20 @@
-Last updated: 2026-06-06 21:54
+Last updated: 2026-06-06 21:57
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and generating handover docs that let anyone resume work without context loss.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress snapshots that Claude can resume from.
 
 ## What's In Flight
 
-- Integration test suite for all 4 stages of the checkpoint/resumption pipeline (stages 7-10). Currently 7-10 tests written, need CI pipeline validation and real end-to-end testing with actual checkpoints.
-- Stage 10 project brief generation: verifying that the handover document is correctly generated from persisted state at session end.
-- AppleScript string escaping fix in `lifecycle.py`: goal text containing apostrophes (e.g., "askr's") was breaking the Claude session launcher. Implemented temp shell script approach to avoid quote conflicts.
-- Test status verification: need to check last Bash output for any test failures and fix them.
+- End-to-end testing of goal functionality with Discord screenshots to verify the complete workflow
+- Integration tests for all 4 stages (7-10) in the CI pipeline
+- Stage 10 project brief generation end-to-end with real checkpoint data
+- AppleScript string escaping fix in `askr/session/lifecycle.py` — apostrophes in goal prompts were breaking shell commands; solution is to strip apostrophes before passing to AppleScript
+- Syntax validation of lifecycle.py after recent edits and daemon reload
 
 ## Key Decisions Made
 
-- State persisted to git, not a database. Enables version control, diffs, and natural handoffs between developers.
-- Append-only decision log in `decisions.md`. Never edit existing lines; only append. Maintains audit trail of why choices were made.
+- State persists to git via append-only decision logs and handover documents, enabling context recovery across sessions
+- Session monitoring uses token forecasting to predict which limit (context or quota) hits first, triggering checkpoint before exhaustion
+- Checkpoints are triggered at safe interruption points validated by `safe_pause.py` to avoid mid-operation interruption
+- Claude Code integration via hooks at session start, prompt submit, session stop, and pre-compaction stages
