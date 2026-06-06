@@ -1,5 +1,7 @@
 ## Today - 2026-06-06
 
+- [ ] ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited <!-- added: 2026-06-06T22:31 -->
+
 
 
 - [ ] Test Stage 10 project brief generation end-to-end with real checkpoint <!-- added: 2026-06-06T17:31 -->
