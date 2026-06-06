@@ -21,10 +21,11 @@ def _write(path: str, content: str):
         f.write(content)
 
 
-def write_handover(content: str, developer: str = None):
+def write_handover(content: str, developer: str = None) -> str:
     dev = developer or load_developer()
     path = state_path(f"handover_{dev}.md")
     _write(path, f"# Handover: {dev}\n\nLast updated: {_now()}\n\n{content.strip()}\n")
+    return path
 
 
 def write_current_task(objective: str, developer: str = None):
