@@ -56,13 +56,14 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 
-_PID_PATH             = os.path.expanduser("~/.config/askr/daemon.pid")
-_CAFFEINATE_PID_PATH  = os.path.expanduser("~/.config/askr/caffeinate.pid")
-_CLAUDE_PID_PATH      = os.path.expanduser("~/.config/askr/claude_session.pid")
-_STATS_PATH           = os.path.expanduser("~/.config/askr/session_stats.json")
-_LAUNCH_MODE_PATH     = os.path.expanduser("~/.config/askr/launch_mode.json")
-_NOTIFICATION_PATH    = os.path.expanduser("~/.config/askr/notification.json")
-_LOG_PATH             = os.path.expanduser("~/.config/askr/daemon.log")
+_PID_PATH              = os.path.expanduser("~/.config/askr/daemon.pid")
+_CAFFEINATE_PID_PATH   = os.path.expanduser("~/.config/askr/caffeinate.pid")
+_CLAUDE_PID_PATH       = os.path.expanduser("~/.config/askr/claude_session.pid")
+_STATS_PATH            = os.path.expanduser("~/.config/askr/session_stats.json")
+_LAUNCH_MODE_PATH      = os.path.expanduser("~/.config/askr/launch_mode.json")
+_NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
+_CHECKPOINT_PENDING    = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
+_LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 
 POLL_ACTIVE        = 30    # seconds when session is live
 POLL_IDLE          = 60    # seconds when no session
@@ -308,6 +309,31 @@ def _write_launch_mode(goal: str = ""):
         pass
 
 
+def _write_checkpoint_pending(stats: dict):
+    """
+    Signal the Stop hook to checkpoint after the current exchange completes.
+    The daemon never cuts in mid-exchange for context triggers — it just sets this flag.
+    """
+    try:
+        os.makedirs(os.path.dirname(_CHECKPOINT_PENDING), exist_ok=True)
+        with open(_CHECKPOINT_PENDING, "w") as f:
+            json.dump({
+                "trigger": "context",
+                "context_pct": stats.get("context_pct", 0),
+                "quota_pct": stats.get("quota_pct"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
+    except Exception:
+        pass
+
+
+def _clear_checkpoint_pending():
+    try:
+        os.remove(_CHECKPOINT_PENDING)
+    except Exception:
+        pass
+
+
 def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
@@ -443,8 +469,8 @@ def run_daemon():
                         remaining = int(TRIGGER_COOLDOWN - (time.time() - last_trigger_at))
                         _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} quota={quota_pct or 0:.1f}%")
                     elif ctx_pct >= CONTEXT_TRIGGER:
-                        _log(f"Trigger A: context={ctx_pct:.1%} [{ctx_label}]")
-                        _execute_trigger("context", stats, project_path)
+                        _log(f"Trigger A: context={ctx_pct:.1%} — flagging for checkpoint after current exchange")
+                        _write_checkpoint_pending(stats)
                         last_trigger_at = time.time()
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API)")

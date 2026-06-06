@@ -37,6 +37,54 @@ def _advance_launch_goal():
         pass
 
 
+def _handle_pending_checkpoint(developer: str, transcript_path: str):
+    """
+    If the daemon flagged a context checkpoint, execute it now that the
+    current exchange is complete. Spawns a new session via the IDE notification.
+    """
+    _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
+    _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
+
+    try:
+        if not os.path.exists(_CHECKPOINT_PENDING):
+            return False
+        with open(_CHECKPOINT_PENDING) as f:
+            pending = json.load(f)
+        os.remove(_CHECKPOINT_PENDING)
+    except Exception:
+        return False
+
+    try:
+        from askr.session.checkpoint import create_checkpoint
+        from askr.session.lifecycle import _get_next_goal, _write_launch_mode
+
+        result = create_checkpoint(
+            trigger_type="context",
+            developer=developer,
+            transcript_path=transcript_path,
+        )
+
+        next_goal = _get_next_goal()
+        _write_launch_mode(next_goal)
+
+        pct = pending.get("context_pct", 0)
+        pct_str = f"{round(pct * 100)}%"
+        payload = {
+            "type": "context",
+            "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
+            "goal": next_goal,
+            "shown": False,
+            "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),
+        }
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump(payload, f)
+
+        return True
+    except Exception:
+        return False
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -48,6 +96,11 @@ def main():
 
     developer = load_developer()
     transcript_path = payload.get("transcript_path", "")
+
+    # If daemon flagged a context checkpoint, handle it now that the exchange is done
+    if _handle_pending_checkpoint(developer, transcript_path):
+        _advance_launch_goal()
+        return  # skip normal stop checkpoint — context checkpoint already did it
 
     from askr.session.checkpoint import create_checkpoint
     create_checkpoint(
