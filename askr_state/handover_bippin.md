@@ -1,20 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 14:05
+Last updated: 2026-06-06 15:10
 
 ## Task
-Implement stale goal detection and user accountability flow: flag goals abandoned >6 hours ago, prompt user to mark as discarded or completed, log outcome.
+Implement autonomous execution trigger at 65% quota and replace terminal header prints with VS Code notifications when switching to Claude.
 
 ## Status
-- askr/state/goals.py — Added `get_stale_goals()` and `discard_goal()` functions; `load_today_goals()` and `load_open_goals()` strip timestamp comments; `complete_goal()` handles lines with timestamps. Not yet tested.
-- askr/hooks/session_start.py — Added stale goal check that triggers `goal_check` event with list of stale goals. Not yet tested.
-- askr/ide/vscode-extension/extension.js — Added handler for `goal_check` event. Not yet tested.
-- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Added handler for `goal_check` event. Not yet tested.
-- askr/cli/askr.py — Added `askr goal discard <goal_id>` command. Not yet tested.
-- Git staging: changes to goals.py, session_start.py, both extension files staged but not committed.
+- askr/session/lifecycle.py — Quota trigger threshold changed to 65%, ready to test
+- askr/ide/vscode-extension/extension.js — Terminal header printf removed, replaced with showInformationMessage notification
+- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Terminal header printf removed, replaced with showInformationMessage notification
+- Daemon reloaded via launchctl unload/load
+- Changes staged and committed to git
 
 ## Failed Approaches
 None
 
 ## Next Action
-Run integration test: activate venv, start a new session with at least one goal older
+Run askr in a terminal session and trigger autonomous execution by reducing chat context to 65% quota threshold. Verify that: (1) the 65% trigger fires autonomous execution, (2) VS Code shows a notification instead of terminal output when switching to Claude, (3) no terminal header prints appear after "claude" command is run.
+
+## Open Questions
+None
