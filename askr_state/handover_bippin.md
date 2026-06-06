@@ -1,24 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:32
-
-# Handover Document
+Last updated: 2026-06-06 22:34
 
 ## Task
-Update the roadmap to mark phase 3.6 as complete and commit the changes to git.
+Fix the `askr goal add` command to open a new Claude session in VS Code's integrated terminal instead of Terminal.app, with Terminal.app as a fallback mechanism.
 
 ## Status
-- File: /Users/bippin/Desktop/askr/roadmap.md
-- Phase 3.6 header was missing completion marker despite all features in the table being marked ✅ Done
-- Header updated to match format of other completed phases
-- Changes staged: roadmap.md and askr_state/goals.md
-- Commit message prepared: "chore: mark phase 3.6 complete"
+- Extension file: `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` — already has `goal_launch` notification handler at lines 158-160 that opens integrated terminal tabs
+- Lifecycle file: `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` — `_start_claude()` method modified to write `goal_launch` notification AND execute AppleScript fallback (no early return)
+- Daemon: `~/Library/LaunchAgents/com.askr.daemon.plist` — unloaded during testing
+- Current behavior: notification writes but extension does not pick it up; Terminal.app fallback launches correctly
+- Phase 1 functionality: `askr "question"` command returns "not yet implemented, see roadmap.md" — this is expected placeholder behavior, not a bug
 
 ## Failed Approaches
-None
-
-## Next Action
-Execute: git commit -m "chore: mark phase 3.6 complete" to finalize the commit of roadmap.md and askr_state/goals.md
-
-## Open Questions
-None
+- Using only AppleScript to launch Terminal.app — opened in separate Terminal.app window instead of VS Code integrated terminal
+- Removing AppleScript fallback entirely — caused "askr unidentified" notification error when extension failed to
