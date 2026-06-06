@@ -155,9 +155,26 @@ def main():
     if trigger_reason:
         session["last_trigger_at"] = datetime.now(timezone.utc).isoformat()
         _write_trigger(trigger_reason, tool_name, file_path)
+        _spawn_guard_runner()
 
     _save_session(session)
     sys.exit(0)
+
+
+def _spawn_guard_runner():
+    """Launch guard_runner.py detached so Claude's tool is not blocked."""
+    try:
+        import subprocess
+        runner = os.path.join(os.path.dirname(__file__), "guard_runner.py")
+        python = sys.executable
+        subprocess.Popen(
+            [python, runner],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
