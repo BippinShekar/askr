@@ -301,6 +301,7 @@ def create_checkpoint(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "handover_path": handover_path or "",
         "developer": developer,
+        "completed_goals": completed_goals,
     }
 
     try:
@@ -328,13 +329,15 @@ def _notify_discord_goals_completed(goals: list):
 
 
 def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
+    # stop trigger gets its own richer broadcast from stop.py (Stage 5)
+    if trigger_type == "stop":
+        return
     try:
         from askr.clients.discord import send_message
         label = {
-            "context": "Context limit",
-            "quota":   "Quota limit",
-            "manual":  "Manual checkpoint",
-            "stop":    "Session ended",
+            "context":   "Context limit",
+            "quota":     "Quota limit",
+            "manual":    "Manual checkpoint",
             "emergency": "Emergency checkpoint",
         }.get(trigger_type, trigger_type.capitalize())
         ts = result.get("timestamp", "")[:16].replace("T", " ")

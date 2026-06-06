@@ -9,6 +9,7 @@ Delegates to checkpoint.create_checkpoint for handover, state update, commit+pus
 import sys
 import os
 import json
+import subprocess
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -85,6 +86,38 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         return False
 
 
+def _broadcast_session_end(developer: str, completed_goals: list, project_path: str):
+    try:
+        from askr.clients.discord import send_message
+        lines = [f"**[askr] Session ended** — {developer}"]
+
+        if completed_goals:
+            lines.append("**Goals completed:**")
+            lines.extend(f"✓ {g}" for g in completed_goals)
+
+        try:
+            result = subprocess.run(
+                ["git", "diff", "HEAD~1", "--name-only"],
+                capture_output=True, text=True, cwd=project_path, timeout=5,
+            )
+            files = [
+                f for f in result.stdout.strip().splitlines()
+                if not f.startswith("askr_state/")
+            ]
+            if files:
+                lines.append("**Files changed:**")
+                lines.extend(f"  {f}" for f in files[:10])
+                if len(files) > 10:
+                    lines.append(f"  …and {len(files) - 10} more")
+        except Exception:
+            pass
+
+        if len(lines) > 1:
+            send_message("\n".join(lines))
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -103,12 +136,15 @@ def main():
         return  # skip normal stop checkpoint — context checkpoint already did it
 
     from askr.session.checkpoint import create_checkpoint
-    create_checkpoint(
+    from askr.state.config import load_project_path
+    result = create_checkpoint(
         trigger_type="stop",
         developer=developer,
         transcript_path=transcript_path,
     )
 
+    completed_goals = result.get("completed_goals", [])
+    _broadcast_session_end(developer, completed_goals, load_project_path())
     _advance_launch_goal()
 
 
