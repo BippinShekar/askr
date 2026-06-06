@@ -1,18 +1,19 @@
-Last updated: 2026-06-06 23:15
+Last updated: 2026-06-06 23:16
 
 # Project Brief
 
-Askr is a daemon and CLI tool that solves context loss during Claude Code sessions. When Claude hits context limits or quota resets, the developer's train of thought and progress vanish. Askr monitors token usage, predicts exhaustion, automatically checkpoints project state to git, and orchestrates seamless resumption—enabling developers to pause and hand off work without losing context or momentum.
+Askr is a daemon and CLI tool that solves context loss when Claude Code sessions hit quota or context limits mid-workflow. It monitors token usage, predicts which limit will be exhausted first, automatically checkpoints project state to git before interruption, and orchestrates seamless resumption so developers never lose their train of thought or progress.
 
 ## What's In Flight
 
-- Twitter/X problem validation post: drafting a concise, sub-280-character statement of the core problem (Claude pauses → context/flow lost) without product positioning. Goal is to validate the problem with followers before pitching a solution.
-- Test suite verification: checking Bash output from last session for failures and fixing any broken tests.
-- State file review: auditing files changed since last session and cross-referencing against decisions.md.
+- Twitter/X post about the core problem (draft finalized, awaiting publication)
+- Fallback mechanism for session resumption notifications: write notification AND launch Terminal.app; if Terminal.app fails, run headless
+- CLI structure: `askr` handles subcommands (goal, status, goals); `ask` handles natural language Q&A (Phase 0)
+- Integration hooks with Claude Code: session_start, user_prompt_submit, stop, pre_compact
 
 ## Key Decisions Made
 
-- Append-only decision log: all decisions timestamped and reasoned; never edited or deleted. Ensures full audit trail and prevents revisionist history.
-- Git-backed state persistence: project state (tasks, decisions, progress) stored in version control to enable developer handoffs and session resumption without manual context transfer.
-- Problem-first messaging: Twitter validation focuses on the problem statement only (context loss on pause), not the product or solution. Avoids premature positioning.
--
+- State persisted to git as append-only decision log and handover documents; enables developer handoffs and session resumption without external databases
+- Checkpoint triggered before exhaustion, not after; safe_pause validates interruption points to avoid mid-operation breaks
+- Dual notification path (notification + Terminal.app + headless fallback) ensures resumption prompt reaches developer regardless of environment
+- Natural language Q&A uses `ask` command, not `askr`; `askr` reserved for structured sub

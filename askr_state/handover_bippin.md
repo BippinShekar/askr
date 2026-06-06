@@ -1,24 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 23:15
+Last updated: 2026-06-06 23:16
 
-# Handover Document
+Task
+Draft and post a Twitter/X message about the core problem askr solves: context loss when Claude pauses mid-workflow.
 
-## Task
-Draft a concise Twitter post about the problem askr solves — context loss when Claude pauses — without promoting the product yet, just validating the problem with followers.
+Status
+- Tweet draft finalized: "claude makes you cracked at building. then quota hits. train of thought gone. flow gone. anyone else?"
+- Message intent confirmed: sharing the problem, not promoting a solution (product not yet built)
+- Tone locked: concise, problem-focused, inviting community validation
+- `askr` CLI structure confirmed: `askr` handles subcommands (goal, status, goals, etc.); `ask` handles natural language Q&A (Phase 0)
+- Fallback mechanism fixed in /Users/bippin/Desktop/askr/askr/session/lifecycle.py: write notification AND always launch Terminal.app; if Terminal.app fails, run headless
+- launchctl daemon reloaded after lifecycle.py edit
 
-## Status
-- User wants to post on Twitter/X about the core problem: when Claude pauses (context limit, quota reset), the train of thought and flow are lost
-- Previous draft was too long and product-focused
-- Final direction: share the problem statement only, ask if others experience it, keep it concise
-- No tweet has been written yet — user is requesting a revised, shorter version
+Failed Approaches
+- Calling `askr "question"` for natural language — returns "not yet implemented"; use `ask "question"` instead
+- Relying solely on VS Code extension notification without Terminal.app fallback — caused incomplete terminal launch; now both notification and Terminal.app launch, with headless as final fallback
 
-## Failed Approaches
-- Longer draft that positioned askr as the solution — rejected because user wants problem validation only, not product pitch yet
-- Including product context ("building in public" framing) — user clarified this should focus purely on the problem
-
-## Next Action
-Write a concise Twitter post (under 280 characters ideally, or 1-2 short sentences max) that describes the problem: Claude pauses, context/flow lost, ask if others experience this. Do not mention askr, solutions, or "building in public" — problem statement only. Deliver the exact tweet text ready to post.
-
-## Open Questions
-None
+Next Action
+Post the finalized tweet to Twitter/X: "claude makes you cracked at building. then quota hits.
