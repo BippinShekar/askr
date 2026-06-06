@@ -289,10 +289,15 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     claude_bin = shutil.which("claude") or "claude"
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
-    # Open a visible Terminal.app window so the session is watchable
+    # Open a visible Terminal.app window so the session is watchable.
+    # Write to a temp script to avoid AppleScript quoting issues with special chars.
     try:
-        cmd = f"cd {shlex.quote(project_path)} && {claude_bin} {shlex.quote(prompt_arg)}"
-        script = f'tell application "Terminal" to do script "{cmd}"'
+        import tempfile, stat as _stat
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+            f.write(f"#!/bin/zsh\ncd {shlex.quote(project_path)} && {claude_bin} {shlex.quote(prompt_arg)}\n")
+            tmp = f.name
+        os.chmod(tmp, _stat.S_IRWXU)
+        script = f'tell application "Terminal" to do script "{tmp}"'
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _log(f"opened Terminal window for claude in {project_path}")
