@@ -1,32 +1,12 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 18:32
-
-# Handover Document
+Last updated: 2026-06-06 18:40
 
 ## Task
-Implement phase 3.5 of askr in stages with committed pushes, determine Twitter messaging strategy for open-source positioning, and prepare pre-implementation briefing.
+Implement Phase 3.5 of the askr guard system: async guard engine with background subprocess execution, IDE popup + Discord notifications, and append-only audit logging.
 
 ## Status
-Secrets scrubbing implemented and shipped:
-- `askr/session/checkpoint.py` modified with `_scrub_secrets()` function
-- Scrubs Discord webhook URLs, Anthropic keys (sk-ant-), OpenAI keys (sk-proj-, sk-), Bearer tokens, and long random strings before reaching Haiku
-- Runs on every user message, assistant text, and Bash command
-- Commit pushed to remote
-
-New Discord webhook created and tested:
-- `.env` file updated with new webhook URL (gitignored, stays local only)
-- Webhook verified live with test message
-
-Competitive research completed:
-- No true direct competitors found
-- All individual features have partial analogs elsewhere but no tool has the full loop
-- Research covered GitHub, ProductHunt, HN, Reddit, and general web
-
-Website decision finalized:
-- Do not build website yet
-- Current install story insufficient for conversion (hardcoded paths, venv setup, no brew install)
-- Product onboarding must be cleaned before marketing push
-
-## Failed Approaches
-- Reverting the commit containing leaked webhook URL — rejected because git history
+- Stage 1 (guard engine core): Complete. `/Users/bippin/Desktop/askr/askr/session/guard.py` written and tested with `run_guard_check()` function. Committed and pushed.
+- Stage 2 (guard engine validation): Complete. Engine verified working. Committed and pushed.
+- Stage 3 (async delivery): Complete. `/Users/bippin/Desktop/askr/askr/hooks/guard_runner.py` written to launch guard check in background subprocess. `/Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py` edited to wire async subprocess launch on trigger. `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` edited to handle `guard_warning` notification type in IDE extension. All committed and pushed.
+- Stage 4 (audit logging): Complete. `/Users/bippin/Desktop/askr/askr/hooks/guard_runner.py` edited to append guard check results to `guard_log.md` as append-only audit trail. Committed and pushed.
