@@ -882,6 +882,66 @@ def cmd_uninstall():
     console.print("  [green]done[/green] — askr fully removed\n")
 
 
+def cmd_report():
+    """Send a morning/daily report to Discord and print it to stdout."""
+    from askr.state.analytics import today_summary, _load_all
+    from askr.state.goals import load_today_goals, load_open_goals
+    from datetime import datetime as _dt
+
+    developer = load_developer()
+    today = _dt.now().strftime("%Y-%m-%d")
+
+    summary = today_summary()
+    all_entries = _load_all()
+    today_entries = [e for e in all_entries if e.get("date") == today]
+
+    open_goals   = load_open_goals() or []
+    today_goals  = load_today_goals() or []
+    done_today   = [g for g in today_goals if g.startswith("[x]") or "✓" in g]
+
+    lines = [f"**[askr] Daily Report — {developer} — {today}**"]
+
+    if summary["sessions"] > 0:
+        lines.append(f"Sessions today: {summary['sessions']}  |  Time saved: {summary['total_human']}")
+
+    if done_today:
+        lines.append("\n**Completed today:**")
+        lines.extend(f"✓ {g.lstrip('[x] ').strip()}" for g in done_today)
+
+    if open_goals:
+        lines.append("\n**Open goals:**")
+        lines.extend(f"- {g}" for g in open_goals[:5])
+
+    # Next action from latest handover
+    try:
+        handover_path = state_path(f"handover_{developer}.md")
+        if os.path.exists(handover_path):
+            with open(handover_path) as f:
+                content = f.read()
+            for section in content.split("##"):
+                if section.strip().lower().startswith("next action"):
+                    next_action = section.split("\n", 1)[1].strip()[:200]
+                    lines.append(f"\n**Next action:**\n{next_action}")
+                    break
+    except Exception:
+        pass
+
+    report = "\n".join(lines)
+    console.print()
+    console.print(report)
+    console.print()
+
+    try:
+        from askr.clients.discord import send_message
+        ok = send_message(report)
+        if ok:
+            console.print("  [green]✓[/green] sent to Discord")
+        else:
+            console.print("  [yellow]Discord webhook not configured[/yellow] — set ASKR_DISCORD_WEBHOOK in .env")
+    except Exception as e:
+        console.print(f"  [red]Discord send failed:[/red] {e}")
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]session orchestration for Claude Code[/dim]")
@@ -895,7 +955,7 @@ def main():
         console.print("  [dim]askr launch --stop       - stop daemon manually[/dim]")
         console.print("  [dim]askr launch --restart    - restart daemon now[/dim]")
         console.print("  [dim]askr uninstall           - remove all askr traces from this machine[/dim]")
-        console.print("  [dim]askr log                 - session history (Phase 3)[/dim]")
+        console.print("  [dim]askr report              - send morning/daily report to Discord[/dim]")
         console.print()
         sys.exit(0)
 
@@ -914,6 +974,8 @@ def main():
         cmd_launch(rest)
     elif cmd == "uninstall":
         cmd_uninstall()
+    elif cmd == "report":
+        cmd_report()
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
