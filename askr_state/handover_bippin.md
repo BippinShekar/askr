@@ -1,23 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 15:20
+Last updated: 2026-06-06 15:22
 
 ## Task
-Verify that the autonomous execution trigger works by observing the daemon fire when chat context reaches 65% quota threshold, and fix terminal notification display during Claude session handoff.
+Fix double-daemon spawning in askr lifecycle manager and verify context threshold trigger fires correctly at 65% threshold.
 
 ## Status
-- askr/session/lifecycle.py — Context quota trigger threshold changed from 63% to 65%, committed
-- askr/ide/vscode-extension/extension.js — Terminal header printf removed, replaced with VSCode info notification, committed
-- /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Same notification change applied, committed
-- Daemon reloaded via launchctl unload/load
-- Chat context currently at 64% — next tool call will exceed 65% threshold
-- Daemon should fire within 30 seconds of threshold breach and spawn new Claude terminal session with continuation prompt
+- askr/session/lifecycle.py — Single-instance guard added to prevent duplicate daemon processes. File edited and committed.
+- /Users/bippin/Library/LaunchAgents/com.askr.daemon.plist — Reloaded after lifecycle.py fix.
+- /Users/bippin/.config/askr/session_stats.json — Context at 0.6518 (65.18%), above 0.65 threshold.
+- /Users/bippin/.config/askr/daemon.log — Shows single daemon running cleanly, threshold trigger confirmed fired, new session started with context reset to 13.7%.
+- Git commits — lifecycle.py changes staged and committed to /Users/bippin/Desktop/askr.
 
 ## Failed Approaches
-- Terminal printf headers before "claude" command — output not accessible after command execution, replaced with in-editor notification instead
+- Floating point comparison without explicit guard — 0.6498 rounded to display as 65.0% but did not trigger at threshold 0.65.
+- Relying on daemon.pid file alone for single-instance enforcement — both daemons wrote to same file, one ran untracked.
+- Checking daemon status without killing both processes first — could not verify clean state while duplicates existed.
 
 ## Next Action
-Run `tail -20 ~/.config/askr/daemon.log` to verify daemon detected the quota threshold breach and triggered autonomous execution. Check Cursor for info notification confirming session handoff. If daemon did not fire, check daemon.log for errors and verify launchctl reload completed successfully.
-
-## Open Questions
-- Whether daemon actually fired when context exceeded 65
+Verify the
