@@ -1,23 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 17:01
+Last updated: 2026-06-06 17:08
 
 # Handover Document
 
 ## Task
-Fix handover document generation to reflect only final settled conclusions and avoid carrying forward intermediate suggestions or unanswered questions that were actually resolved.
+Decide whether to build Phase 3 features now or wait until overnight autonomous run testing completes to verify askr's unattended behavior.
 
 ## Status
-- `askr/session/checkpoint.py`: Updated handover prompt with two explicit rules: (1) only final state counts — intermediate suggestions that were later reversed do not appear in Next Action, (2) answered questions are not open questions — only genuinely unresolved items are listed.
-- Git commit pushed with message "fix: handover prompt — final state only, no intermediate suggestions"
-- Previous session verified: context trigger now writes `checkpoint_pending.json` instead of killing Claude mid-exchange; stop hook consumes flag after each exchange completes and creates checkpoint.
+- Phase 2 implementation complete and verified
+- Daemon checkpoint system working: context trigger writes `checkpoint_pending.json`, stop hook consumes flag and creates checkpoint
+- Handover prompt fixed with three rules: final state only, answered questions are not open, last exchange wins
+- Changes committed and pushed to main
+- Screen sleep behavior clarified: display sleep does not affect autonomous operation; CPU/processes/network continue running
 
 ## Failed Approaches
-- Carrying intermediate suggestions (e.g., `caffeinate -di` for screen sleep) into Next Action when the final conclusion was "don't bother" — now explicitly excluded by prompt rule.
-- Listing answered questions as Open Questions — now explicitly excluded by prompt rule.
+- `caffeinate -i` alone for preventing screen sleep — insufficient because it only prevents system idle sleep, not display sleep. Rejected in favor of not addressing it (display sleep is irrelevant to autonomous operation).
 
 ## Next Action
-Verify the updated handover prompt in `askr/session/checkpoint.py` produces correct handover documents by running a test session that includes intermediate suggestions and answered questions, then confirming the handover reflects only final state.
+Decide: proceed with Phase 3 feature development, or run overnight autonomous test first to verify askr completes unattended tasks before adding new features. This is a project planning decision, not a code task.
 
 ## Open Questions
-None.
+- Should Phase 3 development start now, or should overnight autonomous testing run first to validate Phase 2 behavior at scale?
