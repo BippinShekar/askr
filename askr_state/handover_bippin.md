@@ -1,20 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:24
+Last updated: 2026-06-06 22:30
 
-# Handover Document
+# Handover: askr Goal Launch Terminal Integration
 
 ## Task
-Implement a 4-stage guard rail system for the askr pre/post tool use hooks with retry tracking, escape hatch escalation, and resolution detection.
+Implement goal launch notifications to open integrated terminal tabs in Cursor/VS Code instead of spawning separate Terminal.app windows, with fallback to Terminal.app if the extension notification fails.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py`: Implemented retry tracking via `guard_blocks.json` file. Added `_on_block()` function that logs blocks per file, bypasses cooldown if file was previously blocked, and triggers escape hatch (allow through + Discord escalation) when block count ≥ 2. Updated `main()` to use blocks state for cooldown bypass logic.
-- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py`: Implemented `_on_escape_hatch()` function for resolution detection. When a previously-blocked file is successfully written, sends Discord resolution alert and updates guard_log.
-- `/Users/bippin/Desktop/askr/roadmap.md`: Updated to mark all 4 stages complete (Stage 1: cooldown, Stage 2: block tracking, Stage 3: escape hatch, Stage 4: resolution detection).
-- All changes committed and pushed to git.
+- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Added `goal_launch` handler to polling loop (lines 158-160 pattern) to watch for goal_launch notifications and open integrated terminal tabs named after the goal.
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified `_start_claude()` to write a `goal_launch` notification instead of using AppleScript. Notification write must NOT have a `return` statement after it — execution must continue to the Terminal.app AppleScript fallback code so Terminal.app always launches if the notification path fails.
+- `/Users/bippin/Library/LaunchAgents/com.askr.daemon.plist`: Daemon was unloaded during testing; needs reload before next test.
+- Last test result: notification was written but extension did not pick it up (unidentified notification error); fallback Terminal.app did not launch because of premature `return` statement.
 
 ## Failed Approaches
-None.
-
-## Next Action
-Verify the roadmap shows all Phase
+- Using AppleScript
