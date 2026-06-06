@@ -21,6 +21,7 @@ SNAPSHOT_PATH = os.path.join(".llm_snapshot", "summary.json")
 HOOK_MAP = {
     "SessionStart":       "session_start.py",
     "UserPromptSubmit":   "user_prompt_submit.py",
+    "PreToolUse":         "pre_tool_use.py",
     "PostToolUse":        "post_tool_use.py",
     "Stop":               "stop.py",
     "PreCompact":         "pre_compact.py",
@@ -28,9 +29,11 @@ HOOK_MAP = {
 }
 
 # Stop and PreCompact make a Haiku API call for handover generation — need more headroom
+# PreToolUse must be fast — it blocks Claude's tool execution until it exits
 HOOK_TIMEOUTS = {
     "Stop":        60,
     "PreCompact":  60,
+    "PreToolUse":  10,
 }
 
 _STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
