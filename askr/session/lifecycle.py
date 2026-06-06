@@ -381,6 +381,18 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 # ---------------------------------------------------------------------------
 
 def run_daemon():
+    # Single-instance guard — exit immediately if another instance is already running
+    if os.path.exists(_PID_PATH):
+        try:
+            with open(_PID_PATH) as f:
+                existing_pid = int(f.read().strip())
+            if existing_pid != os.getpid():
+                os.kill(existing_pid, 0)  # raises if process is dead
+                _log(f"another instance already running (pid={existing_pid}) — exiting")
+                sys.exit(0)
+        except (ProcessLookupError, ValueError, OSError):
+            pass  # stale PID file — safe to overwrite
+
     _write_pid()
     _log("daemon started")
 
