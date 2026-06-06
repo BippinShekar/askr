@@ -612,6 +612,14 @@ def cmd_status(args: list = None):
             console.print()
             console.print(f"  [dim]session[/dim]     {_statusline_text()}")
 
+    try:
+        from askr.state.analytics import today_summary
+        summary = today_summary()
+        if summary["sessions"] > 0:
+            console.print(f"  [dim]time saved[/dim]  [bold]{summary['total_human']}[/bold]  [dim]({summary['sessions']} session{'s' if summary['sessions'] != 1 else ''} today)[/dim]")
+    except Exception:
+        pass
+
     console.print()
 
 

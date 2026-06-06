@@ -294,6 +294,12 @@ def create_checkpoint(
     except Exception:
         pass
 
+    try:
+        from askr.state.analytics import record_session_end
+        record_session_end(trigger_type, developer)
+    except Exception:
+        pass
+
     git_commit_push(state_dir, developer, trigger_type)
 
     result = {

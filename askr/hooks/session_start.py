@@ -120,6 +120,12 @@ def main():
     if os.path.isdir(get_state_dir()):
         git_pull()
 
+    try:
+        from askr.state.analytics import record_session_start
+        record_session_start()
+    except Exception:
+        pass
+
     developer = load_developer()
     _archive_stale_goals()
     _notify_stale_goals()
