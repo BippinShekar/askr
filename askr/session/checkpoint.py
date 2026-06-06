@@ -127,22 +127,27 @@ SESSION TRANSCRIPT:
 
 Write the handover in this exact format. No emojis. No markdown decorations. No boilerplate phrases like "continue from where we left off" or "check implementation_state.md". Every line must be concrete and immediately actionable.
 
+Sessions vary in type — implementation, testing/debugging, exploration, or discussion. Adapt the Status section accordingly:
+- Implementation session: list file paths and their current state
+- Testing/debugging session: list what was tested, what passed/failed, what system state was confirmed
+- Exploration/discussion session: list decisions made, options ruled out, direction agreed on
+
 ## Task
-[One sentence: what specific coding task was in progress — name the feature, bug, or file]
+[One sentence: what was being worked on — could be implementing a feature, debugging a system, testing behavior, or making a design decision]
 
 ## Status
-[Bullet list: what exact state each relevant file or component is in. Use file paths. Example: "askr/session/lifecycle.py — Trigger B logic rewritten, not yet tested". If something is broken or partially done, say so explicitly.]
+[Bullet list: concrete current state. For implementation: file paths and what changed. For testing: what was verified and what the outcome was. For debugging: what was found. Never write "Unknown" if the transcript contains relevant information — extract it.]
 
 ## Failed Approaches
-[Bullet list of approaches that were tried and did not work, with brief reason. Write "None" if none. This prevents the next session from repeating failures.]
+[Bullet list of approaches that were tried and did not work, with brief reason. Write "None" if none.]
 
 ## Next Action
-[The single next thing to do — specific enough that Claude can start immediately. Include the exact file path and what change to make, or the exact command to run. One action only.]
+[The single next thing to do — specific enough that Claude can start immediately. For testing sessions this might be "run X test" or "verify Y behavior". For implementation it's a file path and change. One action only.]
 
 ## Open Questions
 [Bullet list of unresolved decisions or unknowns blocking progress. Write "None" if none.]
 
-If the transcript does not contain enough information to fill a section, write "Unknown" — do not invent content."""
+If a section truly has no information in the transcript, write "Unknown" — but exhaust the transcript first before concluding that."""
 
         return call_claude(
             "You write precise technical handover documents for autonomous AI coding agents. Output only the document — no preamble, no explanation.",
