@@ -1,24 +1,18 @@
-Last updated: 2026-06-06 17:49
+Last updated: 2026-06-06 17:50
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so anyone can resume work without losing context.
 
 ## What's In Flight
 
-- Discord webhook integration for notifications — webhook URL validated and stored in `.env`, test message send failing, debugging HTTP response to identify root cause
-- Integration test suite for all 4 checkpoint/resumption stages (7-10 tests) in CI pipeline
-- End-to-end test of Stage 10 project brief generation using real checkpoint data
-- Verification of test status from last Bash output and fixing any failures
+- Integration tests for all 4 stages (7-10) in CI pipeline; Stage 10 validates project brief generation end-to-end with real checkpoints.
+- Discord webhook notifications: module exists and is integrated; test message successfully delivered to user's personal Discord server. Webhook URL stored in `.env` as `ASKR_DISCORD_WEBHOOK`.
+- Verification of test status from last Bash output and fixing any failures.
+- Review of files changed since last session and validation against decisions.md.
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision log, task tracking, and progress snapshots — enables full audit trail and developer handoffs
-- Four-stage lifecycle: monitor token usage → forecast exhaustion → checkpoint state → resume with context injection
-- Hooks integrated at session start, user prompt submit, session stop, and pre-compaction to capture context at critical moments
-- Project brief auto-generated from checkpoint state to orient new developers in under 2 minutes
-- Discord notifications for session events (webhook-based, async, non-blocking)
-
-## Open Goals
-
-- Complete Discord webhook validation debug script using urllib.
+- State is append-only and persisted to git: tasks, decisions, and progress are never edited in place, only appended. This creates an audit trail and prevents merge conflicts.
+- Session lifecycle is split into four stages: start (inject context), prompt submission (extract objectives), stop (generate handover docs), and pre-compact (emergency checkpoint).
+- Handover documents are human-readable and include task status, failed approaches, and next steps so any developer can pick up work
