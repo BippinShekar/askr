@@ -178,6 +178,25 @@ The problem: Claude sounds confident even when the approach has structural gaps.
 
 ---
 
+## Phase 3.6 - Autonomous Guard Correction
+
+**Goal:** When the guard catches an architectural mistake, don't just warn — block the write, explain why to Claude inline, let Claude self-correct, then report the full incident to Discord. Zero developer intervention required.
+
+The problem with Phase 3.5: the guard warns but doesn't act. Claude proceeds with the bad approach anyway. The warning lands in Discord after the damage is done. This phase makes the guard a hard stop — Claude sees the block reason, rewrites its approach, and Discord gets a before/after incident report automatically.
+
+| Feature | Status |
+|---|---|
+| `PreToolUse` returns block signal — guard returns `{"decision": "block", "reason": "..."}` to cancel the write and surface explanation directly to Claude | 🔲 Todo |
+| Block message quality — explanation must be specific enough for Claude to self-correct (not just "architectural issue") | 🔲 Todo |
+| Discord pre-block alert — "guard blocked write to X — reason: ..." sent before Claude retries | 🔲 Todo |
+| Discord resolution alert — after Claude retries and write succeeds, send "resolved — what changed" diff summary | 🔲 Todo |
+| Block audit trail — `guard_log.md` records blocked attempts + resolution outcome | 🔲 Todo |
+| Escape hatch — if Claude retries the same blocked write 2x, unblock and escalate to Discord as unresolved | 🔲 Todo |
+
+**Done when:** Guard catches a real architectural mistake, blocks the write, Claude self-corrects without developer input, Discord shows the full incident (blocked → corrected) automatically.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
