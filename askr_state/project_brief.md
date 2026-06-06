@@ -1,18 +1,20 @@
-Last updated: 2026-06-06 21:31
+Last updated: 2026-06-06 21:34
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before the session breaks. It then orchestrates resumption in a fresh session with full context restored. This solves the problem of losing work and context mid-project when Claude hits its limits.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Integration tests for all 4 stages of the checkpoint/resume cycle (stages 7-10) in CI pipeline. Stage 10 (project brief generation end-to-end) needs real checkpoint testing.
-- Daemon process tracking fix: updated `_kill_claude()` in `lifecycle.py` to find Claude processes by working directory match using `lsof`, since manually-started Claude instances don't have a tracked PID. This unblocks the Stop hook.
-- Test status verification from last Bash output and fixing any failures.
-- Review of files changed since last session and decision log.
+- Integration tests for all 4 stages (7-10) of the checkpoint pipeline in CI
+- End-to-end test of Stage 10 (project brief generation) with real checkpoint data
+- Process kill fallback mechanism in lifecycle.py using lsof to match project working directory (recently completed and verified)
+- Verification of context checkpoint mechanism working end-to-end (confirmed in last session: daemon detected 80.2% context usage, wrote checkpoint_pending.json, Stop hook consumed and committed)
 
 ## Key Decisions Made
 
-- State persisted to git, not a database. Enables handoffs between developers and sessions without external infrastructure.
-- Append-only decision log in `decisions.md`. Never edit existing lines; only add new decisions with timestamp, developer, and reason.
-- Four-stage lifecycle: session start (inject context), user prompt (extract objectives), stop (generate
+- State persisted to git as append-only files (tasks, decisions, progress) to enable developer handoffs and session resumption
+- Four-stage checkpoint pipeline: detect exhaustion → safe pause validation → state persistence → handover document generation
+- Daemon monitors token usage via forecast.py to predict which limit hits first (context or quota)
+- Claude Code integration via hooks at session start, prompt submit, session stop, and pre-compact events
+- Process killing uses lsof fallback when standard

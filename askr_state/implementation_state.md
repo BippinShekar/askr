@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:34] Ran: askr goal --help 2>/dev/null; askr goals --help 2>/dev/null; which askr && askr 
+- [21:33] Ran: python3 -m askr --help 2>/dev/null || askr --help 2>/dev/null | head -40
+- [21:33] Ran: find /Users/bippin/Desktop/askr -name "cli.py" -o -name "__main__.py" 2>/dev/nul
+- [21:33] Ran: python3 /Users/bippin/Desktop/askr/askr/cli.py --help 2>/dev/null | head -30; gr
 - [21:31] Ran: git add askr_state/handover_bippin.md && git commit -m "askr: checkpoint [bippin
 - [21:31] Modified: /Users/bippin/Desktop/askr/askr_state/handover_bippin.md
 - [21:31] Ran: git add askr/session/lifecycle.py && git commit -m "$(cat <<'EOF'
