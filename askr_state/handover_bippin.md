@@ -1,21 +1,32 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 18:19
+Last updated: 2026-06-06 18:32
 
 # Handover Document
 
 ## Task
-Competitive analysis for askr tool and decision on website creation strategy.
+Implement phase 3.5 of askr in stages with committed pushes, determine Twitter messaging strategy for open-source positioning, and prepare pre-implementation briefing.
 
 ## Status
-- Secrets scrubbing feature implemented and shipped: `_scrub_secrets()` function in askr/session/checkpoint.py filters Discord webhooks, Anthropic keys (sk-ant-), OpenAI keys (sk-proj-, sk-), Bearer tokens, and long random strings before messages reach Haiku
-- README.md updated with `askr report` command documentation
-- New Discord webhook created and tested successfully; stored in .env (gitignored)
-- Competitive analysis agent task completed with output at /private/tmp/claude-501/-Users-bippin-Desktop-askr/09554bbe-8936-416b-bf8e-3e26a332ddea/tasks/ac744100e328ea0fd.output
-- Decision made: Do NOT build website yet. Reasoning: install story is not clean enough (hardcoded paths, venv setup required, no brew install available). Website would send users to a product that cannot onboard strangers effectively.
+Secrets scrubbing implemented and shipped:
+- `askr/session/checkpoint.py` modified with `_scrub_secrets()` function
+- Scrubs Discord webhook URLs, Anthropic keys (sk-ant-), OpenAI keys (sk-proj-, sk-), Bearer tokens, and long random strings before reaching Haiku
+- Runs on every user message, assistant text, and Bash command
+- Commit pushed to remote
+
+New Discord webhook created and tested:
+- `.env` file updated with new webhook URL (gitignored, stays local only)
+- Webhook verified live with test message
+
+Competitive research completed:
+- No true direct competitors found
+- All individual features have partial analogs elsewhere but no tool has the full loop
+- Research covered GitHub, ProductHunt, HN, Reddit, and general web
+
+Website decision finalized:
+- Do not build website yet
+- Current install story insufficient for conversion (hardcoded paths, venv setup, no brew install)
+- Product onboarding must be cleaned before marketing push
 
 ## Failed Approaches
-- Reverting the commit containing leaked webhook URL — rejected because git history remains visible on public repo; decided instead to create new webhook and treat as lesson for future development
-
-## Next Action
-Read the completed competitive analysis output file at /private
+- Reverting the commit containing leaked webhook URL — rejected because git history
