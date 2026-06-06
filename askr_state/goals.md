@@ -3,7 +3,6 @@
 
 
 
-- [ ] Test Stage 10 project brief generation end-to-end with real checkpoint <!-- added: 2026-06-06T17:31 -->
 
 - [x] Commit staged changes and test that handover files capture complete state <!-- added: 2026-06-06T15:50 -->
 
@@ -18,6 +17,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-06 23:02] Test Stage 10 project brief generation end-to-end with real checkpoint
 [2026-06-06 22:32] ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
 [2026-06-06 22:30] DISCARDED: ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
 [2026-06-06 22:18] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.
