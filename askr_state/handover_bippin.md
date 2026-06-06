@@ -1,24 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:46
+Last updated: 2026-06-06 21:48
+
+# Handover Document
 
 ## Task
-Make the `askr goal add` command visibly demonstrate autonomous Claude session execution by opening a real iTerm2 terminal window instead of running headless.
+Fix the `askr goal add` command to launch Claude in a visible Terminal.app window instead of headless, and verify the goal lifecycle works end-to-end with proper window spawning.
 
 ## Status
-- `askr/session/lifecycle.py`: Modified `_start_claude()` to open a visible iTerm2 window instead of redirecting stdout/stderr to devnull
-- `askr/cli/askr.py`: Committed with lifecycle changes
-- LaunchAgent daemon (com.askr.daemon.plist) unloaded to prevent background interference
-- Goal "run end to end testing with proper discord screenshots work o..." discarded to prepare clean demo state
-- Headless Claude process (pid 54231) killed
-- Changes committed to git
+- File: `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
+- Change made: Updated `_start_claude()` function to use Terminal.app AppleScript instead of iTerm2 (which was failing silently)
+- Added `import shlex` to the imports section
+- AppleScript approach confirmed working: `osascript -e 'tell application "Terminal" to do script "echo hello"'` executes successfully
+- Daemon launchctl configuration: `/Users/bippin/Library/LaunchAgents/com.askr.daemon.plist` (unloaded during testing, needs reload)
+- Git commit prepared with message "fix: use Terminal.app AppleScript for visible Claude session"
+- Stale headless Claude process (pid 55636) killed
+- Test goal "run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not" discarded to reset demo state
 
 ## Failed Approaches
-- Running `askr goal add` with headless Claude process — user could not see session activity or progress
-- Using stdout/stderr devnull redirection — made autonomous work invisible to user
-
-## Next Action
-Open a new terminal and run `askr goal add "build the login page"` to verify the iTerm2 window opens visibly and shows Claude working autonomously on the goal.
-
-## Open Questions
-None
+- iTerm2 AppleScript: `tell application "iTerm
