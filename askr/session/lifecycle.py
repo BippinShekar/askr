@@ -290,19 +290,16 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
     # Open a visible Terminal.app window so the session is watchable.
-    # Write to a temp script to avoid AppleScript quoting issues with special chars.
     try:
-        import tempfile, stat as _stat
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
-            f.write(f"#!/bin/zsh\ncd {shlex.quote(project_path)} && {claude_bin} {shlex.quote(prompt_arg)}\n")
-            tmp = f.name
-        os.chmod(tmp, _stat.S_IRWXU)
-        script = f'tell application "Terminal" to do script "{tmp}"'
+        safe_prompt = prompt_arg.replace("'", "").replace('"', "")
+        cmd = f"cd {project_path} && {claude_bin} \\"{safe_prompt}\\""
+        script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _log(f"opened Terminal window for claude in {project_path}")
         return
-    except Exception:
+    except Exception as e:
+        _log(f"Terminal launch failed: {e}")
         pass
 
     # Fallback: headless background process
