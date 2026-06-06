@@ -439,6 +439,56 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 # Main daemon loop
 # ---------------------------------------------------------------------------
 
+def _wait_for_exchange_end_then_kill(project_path: str):
+    """
+    Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
+    the current exchange is done — kill Claude so the Stop hook fires and
+    consumes checkpoint_pending.json to run the checkpoint.
+    """
+    IDLE_SECS   = 20   # seconds of JSONL silence → exchange is done
+    TIMEOUT     = 300  # give up after 5 min if exchange never ends
+    POLL        = 5
+
+    from askr.session.monitor import _find_active_jsonl, _project_hash
+    import glob as _glob
+
+    _log("waiting for exchange to finish before killing Claude...")
+    deadline = time.time() + TIMEOUT
+    last_mtime = None
+    idle_since = None
+
+    while time.time() < deadline:
+        time.sleep(POLL)
+        try:
+            sessions_dir = os.path.join(
+                os.path.expanduser("~/.claude/projects"),
+                project_path.replace("/", "-"),
+            )
+            files = [
+                os.path.join(sessions_dir, f)
+                for f in os.listdir(sessions_dir)
+                if f.endswith(".jsonl")
+            ] if os.path.isdir(sessions_dir) else []
+            jsonl = max(files, key=os.path.getmtime) if files else None
+            mtime = os.path.getmtime(jsonl) if jsonl else None
+        except Exception:
+            mtime = None
+
+        if mtime is None:
+            continue
+
+        if mtime != last_mtime:
+            last_mtime = mtime
+            idle_since  = time.time()
+        elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
+            _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
+            _kill_claude()
+            return
+
+    _log("exchange wait timed out — killing Claude anyway")
+    _kill_claude()
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -497,9 +547,10 @@ def run_daemon():
                         remaining = int(TRIGGER_COOLDOWN - (time.time() - last_trigger_at))
                         _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} quota={quota_pct or 0:.1f}%")
                     elif ctx_pct >= CONTEXT_TRIGGER:
-                        _log(f"Trigger A: context={ctx_pct:.1%} — flagging for checkpoint after current exchange")
+                        _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude")
                         _write_checkpoint_pending(stats)
                         last_trigger_at = time.time()
+                        _wait_for_exchange_end_then_kill(project_path)
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API)")
                         _execute_trigger("quota", stats, project_path)
