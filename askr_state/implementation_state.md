@@ -9,6 +9,17 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:20] Ran: venv/bin/python askr/cli/askr.py status --line
+- [21:19] Ran: cat ~/.config/askr/session_stats.json | python3 -c "import json,sys; d=json.load
+- [21:19] Ran: stat -f "%Sm" ~/.config/askr/session_stats.json
+- [21:19] Ran: venv/bin/python -c "
+from askr.session.usage_api import get_quota_status
+qs = ge
+- [21:19] Ran: grep -n "quota\|reset_at\|oauth\|usage" /Users/bippin/Desktop/askr/askr/hooks/po
+- [21:19] Ran: python3 -c "
+from datetime import datetime, timezone
+reset = datetime.fromisofor
+- [21:19] Ran: cat ~/.config/askr/session_stats.json 2>/dev/null | python3 -c "import json,sys;
 - [18:40] Ran: git push --quiet
 - [18:40] Ran: git add roadmap.md && git commit -m "docs: roadmap Phase 3.5 marked complete"
 - [18:40] Modified: /Users/bippin/Desktop/askr/roadmap.md

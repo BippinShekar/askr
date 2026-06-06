@@ -1,22 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:17
+Last updated: 2026-06-06 21:20
 
-# Handover: Guard Engine Phase 3.5 Implementation
+# Handover Document
 
 ## Task
-Implement Phase 3.5 of the guard system: async delivery mechanism with IDE popup + Discord notifications and append-only audit logging.
+Completed Phase 3.5 of the guard system: shipped PreToolUse hook (significance detection), Guard engine (Haiku cross-check), and async delivery (IDE popup + Discord). Verified quota refresh behavior and confirmed system state.
 
 ## Status
-- `askr/session/guard.py`: Guard engine implemented with Haiku cross-check against architecture. Committed.
-- `askr/hooks/pre_tool_use.py`: PreToolUse hook wired to detect significance and trigger guard checks. Committed.
-- `askr/hooks/guard_runner.py`: Async subprocess launcher created. Appends warnings to `guard_log.md` with timestamp, trigger type, and guard response. Committed.
-- `askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: IDE notification handler updated to recognize and display `guard_warning` message type. Committed.
-- `roadmap.md`: Phase 3.5 marked complete.
-- All changes pushed to remote.
+- `askr/hooks/guard_runner.py` — committed with guard_log.md append-only functionality
+- `roadmap.md` — Phase 3.5 marked complete and pushed
+- Guard system fully deployed across 3 stages:
+  - Stage 1: PreToolUse hook in `askr/hooks/pre_tool_use.py` (significance detection)
+  - Stage 2: Guard engine in `askr/session/guard.py` (Haiku cross-check against architecture)
+  - Stage 3: Async delivery (IDE popup + Discord, non-blocking)
+- Quota status verified: API shows 5% quota (refreshed as of 15:49), `session_stats.json` is current
+- Statusline quota display confirmed working
 
 ## Failed Approaches
-None.
+None
 
 ## Next Action
-Test the complete guard system end-to-end: trigger a significant tool use, verify that the guard check runs asynchronously without blocking Claude's tool execution, confirm that a warning appears in the IDE popup and Discord, and validate that the event is logged to `guard_log.
+Test the guard system by triggering one of the three activation conditions: create a new file, make 3+ file edits in a session, or edit a file mentioned in `architecture.md` near "core",
