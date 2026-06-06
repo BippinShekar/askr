@@ -2,24 +2,17 @@ Last updated: 2026-06-06 23:01
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or repeating effort.
 
 ## What's In Flight
 
-- Stage 10: End-to-end testing of project brief generation with real checkpoint workflow
-- Verification of test suite status and fixing any failures from last session
-- Review of file changes and decisions.md to understand what was completed in the previous session
+- Stage 10: End-to-end testing of project brief generation from real checkpoint data. Need to verify test status from last Bash output and fix any failures.
+- Session lifecycle hooks: `stop.py` generates handover docs and commits state on session end; `pre_compact.py` handles emergency checkpoint before context auto-compaction.
+- State persistence layer: `reader.py` and `writer.py` manage task/decision/progress files; integration with git for durable handoffs.
 
 ## Key Decisions Made
 
-- State is persisted to git as the single source of truth for handoffs between developers and sessions
-- Session monitoring is split into discrete modules: token forecasting, safe pause detection, checkpoint generation, and resumption orchestration
-- Claude Code integration happens via hooks at key lifecycle points (session start, prompt submit, session stop, pre-compact)
-- Handover documents are auto-generated on session end to capture task, status, failed approaches, and open questions
-- State files store developer context, active objectives, task progress, and decisions in append-only format
-
-## Open Goals
-
-- Test Stage 10 project brief generation end-to-end with real checkpoint
-- Verify test status from last Bash output and fix any failures
-- Review files changed since last session
+- Append-only decision log in decisions.md—never edit existing lines, only append. Ensures audit trail and prevents accidental context loss.
+- State stored in git, not external database. Keeps everything version-controlled and enables natural developer handoffs via commits.
+- Forecast module predicts which limit (context or quota) hits first, allowing proactive checkpoint before either exhaustion.
+- Safe pause validation before interruption—don't checkpoint mid-operation; wait
