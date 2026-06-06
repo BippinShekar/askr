@@ -45,7 +45,8 @@ def _section_lines(content: str, header: str) -> list[str]:
 def add_goal(text: str, section: str = "today"):
     content = _read()
     today_hdr = _today_header()
-    new_line = f"- [ ] {text.strip()}"
+    ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    new_line = f"- [ ] {text.strip()} <!-- added: {ts} -->"
 
     if not content:
         _write(
@@ -72,11 +73,10 @@ def complete_goal(text: str) -> bool:
     if not content:
         return False
 
-    patterns = [f"- [ ] {text.strip()}", f"- [x] {text.strip()}"]
     matched = None
-    for p in patterns:
-        if p in content:
-            matched = p
+    for line in content.split("\n"):
+        if line.strip().startswith(("- [ ]", "- [x]")) and _strip_ts(line.strip()[5:]) == text.strip():
+            matched = line
             break
 
     if not matched:
@@ -94,12 +94,16 @@ def complete_goal(text: str) -> bool:
     return True
 
 
+def _strip_ts(text: str) -> str:
+    return re.sub(r'\s*<!--.*?-->', '', text).strip()
+
+
 def load_open_goals() -> list[str]:
     content = _read()
     if not content:
         return []
     return [
-        l.strip()[5:].strip()
+        _strip_ts(l.strip()[5:])
         for l in content.split("\n")
         if l.strip().startswith("- [ ]")
     ]
@@ -110,7 +114,61 @@ def load_today_goals() -> list[str]:
     if not content:
         return []
     lines = _section_lines(content, _today_header())
-    return [l[5:].strip() for l in lines if l.startswith("- [ ]")]
+    return [_strip_ts(l[5:]) for l in lines if l.startswith("- [ ]")]
+
+
+def get_stale_goals(hours: int = 6) -> list[tuple[str, str, float]]:
+    """
+    Return goals older than `hours` as list of (clean_text, added_iso, hours_old).
+    Only checks goals with a stored timestamp — silently skips goals without one.
+    """
+    content = _read()
+    if not content:
+        return []
+
+    stale = []
+    now = datetime.now()
+    for line in content.split("\n"):
+        if not line.strip().startswith("- [ ]"):
+            continue
+        m = re.search(r'<!-- added: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}) -->', line)
+        if not m:
+            continue
+        try:
+            added = datetime.fromisoformat(m.group(1))
+            age_hours = (now - added).total_seconds() / 3600
+            if age_hours >= hours:
+                stale.append((_strip_ts(line.strip()[5:]), m.group(1), round(age_hours, 1)))
+        except Exception:
+            continue
+    return stale
+
+
+def discard_goal(text: str) -> bool:
+    content = _read()
+    if not content:
+        return False
+
+    # Match line with or without timestamp comment
+    target = None
+    for line in content.split("\n"):
+        if line.strip().startswith("- [ ]") and _strip_ts(line.strip()[5:]) == text.strip():
+            target = line
+            break
+
+    if not target:
+        return False
+
+    content = content.replace(target + "\n", "").replace(target, "")
+
+    done_line = f"[{_now()}] DISCARDED: {text.strip()}"
+    if "## Done" in content:
+        content = content.replace("## Done\n", f"## Done\n{done_line}\n", 1)
+    else:
+        content = content.rstrip() + f"\n\n## Done\n{done_line}\n"
+
+    _write(content)
+    return True
 
 
 def load_done_today() -> list[str]:

@@ -652,13 +652,14 @@ def cmd_goals():
 
 
 def cmd_goal(args: list[str]):
-    from askr.state.goals import add_goal, complete_goal
+    from askr.state.goals import add_goal, complete_goal, discard_goal
 
     if not args:
         console.print("\n  [bold]askr goal[/bold]")
         console.print("  [dim]askr goal add \"finish the auth layer\"[/dim]")
         console.print("  [dim]askr goal add \"ship phase 2\" --backlog[/dim]")
-        console.print("  [dim]askr goal done \"finish the auth layer\"[/dim]\n")
+        console.print("  [dim]askr goal done \"finish the auth layer\"[/dim]")
+        console.print("  [dim]askr goal discard \"finish the auth layer\"[/dim]\n")
         return
 
     sub = args[0]
@@ -684,9 +685,20 @@ def cmd_goal(args: list[str]):
             console.print(f"\n  [yellow]not found:[/yellow] {text}\n")
             console.print("  [dim]run[/dim] [bold]askr goals[/bold] [dim]to see open goals[/dim]\n")
 
+    elif sub == "discard":
+        if len(args) < 2:
+            console.print("\n  [red]usage: askr goal discard \"goal text\"[/red]\n")
+            return
+        text = args[1]
+        if discard_goal(text):
+            console.print(f"\n  [yellow]✓[/yellow] discarded: [bold]{text}[/bold]\n")
+        else:
+            console.print(f"\n  [yellow]not found:[/yellow] {text}\n")
+            console.print("  [dim]run[/dim] [bold]askr goals[/bold] [dim]to see open goals[/dim]\n")
+
     else:
         console.print(f"\n  [yellow]unknown: askr goal {sub}[/yellow]")
-        console.print("  [dim]use: add / done[/dim]\n")
+        console.print("  [dim]use: add / done / discard[/dim]\n")
 
 
 def cmd_launch(args: list):

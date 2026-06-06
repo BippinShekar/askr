@@ -66,6 +66,33 @@ def _archive_stale_goals():
         pass
 
 
+def _notify_stale_goals():
+    """
+    If any timestamped goals are 6+ hours old, write a goal_check notification
+    so the IDE extension surfaces them for the user to resolve.
+    """
+    try:
+        import json as _json
+        from askr.state.goals import get_stale_goals
+        stale = get_stale_goals(hours=6)
+        if not stale:
+            return
+        notification_path = os.path.expanduser("~/.config/askr/notification.json")
+        goal_lines = "\n".join(f"  - {text} ({h}h ago)" for text, _, h in stale)
+        payload = {
+            "type": "goal_check",
+            "message": f"{len(stale)} goal(s) haven't moved in 6+ hours:\n{goal_lines}",
+            "goals": [{"text": t, "added": a, "hours": h} for t, a, h in stale],
+            "shown": False,
+            "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),
+        }
+        os.makedirs(os.path.dirname(notification_path), exist_ok=True)
+        with open(notification_path, "w") as f:
+            _json.dump(payload, f)
+    except Exception:
+        pass
+
+
 def _maybe_suggest_goals(developer: str) -> list[str]:
     """
     If today has no goals, suggest 1-2 from the last handover via Haiku.
@@ -95,6 +122,7 @@ def main():
 
     developer = load_developer()
     _archive_stale_goals()
+    _notify_stale_goals()
     suggested_goals = _maybe_suggest_goals(developer)
 
     state_context = build_context_injection()

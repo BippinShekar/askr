@@ -164,6 +164,25 @@ function checkNotification() {
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
       terminal.sendText(`${header} && claude "${continuePrompt}"`);
+    } else if (n.type === 'goal_check') {
+      // Stale inferred goals — ask user what to do, log the outcome
+      const goals = (n.goals || []).map(g => g.text);
+      const summary = goals.length === 1
+        ? `Goal stale for ${n.goals[0].hours}h: "${goals[0]}"`
+        : `${goals.length} goals stale 6h+`;
+      vscode.window.showWarningMessage(
+        `Askr: ${summary}`,
+        'Mark Done', 'Discard', 'Keep'
+      ).then(action => {
+        if (!action || action === 'Keep') return;
+        const terminal = vscode.window.createTerminal({ name: 'askr — goal review' });
+        terminal.show();
+        if (action === 'Mark Done') {
+          goals.forEach(g => terminal.sendText(`askr goal done "${g}"`));
+        } else if (action === 'Discard') {
+          goals.forEach(g => terminal.sendText(`askr goal discard "${g}"`));
+        }
+      });
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
