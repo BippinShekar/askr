@@ -1,19 +1,17 @@
-Last updated: 2026-06-06 21:52
+Last updated: 2026-06-06 21:54
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and generating handover docs that let anyone resume work without context loss.
 
 ## What's In Flight
 
-- Goal autonomy: Claude now launches immediately in Terminal.app with goal text as initial prompt, rather than waiting for user input. Recently fixed in lifecycle.py and cli/askr.py.
-- Integration test coverage: Building 7-10 tests across all 4 stages of the checkpoint/resumption pipeline. Stage 10 (project brief generation) needs end-to-end validation with real checkpoints.
-- Test suite validation: Verifying test status from recent bash output and fixing any failures before merge.
+- Integration test suite for all 4 stages of the checkpoint/resumption pipeline (stages 7-10). Currently 7-10 tests written, need CI pipeline validation and real end-to-end testing with actual checkpoints.
+- Stage 10 project brief generation: verifying that the handover document is correctly generated from persisted state at session end.
+- AppleScript string escaping fix in `lifecycle.py`: goal text containing apostrophes (e.g., "askr's") was breaking the Claude session launcher. Implemented temp shell script approach to avoid quote conflicts.
+- Test status verification: need to check last Bash output for any test failures and fix them.
 
 ## Key Decisions Made
 
-- Append-only decision log in decisions.md to maintain audit trail of architectural choices.
-- State persisted in git (tasks, decisions, progress) rather than external database—enables offline handoffs and version history.
-- Four-stage lifecycle: session start (inject context), user prompt (extract objectives), session end (generate handover docs), pre-compact (emergency checkpoint).
-- Claude integration via hooks at natural session boundaries rather than polling—reduces overhead and catches exhaustion before it happens.
-- Goal autonomy
+- State persisted to git, not a database. Enables version control, diffs, and natural handoffs between developers.
+- Append-only decision log in `decisions.md`. Never edit existing lines; only append. Maintains audit trail of why choices were made.
