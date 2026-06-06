@@ -153,12 +153,15 @@ function checkNotification() {
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
     if (n.type === 'context') {
-      const continuePrompt = 'Read the handover and start on the Next Action immediately. Work autonomously.';
       const goal = n.goal ? ` Picking up: ${n.goal}` : '';
       vscode.window.showInformationMessage(`Askr: Context saved — switching chats, no context lost.${goal}`);
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
-      terminal.sendText(`claude "${continuePrompt}"`);
+      if (n.handover_ready) {
+        terminal.sendText('claude "Read the handover and start on the Next Action immediately. Work autonomously."');
+      } else {
+        terminal.sendText('claude');
+      }
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
       const goals = (n.goals || []).map(g => g.text);
