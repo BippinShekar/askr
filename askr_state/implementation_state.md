@@ -9,6 +9,41 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [15:29] Ran: cat ~/.config/askr/config.json 2>/dev/null && echo "---" && ls ~/.config/askr/ &
+- [15:29] Ran: git -C /Users/bippin/Desktop/askr diff HEAD askr/session/lifecycle.py | head -20
+- [15:29] Ran: git -C /Users/bippin/Desktop/askr show --stat HEAD
+- [15:29] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [15:29] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- [15:29] Ran: ls /Users/bippin/Desktop/askr/askr/notifications/ 2>/dev/null && cat /Users/bipp
+- [15:29] Ran: git -C /Users/bippin/Desktop/askr add askr/session/lifecycle.py askr/ide/vscode-
+- [15:29] Ran: git add askr/session/lifecycle.py && git commit -m "fix: add cooldown guard + re
+- [15:29] Ran: launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist && launchctl load 
+- [15:29] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [15:29] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
+- [15:29] Ran: grep -n "_write_notification" /Users/bippin/Desktop/askr/askr/session/lifecycle.
+- [15:28] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:28] Ran: git diff HEAD askr/session/lifecycle.py
+- [15:28] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:28] Ran: git log --oneline -8 && echo "---" && git diff HEAD --stat && echo "---" && git 
+- [15:28] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:28] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:28] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [15:28] Ran: grep -n "CONTEXT_TRIGGER\|_last_trigger\|cooldown\|_execute_trigger\|was_active"
+- [15:24] Ran: cat askr/state/reader.py | grep "def \|decisions\|architecture" | head -20
+- [15:24] Ran: cat askr/state/config.py | head -40
+- [15:23] Ran: grep -n "Resumed\|saved\|checkpoint\|ckpt\|status\|statusline\|statusBar\|notifi
+- [15:23] Ran: cat askr/state/goals.py | tail -100
+- [15:23] Ran: cat askr/hooks/session_start.py
+- [15:23] Ran: cat askr/notifications/discord.py
+- [15:23] Ran: cat askr/state/goals.py | head -80
+- [15:23] Ran: ls askr/notifications/ 2>/dev/null || echo "no notifications dir" && cat askr/ut
+- [15:23] Ran: cat askr/session/checkpoint.py
+- [15:23] Ran: cat askr/hooks/stop.py
+- [15:22] Ran: cat askr/hooks/notification.py && echo "===" && cat askr/session/lifecycle.py | 
+- [15:22] Ran: cat askr_state/goals.md && echo "===" && cat askr_state/handover_bippin.md
+- [15:22] Ran: git diff HEAD~1 --stat && echo "===" && git show HEAD --stat
+- [15:22] Ran: git log --oneline -10 && echo "---" && cat roadmap.md
+- [15:22] Ran: ls ~/.config/askr/ && cat ~/.config/askr/session_stats.json 2>/dev/null | python
 - [15:22] Ran: git -C /Users/bippin/Desktop/askr add askr/session/lifecycle.py && git -C /Users
 - [15:22] Ran: ls /Users/bippin/Desktop/askr/askr/notifications/ && cat /Users/bippin/Desktop/a
 - [15:22] Ran: ls /Users/bippin/Desktop/askr/askr/ && ls /Users/bippin/Desktop/askr/askr/hooks/
