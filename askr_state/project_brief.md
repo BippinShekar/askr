@@ -1,18 +1,20 @@
-Last updated: 2026-06-06 22:30
+Last updated: 2026-06-06 22:32
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions in Cursor/VS Code, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before the session breaks. It then orchestrates resumption by injecting saved context back into the next session, enabling seamless handoffs between developers and long-running projects without losing work or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) that can be injected back into new Claude Code sessions, eliminating context loss and enabling long-running projects to survive session boundaries.
 
 ## What's In Flight
 
-- Goal launch terminal integration: modifying `lifecycle.py` to emit `goal_launch` notifications that the Cursor extension picks up and opens integrated terminal tabs, with fallback to Terminal.app if the notification fails. Current blocker: extension not receiving notifications; premature `return` statement preventing fallback execution.
-- End-to-end test of Stage 10 project brief generation with real checkpoint flow.
-- Daemon reload: `com.askr.daemon.plist` was unloaded during testing and needs to be reloaded before next test run.
+- Finalizing phase 3.6 completion: roadmap.md marked complete, awaiting git commit
+- Stage 10 project brief generation: end-to-end test with real checkpoint data
+- Verification of test suite status from last bash output and fixing any failures
+- Review of files changed since last session and validation against decisions.md
 
 ## Key Decisions Made
 
-- State persisted to git, not a database: enables version control, diffs, and offline handoffs between developers.
-- Append-only decision log: all decisions recorded with timestamp and reason; never edited, only appended.
-- Notification-based extension communication: Cursor extension polls for notifications written by daemon rather than daemon calling extension APIs directly.
-- Safe
+- Append-only decision log in decisions.md: decisions are never edited, only appended, to maintain audit trail and prevent rewriting history
+- State persisted in git, not external databases: enables version control, diffs, and offline handoffs between developers
+- Checkpoint triggered before exhaustion, not after: safe_pause.py validates interruption points to avoid mid-operation breaks
+- Modular hook architecture: Claude Code integration via session_start, user_prompt_submit, stop, and pre_compact hooks rather than monolithic integration
+- Context

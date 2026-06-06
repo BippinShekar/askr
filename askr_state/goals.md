@@ -1,6 +1,5 @@
 ## Today - 2026-06-06
 
-- [ ] ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited <!-- added: 2026-06-06T22:31 -->
 
 
 
@@ -19,6 +18,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-06 22:32] ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
 [2026-06-06 22:30] DISCARDED: ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
 [2026-06-06 22:18] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.
 [2026-06-06 22:13] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.

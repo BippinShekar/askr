@@ -1,17 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:30
+Last updated: 2026-06-06 22:32
 
-# Handover: askr Goal Launch Terminal Integration
+# Handover Document
 
 ## Task
-Implement goal launch notifications to open integrated terminal tabs in Cursor/VS Code instead of spawning separate Terminal.app windows, with fallback to Terminal.app if the extension notification fails.
+Update the roadmap to mark phase 3.6 as complete and commit the changes to git.
 
 ## Status
-- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Added `goal_launch` handler to polling loop (lines 158-160 pattern) to watch for goal_launch notifications and open integrated terminal tabs named after the goal.
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified `_start_claude()` to write a `goal_launch` notification instead of using AppleScript. Notification write must NOT have a `return` statement after it — execution must continue to the Terminal.app AppleScript fallback code so Terminal.app always launches if the notification path fails.
-- `/Users/bippin/Library/LaunchAgents/com.askr.daemon.plist`: Daemon was unloaded during testing; needs reload before next test.
-- Last test result: notification was written but extension did not pick it up (unidentified notification error); fallback Terminal.app did not launch because of premature `return` statement.
+- File: /Users/bippin/Desktop/askr/roadmap.md
+- Phase 3.6 header was missing completion marker despite all features in the table being marked ✅ Done
+- Header updated to match format of other completed phases
+- Changes staged: roadmap.md and askr_state/goals.md
+- Commit message prepared: "chore: mark phase 3.6 complete"
 
 ## Failed Approaches
-- Using AppleScript
+None
+
+## Next Action
+Execute: git commit -m "chore: mark phase 3.6 complete" to finalize the commit of roadmap.md and askr_state/goals.md
+
+## Open Questions
+None
