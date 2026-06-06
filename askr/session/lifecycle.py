@@ -52,6 +52,7 @@ _patch_path()
 import json
 import time
 import signal
+import shlex
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -285,22 +286,14 @@ def _start_claude(project_path: str):
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
 
-    # Try to open a visible iTerm2 window first so the session is watchable
-    claude_bin = shutil.which("claude")
+    # Open a visible Terminal.app window so the session is watchable
+    claude_bin = shutil.which("claude") or "claude"
     try:
-        script = f'''
-tell application "iTerm2"
-    create window with default profile
-    tell current session of current window
-        write text "cd {project_path} && {claude_bin}"
-    end tell
-end tell
-'''
+        cmd = f"cd {shlex.quote(project_path)} && {claude_bin}"
+        script = f'tell application "Terminal" to do script "{cmd}"'
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _log(f"opened iTerm2 window for claude in {project_path}")
-        # PID tracking not available for AppleScript-launched process; daemon will
-        # detect the session via session_stats.json mtime instead.
+        _log(f"opened Terminal window for claude in {project_path}")
         return
     except Exception:
         pass
