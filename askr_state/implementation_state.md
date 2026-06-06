@@ -9,6 +9,18 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [17:48] Ran: venv/bin/python -c "
+import urllib.request, json
+url = 'https://discord.com/api/
+- [17:48] Ran: venv/bin/python -c "
+import os
+from askr.utils import env
+env.load()
+print('webh
+- [17:48] Ran: venv/bin/python -c "
+from askr.clients.discord import send_message
+ok = send_mes
+- [17:48] Modified: /Users/bippin/Desktop/askr/.env
 - [17:30] Ran: git push --quiet
 - [17:30] Ran: git add askr/session/checkpoint.py && git commit -m "feat: project_brief.md gene
 - [17:30] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
