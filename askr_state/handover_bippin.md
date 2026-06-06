@@ -2,20 +2,22 @@
 
 Last updated: 2026-06-06 21:31
 
+# Handover: askr daemon process tracking fix
+
 ## Task
-Fix the context trigger checkpoint mechanism in askr daemon — the Stop hook was not firing because the daemon sets `checkpoint_pending.json` but never kills the Claude process to trigger the hook.
+Fix the daemon's inability to kill Claude processes when the user starts Claude manually (outside the daemon's `_start_claude()` function), causing the Stop hook to fail silently.
 
 ## Status
-- COMPLETE. End-to-end flow verified: commit `3565106` ("askr: checkpoint") at 21:27 confirms daemon detected context=80.2%, wrote `checkpoint_pending.json`, waited 20s JSONL silence, attempted kill, Stop hook fired and consumed the pending file.
-- Secondary fix applied (commit `708dee2`): `_kill_claude` now falls back to `pgrep`+`lsof` to find user-started Claude processes by cwd when no tracked PID exists. Previously it skipped the kill if the daemon didn't start Claude.
-- Daemon reloaded with fix at 21:31.
+- **File modified:** `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
+- **Change:** Updated `_kill_claude()` function to accept `project_path` parameter and use `lsof` to find the Claude process by matching the working directory, instead of relying on a tracked PID that doesn't exist when Claude is started manually.
+- **Call sites updated:** Three calls to `_kill_claude()` now pass `project_path` as argument.
+- **Daemon reloaded:** `launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist` executed successfully.
+- **Commits made:**
+  - `lifecycle.py` changes committed with message "fix: kill user-started Claude processes via working directory match"
+  - `askr_state/handover_bippin.md` updated and committed
 
 ## Failed Approaches
-- Initial assumption that Stop hook fires after each turn — it only fires on process exit.
-- First kill attempt failed with "no tracked claude PID" because user had started Claude manually, not via `_start_claude()`. Claude exited naturally so checkpoint still worked, but forced kill was needed for reliability.
+- Relying on daemon-tracked PID: does not work when user starts Claude manually outside daemon control.
 
 ## Next Action
-None — mechanism is working. Monitor daemon.log over next few sessions to confirm `_find_claude_pid_by_project` successfully finds and kills user-started Claude processes when context trigger fires.
-
-## Open Questions
-None.
+Test the Stop hook by manually starting Claude in
