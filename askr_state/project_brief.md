@@ -1,18 +1,17 @@
-Last updated: 2026-06-06 17:50
+Last updated: 2026-06-06 17:53
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so anyone can resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It then orchestrates resumption in a fresh session with full context restored. The core problem: Claude Code sessions have hard limits, and losing work mid-task or forcing developers to manually hand off context between sessions wastes time and breaks flow.
 
 ## What's In Flight
 
-- Integration tests for all 4 stages (7-10) in CI pipeline; Stage 10 validates project brief generation end-to-end with real checkpoints.
-- Discord webhook notifications: module exists and is integrated; test message successfully delivered to user's personal Discord server. Webhook URL stored in `.env` as `ASKR_DISCORD_WEBHOOK`.
-- Verification of test status from last Bash output and fixing any failures.
-- Review of files changed since last session and validation against decisions.md.
+- Integration test suite for all 4 checkpoint stages (stages 7-10) in CI pipeline. Currently verifying test status and fixing failures from last bash output.
+- End-to-end test of Stage 10 (project brief generation) using a real checkpoint to validate handover document completeness.
+- Discord webhook delivery: User-Agent header added to resolve Cloudflare 1010 bot detection. Stop hook timeout increased from 15s to 60s to allow handover file generation to complete. `write_handover()` now returns file path instead of None.
+- Next action: run full checkpoint cycle to confirm handover generation completes within new timeout and Discord notification fires.
 
 ## Key Decisions Made
 
-- State is append-only and persisted to git: tasks, decisions, and progress are never edited in place, only appended. This creates an audit trail and prevents merge conflicts.
-- Session lifecycle is split into four stages: start (inject context), prompt submission (extract objectives), stop (generate handover docs), and pre-compact (emergency checkpoint).
-- Handover documents are human-readable and include task status, failed approaches, and next steps so any developer can pick up work
+- State persisted to git, not a database. Enables handoffs between developers and sessions without external infrastructure.
+- Four-stage checkpoint flow: forecast exhaustion, safe pause at a valid interruption point
