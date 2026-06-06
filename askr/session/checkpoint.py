@@ -283,6 +283,8 @@ def create_checkpoint(
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer)
 
+    _generate_project_brief(state_dir, developer)
+
     completed_goals = []
     try:
         from askr.state.goals import load_today_goals, infer_completed_from_activity, complete_goal
@@ -321,6 +323,82 @@ def create_checkpoint(
     _notify_discord_goals_completed(completed_goals)
 
     return result
+
+
+def _generate_project_brief(state_dir: str, developer: str):
+    """
+    Regenerate project_brief.md from decisions, architecture, goals, and handover.
+    Written for a human — co-founder or new hire should be fully oriented from this file alone.
+    """
+    try:
+        decisions_path = os.path.join(state_dir, "decisions.md")
+        arch_path      = os.path.join(state_dir, "architecture.md")
+        handover_path  = os.path.join(state_dir, f"handover_{developer}.md")
+        brief_path     = os.path.join(state_dir, "project_brief.md")
+
+        def _read(p):
+            try:
+                with open(p) as f:
+                    return f.read()[:3000]
+            except Exception:
+                return ""
+
+        decisions  = _read(decisions_path)
+        arch       = _read(arch_path)
+        handover   = _read(handover_path)
+
+        from askr.state.goals import load_open_goals
+        open_goals = "\n".join(f"- {g}" for g in (load_open_goals() or []))
+
+        if not any([decisions, arch, handover]):
+            return
+
+        from askr.clients.claude import call_claude
+        prompt = f"""You are writing project_brief.md — a single file that orients any person (co-founder, new hire, returning developer) in under 2 minutes. It answers: what is this product right now, what's actively in flight, what key decisions have been made, and what should someone pick up next.
+
+ARCHITECTURE:
+{arch or "Not available."}
+
+RECENT DECISIONS:
+{decisions or "Not available."}
+
+OPEN GOALS:
+{open_goals or "None."}
+
+LATEST HANDOVER:
+{handover or "Not available."}
+
+Write project_brief.md in this format. Plain text only — no emojis, no markdown decorations beyond headers and bullets.
+
+# Project Brief
+[One paragraph: what this product is and what problem it solves.]
+
+## What's In Flight
+[Bullet list: active work streams, what's being built right now, current milestone.]
+
+## Key Decisions Made
+[Bullet list: architectural and product decisions that are settled. Enough context that someone new knows why, not just what.]
+
+## Open Goals
+[Bullet list: what's next, in priority order.]
+
+## How to Get Started
+[3-4 concrete steps a new developer would take to get oriented and productive. Specific commands where applicable.]
+
+Keep it tight. A person should be able to read this in 90 seconds."""
+
+        brief = call_claude(
+            "You write clear, tight technical briefings for software projects. Output only the document.",
+            prompt,
+            mode="brief",
+            query_preview="project brief generation",
+        )
+
+        with open(brief_path, "w") as f:
+            f.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{brief}")
+
+    except Exception:
+        pass
 
 
 def _notify_discord_goals_completed(goals: list):
