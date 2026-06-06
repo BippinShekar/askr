@@ -1,18 +1,23 @@
-Last updated: 2026-06-06 23:01
+Last updated: 2026-06-06 23:02
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or repeating effort.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and generating handover documents so work can resume without context loss.
 
 ## What's In Flight
 
-- Stage 10: End-to-end testing of project brief generation from real checkpoint data. Need to verify test status from last Bash output and fix any failures.
-- Session lifecycle hooks: `stop.py` generates handover docs and commits state on session end; `pre_compact.py` handles emergency checkpoint before context auto-compaction.
-- State persistence layer: `reader.py` and `writer.py` manage task/decision/progress files; integration with git for durable handoffs.
+- Checkpoint and project brief generation system: fully implemented, tested end-to-end (both manual and automatic "stop" trigger paths), and committed
+- State persistence layer: goals, implementation state, and decisions tracked in `askr_state/` and auto-committed on checkpoint
+- Session monitoring: token forecasting and safe pause validation ready for integration testing
 
 ## Key Decisions Made
 
-- Append-only decision log in decisions.md—never edit existing lines, only append. Ensures audit trail and prevents accidental context loss.
-- State stored in git, not external database. Keeps everything version-controlled and enables natural developer handoffs via commits.
-- Forecast module predicts which limit (context or quota) hits first, allowing proactive checkpoint before either exhaustion.
-- Safe pause validation before interruption—don't checkpoint mid-operation; wait
+- State stored in git-tracked markdown files (`askr_state/goals.md`, `askr_state/implementation_state.md`, `askr_state/decisions.md`) for human readability and version control
+- Checkpoint triggered both manually (`askr checkpoint`) and automatically on session stop via Claude Code hooks
+- Project brief regenerated on every checkpoint to keep orientation docs current
+- Append-only decision log prevents accidental rewrites of past decisions
+- Session lifecycle managed through discrete phases: start → monitor → forecast → safe pause → checkpoint → resume
+
+## Open Goals
+
+- Verify test status from last Bash output
