@@ -1,20 +1,18 @@
-Last updated: 2026-06-06 23:16
+Last updated: 2026-06-07 05:16
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It solves the problem of losing work and context mid-session when Claude's limits reset, enabling seamless handoffs between developers and session resumptions.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, eliminating the friction of manual context recovery.
 
 ## What's In Flight
 
-- Twitter problem-statement post finalized and ready to publish: "claude makes you cracked at building. then quota hits. train of thought gone. flow gone. anyone else?"
-- Session lifecycle management: checkpoint and resumption flow working end-to-end with Terminal.app fallback for notifications
-- Phase 1 clarification: `ask` is the natural language Q&A CLI; `askr` is the session orchestration daemon with subcommands only
-- Verification of test status from last bash output and fixing any failures
+- Phase 1 validation: End-to-end test of morning report screenshot delivery mechanism. Currently unconfirmed whether screenshots actually arrive to user.
+- Session orchestration subcommands (goal, status, goals, etc.) are operational and integrated with Claude Code hooks.
+- Lifecycle notification flow: VS Code notification as primary, Terminal.app as fallback, headless as final layer. launchctl daemon currently unloaded.
+- Token usage monitoring shows zero burnage due to auto chat window switching with pre-context summarization; user has not approached 90% session limit.
 
 ## Key Decisions Made
 
-- Notification flow always launches Terminal.app as fallback, regardless of VS Code notification pickup (ensures visibility)
-- Tweet stays problem-focused, not product-focused, to engage followers before revealing the solution
-- Phase 1 scope: session monitoring, checkpoint generation, and basic resumption; full multi-developer handoff is Phase 2+
-- State persisted in git via append-only decision log and handover documents for transparency and auditability
-- Context forec
+- State persisted to git via append-only decision log and handover documents, enabling developer handoffs without context loss.
+- Four-layer architecture: session lifecycle (monitor, forecast, checkpoint, safe pause), Claude Code hooks (start, prompt submit, stop, pre-compact), persistent state (reader, writer, config), and code analysis (context loader, graph).
+- Lifecycle notifications use layered fallback strategy: VS Code first,
