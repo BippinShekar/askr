@@ -284,6 +284,28 @@ def _start_claude(project_path: str):
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
+
+    # Try to open a visible iTerm2 window first so the session is watchable
+    claude_bin = shutil.which("claude")
+    try:
+        script = f'''
+tell application "iTerm2"
+    create window with default profile
+    tell current session of current window
+        write text "cd {project_path} && {claude_bin}"
+    end tell
+end tell
+'''
+        subprocess.run(["osascript", "-e", script], check=True, timeout=5,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _log(f"opened iTerm2 window for claude in {project_path}")
+        # PID tracking not available for AppleScript-launched process; daemon will
+        # detect the session via session_stats.json mtime instead.
+        return
+    except Exception:
+        pass
+
+    # Fallback: headless background process
     try:
         proc = subprocess.Popen(
             ["claude"],
