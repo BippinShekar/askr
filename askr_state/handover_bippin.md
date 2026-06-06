@@ -1,20 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 17:57
+Last updated: 2026-06-06 18:02
 
 # Handover Document
 
 ## Task
-Implement cost tracking and display for askr API usage, update Phase 3 roadmap to reflect completed work, and ensure Stop/PreCompact hook timeouts default to 60s in init.
+Implement secrets scrubbing in session transcripts before they reach Claude, and document Discord webhook setup in README.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Modified to set per-event timeout map with Stop and PreCompact hooks at 60s default (higher than other hooks) during init setup.
-- `/Users/bippin/Desktop/askr/roadmap.md`: Updated to reflect Phase 3 implementation work completed in this session.
-- `/Users/bippin/Desktop/askr/askr/state/writer.py`: Previously fixed in this session to return handover path (no further action needed).
-- Changes committed and pushed without Claude as co-author.
+- `askr/session/checkpoint.py`: Added `_scrub_secrets()` function that masks Discord webhooks, API keys, and other sensitive patterns. Wired into `_build_transcript_text()` to scrub every line before transcript is sent to Haiku.
+- `README.md`: Added Discord webhook setup instructions to configuration section. Added `askr report` command to commands reference section.
+- `askr/cli/askr.py` and `roadmap.md`: Previously committed (Phase 3 updates).
+- All changes committed and pushed to git.
 
 ## Failed Approaches
-- Setting timeout globally in settings.json — user clarified that askr init's claude settings setup should handle this at 60s default instead.
+None.
 
 ## Next Action
-Design and implement cost calculation and display mechanism for askr. Determine: (1) where to capture API call costs (Haiku pricing per request), (2) how to aggregate and store cumulative costs per session/user, (3) best UI/output location to display costs to users (CLI output, dashboard, log file
+Verify that `_scrub_secrets()` correctly masks all secret patterns (Discord webhooks, API keys, tokens) by running a test session that includes secrets in the transcript and confirming they appear masked in the checkpoint output.
+
+## Open Questions
+None.
