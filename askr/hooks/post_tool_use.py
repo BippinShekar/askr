@@ -150,6 +150,60 @@ def _write_session_stats():
         pass
 
 
+_GUARD_BLOCKS_PATH = os.path.expanduser("~/.config/askr/guard_blocks.json")
+
+
+def _check_guard_resolution(tool_name: str, file_path: str):
+    """If the completed write was to a previously-blocked file, send resolution alert."""
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
+        return
+    if not file_path:
+        return
+    try:
+        if not os.path.exists(_GUARD_BLOCKS_PATH):
+            return
+        with open(_GUARD_BLOCKS_PATH) as f:
+            blocks = json.load(f)
+        if file_path not in blocks:
+            return
+
+        block_entry = blocks.pop(file_path)
+        with open(_GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+
+        issues = block_entry.get("issues", [])
+        count  = block_entry.get("count", 1)
+
+        try:
+            from askr.clients.discord import send_message
+            issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
+            msg = (
+                f"✅ **[askr guard] Resolved** — `{os.path.basename(file_path)}`\n"
+                f"Blocked {count}x, then self-corrected. Write succeeded."
+                + (f"\n**Original issues:**\n{issues_text}" if issues_text else "")
+            )
+            send_message(msg)
+        except Exception:
+            pass
+
+        try:
+            log_path = os.path.join(get_state_dir(), "guard_log.md")
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            lines = [
+                f"\n## {ts} — Resolution [RESOLVED]",
+                f"**File:** `{file_path}`",
+                f"Claude self-corrected after {count} block(s). Write succeeded.",
+                "**Outcome:** Resolved autonomously",
+                "",
+            ]
+            with open(log_path, "a") as f:
+                f.write("\n".join(lines) + "\n")
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -161,6 +215,9 @@ def main():
 
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
+
+    file_path = tool_input.get("file_path") or tool_input.get("path", "")
+    _check_guard_resolution(tool_name, file_path)
 
     activity = _extract_activity(tool_name, tool_input)
 

@@ -189,7 +189,7 @@ The problem with Phase 3.5: the guard warns but doesn't act. Claude proceeds wit
 | `PreToolUse` returns block signal — guard returns `{"decision": "block", "reason": "..."}` to cancel the write and surface explanation directly to Claude | ✅ Done |
 | Block message quality — explanation must be specific enough for Claude to self-correct (not just "architectural issue") | ✅ Done |
 | Discord pre-block alert — "guard blocked write to X — reason: ..." sent before Claude retries | ✅ Done |
-| Discord resolution alert — after Claude retries and write succeeds, send "resolved — what changed" diff summary | 🔲 Todo |
+| Discord resolution alert — after Claude retries and write succeeds, send "resolved — what changed" diff summary | ✅ Done |
 | Block audit trail — `guard_log.md` records blocked attempts + resolution outcome | ✅ Done |
 | Escape hatch — if Claude retries the same blocked write 2x, unblock and escalate to Discord as unresolved | ✅ Done |
 
