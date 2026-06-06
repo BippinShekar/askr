@@ -293,7 +293,12 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     try:
         safe_prompt = prompt_arg.replace("'", "").replace('"', "")
         cmd = f"cd {project_path} && {claude_bin} '{safe_prompt}'"
-        script = f'tell application "Terminal" to do script "{cmd}"'
+        script = (
+            f'tell application "Terminal"\n'
+            f'  do script "{cmd}"\n'
+            f'  activate\n'
+            f'end tell'
+        )
         subprocess.run(["osascript", "-e", script], check=True, timeout=5,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         _log(f"opened Terminal window for claude in {project_path}")
