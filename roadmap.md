@@ -157,7 +157,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 
 ---
 
-## Phase 3.5 - Implementation Guard
+## Phase 3.5 - Implementation Guard ✅
 
 **Goal:** Catch architectural holes and bad implementation approaches before Claude writes a single line — not after an hour of debugging to revert.
 
@@ -165,13 +165,14 @@ The problem: Claude sounds confident even when the approach has structural gaps.
 
 | Feature | Status |
 |---|---|
-| Pre-tool-use hook detects implementation start (batch writes/edits, new file creation) | 🔲 Todo |
-| Haiku cross-check: plan vs. `architecture.md` + `handover.md` for contradictions | 🔲 Todo |
-| Flags: missing dependencies, API surface mismatches, assumptions that conflict with real codebase | 🔲 Todo |
-| Warning surfaced via IDE popup (notification.json) + Discord (Phase 3 channel) | 🔲 Todo |
-| Non-blocking — user sees warning, decides whether to proceed | 🔲 Todo |
-| Smart trigger: only fires for structurally significant changes (new files, shared interface edits, >N file batches) | 🔲 Todo |
-| `askr_state/guard_log.md` — append-only log of warnings raised + user decisions | 🔲 Todo |
+| `PreToolUse` hook — detects significant operations (new file, batch edits ≥3, shared interface edit) | ✅ Done |
+| Haiku cross-check — plan vs. `architecture.md` + `handover.md` + `decisions.md` for contradictions | ✅ Done |
+| Flags: missing dependencies, API surface mismatches, assumptions conflicting with real codebase | ✅ Done |
+| Async delivery — guard runner spawned as detached subprocess, Claude's tool not blocked | ✅ Done |
+| Warning surfaced via IDE popup (`notification.json` → `guard_warning` type) + Discord | ✅ Done |
+| Non-blocking — user sees warning, Claude proceeds, user decides whether to intervene | ✅ Done |
+| 5-minute cooldown — guard doesn't re-trigger on every write in the same batch | ✅ Done |
+| `askr_state/guard_log.md` — append-only audit trail of warnings raised | ✅ Done |
 
 **Done when:** Claude proposes a plan with a real architectural hole, askr surfaces a warning before the first file is touched, developer avoids a 30-minute revert.
 
