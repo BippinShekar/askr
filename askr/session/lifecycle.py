@@ -517,6 +517,23 @@ def _wait_for_exchange_end_then_kill(project_path: str):
     _kill_claude(project_path)
 
 
+def _maybe_autolaunch(project_path: str):
+    """If goals exist and no session is running, start Claude autonomously."""
+    if not _claude_cli_available():
+        return
+    try:
+        from askr.state.goals import load_today_goals
+        goals = load_today_goals()
+        if not goals:
+            return
+    except Exception:
+        return
+    goal = goals[0]
+    _log(f"idle with open goals — auto-launching for: {goal}")
+    _write_launch_mode(goal)
+    _start_claude(project_path)
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -589,6 +606,7 @@ def run_daemon():
 
                 time.sleep(POLL_ACTIVE)
             else:
+                _maybe_autolaunch(project_path)
                 time.sleep(POLL_IDLE)
 
     finally:

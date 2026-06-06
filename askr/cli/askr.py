@@ -691,6 +691,26 @@ def cmd_goals():
     console.print()
 
 
+def _maybe_launch_for_goal(goal_text: str):
+    """Start an autonomous Claude session for this goal immediately."""
+    try:
+        from askr.session.lifecycle import (
+            _claude_cli_available, _start_claude, _write_launch_mode,
+        )
+        from askr.state.config import load_project_path
+
+        if not _claude_cli_available():
+            console.print("  [yellow]warn:[/yellow] claude not in PATH — start it manually\n")
+            return
+
+        project_path = load_project_path()
+        _write_launch_mode(goal_text)
+        _start_claude(project_path)
+        console.print("  [green]→[/green] starting autonomous session for this goal\n")
+    except Exception:
+        pass
+
+
 def cmd_goal(args: list[str]):
     from askr.state.goals import add_goal, complete_goal, discard_goal
 
@@ -713,6 +733,9 @@ def cmd_goal(args: list[str]):
         add_goal(text, section)
         label = "backlog" if section == "backlog" else "today"
         console.print(f"\n  [green]✓[/green] added to {label}: [bold]{text}[/bold]\n")
+
+        if section == "today":
+            _maybe_launch_for_goal(text)
 
     elif sub == "done":
         if len(args) < 2:
