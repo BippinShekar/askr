@@ -9,6 +9,12 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:24] Ran: venv/bin/python askr/cli/askr.py status --line
+- [21:23] Ran: venv/bin/python askr/cli/askr.py status --line
+- [21:23] Ran: venv/bin/python askr/cli/askr.py status --line
+- [21:23] Ran: venv/bin/python askr/cli/askr.py status --line
+- [21:23] Ran: venv/bin/python askr/cli/askr.py status
+- [21:23] Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | xargs wc -l | sort -rn | hea
 - [21:20] Ran: venv/bin/python askr/cli/askr.py status --line
 - [21:19] Ran: cat ~/.config/askr/session_stats.json | python3 -c "import json,sys; d=json.load
 - [21:19] Ran: stat -f "%Sm" ~/.config/askr/session_stats.json
