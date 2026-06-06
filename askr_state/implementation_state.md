@@ -9,6 +9,12 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:37] Ran: grep -n "goal\|autonom\|launch\|idle" /Users/bippin/Desktop/askr/askr_state/goal
+- [21:37] Ran: grep -n "goal" /Users/bippin/Desktop/askr/askr/cli/askr.py | head -40
+- [21:37] Ran: find /Users/bippin/Desktop/askr/askr/cli -name "*.py" | head -20
+- [21:37] Ran: find /Users/bippin/Desktop/askr/askr/cli -name "*.py" | xargs grep -l "goal" 2>/
+- [21:37] Ran: grep -n "goal add\|goal_add\|after_add\|on_add" /Users/bippin/bin/askr | head -2
+- [21:37] Ran: cat /Users/bippin/bin/askr
 - [21:36] Ran: python3 -c "
 import json
 with open('/Users/users/bippin/.config/askr/session_sta

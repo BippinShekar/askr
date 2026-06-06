@@ -1,22 +1,25 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 21:36
+Last updated: 2026-06-06 21:37
 
-# Handover: askr Goal Autonomy Loop
+# Handover: askr Goal Autonomy Trigger
 
 ## Task
-Verify that the askr goal autonomy loop works end-to-end: a goal added via CLI is picked up by the daemon on next session and fed to the launch prompt.
+Determine whether `askr goal add` should trigger an immediate autonomous session or wait for context overflow at 75%.
 
 ## Status
-- Goal added via CLI: "run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not"
-- Goal stored in `/Users/users/bippin/.config/askr/session_state` (file being read at session end to verify storage)
-- Daemon running and monitoring for new sessions
-- Previous session verified checkpoint mechanism working (commit 3565106): daemon detects context threshold, writes `checkpoint_pending.json`, waits for JSONL silence, Stop hook consumes file and commits
-- Kill fallback in `lifecycle.py` fixed and committed to pass `project_path` parameter
-- Daemon reloaded via `launchctl unload ~/Library/LaunchAgents/com.askr.daemon.plist`
+- User added goal: "run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not"
+- Goal was stored in session state (confirmed via config read attempt)
+- Current context: 23%
+- User assertion: goals should start working in isolation (immediately), not wait for context threshold
+- Codebase exploration started but incomplete:
+  - Checked `/Users/bippin/bin/askr` (wrapper script)
+  - Located goal-related code in `/Users/bippin/Desktop/askr/askr/cli/` (multiple .py files)
+  - Did not complete grep for goal trigger logic or launch behavior
+- Previous session checkpoint verified working (commit 3565106)
 
 ## Failed Approaches
-None.
+- Assumed goal execution waits for 75% context threshold — user corrected this assumption as incorrect design
 
 ## Next Action
-When the next Claude Code session starts (either manually triggered or daemon-initiated), verify that the daemon has read the stored goal and injected it into the launch prompt. Check the session logs or prompt output to confirm the goal text appears in the initial context
+Search `/Users/bippin/Desktop/askr/askr/cli/` for the goal trigger implementation: grep for "goal.*add\|after_add\|on_add\|launch.*goal" across all .py files to find
