@@ -1,19 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 15:29
+Last updated: 2026-06-06 15:39
+
+# Handover Document
 
 ## Task
-Fix daemon trigger cooldown bug and gate autonomous handover prompts behind handover quality check in extension.
+Fix daemon trigger cooldown and session tracking to prevent multiple autonomous sessions from spinning up against the same chat when stats file continues updating.
 
 ## Status
-- askr/session/lifecycle.py — Cooldown logic added after trigger fires, handover_quality passed to notification.json checkpoint. Changes appear complete but not yet verified in git diff.
-- askr/ide/vscode-extension/extension.js — Updated to check handover_quality before sending autonomous prompt.
-- askr/.cursor/extensions/askr.askr-status-1.0.0/extension.js — Updated to check handover_quality before sending autonomous prompt.
-- Daemon launchctl reload command executed but completion status unknown.
-- Git commits staged but final verification incomplete — lifecycle.py changes may not be in HEAD yet.
+- **checkpoint.py**: Modified to make prompt session-type-aware so testing/debugging sessions produce meaningful task descriptions instead of "Unknown" when no file edits occur
+- **vscode-extension/extension.js**: Removed handover quality gate (>200 byte check) — handovers now reliable enough to not need workaround
+- **.cursor/extensions/askr.askr-status-1.0.0/extension.js**: Same removal of handover quality gate
+- **lifecycle.py**: Previous session added 300s trigger cooldown and handover quality gate; both now being refined
+- **session_stats.json**: Already contains session ID; can be used with `lsof` to find PID of process holding JSONL transcript file open
+- Daemon reload and commits pending — files staged but git operations incomplete in transcript
 
 ## Failed Approaches
-- Initial attempt to commit did not include lifecycle.py changes; second commit attempt status unclear.
+- 300s blanket cooldown after trigger fires — too crude, doesn't address root cause that running session's stats file keeps updating
+- Handover quality gate (>200 byte check) in extensions — workaround for unreliable handover creation; should be removed once handover creation is fixed
 
 ## Next Action
-Run `git -C /Users/bippin/Desktop/askr diff HEAD askr/session/lifecycle.py` to verify all three lifecycle.py edits are actually committed. If diff is empty, run `git -C /Users/bippin/Desktop/askr add askr/session/lifecycle.py && git -C /Users/bippin/Desktop/askr commit -m "Fix trigger cooldown and gate handover prompts"`.
