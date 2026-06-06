@@ -75,6 +75,38 @@ def main():
     except Exception:
         pass
 
+    # guard_log.md
+    _append_guard_log(state_dir, result, file_path, reason_label)
+
+
+def _append_guard_log(state_dir: str, result: dict, file_path: str, reason_label: str):
+    try:
+        from datetime import datetime
+        log_path = os.path.join(state_dir, "guard_log.md")
+        issues = result.get("issues", [])
+        summary = result.get("summary", "")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        lines = [f"\n## {ts} — {reason_label}"]
+        lines.append(f"**File:** `{file_path}`")
+        lines.append(f"**Summary:** {summary}")
+        if issues:
+            lines.append("**Issues:**")
+            lines.extend(f"- {i}" for i in issues)
+        lines.append("**Outcome:** Claude proceeded (non-blocking)")
+        lines.append("")
+
+        header = ""
+        if not os.path.exists(log_path):
+            header = "# Guard Log\n\nAppend-only log of architectural warnings raised during implementation.\n"
+
+        with open(log_path, "a") as f:
+            if header:
+                f.write(header)
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     main()
