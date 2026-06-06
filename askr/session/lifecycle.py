@@ -360,6 +360,16 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
 # Trigger execution
 # ---------------------------------------------------------------------------
 
+def _notify_discord_resumed(trigger: str, goal: str):
+    try:
+        from askr.clients.discord import send_message
+        reason = "context limit reached" if trigger == "context" else "quota reset"
+        goal_str = f" Picking up: {goal}" if goal else ""
+        send_message(f"**[askr] Session resumed** — {reason}.{goal_str}")
+    except Exception:
+        pass
+
+
 def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
@@ -405,6 +415,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 
     _log("starting new claude session")
     _start_claude(project_path)
+    _notify_discord_resumed(trigger, next_goal)
 
 
 # ---------------------------------------------------------------------------
