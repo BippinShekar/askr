@@ -9,6 +9,15 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [22:42] Ran: ask 2>&1 | head -10
+- [22:42] Ran: cat /Users/bippin/Desktop/askr/Formula 2>/dev/null || ls /Users/bippin/Desktop/a
+- [22:42] Ran: grep -o "^[A-Z_]*=" /Users/bippin/Desktop/askr/.env 2>/dev/null
+- [22:42] Ran: ls /Users/bippin/Desktop/askr/.env 2>/dev/null && echo "exists" || echo "not fou
+- [22:42] Ran: ls ~/.config/askr/ 2>/dev/null && echo "exists" || echo "not found"
+- [22:42] Ran: cat ~/.config/askr/.env 2>/dev/null | grep -v "^#" | sed 's/=.*/=<redacted>/'
+- [22:42] Ran: cat /Users/bippin/Desktop/askr/askr_state/notifications.log 2>/dev/null | tail -
+- [22:42] Ran: find /Users/bippin/Desktop/askr -type f -name "*.ts" -o -name "*.js" -o -name "*
+- [22:42] Ran: ls /Users/bippin/Desktop/askr
 - [22:32] Ran: git add roadmap.md askr_state/goals.md && git commit -m "$(cat <<'EOF'
 chore: ma
 - [22:32] Ran: git diff roadmap.md
