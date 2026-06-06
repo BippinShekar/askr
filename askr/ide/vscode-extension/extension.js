@@ -153,17 +153,12 @@ function checkNotification() {
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
     if (n.type === 'context') {
-      const goal = n.goal ? `Picking up: ${n.goal}` : 'Continuing from last session.';
       const continuePrompt = 'Read the handover and start on the Next Action immediately. Work autonomously.';
-      const header = [
-        `printf "\\033[36m━━━ askr checkpoint ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n"`,
-        `printf "  Context saved to git. Handover loaded — no context lost.\\n"`,
-        `printf "  ${goal}\\n"`,
-        `printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\033[0m\\n\\n"`,
-      ].join(' && ');
+      const goal = n.goal ? ` Picking up: ${n.goal}` : '';
+      vscode.window.showInformationMessage(`Askr: Context saved — switching chats, no context lost.${goal}`);
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
-      terminal.sendText(`${header} && claude "${continuePrompt}"`);
+      terminal.sendText(`claude "${continuePrompt}"`);
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
       const goals = (n.goals || []).map(g => g.text);
