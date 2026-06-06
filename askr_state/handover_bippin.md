@@ -1,24 +1,16 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:08
+Last updated: 2026-06-06 22:11
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Add Phase 3.6 to roadmap: autonomous guard feedback loop that enables the guard engine to communicate correction strategies back into active Claude conversations, with pre/post-fix screenshots and Discord reporting.
+Verify Phase 3.5 guard implementation status and add Phase 3.6 (autonomous guard correction with Discord feedback loop) to roadmap as a staged implementation plan.
 
 ## Status
-- `/Users/bippin/Desktop/askr/roadmap.md` — Phase 3.6 added and committed
-- Commit: `git add roadmap.md && git commit -m "docs: roadmap Phase 3.6 — autonomous guard feedback loop"`
-- Phase 3.5 (guard implementation) verified as complete across 4 commits:
-  - `9ba470b` — PreToolUse hook with significance detection
-  - `a004f52` — guard engine (Haiku cross-checks significant writes)
-  - `394d54d` — async delivery to IDE popup + Discord
-  - `84da5e7` — guard_log.md audit log
-- Current guard architecture: runs as detached subprocess outside active conversation; can warn but cannot inject corrections back into Claude's conversation context
-
-## Failed Approaches
-- Attempting to make guard "realise" Claude of mistakes without bidirectional communication channel — identified as architectural limitation, not viable without conversation integration layer
-
-## Next Action
-Design and implement Phase 3.6: add bidirectional communication channel from guard subprocess back
+- Phase 3.5 is fully implemented across 4 commits: `9ba470b` (PreToolUse hook), `a004f52` (guard engine), `394d54d` (async IDE/Discord delivery), `84da5e7` (guard_log.md audit log)
+- Implementation files confirmed: `askr/hooks/pre_tool_use.py`, `askr/session/guard.py`, `askr/hooks/guard_runner.py`
+- Phase 3.6 added to `/Users/bippin/Desktop/askr/roadmap.md` with commit message "docs: roadmap Phase 3.6 — autonomous guard"
+- Phase 3.6 scope: enable guard to send error screenshot + pre-correction message to Discord, autonomously correct Claude's mistake by reinserting context into conversation, send post-correction screenshot and brief status to Discord
+- Escape hatch identified: unblock after 2 retries, escalate to Discord as unresolved if Claude remains stubborn about approach
+- Goal creation command had a quoting bug in AppleScript string wr

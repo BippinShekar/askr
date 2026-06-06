@@ -1,5 +1,6 @@
 ## Today - 2026-06-06
 
+
 - [ ] run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not <!-- added: 2026-06-06T21:54 -->
 
 
@@ -24,6 +25,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-06 22:11] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.
 [2026-06-06 21:54] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
 [2026-06-06 21:52] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
 [2026-06-06 21:48] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
