@@ -1,15 +1,5 @@
 ## Today - 2026-06-06
 
-
-- [ ] run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not <!-- added: 2026-06-06T21:54 -->
-
-
-
-
-
-
-- [ ] Add integration tests for all 4 stages (7-10) in CI pipeline <!-- added: 2026-06-06T17:31 -->
-
 - [ ] Test Stage 10 project brief generation end-to-end with real checkpoint <!-- added: 2026-06-06T17:31 -->
 
 - [x] Commit staged changes and test that handover files capture complete state <!-- added: 2026-06-06T15:50 -->
@@ -25,6 +15,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-06 22:13] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.
 [2026-06-06 22:11] DISCARDED: let's implement phase 3.6 in stages, ensure each stage is commited and pushed without claude as co=-collaborator.
 [2026-06-06 21:54] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not
 [2026-06-06 21:52] DISCARDED: run end to end testing with proper discord screenshots work ot not, this is to check if askr's goal functionlaity works or not

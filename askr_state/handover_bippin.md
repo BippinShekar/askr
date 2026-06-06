@@ -1,16 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-06 22:11
-
-# Handover Document
+Last updated: 2026-06-06 22:13
 
 ## Task
-Verify Phase 3.5 guard implementation status and add Phase 3.6 (autonomous guard correction with Discord feedback loop) to roadmap as a staged implementation plan.
+Implement Phase 3.6 of the guard system: autonomous error correction where the guard detects Claude mistakes, sends a pre-correction screenshot to Discord, autonomously corrects the mistake by helping Claude understand the proper structure, then sends a post-correction screenshot with a brief summary.
 
 ## Status
-- Phase 3.5 is fully implemented across 4 commits: `9ba470b` (PreToolUse hook), `a004f52` (guard engine), `394d54d` (async IDE/Discord delivery), `84da5e7` (guard_log.md audit log)
-- Implementation files confirmed: `askr/hooks/pre_tool_use.py`, `askr/session/guard.py`, `askr/hooks/guard_runner.py`
-- Phase 3.6 added to `/Users/bippin/Desktop/askr/roadmap.md` with commit message "docs: roadmap Phase 3.6 — autonomous guard"
-- Phase 3.6 scope: enable guard to send error screenshot + pre-correction message to Discord, autonomously correct Claude's mistake by reinserting context into conversation, send post-correction screenshot and brief status to Discord
-- Escape hatch identified: unblock after 2 retries, escalate to Discord as unresolved if Claude remains stubborn about approach
-- Goal creation command had a quoting bug in AppleScript string wr
+- Phase 3.6 added to roadmap.md and committed
+- Guard implementation exists in 4 commits across `askr/hooks/pre_tool_use.py`, `askr/session/guard.py`, `askr/hooks/guard_runner.py` with working code
+- Goal creation command has a quoting bug in `askr/session/lifecycle.py` that breaks AppleScript string wrapping — inner double quotes need to be single quotes
+- Terminal.app launch from goal creation was running headless (background) — needs `activate` call in AppleScript to bring window to foreground so Claude session chat is visible
+- Test goal "let's implement phase 3.6 in stages..." was discarded to prevent auto-launch
+
+## Failed Approaches
+- Initial framing of "making Claude realise" via detached guard subprocess — guard runs outside conversation with no channel back into active Claude session, so direct conversation correction is not possible from guard alone
+- Headless Terminal launch — attempted but user requires visible Terminal window with active Claude session chat visible during
