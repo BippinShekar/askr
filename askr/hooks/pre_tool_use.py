@@ -178,9 +178,15 @@ def _run_guard(trigger: dict) -> dict:
 
 
 def _on_block(result: dict, file_path: str, trigger_reason: str):
-    """Format and emit the block signal. Does not return (exits 2)."""
+    """Send Discord alert, log the block, then emit the block signal. Does not return (exits 2)."""
     issues  = result.get("issues", [])
     summary = result.get("summary", "Architectural issue detected.")
+
+    reason_label = {
+        "new_file":         "New file creation",
+        "batch_writes":     "Batch file edits",
+        "shared_interface": "Shared interface edit",
+    }.get(trigger_reason, "Implementation change")
 
     issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
     block_reason = (
@@ -189,7 +195,51 @@ def _on_block(result: dict, file_path: str, trigger_reason: str):
         + "\n\nRevise your approach to address these architectural concerns before proceeding."
     )
 
+    _send_discord_block_alert(file_path, reason_label, summary, issues)
+    _append_guard_log_block(file_path, reason_label, summary, issues)
     _block_tool(block_reason)
+
+
+def _send_discord_block_alert(file_path: str, reason_label: str, summary: str, issues: list):
+    try:
+        from askr.clients.discord import send_message
+        issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
+        msg = (
+            f"⛔ **[askr guard] Blocked** — {reason_label}: `{os.path.basename(file_path)}`\n"
+            f"{summary}"
+            + (f"\n{issues_text}" if issues_text else "")
+        )
+        send_message(msg)
+    except Exception:
+        pass
+
+
+def _append_guard_log_block(file_path: str, reason_label: str, summary: str, issues: list):
+    try:
+        from askr.state.config import get_state_dir
+        from datetime import datetime
+        log_path = os.path.join(get_state_dir(), "guard_log.md")
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        lines = [f"\n## {ts} — {reason_label} [BLOCKED]"]
+        lines.append(f"**File:** `{file_path}`")
+        lines.append(f"**Summary:** {summary}")
+        if issues:
+            lines.append("**Issues:**")
+            lines.extend(f"- {i}" for i in issues)
+        lines.append("**Outcome:** Write blocked — awaiting Claude correction")
+        lines.append("")
+
+        header = ""
+        if not os.path.exists(log_path):
+            header = "# Guard Log\n\nAppend-only log of architectural warnings raised during implementation.\n"
+
+        with open(log_path, "a") as f:
+            if header:
+                f.write(header)
+            f.write("\n".join(lines) + "\n")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
