@@ -61,6 +61,19 @@ def _save_history(query, mode, response):
         f.write(block)
 
 
+def _load_recent_history(n=5) -> str:
+    try:
+        with open(HISTORY_FILE) as f:
+            content = f.read()
+        blocks = [b.strip() for b in content.split("---") if b.strip()]
+        recent = blocks[-n:] if len(blocks) >= n else blocks
+        if not recent:
+            return ""
+        return "RECENT CONVERSATION:\n" + "\n---\n".join(recent)
+    except FileNotFoundError:
+        return ""
+
+
 def _build_prompt(fast_ctx, inventory, snapshot, mode):
     file_sections = []
     file_contents = load_file_contents(snapshot)
@@ -116,7 +129,9 @@ def run(query, mode=None, llm=None):
     snapshot = load_snapshot()
 
     system = f"{BASE_SYSTEM_PROMPT}\n{MODES.get(mode, MODES[DEFAULT_MODE])}"
-    prompt = _build_prompt(fast_ctx, inventory, snapshot, mode) + f"\nQUESTION:\n{query}"
+    recent_history = _load_recent_history(n=5)
+    history_block = f"\n{recent_history}\n" if recent_history else ""
+    prompt = _build_prompt(fast_ctx, inventory, snapshot, mode) + history_block + f"\nQUESTION:\n{query}"
 
     if mode == "web":
         res = call_claude_web(system, prompt, mode=mode, query_preview=query[:60])
