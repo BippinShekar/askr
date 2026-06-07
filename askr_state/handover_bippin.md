@@ -1,23 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 02:00
+Last updated: 2026-06-08 02:04
 
 ## Task
-Implement rolling window context for `ask` CLI tool to preserve conversation history across invocations without in-memory retrieval overhead.
+Implement rolling window context for `ask` CLI tool to maintain conversation history across stateless invocations, and draft a tweet about Claude's auto-compaction quota burn.
 
 ## Status
-- Rolling window approach decided as optimal: load last 5 history exchanges on each `ask` invocation
-- `/Users/bippin/Desktop/askr/askr/qa/pipeline.py` modified with `_load_recent_history` function
-- History injection integrated into prompt pipeline
-- Git commit completed: "feat: rolling window of last 5 his"
-- Quota analysis completed: compaction was consuming ~4-5% of 5-hour window (9% total for compaction + 2 messages), now eliminated by rolling window approach
-- Implementation verified working — previous context (e.g., pasted tweet from 2 exchanges back) now accessible in subsequent queries
+- `/Users/bippin/Desktop/askr/askr/qa/pipeline.py`: Modified to add `_load_recent_history()` function that loads last 5 exchanges from `.askr_history` and injects them into the prompt context
+- Rolling window implementation complete and committed: `git commit -m "feat: rolling window of last 5 his"`
+- Quota analysis completed: auto-compaction burns 4-5% of 5-hour quota window, takes ~4 minutes, and silently drops context
+- Tweet draft in progress: needs to end with a question and emphasize human tone rather than technical callout
 
 ## Failed Approaches
-- In-memory tokenization and retrieval: rejected due to CLI tool architecture (each invocation is fresh process, would require re-embedding on every call, slower than rolling window)
+- In-memory tokenization and retrieval system: rejected as non-viable for stateless CLI tool (each invocation is fresh process, would require re-embedding history on every call anyway)
 
 ## Next Action
-None — implementation complete and verified. User's final message was off-topic request for tweet suggestion, not a work directive.
+Revise the tweet about Claude's auto-compaction to end with a question and adopt a more conversational, human tone rather than technical framing.
 
 ## Open Questions
-None
+- Exact final wording of the tweet (structure agreed: question-ending + human tone, but specific text not finalized)
