@@ -1,21 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 02:04
+Last updated: 2026-06-08 03:08
 
 ## Task
-Implement rolling window context for `ask` CLI tool to maintain conversation history across stateless invocations, and draft a tweet about Claude's auto-compaction quota burn.
+Implement rolling window context for `ask` CLI tool to replace in-memory tokenization/retrieval, and draft a tweet about Claude's auto-compaction quota burn.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/qa/pipeline.py`: Modified to add `_load_recent_history()` function that loads last 5 exchanges from `.askr_history` and injects them into the prompt context
-- Rolling window implementation complete and committed: `git commit -m "feat: rolling window of last 5 his"`
-- Quota analysis completed: auto-compaction burns 4-5% of 5-hour quota window, takes ~4 minutes, and silently drops context
-- Tweet draft in progress: needs to end with a question and emphasize human tone rather than technical callout
+- `/Users/bippin/Desktop/askr/askr/qa/pipeline.py`: Added `_load_recent_history` function that injects last 5 Q&A exchanges into prompt context on each invocation
+- Git commit created: "feat: rolling window of last 5 his" (message truncated in transcript)
+- Rolling window approach confirmed as viable — each `ask` invocation is a fresh process, so persistent in-memory storage is not feasible
+- Quota analysis completed: auto-compaction burns ~4-5% of 5-hour quota window, takes ~4 minutes, silently drops context
+- Tweet draft finalized: "claude's auto-compact is a silent killer. 4 minutes frozen. quota burned. context quietly dropped. i don't know what it forgot. i build on top of this, and boom next few hours or days spending to rectify/salvage what went wrong."
 
 ## Failed Approaches
-- In-memory tokenization and retrieval system: rejected as non-viable for stateless CLI tool (each invocation is fresh process, would require re-embedding history on every call anyway)
+- In-memory tokenization and retrieval: rejected because `ask` is a stateless CLI tool with no persistent process to hold memory between invocations; re-embedding history on every call would be slower than rolling window
 
-## Next Action
-Revise the tweet about Claude's auto-compaction to end with a question and adopt a more conversational, human tone rather than technical framing.
-
-## Open Questions
-- Exact final wording of the tweet (structure agreed: question-ending + human tone, but specific text not finalized)
+##
