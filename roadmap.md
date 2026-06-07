@@ -197,6 +197,27 @@ The problem with Phase 3.5: the guard warns but doesn't act. Claude proceeds wit
 
 ---
 
+## Phase 3.7 - Rich Visual Reports
+
+**Goal:** Replace text-wall Discord messages with a single shareable image — session stats, cost savings, context timeline, goals completed. The screenshot that makes people want askr.
+
+The problem with Phase 3 Discord output: it's walls of text. Nobody screenshots a wall of text. This phase generates a real PNG — dark card, session timeline, token/cost delta — and sends it as a Discord file attachment. Generated in Python, sent, deleted. No screenshotting, no browser, no dependencies beyond matplotlib.
+
+The killer stat: "without askr this session would have cost $X and hit the context wall at Y tokens. With askr: $Z saved, 0 interruptions." Immediately legible to any developer paying for Claude.
+
+| Feature | Status |
+|---|---|
+| Cost calculation — tokens used × model rate, projected cost without askr checkpointing | 🔲 Todo |
+| Session timeline image — context % curve, trigger fire point, goal completions marked | 🔲 Todo |
+| Summary card — time saved, tokens saved, cost delta, files changed, goals completed | 🔲 Todo |
+| Discord file attachment — send PNG via multipart/form-data, delete temp file after | 🔲 Todo |
+| Fires on checkpoint (context + quota triggers) and goal completion | 🔲 Todo |
+| Morning report image — daily rollup of all sessions, total saved, goals shipped | 🔲 Todo |
+
+**Done when:** A checkpoint fires, Discord receives a dark-card PNG with session stats and cost savings that's worth screenshotting and posting.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
