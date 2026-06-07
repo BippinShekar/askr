@@ -1,17 +1,17 @@
-Last updated: 2026-06-07 08:43
+Last updated: 2026-06-07 21:49
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) that Claude can resume from, solving the problem of losing context and momentum when a session ends or hits limits.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or repeating analysis.
 
 ## What's In Flight
 
-- Phase 3.7: Rich visual Disco mode for session monitoring (committed, in roadmap)
-- Phase 3.8: Permission continuity across auto-started sessions (identified blocker: "allow once" grants from .claude/settings.json do not persist when Claude auto-resumes, breaking autonomous behavior)
-- Context tracking mismatch investigation: askr showed 53% usage in external repo but auto-compact still fired, indicating JSONL monitoring or session_stats.json updates lag behind actual token burn
-- Terminal auto-compact progress bar confirmed as available diagnostic tool (shows % till compaction and progress), but deemed secondary since askr's safeguards already stop well before auto-compact triggers
+- Progress/ETA indicators for `askr init` command when initializing large repositories. Current implementation shows step-by-step listing but lacks visual feedback for long operations.
+- Verification that Claude Code's native auto-compact progress bar is not a useful data source for askr monitoring (confirmed: it only appears in repos without askr, where askr's preventative firing at 75% context would never allow it to trigger).
+- Bash grep search results pending review to audit current implementation for existing progress/spinner/ETA/status tracking in cmd_init and related functions.
 
 ## Key Decisions Made
 
-- Append-only decision log in decisions.md; never edit existing lines, only add new ones with timestamp and reasoning
-- State persisted in git via checkpoint.py before exhaustion; handover docs generated on session
+- Askr fires preventatively at 75% context exhaustion to avoid triggering Claude Code's native auto-compact. This design means askr-enabled repos never reach the state where Claude's progress bar appears.
+- State is append-only in decisions.md; historical decisions are never edited, only new ones appended with timestamp and reasoning.
+- Session state persists in git via checkpoint commits,
