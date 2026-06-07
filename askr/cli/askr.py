@@ -312,8 +312,6 @@ def _generate_architecture_from_snapshot(developer: str):
         # Generate architecture.md
         arch_path = state_path("architecture.md")
         if not os.path.exists(arch_path):
-            console.print("  [dim]generating architecture.md from codebase...[/dim]")
-
             prompt = f"""Write architecture.md for this codebase. Be factual and brief. Only describe what is actually in the code.
 
 CONTEXT:
@@ -337,12 +335,13 @@ Format exactly as:
 
 No placeholders. No speculation. Only what is in the code."""
 
-            arch_content = call_claude(
-                "You write concise, factual technical documentation.",
-                prompt,
-                mode="default",
-                query_preview="architecture.md generation"
-            )
+            with console.status("  generating architecture.md from codebase...", spinner="dots"):
+                arch_content = call_claude(
+                    "You write concise, factual technical documentation.",
+                    prompt,
+                    mode="default",
+                    query_preview="architecture.md generation"
+                )
             # strip leading # Architecture header if LLM added one - writer adds its own
             lines = arch_content.strip().splitlines()
             if lines and lines[0].strip().lower().startswith("# architecture"):
