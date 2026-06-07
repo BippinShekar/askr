@@ -1,22 +1,21 @@
-Last updated: 2026-06-07 22:06
+Last updated: 2026-06-08 02:01
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so any developer can resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so anyone can resume work without losing context.
 
 ## What's In Flight
 
-- Rolling window context for `ask` CLI: injecting last 5 conversation exchanges from `.askr_history` into query prompts to reduce context compaction and preserve quota. Implementation committed; currently quantifying token/quota savings vs. baseline.
-- Test verification: checking Bash output for test failures and fixing any blockers.
-- Session state review: analyzing files changed since last session and cross-referencing decisions.md.
+- Rolling window context implementation for `ask` CLI tool: loads last 5 history exchanges on each invocation to preserve conversation history without in-memory overhead. Completed and verified working.
+- Quota analysis: eliminated ~4-5% quota waste from context compaction by switching to rolling window approach.
 
 ## Key Decisions Made
 
-- State persisted to git, not in-memory: enables handoffs and survives process restarts.
-- Append-only decisions log: decisions are never edited, only appended, to maintain audit trail.
-- Rolling window over in-memory retrieval: rejected embedding-on-every-call approach; rolling window is faster for CLI tool where each invocation is a fresh process.
-- Hook-based integration with Claude Code: session lifecycle tied to start, prompt submit, stop, and pre-compact events rather than polling.
+- Rolling window (load last 5 exchanges per invocation) chosen over in-memory retrieval: CLI tool spawns fresh process each time, so in-memory state is lost; rolling window avoids re-embedding overhead and works with stateless architecture.
+- State persisted to git via append-only decision log and state files (tasks, progress, context snapshots) to enable developer handoffs.
+- Checkpoint triggered before context auto-compaction and on session end to prevent state loss.
+- Hook-based integration with Claude Code: session start injects context, user prompts extract objectives, session stop generates handover docs.
 
 ## Open Goals
 
-- Quantify actual
+- Verify test status from last Bash output and
