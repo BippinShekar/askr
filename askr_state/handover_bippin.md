@@ -1,20 +1,19 @@
 # Handover: bippin
 
-Last updated: 2026-06-07 21:57
+Last updated: 2026-06-07 22:00
 
 ## Task
-Implement a spinner progress indicator for the `_generate_architecture_from_snapshot` call during `askr init` on large repositories, and investigate why askr's context-aware assistance is not functioning properly despite having the necessary context available.
+Implement in-memory tokenization and retrieval system for `.askr_history` conversation context to replace stateless query handling in the `ask` CLI tool.
 
 ## Status
-- Spinner implementation completed in `/Users/bippin/Desktop/askr/askr/cli/askr.py` — replaced silent print+Haiku call with Rich spinner that displays during architecture.md generation and shows completion message when done
-- Change committed to git with message "feat: spinner on architecture.md gene"
-- `.askr_history` file exists at `/Users/bippin/Desktop/askr/.askr_history` and contains conversation history showing context flow issues
-- Confirmed that `implementation_state.md` generation requires no spinner (file manipulation only, no LLM call)
-- Identified that the slow operation during init is the Haiku call in `_generate_architecture_from_snapshot` (20-30 seconds on large repos)
+- `.askr_history` file exists at `/Users/bippin/Desktop/askr/.askr_history` and contains previous conversation context that is currently ignored by `ask` queries
+- Current behavior: every query starts fresh, reads codebase snapshot only, does not reference prior conversation history
+- Problem identified: `ask` is completely stateless — no mechanism to pass `.askr_history` as context to LLM calls
+- Architecture: `ask` reads from codebase snapshot but has no integration point for conversation history retrieval
+- File location confirmed: `/Users/bippin/Desktop/askr/askr/cli/askr.py` is the main CLI entry point
 
 ## Failed Approaches
-- Suggested adding ETA indicator to init progress — rejected as unnecessary complexity; spinner-only solution is sufficient
-- Considered adding spinner to `implementation_state.md` generation — rejected after verification that this step is instant (file manipulation, no LLM call)
+- Rolling window approach was mentioned but not pursued — session concluded that in-memory tokenization + retrieval is faster and more viable pre-release
 
 ## Next Action
-Examine `/Users/bippin
+Design and implement in-memory token-aware retrieval system that loads `.askr_history`, tokenizes entries, and injects relevant prior context into LLM prompts during query execution. Start by modifying the query handler in `/Users/bippin/Desktop/askr/askr/cli/askr.py` to
