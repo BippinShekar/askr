@@ -1,19 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-07 22:00
+Last updated: 2026-06-07 22:04
 
 ## Task
-Implement in-memory tokenization and retrieval system for `.askr_history` conversation context to replace stateless query handling in the `ask` CLI tool.
+Implement rolling window conversation history into the `ask` CLI tool so that queries can reference previous interactions without requiring in-memory retrieval or persistent processes.
 
 ## Status
-- `.askr_history` file exists at `/Users/bippin/Desktop/askr/.askr_history` and contains previous conversation context that is currently ignored by `ask` queries
-- Current behavior: every query starts fresh, reads codebase snapshot only, does not reference prior conversation history
-- Problem identified: `ask` is completely stateless — no mechanism to pass `.askr_history` as context to LLM calls
-- Architecture: `ask` reads from codebase snapshot but has no integration point for conversation history retrieval
-- File location confirmed: `/Users/bippin/Desktop/askr/askr/cli/askr.py` is the main CLI entry point
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Added Rich spinner animation during `architecture.md` generation from Haiku LLM calls (completed in previous step)
+- `/Users/bippin/Desktop/askr/askr/qa/pipeline.py`: Added `_load_recent_history()` function to read last 5 interactions from `.askr_history` file and injected rolling window context into the prompt pipeline (committed)
+- `.askr_history` file exists at `/Users/bippin/Desktop/askr/.askr_history` and contains conversation transcript that was previously being ignored by `ask` queries
+- Decision finalized: rolling window approach chosen over in-memory tokenization/retrieval due to CLI process lifecycle constraints (each invocation is stateless)
 
 ## Failed Approaches
-- Rolling window approach was mentioned but not pursued — session concluded that in-memory tokenization + retrieval is faster and more viable pre-release
+- In-memory retrieval with tokenization: rejected as slower than rolling window since each CLI invocation would require re-loading and re-embedding history anyway
 
 ## Next Action
-Design and implement in-memory token-aware retrieval system that loads `.askr_history`, tokenizes entries, and injects relevant prior context into LLM prompts during query execution. Start by modifying the query handler in `/Users/bippin/Desktop/askr/askr/cli/askr.py` to
+Verify that the rolling window history injection works end-to-end by running `askr ask` with a multi-turn query sequence and confirming the second query can reference context

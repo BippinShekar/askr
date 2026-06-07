@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [22:04] Ran: git add askr/qa/pipeline.py && git commit -m "feat: rolling window of last 5 his
+- [22:04] Modified: /Users/bippin/Desktop/askr/askr/qa/pipeline.py
+- [22:03] Modified: /Users/bippin/Desktop/askr/askr/qa/pipeline.py
+- [22:03] Ran: find /Users/bippin/Desktop/askr/askr -name "pipeline.py" -o -name "qa.py" | grep
 - [21:56] Ran: cat /Users/bippin/Desktop/askr/.askr_history
 - [21:56] Ran: find /Users/bippin/Desktop/askr -name ".askr_history" | head -5; ls ~/.askr_hist
 - [21:52] Ran: git add askr/cli/askr.py && git commit -m "feat: spinner on architecture.md gene
