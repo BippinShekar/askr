@@ -218,6 +218,23 @@ The killer stat: "without askr this session would have cost $X and hit the conte
 
 ---
 
+## Phase 3.8 - Permission Continuity
+
+**Goal:** Auto-launched sessions never prompt for tool permissions. Full autonomy means zero interruptions — not just "new session starts" but "new session runs without asking you anything."
+
+The problem: Claude Code permissions granted as "allow once" die with the session. Every auto-launched session starts cold and re-prompts for the same tools. This breaks unattended overnight runs the moment the first Bash or Edit call needs approval.
+
+| Feature | Status |
+|---|---|
+| `askr init` writes a baseline `allowedTools` list to `.claude/settings.json` covering tools needed for autonomous operation (Bash, Edit, Write, Read, etc.) | 🔲 Todo |
+| Stop hook reads tool usage from session JSONL, adds any newly-used tools to `.claude/settings.json` so next session inherits them | 🔲 Todo |
+| `askr launch` shows which tools are pre-approved and which would still prompt | 🔲 Todo |
+| Auto-launched sessions (from goal add or context trigger) get `--allowedTools` flag populated from settings at launch time | 🔲 Todo |
+
+**Done when:** askr starts a new session autonomously overnight, runs Bash, Edit, Write, and git push without a single permission prompt.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
