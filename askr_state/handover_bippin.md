@@ -1,24 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-07 08:25
-
-# Handover Document
+Last updated: 2026-06-07 08:41
 
 ## Task
-Design and implement permission inheritance for auto-started Claude Code sessions so that new sessions spawned by askr inherit tool permissions from their parent session, eliminating the need to re-approve permissions manually.
+Design and implement a permission inheritance system for auto-started Claude Code sessions in askr, plus explore token burn metrics during auto-compact to quantify savings.
 
 ## Status
-- Roadmap updated with Phase 3.7 (rich visual Discord reports showing token/cost savings) — committed and pushed
-- Roadmap updated with Phase 3.8 (permission continuity across auto-started sessions) — committed and pushed
-- Permission system identified: `.claude/settings.json` and `.claude/settings.local.json` store tool grants
-- Behavior confirmed: "always allow" permissions persist across sessions; "allow once" permissions die with session termination
-- Current blocker: mechanism for passing parent session permissions to child session not yet designed or implemented
+- Roadmap updated with Phase 3.7 (rich visual Discord report showing context savings) and Phase 3.8 (permission continuity across sessions) — committed and pushed to git
+- Permission architecture identified: `.claude/settings.json` and `.claude/settings.local.json` store tool grants; "always allow" persists across sessions, "allow once" dies with session termination
+- Current setup already stops context compression far before auto-compact threshold
+- Terminal displays auto-compact progress bar and percentage till trigger — feasibility of leveraging this data for token burn analysis under investigation
+- Discord webhook integration approach finalized: generate PNG directly with matplotlib, send as multipart/form-data file attachment, delete temp file (no screenshot tool needed)
 
 ## Failed Approaches
-- Screenshot-based reporting rejected in favor of direct PNG generation via matplotlib sent as Discord file attachment with webhook multipart/form-data upload
+- Basic text-only Discord report — rejected in favor of enriched visual showing session cost without askr vs. cost with askr, context timeline, and token savings
+- Screengrab approach for visualization — replaced with direct matplotlib PNG generation and webhook file upload
 
 ## Next Action
-Design the permission inheritance mechanism: determine how to read parent session permissions from `.claude/settings.json`/`.claude/settings.local.json`, serialize them into the handover document passed to the auto-started child session, and apply them on child session initialization. Document the approach in Phase 3.8 implementation plan before coding.
-
-## Open Questions
-- How should permission inheritance handle conflicts (
+Investigate and quantify token burn during auto-compact by analyzing the progress bar and percentage data shown in the terminal — determine if this metric can be extracted and displayed in
