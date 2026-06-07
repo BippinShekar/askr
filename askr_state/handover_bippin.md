@@ -1,20 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-07 08:15
+Last updated: 2026-06-07 08:25
+
+# Handover Document
 
 ## Task
-Design and implement Phase 3.7: rich visual Discord reports showing context compression savings, and Phase 4: settings inheritance for auto-spawned Claude Code sessions.
+Design and implement permission inheritance for auto-started Claude Code sessions so that new sessions spawned by askr inherit tool permissions from their parent session, eliminating the need to re-approve permissions manually.
 
 ## Status
-- roadmap.md: Updated with Phase 3.7 entry (committed and pushed to git)
-- Phase 3.7 scope finalized: Generate PNG visualization showing per-session token/cost savings with askr vs without, context timeline bar, and concrete value prop (e.g. "$X saved, context managed automatically, 0 interruptions")
-- Visualization approach: matplotlib-generated PNG sent directly via Discord webhook multipart/form-data, temp file deleted after send (no screenshot approach needed)
-- Phase 4 identified as new phase: auto-spawned Claude Code sessions must inherit session settings/permissions from parent session instead of requiring re-entry
-- Context trigger testing: User has not naturally hit 75% context limit on small sessions; deliberate stress test needed before Phase 4 work (can temporarily drop CONTEXT_TRIGGER to 0.3 in lifecycle.py to force it)
+- Roadmap updated with Phase 3.7 (rich visual Discord reports showing token/cost savings) — committed and pushed
+- Roadmap updated with Phase 3.8 (permission continuity across auto-started sessions) — committed and pushed
+- Permission system identified: `.claude/settings.json` and `.claude/settings.local.json` store tool grants
+- Behavior confirmed: "always allow" permissions persist across sessions; "allow once" permissions die with session termination
+- Current blocker: mechanism for passing parent session permissions to child session not yet designed or implemented
 
 ## Failed Approaches
-- Basic text-based Discord reports: rejected in favor of enriched PNG visualizations for impact
-- Screenshot-based approach: rejected in favor of direct matplotlib PNG generation and webhook upload
+- Screenshot-based reporting rejected in favor of direct PNG generation via matplotlib sent as Discord file attachment with webhook multipart/form-data upload
 
 ## Next Action
-Implement Phase 3.7: Create visualization module that generates
+Design the permission inheritance mechanism: determine how to read parent session permissions from `.claude/settings.json`/`.claude/settings.local.json`, serialize them into the handover document passed to the auto-started child session, and apply them on child session initialization. Document the approach in Phase 3.8 implementation plan before coding.
+
+## Open Questions
+- How should permission inheritance handle conflicts (
