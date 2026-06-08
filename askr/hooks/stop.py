@@ -193,7 +193,6 @@ def main():
         return  # skip normal stop checkpoint — context checkpoint already did it
 
     from askr.session.checkpoint import create_checkpoint
-    from askr.state.config import load_project_path
     result = create_checkpoint(
         trigger_type="stop",
         developer=developer,
@@ -202,7 +201,12 @@ def main():
 
     completed_goals = result.get("completed_goals", [])
     duration_seconds = result.get("duration_seconds", 0)
-    _broadcast_session_end(developer, completed_goals, load_project_path(), duration_seconds)
+
+    # Only send a card for meaningful stops — goals completed or session ran >5 min.
+    # Suppresses noise from casual conversation turns and quick tests.
+    if completed_goals or duration_seconds >= 300:
+        _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds)
+
     _advance_launch_goal()
 
 
