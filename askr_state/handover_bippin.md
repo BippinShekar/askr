@@ -1,19 +1,26 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 23:38
+Last updated: 2026-06-08 23:39
 
-Task
-Refine the YC founder profile "hacked a system" essay question response to accurately reflect how the user bypassed college attendance/exam requirements through direct persuasion rather than payment.
+## Task
+Refine the YC founder profile "hacked a system" essay answer to match the applicant's voice: confident, borderline arrogant, but backed by real execution.
 
-Status
-- Essay question identified: "Please tell us about a time you most successfully hacked some (non-computer) system to your advantage."
-- Final narrative settled: User told professor in 1st year to stop calling him to attend classes; skipped numerous exams while building 8bit company; 4-year degree took 5 years to complete; passed exams on external marks alone (no internal marks awarded as penalty for brazenness, unlike peers who paid professors for internal mark inflation)
-- Story arc confirmed as stronger than initial 3rd-year version — 1st year demonstrates earlier conviction and higher stakes
-- Key differentiator identified: user's approach was transparent/confrontational vs. transactional (payment-based) methods used by other students
+## Status
+Final essay answer settled on this version (no markdown, no emdashes):
 
-Failed Approaches
-- Initial framing as 3rd-year exemption — user corrected to 1st year, which is more compelling
-- Generic "shipped real product" closing — user provided specific context about 5-year timeline and external-only exam passage
+"In my first year, I told my professor flat out: don't call me to attend these classes. Most students bribe for internal marks. I refused, fought through externals alone, skipped exams to build 8bit, turned a 4-year degree into 5 years. Graduated with the highest placement package my college had ever seen."
 
-Next Action
-Write the final polished version of the essay response incorporating: 1st year timing, explicit refusal to attend classes, exam-skipping during 8bit building
+Key context locked in:
+- 1st year, not 3rd year
+- Refused the bribe route (internal marks) that other students use
+- Took 5 years for 4-year degree due to exam skips
+- Highest placement package outcome proves the bet paid off
+- Tone: direct confidence without apology, arrogance grounded in results
+
+## Failed Approaches
+- Using emdashes for pacing (rejected for directness)
+- Softer framing like "I was more valuable building" (rejected for applicant's actual voice)
+- Removing the bribe context (rejected because it's the sharpest part of the story)
+
+## Next Action
+Copy the final essay answer into the YC

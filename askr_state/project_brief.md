@@ -1,19 +1,17 @@
-Last updated: 2026-06-08 23:38
+Last updated: 2026-06-08 23:39
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context window or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without context loss or repeated setup.
 
 ## What's In Flight
 
-- Emergency checkpoint implementation in `askr/session/checkpoint.py` — detecting safe interruption points and persisting state before context auto-compaction triggers
-- Integration validation across all hooks (`session_start.py`, `user_prompt_submit.py`, `stop.py`, `pre_compact.py`) to ensure state flows correctly through session lifecycle
-- Test suite fixes — verifying all unit tests pass after recent changes to state writer and context loader
-- Handover document generation in `stop.py` — ensuring outgoing developer context is complete and actionable for next session
+- Emergency checkpoint implementation: completing the safe_pause validation logic and pre_compact hook integration to catch exhaustion before Claude Code's automatic context compaction triggers.
+- State persistence refinement: ensuring reader.py and writer.py correctly load and update task/decision/progress files across session boundaries.
+- Test suite validation: verifying all unit tests pass after recent changes and fixing any failures from the latest git diff.
 
 ## Key Decisions Made
 
-- State persisted as append-only git commits, not database — enables full audit trail and works offline
-- Forecast module predicts which limit (context or quota) hits first — allows proactive checkpoint before either exhausts
-- Safe pause validation required before any checkpoint — prevents interrupting mid-transaction or during critical operations
-- Hook injection at Claude Code boundaries (start, prompt submit, stop, pre-compact) — minimal coupling, maximum observability
+- Append-only decision log in decisions.md: all product and architectural choices are recorded with timestamp, author, and reasoning. Never edit existing lines—only append. This creates an auditable trail for handoffs.
+- Git as source of truth for state: all checkpoints, task updates, and progress snapshots are committed to the project repo, not stored in external databases. Enables offline work and natural version control.
+- Hook-based integration with Claude Code: rather than modifying Claude's internals, Askr injects at session_start, user_prompt_submit,
