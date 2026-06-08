@@ -1,20 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 23:48
+Last updated: 2026-06-08 23:52
 
-Task
-Refine YC application founder profile answers for technical co-founder with focus on the "hacked a system" question and "things you've built" question.
+# Handover Document
 
-Status
-Two YC application questions have been finalized:
+## Task
+Refine the answer to "Tell us about things you've built before" for a YC application, adding technical depth to existing project descriptions (Askr, AI Audit Engine, Rex, Research Buddy) and ensuring they demonstrate capability to back up claims with evidence.
 
-1. "Tell us about a time you most successfully hacked some (non-computer) system to your advantage."
-Final answer: "In my first year I told my professor straight up: stop calling me to attend these useless classes. Every other student bribes for internal marks. I didn't. Fought through externals alone, skipped enough exams building a company that a 4-year degree took me 5 years. Graduated with the highest placement package my college had ever seen." (No em-dashes, confident/arrogant tone with backing belief)
+## Status
+- Askr (open source): Identified as strongest entry. Watches Claude Code sessions, checkpoints before context degradation, commits structured project state to git, resumes automatically. Repos exist on desktop.
+- AI Audit Engine: Functional but lacks quantified impact metric (clients, revenue, bookings). Currently reads as marketing copy without backing evidence.
+- Rex: Architecture documented in ARCHITECTURE.md on desktop. Exists as completed project.
+- Research Buddy: Orchestrator graph implementation exists at /Users/bippin/Desktop/Research_Buddy/orchestrator/graph.py.
+- Leaps: Current YC-bound startup. campusedecision.in website exists and contains relevant context.
+- All project code exists in /Users/bippin/Desktop/ folders.
 
-2. "Tell us about things you've built before. For example apps you've built, websites, open source contributions. Include URLs if possible."
-Partial answer started: Askr (Open source) — a tool that watches Claude Code sessions, checkpoints before context degradation, commits structured project state to git, and resumes automatically.
+## Failed Approaches
+- Using emdashes in personal narrative (rejected in favor of direct, confident tone).
+- Generic marketing language for AI Audit Engine without technical specifics or metrics (identified as insufficient).
 
-Co-founder context confirmed: User is CTO (51% equity), CEO co-founder filling their own section separately. User's role is technical founder.
-
-Failed Approaches
-Suggesting em-dashes in the "hacked a system" answer — user explicitly
+## Next Action
+Access the three project repositories (
