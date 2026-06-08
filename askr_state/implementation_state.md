@@ -9,6 +9,24 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:11] Ran: python3 - <<'EOF'
+import sys
+sys.path.insert(0, ".")
+
+# Re-generate the cards
+fr
+- [20:09] Ran: cat $(which askr) | head -5
+- [20:07] Ran: which python3.11 python3.12 python3.13 2>/dev/null; ls ~/Library/Python/*/bin/py
+- [20:06] Ran: find /Users/bippin -name "python3" -path "*/bin/python3" 2>/dev/null | head -5 &
+- [20:04] Ran: (cat .python-version 2>/dev/null || true) && (ls .venv/bin/python 2>/dev/null ||
+- [20:04] Ran: python3 - <<'EOF'
+import sys
+sys.path.insert(0, ".")
+from askr.session.report_im
+- [19:39] Ran: which python3 && python3 -m pip install matplotlib --quiet 2>&1 | tail -3
+- [19:39] Ran: python3 -c "
+import sys; sys.path.insert(0, '.')
+from askr.session.report_image 
 - [19:38] Modified: /Users/bippin/Desktop/askr/askr/session/report_image.py
 - [19:38] Modified: /Users/bippin/Desktop/askr/askr/session/report_image.py
 - [19:38] Modified: /Users/bippin/Desktop/askr/askr/session/report_image.py
