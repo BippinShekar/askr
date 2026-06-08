@@ -1,18 +1,23 @@
-Last updated: 2026-06-08 20:12
+Last updated: 2026-06-08 20:15
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or repeating analysis.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Removing accent bar visual elements from card rendering functions in `report_image.py` (session_card and morning_report_card). Changes completed; test snapshot generation in progress using python3.11.
-- Emergency checkpoint implementation in `safe_pause.py` — needs completion and validation against test suite.
-- Test suite verification — last run had failures; need to identify and fix blockers.
+- Emergency checkpoint implementation — validating safe interruption points before context auto-compaction triggers
+- Test case snapshot generation for all 6 report card scenarios (stop_auto, stop, context, quota, manual, emergency) — completed and sent to Discord for UI validation
+- State persistence layer — reader/writer modules managing task/decision/progress files across session boundaries
 
 ## Key Decisions Made
 
-- State persists in git as append-only decision logs and structured state files (tasks, progress, context snapshots). This enables handoff documentation and audit trails.
-- Session monitoring is forecast-driven: `forecast.py` predicts which limit (context or quota) hits first, allowing proactive checkpointing before exhaustion.
-- Claude Code integration via hooks at four critical points: session start (inject context), prompt submit (extract objectives), session stop (generate handover docs), and pre-compact (emergency checkpoint).
-- Python 3.11+ required for environment consistency; multiple system Python
+- State stored in git as append-only decision logs and structured YAML files rather than database — enables code review, blame tracking, and offline access
+- Checkpoint triggered before Claude Code's automatic context compaction, not after — prevents data loss during auto-recovery
+- Session hooks injected at four points: start (context injection), prompt submit (objective extraction), stop (handover docs), pre-compact (emergency save) — covers all critical lifecycle transitions
+- Report cards use matplotlib for visual token forecasting — accent bars removed, consistent left margins at x=0.03 for readability
+
+## Open Goals
+
+- Resume emergency checkpoint implementation and verify test status from last run
+- Review implementation
