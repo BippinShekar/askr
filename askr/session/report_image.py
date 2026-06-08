@@ -171,20 +171,13 @@ def session_card(
         sp.set_linewidth(0.8)
         sp.set_visible(True)
 
-    # Left accent bar
-    ax.add_patch(mpatches.Rectangle(
-        (0, 0), 0.016, 1,
-        facecolor=accent, edgecolor="none",
-        transform=ax.transAxes, clip_on=False, zorder=10,
-    ))
-
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     # Header
-    ax.text(0.043, 0.948, "askr", color=accent, fontsize=10,
+    ax.text(0.03, 0.948, "askr", color=accent, fontsize=10,
             fontweight="bold", va="top", transform=ax.transAxes,
             fontfamily="monospace")
-    ax.text(0.043, 0.908, title, color=_WHITE, fontsize=18,
+    ax.text(0.03, 0.908, title, color=_WHITE, fontsize=18,
             fontweight="bold", va="top", transform=ax.transAxes)
     ax.text(0.972, 0.948, f"{developer}  ·  {ts}",
             color=_MUTED, fontsize=9, va="top", ha="right",
@@ -223,7 +216,7 @@ def session_card(
     ax.axhline(y=0.360, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
 
     # Goals + Files
-    L, R, y0 = 0.043, 0.52, 0.315
+    L, R, y0 = 0.03, 0.52, 0.315
 
     if goals:
         ax.text(L, y0, "Goals completed", color=_GREEN, fontsize=8,
@@ -323,16 +316,10 @@ def morning_report_card(
         sp.set_linewidth(0.8)
         sp.set_visible(True)
 
-    ax.add_patch(mpatches.Rectangle(
-        (0, 0), 0.016, 1,
-        facecolor=_BLUE, edgecolor="none",
-        transform=ax.transAxes, clip_on=False, zorder=10,
-    ))
-
-    ax.text(0.043, 0.948, "askr", color=_BLUE, fontsize=10,
+    ax.text(0.03, 0.948, "askr", color=_BLUE, fontsize=10,
             fontweight="bold", va="top", transform=ax.transAxes,
             fontfamily="monospace")
-    ax.text(0.043, 0.908, "MORNING REPORT", color=_WHITE, fontsize=18,
+    ax.text(0.03, 0.908, "MORNING REPORT", color=_WHITE, fontsize=18,
             fontweight="bold", va="top", transform=ax.transAxes)
     ax.text(0.972, 0.948, date, color=_MUTED, fontsize=9,
             va="top", ha="right", transform=ax.transAxes)
@@ -366,7 +353,7 @@ def morning_report_card(
 
     ax.axhline(y=0.360, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
 
-    L, R, y0 = 0.043, 0.52, 0.315
+    L, R, y0 = 0.03, 0.52, 0.315
 
     if goals_completed:
         ax.text(L, y0, "Shipped", color=_GREEN, fontsize=8,

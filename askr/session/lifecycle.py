@@ -640,6 +640,22 @@ def run_daemon():
                     # project_path written by PostToolUse hook (uses os.getcwd — always correct).
                     # Fall back to global config only if stats predate this fix.
                     project_path = stats.get("project_path") or fallback_path
+
+                    # Multi-repo guard: verify the stats belong to a currently active JSONL
+                    # in this project. If the JSONL for project_path hasn't been updated in
+                    # the last 3 minutes, these stats are stale from a different repo's session
+                    # that last wrote session_stats.json. Skip to avoid triggering in the wrong repo.
+                    try:
+                        from askr.session.monitor import _find_active_jsonl
+                        jsonl = _find_active_jsonl(project_path)
+                        jsonl_age = time.time() - os.path.getmtime(jsonl) if jsonl else 999
+                    except Exception:
+                        jsonl_age = 999
+                    if jsonl_age > 180:
+                        _log(f"skip: stats project_path={project_path} but its JSONL is {int(jsonl_age)}s stale — likely a different repo's stats")
+                        time.sleep(POLL_ACTIVE)
+                        continue
+
                     ctx_pct    = stats.get("context_pct", 0)
                     ctx_label  = stats.get("context_label", "ok")
                     quota_pct  = stats.get("quota_pct")    # real % from /api/oauth/usage
@@ -661,7 +677,7 @@ def run_daemon():
                         last_trigger_at = time.time()
                     else:
                         q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
-                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str}")
+                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str} project={project_path}")
 
                 time.sleep(POLL_ACTIVE)
             else:

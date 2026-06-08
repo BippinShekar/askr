@@ -63,69 +63,20 @@ def get_session_cost_summary(project_path: str = "") -> dict:
       - turns: number of assistant turns
     """
     stats = _load_stats()
-    model = stats.get("model", "claude-sonnet-4-6")
+    model          = stats.get("model", "claude-sonnet-4-6")
     context_tokens = stats.get("context_tokens", 0)
+    output_tokens  = stats.get("output_tokens", 0)
     context_window = stats.get("context_window", 200_000)
     context_pct    = stats.get("context_pct", 0.0)
     turns          = stats.get("turns", 0)
 
-    # Try to get per-turn token breakdown from JSONL for more accurate cost
-    output_tokens = 0
-    input_tokens_per_turn: list[int] = []
-    output_tokens_per_turn: list[int] = []
-
-    try:
-        from askr.session.monitor import _find_active_jsonl
-        jsonl_path = _find_active_jsonl(project_path) if project_path else None
-        if not jsonl_path and project_path:
-            pass
-        elif jsonl_path:
-            with open(jsonl_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except Exception:
-                        continue
-                    if entry.get("type") != "assistant":
-                        continue
-                    usage = entry.get("message", {}).get("usage", {})
-                    if not usage:
-                        continue
-                    inp = (
-                        usage.get("input_tokens", 0)
-                        + usage.get("cache_read_input_tokens", 0)
-                        + usage.get("cache_creation_input_tokens", 0)
-                    )
-                    out = usage.get("output_tokens", 0)
-                    input_tokens_per_turn.append(inp)
-                    output_tokens_per_turn.append(out)
-    except Exception:
-        pass
-
-    if output_tokens_per_turn:
-        output_tokens = sum(output_tokens_per_turn)
-        # Actual cost = sum of each turn's (input + output)
-        actual_cost = sum(
-            tokens_to_usd(i, o, model)
-            for i, o in zip(input_tokens_per_turn, output_tokens_per_turn)
-        )
-        # Projected without checkpointing: each turn sends a growing context.
-        # If we had not checkpointed, context would compound linearly.
-        # Approximation: average turn context × turns × 1.5 growth factor
-        avg_in = sum(input_tokens_per_turn) / len(input_tokens_per_turn) if input_tokens_per_turn else context_tokens
-        projected_in = int(avg_in * len(input_tokens_per_turn) * 1.5)
-        projected_out = output_tokens
-        projected_cost = tokens_to_usd(projected_in, projected_out, model)
-    else:
-        # Fallback: estimate from context tokens
-        actual_cost = tokens_to_usd(context_tokens, context_tokens // 4, model)
-        projected_cost = actual_cost * 2.0
+    # Fallback: estimate output from context if not yet tracked in stats
+    if not output_tokens:
         output_tokens = context_tokens // 4
 
-    savings = max(0.0, projected_cost - actual_cost)
+    actual_cost    = tokens_to_usd(context_tokens, output_tokens, model)
+    projected_cost = actual_cost * 2.0
+    savings        = max(0.0, projected_cost - actual_cost)
 
     return {
         "model": model,

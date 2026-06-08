@@ -135,6 +135,7 @@ def _write_session_stats():
             "project_path": project_path,
             "context_pct": round(stats.context_pct, 4),
             "context_tokens": stats.context_tokens,
+            "output_tokens": stats.output_tokens,
             "context_window": stats.context_window,
             "context_label": forecast.context_label,
             "turns": stats.turns,

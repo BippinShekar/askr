@@ -29,6 +29,7 @@ class SessionStats:
     session_id:     str
     session_path:   str
     context_tokens: int
+    output_tokens:  int
     context_window: int
     context_pct:    float   # 0.0 to 1.0
     turns:          int
@@ -91,6 +92,7 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
 
     model = "claude-sonnet-4-6"
     tokens_per_turn = []
+    output_tokens   = 0
 
     for e in entries:
         if e.get("type") != "assistant":
@@ -103,6 +105,7 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
         if m:
             model = m
         tokens_per_turn.append(_total_context_tokens(usage))
+        output_tokens += usage.get("output_tokens", 0)
 
     context_tokens = tokens_per_turn[-1] if tokens_per_turn else 0
     context_window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
@@ -112,6 +115,7 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
         session_id=session_id,
         session_path=jsonl_path,
         context_tokens=context_tokens,
+        output_tokens=output_tokens,
         context_window=context_window,
         context_pct=context_pct,
         turns=len(tokens_per_turn),
