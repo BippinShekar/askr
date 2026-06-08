@@ -290,6 +290,7 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
     # Signal the VS Code/Cursor extension to open an integrated terminal.
+    notification_written = False
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
@@ -300,14 +301,40 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
-        _log("wrote goal_launch notification for VS Code extension")
+        notification_written = True
+        _log("wrote goal_launch notification — extension will open IDE terminal if active")
     except Exception as e:
         _log(f"notification write failed: {e}")
 
-    # The VS Code/Cursor extension handles the goal_launch notification above and
-    # opens an integrated terminal. Only fall back to headless if the extension
-    # isn't installed (e.g. running without an IDE).
-    _log(f"goal_launch notification written — extension will open IDE terminal for {project_path}")
+    # Spawn a background process: after 6 seconds check if the extension marked the
+    # notification shown. If not (extension not loaded/reloaded), open Terminal.app.
+    # This way a reloaded extension gets sole control; an unloaded one gracefully
+    # falls back to Terminal.app without blocking the caller.
+    safe_prompt = prompt_arg.replace("'", "").replace('"', "").replace("\\", "")
+    notif_path  = _NOTIFICATION_PATH
+    fallback_script = (
+        f"import time, json, os, subprocess\n"
+        f"time.sleep(6)\n"
+        f"try:\n"
+        f"    with open({repr(notif_path)}) as _f:\n"
+        f"        _d = json.load(_f)\n"
+        f"    if _d.get('shown'): exit(0)\n"
+        f"except Exception: pass\n"
+        f"_cmd = 'cd {project_path} && {claude_bin} \"{safe_prompt}\"'\n"
+        f"_script = 'tell application \"Terminal\"\\n  do script \"' + _cmd + '\"\\n  activate\\nend tell'\n"
+        f"subprocess.run(['osascript', '-e', _script], timeout=5, "
+        f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+    )
+    try:
+        subprocess.Popen(
+            [sys.executable, "-c", fallback_script],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _log("fallback watcher spawned — Terminal.app fires in 6s if extension doesn't handle it")
+    except Exception as e:
+        _log(f"fallback watcher spawn failed: {e}")
 
 
 def _wait_for_reset(reset_at_iso: str):
