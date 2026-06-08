@@ -434,20 +434,92 @@ def _notify_discord_goals_completed(goals: list):
         pass
 
 
+def _context_history_for_session(project_path: str) -> list[float]:
+    """Read per-turn context % from the active JSONL."""
+    try:
+        from askr.session.monitor import _find_active_jsonl, _total_context_tokens, _MODEL_CONTEXT_WINDOWS, _DEFAULT_CONTEXT_WINDOW
+        jsonl_path = _find_active_jsonl(project_path)
+        if not jsonl_path:
+            return []
+        history = []
+        model = "claude-sonnet-4-6"
+        with open(jsonl_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                if entry.get("type") != "assistant":
+                    continue
+                msg = entry.get("message", {})
+                m = msg.get("model", "")
+                if m:
+                    model = m
+                usage = msg.get("usage", {})
+                if usage:
+                    tokens = _total_context_tokens(usage)
+                    window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
+                    history.append(tokens / window if window > 0 else 0.0)
+        return history
+    except Exception:
+        return []
+
+
 def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
     # stop trigger gets its own richer broadcast from stop.py (Stage 5)
     if trigger_type == "stop":
         return
     try:
-        from askr.clients.discord import send_message
+        from askr.state.config import load_project_path
+        from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
+        from askr.session.report_image import session_card
+        from askr.clients.discord import send_file, send_message
+        from askr.state.analytics import today_summary
+
+        project_path = load_project_path()
+        cost_summary = get_session_cost_summary(project_path)
+        record_checkpoint_cost(trigger_type, developer, cost_summary)
+
+        analytics = today_summary()
+        duration_seconds = analytics.get("total_seconds", 0)
+
+        context_history = _context_history_for_session(project_path)
+
         label = {
-            "context":   "Context limit",
-            "quota":     "Quota limit",
-            "manual":    "Manual checkpoint",
-            "emergency": "Emergency checkpoint",
-        }.get(trigger_type, trigger_type.capitalize())
+            "context":   "Context Checkpoint",
+            "quota":     "Quota Checkpoint",
+            "manual":    "Manual Checkpoint",
+            "emergency": "Emergency Checkpoint",
+        }.get(trigger_type, trigger_type.replace("_", " ").title())
+
+        img_path = session_card(
+            trigger_type=trigger_type,
+            developer=developer,
+            cost_summary=cost_summary,
+            duration_seconds=duration_seconds,
+            goals_completed=result.get("completed_goals", []),
+            context_history=context_history,
+        )
+
         ts = result.get("timestamp", "")[:16].replace("T", " ")
-        msg = f"**[askr] {label}** — {developer} @ {ts} UTC\nState saved to git. Handover ready."
-        send_message(msg)
+        caption = f"**[askr] {label}** — {developer} @ {ts} UTC"
+
+        if img_path:
+            sent = send_file(img_path, caption)
+            try:
+                os.remove(img_path)
+            except Exception:
+                pass
+            if not sent:
+                send_message(caption + "\nState saved to git. Handover ready.")
+        else:
+            send_message(caption + "\nState saved to git. Handover ready.")
     except Exception:
-        pass
+        try:
+            from askr.clients.discord import send_message
+            send_message(f"**[askr] Checkpoint** — {developer}\nState saved to git.")
+        except Exception:
+            pass
