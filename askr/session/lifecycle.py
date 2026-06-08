@@ -577,12 +577,12 @@ def run_daemon():
     try:
         while True:
             from askr.state.config import load_project_path
-            project_path = load_project_path()
+            fallback_path = load_project_path()
 
             active = _session_is_active()
 
             if active and not was_active:
-                _log(f"session active — project={project_path}")
+                _log(f"session active")
                 _start_caffeinate()
             elif not active and was_active:
                 _log("session ended or went idle")
@@ -593,6 +593,9 @@ def run_daemon():
             if active:
                 stats = _read_stats()
                 if stats:
+                    # project_path written by PostToolUse hook (uses os.getcwd — always correct).
+                    # Fall back to global config only if stats predate this fix.
+                    project_path = stats.get("project_path") or fallback_path
                     ctx_pct    = stats.get("context_pct", 0)
                     ctx_label  = stats.get("context_label", "ok")
                     quota_pct  = stats.get("quota_pct")    # real % from /api/oauth/usage

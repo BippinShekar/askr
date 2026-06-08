@@ -92,11 +92,13 @@ def _quota_needs_refresh(existing: dict) -> bool:
 
 def _write_session_stats():
     try:
-        from askr.state.config import load_project_path
         from askr.session.monitor import get_session_stats
         from askr.session.forecast import get_forecast
 
-        project_path = load_project_path()
+        # Use cwd — this hook runs inside Claude, so cwd is the actual project.
+        # load_project_path() returns the globally stored path from last `askr init`,
+        # which is wrong when multiple repos have askr installed.
+        project_path = os.getcwd()
         stats = get_session_stats(project_path)
         if not stats:
             return
@@ -130,6 +132,7 @@ def _write_session_stats():
                 pass
 
         payload = {
+            "project_path": project_path,
             "context_pct": round(stats.context_pct, 4),
             "context_tokens": stats.context_tokens,
             "context_window": stats.context_window,
