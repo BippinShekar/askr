@@ -1,18 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 19:32
+Last updated: 2026-06-08 19:38
 
 ## Task
-Fix multi-repo context-switch daemon bug where the daemon fires a session handover in the wrong repository when multiple askr projects are active simultaneously.
+Fix output token calculation to be per-session instead of reading entire JSONL, and remove vertical color accent bars from snapshot report cards.
 
 ## Status
-- Root cause identified: `session_stats.json` is a single global file that gets overwritten by whichever repo's `PostToolUse` runs last. When repo B overwrites stats with its `project_path`, the daemon fires for repo B while user is actively working in repo A.
-- Solution implemented in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: added stale-stats check before firing trigger. The daemon now calls `_find_active_jsonl(project_path)` to locate the JSONL for the current project, checks its mtime, and skips the trigger if the JSONL hasn't been touched in 3+ minutes (indicating stats are stale from a different repo).
-- `_find_active_jsonl` function confirmed to exist in monitor.py and returns the most recently modified JSONL in a project's sessions directory.
-- Fix verified to be in place and ready for testing.
+Implementation complete. Four files modified:
 
-## Failed Approaches
-- None documented in final state.
+- `/Users/bippin/Desktop/askr/askr/session/monitor.py`: Added `output_tokens` field to stats object written to `session_stats.json`
+- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py`: Modified PostToolUse to write `output_tokens` value into `session_stats.json`
+- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Changed `get_session_cost_summary` to read `output_tokens` from `session_stats.json` instead of scanning entire JSONL file
+- `/Users/bippin/Desktop/askr/askr/session/report_image.py`: Removed vertical accent bars from `snapshot_card`, `context_checkpoint_card`, and `morning_report_card` functions. Also adjusted left margin for Goals/Files section in morning report.
 
-## Next Action
-Test the multi-repo scenario: run askr in two separate project directories simultaneously, trigger context accumulation in one repo, and verify the daemon does NOT fire a hand
+Root cause identified: `cost.py` was summing output tokens from every turn in the JSONL file, including prior context-switched sessions in the same file. Now scoped to current session only via stats file.
+
+## Failed
