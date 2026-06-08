@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [18:36] Ran: cat ~/.config/askr/analytics.json 2>/dev/null | python3 -c "import json,sys; dat
+- [18:36] Ran: git log --format="%h %ai %s" -8
 - [18:33] Ran: git add askr/state/config.py && git commit -m "$(cat <<'EOF'
 fix: get_state_dir 
 - [18:33] Modified: /Users/bippin/Desktop/askr/askr/state/config.py
