@@ -334,6 +334,7 @@ def create_checkpoint(
         "developer": developer,
         "completed_goals": completed_goals,
         "duration_seconds": session_duration,
+        "project_path": os.getcwd(),
     }
 
     try:
@@ -343,8 +344,8 @@ def create_checkpoint(
     except Exception:
         pass
 
+    # Goals are embedded in the checkpoint/stop card — no separate notification needed.
     _notify_discord_checkpoint(trigger_type, developer, result)
-    _notify_discord_goals_completed(completed_goals)
 
     return result
 
@@ -471,23 +472,34 @@ def _context_history_for_session(project_path: str) -> list[float]:
 
 
 def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
-    # stop trigger gets its own richer broadcast from stop.py (Stage 5)
+    # stop trigger gets its own richer broadcast from stop.py
     if trigger_type == "stop":
         return
     try:
-        from askr.state.config import load_project_path
         from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
         from askr.session.report_image import session_card
         from askr.clients.discord import send_file, send_message
-        from askr.state.analytics import today_summary
 
-        project_path = load_project_path()
+        from askr.state.config import load_project_path
+        project_path = result.get("project_path") or load_project_path()
         cost_summary = get_session_cost_summary(project_path)
         record_checkpoint_cost(trigger_type, developer, cost_summary)
 
         duration_seconds = result.get("duration_seconds", 0)
 
         context_history = _context_history_for_session(project_path)
+
+        completed_goals = result.get("completed_goals", [])
+
+        import subprocess as _sp
+        files_changed = []
+        try:
+            res = _sp.run(["git", "diff", "HEAD~1", "--name-only"],
+                          capture_output=True, text=True, cwd=project_path, timeout=5)
+            files_changed = [f for f in res.stdout.strip().splitlines()
+                             if not f.startswith("askr_state/")]
+        except Exception:
+            pass
 
         label = {
             "context":   "Context Checkpoint",
@@ -501,12 +513,15 @@ def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
             developer=developer,
             cost_summary=cost_summary,
             duration_seconds=duration_seconds,
-            goals_completed=result.get("completed_goals", []),
+            goals_completed=completed_goals,
+            files_changed=files_changed,
             context_history=context_history,
         )
 
         ts = result.get("timestamp", "")[:16].replace("T", " ")
         caption = f"**[askr] {label}** — {developer} @ {ts} UTC"
+        if completed_goals:
+            caption += "\n" + "  ".join(f"✓ {g}" for g in completed_goals[:3])
 
         if img_path:
             sent = send_file(img_path, caption)
