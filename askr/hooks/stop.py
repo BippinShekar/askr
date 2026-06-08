@@ -134,7 +134,7 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         return False
 
 
-def _broadcast_session_end(developer: str, completed_goals: list, project_path: str, duration_seconds: int = 0):
+def _broadcast_session_end(developer: str, completed_goals: list, project_path: str, duration_seconds: int = 0, autonomous: bool = False):
     try:
         from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
         from askr.session.report_image import session_card
@@ -169,6 +169,7 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
             goals_completed=completed_goals,
             files_changed=files_changed,
             context_history=context_h,
+            autonomous=autonomous,
         )
 
         caption = f"**[askr] Session ended** — {developer}"
@@ -223,6 +224,18 @@ def _broadcast_session_text(developer: str, completed_goals: list, project_path:
         pass
 
 
+def _was_autonomous() -> bool:
+    """True if this session was launched by askr (goal_launch or context trigger)."""
+    try:
+        from askr.session.lifecycle import _LAUNCH_MODE_PATH
+        if os.path.exists(_LAUNCH_MODE_PATH):
+            with open(_LAUNCH_MODE_PATH) as f:
+                return json.load(f).get("active", False)
+    except Exception:
+        pass
+    return False
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -234,6 +247,7 @@ def main():
 
     developer = load_developer()
     transcript_path = payload.get("transcript_path", "")
+    autonomous = _was_autonomous()
     _update_allowed_tools(transcript_path)
 
     # If daemon flagged a context checkpoint, handle it now that the exchange is done
@@ -254,7 +268,7 @@ def main():
     # Only send a card for meaningful stops — goals completed or session ran >5 min.
     # Suppresses noise from casual conversation turns and quick tests.
     if completed_goals or duration_seconds >= 300:
-        _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds)
+        _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds, autonomous)
 
     _advance_launch_goal()
 

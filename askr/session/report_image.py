@@ -1,12 +1,8 @@
 """
-Phase 3.7 — Rich Visual Reports
+Phase 3.7 — Rich Visual Reports (v2)
 
-Generates a dark-card PNG summarising a session or daily rollup.
-Sent to Discord via send_file(), temp file deleted after upload.
-
-Two image types:
-  - session_card(): checkpoint or session-end summary card
-  - morning_report_card(): daily rollup across all sessions
+Complete redesign. Cards are built around one hero metric that proves
+askr's value: developer interruptions avoided, context intercepted, etc.
 """
 
 from __future__ import annotations
@@ -19,39 +15,67 @@ from typing import Optional
 # Theme
 # ---------------------------------------------------------------------------
 
-_BG      = "#0f1117"
-_CARD    = "#1a1d27"
-_ACCENT  = "#7289da"   # Discord blurple
-_GREEN   = "#43b581"
-_YELLOW  = "#faa61a"
-_RED     = "#f04747"
-_TEXT    = "#dcddde"
-_SUBTEXT = "#72767d"
-_WHITE   = "#ffffff"
+_BG     = "#0d1117"
+_CARD   = "#161b22"
+_BORDER = "#21262d"
+_GREEN  = "#3fb950"
+_PURPLE = "#a371f7"
+_AMBER  = "#d29922"
+_RED    = "#f85149"
+_BLUE   = "#58a6ff"
+_TEXT   = "#e6edf3"
+_MUTED  = "#8b949e"
+_DIM    = "#3d444d"
+_WHITE  = "#ffffff"
+
+_ACCENT = {
+    "stop":      _GREEN,
+    "context":   _PURPLE,
+    "quota":     _AMBER,
+    "manual":    _BLUE,
+    "emergency": _RED,
+}
+
+_LABEL = {
+    "stop":      "SESSION COMPLETE",
+    "context":   "CONTEXT CHECKPOINT",
+    "quota":     "QUOTA CHECKPOINT",
+    "manual":    "MANUAL CHECKPOINT",
+    "emergency": "EMERGENCY CHECKPOINT",
+}
 
 
-def _fmt_usd(amount: float) -> str:
-    if amount < 0.01:
-        return f"${amount:.4f}"
-    return f"${amount:.2f}"
-
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _fmt_tokens(n: int) -> str:
     if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
-        return f"{n/1_000:.1f}K"
-    return str(n)
+        return f"{n / 1_000:.1f}K"
+    return str(n) if n else "—"
 
 
-def _fmt_time(seconds: int) -> str:
-    if seconds < 60:
-        return f"{seconds}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m"
-    h = seconds // 3600
-    m = (seconds % 3600) // 60
+def _fmt_time(s: int) -> str:
+    if not s:
+        return "—"
+    if s < 60:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m"
+    h, m = s // 3600, (s % 3600) // 60
     return f"{h}h {m}m" if m else f"{h}h"
+
+
+def _turns_remaining(history: list[float]) -> Optional[int]:
+    if len(history) < 4:
+        return None
+    recent = history[-min(10, len(history)):]
+    slope  = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
+    if slope < 0.001:
+        return None
+    return max(1, int((1.0 - history[-1]) / slope))
 
 
 # ---------------------------------------------------------------------------
@@ -66,12 +90,11 @@ def session_card(
     goals_completed: list[str] | None = None,
     files_changed: list[str] | None = None,
     context_history: list[float] | None = None,
+    autonomous: bool = False,
 ) -> Optional[str]:
     """
-    Generate a session summary PNG.
-
-    Returns the temp file path on success, None on failure.
-    Caller must delete the file after sending.
+    Generate a session summary card PNG.
+    Returns temp file path on success, None on failure. Caller deletes the file.
     """
     try:
         import matplotlib
@@ -82,122 +105,179 @@ def session_card(
     except ImportError:
         return None
 
-    goals_completed = goals_completed or []
-    files_changed   = files_changed or []
+    goals  = goals_completed or []
+    files  = files_changed or []
+    has_tl = bool(context_history and len(context_history) >= 4)
 
-    has_files    = bool(files_changed)
-    has_goals    = bool(goals_completed)
-    content_rows = (len(goals_completed[:3]) if has_goals else 0) + (min(len(files_changed), 5) if has_files else 0)
-    has_timeline = bool(context_history and len(context_history) >= 3)
-    fig_height   = max(7.5 if has_timeline else 6.0, 5.5 + content_rows * 0.25)
-    fig, ax_main = plt.subplots(figsize=(10, fig_height))
-    fig.patch.set_facecolor(_BG)
-    ax_main.set_visible(False)
+    accent = _ACCENT.get(trigger_type, _BLUE)
+    title  = _LABEL.get(trigger_type, trigger_type.upper())
 
-    if has_timeline:
-        gs = GridSpec(2, 1, figure=fig, height_ratios=[2, 1], hspace=0.35,
-                      top=0.93, bottom=0.08, left=0.06, right=0.97)
-        ax_card = fig.add_subplot(gs[0])
-        ax_time = fig.add_subplot(gs[1])
+    # ── Hero content ─────────────────────────────────────────────────────
+    ctx_pct   = round(cost_summary.get("context_pct", 0) * 100)
+    in_tok    = cost_summary.get("context_tokens", 0)
+    out_tok   = cost_summary.get("output_tokens", 0)
+    turns     = cost_summary.get("turns", 0)
+
+    if trigger_type == "stop" and autonomous:
+        hero_val  = "0"
+        hero_top  = "developer interruptions"
+        hero_sub  = f"Claude ran fully autonomously  ·  {_fmt_time(duration_seconds)}"
+        hero_col  = _GREEN
+    elif trigger_type == "context":
+        hero_val  = f"{ctx_pct}%"
+        hero_top  = "context at checkpoint"
+        trem      = _turns_remaining(context_history) if context_history else None
+        hero_sub  = (f"~{trem} turns until auto-compact — intercepted cleanly"
+                     if trem else "auto-compact intercepted — state saved to git")
+        hero_col  = accent
+    elif trigger_type == "quota":
+        hero_val  = "PAUSED"
+        hero_top  = "quota limit reached"
+        hero_sub  = "state saved to git  ·  auto-resumes at quota reset"
+        hero_col  = accent
     else:
-        gs = GridSpec(1, 1, figure=fig, top=0.93, bottom=0.08, left=0.06, right=0.97)
-        ax_card = fig.add_subplot(gs[0])
-        ax_time = None
+        hero_val  = _fmt_time(duration_seconds) if duration_seconds else str(turns)
+        hero_top  = "session duration" if duration_seconds else "turns"
+        hero_sub  = f"{turns} turns  ·  {_fmt_tokens(in_tok)} input tokens"
+        hero_col  = _BLUE
 
-    # ---- card background ----
-    for ax in ([ax_card] + ([ax_time] if ax_time else [])):
-        ax.set_facecolor(_CARD)
-        for spine in ax.spines.values():
-            spine.set_edgecolor(_SUBTEXT)
-            spine.set_linewidth(0.5)
+    # ── Figure layout ────────────────────────────────────────────────────
+    content_rows = max(len(goals[:4]), len(files[:6]))
+    base_h = 8.8 if has_tl else 7.0
+    fig_h  = base_h + max(0, content_rows - 3) * 0.22
 
-    # ---- title ----
-    label_map = {
-        "context":   "Context Checkpoint",
-        "quota":     "Quota Checkpoint",
-        "stop":      "Session Complete",
-        "manual":    "Manual Checkpoint",
-        "emergency": "Emergency Checkpoint",
-    }
-    title = label_map.get(trigger_type, trigger_type.replace("_", " ").title())
-    ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
-    fig.text(0.05, 0.97, f"askr — {title}", color=_WHITE, fontsize=14, fontweight="bold", va="top")
-    fig.text(0.97, 0.97, f"{developer}  ·  {ts}", color=_SUBTEXT, fontsize=9, va="top", ha="right")
+    fig = plt.figure(figsize=(12, fig_h), facecolor=_BG)
 
-    ax_card.set_xlim(0, 1)
-    ax_card.set_ylim(0, 1)
-    ax_card.axis("off")
+    if has_tl:
+        gs  = GridSpec(2, 1, figure=fig,
+                       height_ratios=[3.0, 1.2],
+                       top=0.97, bottom=0.03, left=0.02, right=0.98,
+                       hspace=0.06)
+        ax  = fig.add_subplot(gs[0])
+        tax = fig.add_subplot(gs[1])
+    else:
+        gs  = GridSpec(1, 1, figure=fig,
+                       top=0.97, bottom=0.03, left=0.02, right=0.98)
+        ax  = fig.add_subplot(gs[0])
+        tax = None
 
-    # ---- stat tiles ----
-    tiles = [
-        ("Cost", _fmt_usd(cost_summary.get("cost_usd", 0)), _TEXT),
-        ("Saved", _fmt_usd(cost_summary.get("savings_usd", 0)), _GREEN),
-        ("Tokens", _fmt_tokens(cost_summary.get("context_tokens", 0)), _TEXT),
-        ("Context", f"{round(cost_summary.get('context_pct', 0) * 100)}%", _YELLOW),
-        ("Turns",   str(cost_summary.get("turns", 0)), _TEXT),
-        ("Time",    _fmt_time(duration_seconds), _ACCENT),
+    # ── Main card ─────────────────────────────────────────────────────────
+    ax.set_facecolor(_CARD)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    for sp in ax.spines.values():
+        sp.set_edgecolor(_BORDER)
+        sp.set_linewidth(0.8)
+        sp.set_visible(True)
+
+    # Left accent bar
+    ax.add_patch(mpatches.Rectangle(
+        (0, 0), 0.016, 1,
+        facecolor=accent, edgecolor="none",
+        transform=ax.transAxes, clip_on=False, zorder=10,
+    ))
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Header
+    ax.text(0.043, 0.948, "askr", color=accent, fontsize=10,
+            fontweight="bold", va="top", transform=ax.transAxes,
+            fontfamily="monospace")
+    ax.text(0.043, 0.908, title, color=_WHITE, fontsize=18,
+            fontweight="bold", va="top", transform=ax.transAxes)
+    ax.text(0.972, 0.948, f"{developer}  ·  {ts}",
+            color=_MUTED, fontsize=9, va="top", ha="right",
+            transform=ax.transAxes)
+
+    # Hero number
+    ax.text(0.5, 0.740, hero_val, color=hero_col, fontsize=58,
+            fontweight="bold", ha="center", va="center",
+            transform=ax.transAxes)
+    ax.text(0.5, 0.630, hero_top, color=_MUTED, fontsize=11,
+            ha="center", va="center", transform=ax.transAxes,
+            fontweight="bold")
+    ax.text(0.5, 0.578, hero_sub, color=_DIM, fontsize=9,
+            ha="center", va="center", transform=ax.transAxes)
+
+    # Divider
+    ax.axhline(y=0.530, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
+
+    # Stats row
+    stats = [
+        (_fmt_tokens(in_tok),         "input tokens",    _TEXT),
+        (_fmt_tokens(out_tok),        "output tokens",   _TEXT),
+        (f"{ctx_pct}%",              "ctx window",       _AMBER if ctx_pct >= 60 else _TEXT),
+        (str(turns),                  "turns",            _TEXT),
+        (_fmt_time(duration_seconds), "duration",         _BLUE),
     ]
-    tile_w = 1.0 / len(tiles)
-    for i, (label, value, color) in enumerate(tiles):
-        x = (i + 0.5) * tile_w
-        ax_card.text(x, 0.72, value, color=color, fontsize=18, fontweight="bold",
-                     ha="center", va="center", transform=ax_card.transAxes)
-        ax_card.text(x, 0.48, label, color=_SUBTEXT, fontsize=9,
-                     ha="center", va="center", transform=ax_card.transAxes)
+    sw = 1.0 / len(stats)
+    for i, (v, lbl, col) in enumerate(stats):
+        x = (i + 0.5) * sw
+        ax.text(x, 0.465, v, color=col, fontsize=16, fontweight="bold",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.text(x, 0.403, lbl, color=_MUTED, fontsize=8,
+                ha="center", va="center", transform=ax.transAxes)
 
-    # ---- divider ----
-    ax_card.axhline(y=0.38, color=_SUBTEXT, linewidth=0.4, xmin=0.02, xmax=0.98)
+    # Divider
+    ax.axhline(y=0.360, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
 
-    # ---- goals / files — split into two columns ----
-    col_split = 0.52  # goals on left, files on right
+    # Goals + Files
+    L, R, y0 = 0.043, 0.52, 0.315
 
-    # Left column: goals
-    if goals_completed:
-        goal_lines = ["Goals completed"]
-        goal_lines += [f"  ✓ {g[:48]}" for g in goals_completed[:4]]
-        ax_card.text(0.03, 0.30, "\n".join(goal_lines), color=_GREEN, fontsize=8.5,
-                     va="top", transform=ax_card.transAxes, linespacing=1.6,
-                     fontfamily="monospace")
+    if goals:
+        ax.text(L, y0, "Goals completed", color=_GREEN, fontsize=8,
+                fontweight="bold", va="top", transform=ax.transAxes)
+        for i, g in enumerate(goals[:4]):
+            ax.text(L, y0 - 0.056 * (i + 1), f"✓  {g[:56]}",
+                    color=_GREEN, fontsize=8.5, va="top",
+                    transform=ax.transAxes, fontfamily="monospace")
 
-    # Right column: files changed
-    if files_changed:
-        file_lines = ["Files changed"]
-        file_lines += [f"  {f[:42]}" for f in files_changed[:5]]
-        if len(files_changed) > 5:
-            file_lines.append(f"  +{len(files_changed) - 5} more")
-        ax_card.text(col_split, 0.30, "\n".join(file_lines), color=_SUBTEXT, fontsize=8.5,
-                     va="top", transform=ax_card.transAxes, linespacing=1.6,
-                     fontfamily="monospace")
+    if files:
+        ax.text(R, y0, "Files changed", color=_MUTED, fontsize=8,
+                fontweight="bold", va="top", transform=ax.transAxes)
+        for i, f in enumerate(files[:6]):
+            ax.text(R, y0 - 0.056 * (i + 1), f,
+                    color=_MUTED, fontsize=8, va="top",
+                    transform=ax.transAxes, fontfamily="monospace")
+        if len(files) > 6:
+            ax.text(R, y0 - 0.056 * 7, f"+{len(files) - 6} more",
+                    color=_DIM, fontsize=8, va="top", transform=ax.transAxes)
 
-    # ---- timeline ----
-    if ax_time and context_history:
+    # ── Timeline (context checkpoints only) ───────────────────────────────
+    if tax and context_history:
+        tax.set_facecolor(_CARD)
+        for sp in tax.spines.values():
+            sp.set_edgecolor(_BORDER)
+            sp.set_linewidth(0.5)
+
         xs = list(range(len(context_history)))
         ys = [c * 100 for c in context_history]
 
-        ax_time.plot(xs, ys, color=_ACCENT, linewidth=1.5, zorder=3)
-        ax_time.fill_between(xs, ys, alpha=0.15, color=_ACCENT, zorder=2)
+        tax.fill_between(xs, ys, alpha=0.10, color=accent, zorder=1)
+        tax.plot(xs, ys, color=accent, linewidth=2.0, zorder=3)
 
-        # trigger fire point (last turn = where checkpoint fired)
-        ax_time.axvline(x=xs[-1], color=_YELLOW, linewidth=1, linestyle="--", alpha=0.7)
-        ax_time.text(xs[-1] + 0.3, ys[-1] + 2, "trigger", color=_YELLOW,
-                     fontsize=7, va="bottom")
+        # Trigger marker
+        tax.axvline(x=xs[-1], color=_AMBER, linewidth=1.2,
+                    linestyle="--", alpha=0.8, zorder=4)
+        tax.text(max(xs[-1] - 0.4, 0), min(ys[-1] + 3, 97),
+                 "checkpoint", color=_AMBER, fontsize=7,
+                 ha="right", va="bottom")
 
-        ax_time.axhline(y=75, color=_RED, linewidth=0.6, linestyle=":", alpha=0.6)
-        ax_time.text(0.5, 76, "75% checkpoint", color=_RED, fontsize=7, va="bottom")
+        # 75% threshold
+        tax.axhline(y=75, color=_RED, linewidth=0.7,
+                    linestyle=":", alpha=0.6, zorder=2)
+        tax.text(0.5, 76, "75% threshold", color=_RED,
+                 fontsize=7, va="bottom")
 
-        ax_time.set_ylim(0, 105)
-        ax_time.set_ylabel("context %", color=_SUBTEXT, fontsize=8)
-        ax_time.set_xlabel("turn", color=_SUBTEXT, fontsize=8)
-        ax_time.tick_params(colors=_SUBTEXT, labelsize=7)
-        ax_time.set_facecolor(_CARD)
-        ax_time.yaxis.label.set_color(_SUBTEXT)
-        ax_time.xaxis.label.set_color(_SUBTEXT)
-        for spine in ax_time.spines.values():
-            spine.set_edgecolor(_SUBTEXT)
-            spine.set_linewidth(0.4)
+        tax.set_ylim(0, 105)
+        tax.set_ylabel("context %", color=_MUTED, fontsize=8)
+        tax.set_xlabel("turn", color=_MUTED, fontsize=8)
+        tax.tick_params(colors=_MUTED, labelsize=7)
+        tax.yaxis.label.set_color(_MUTED)
+        tax.xaxis.label.set_color(_MUTED)
 
-    # ---- save ----
-    fd, path = tempfile.mkstemp(suffix=".png", prefix="askr_session_")
+    fd, path = tempfile.mkstemp(suffix=".png", prefix="askr_card_")
     os.close(fd)
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_BG)
     plt.close(fig)
@@ -218,15 +298,11 @@ def morning_report_card(
     goals_completed: list[str] | None = None,
     goals_open: list[str] | None = None,
 ) -> Optional[str]:
-    """
-    Generate a daily rollup PNG.
-
-    Returns temp file path on success, None on failure.
-    """
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
         from matplotlib.gridspec import GridSpec
     except ImportError:
         return None
@@ -234,49 +310,79 @@ def morning_report_card(
     goals_completed = goals_completed or []
     goals_open      = goals_open or []
 
-    fig, _ = plt.subplots(figsize=(10, 6))
-    fig.patch.set_facecolor(_BG)
-    _.set_visible(False)
-
-    gs = GridSpec(1, 1, figure=fig, top=0.92, bottom=0.06, left=0.05, right=0.97)
-    ax = fig.add_subplot(gs[0])
+    fig = plt.figure(figsize=(12, 6.5), facecolor=_BG)
+    gs  = GridSpec(1, 1, figure=fig,
+                   top=0.96, bottom=0.04, left=0.02, right=0.98)
+    ax  = fig.add_subplot(gs[0])
     ax.set_facecolor(_CARD)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
-    for spine in ax.spines.values():
-        spine.set_edgecolor(_SUBTEXT)
-        spine.set_linewidth(0.5)
+    for sp in ax.spines.values():
+        sp.set_edgecolor(_BORDER)
+        sp.set_linewidth(0.8)
+        sp.set_visible(True)
 
-    fig.text(0.05, 0.97, "askr — Morning Report", color=_WHITE, fontsize=14, fontweight="bold", va="top")
-    fig.text(0.97, 0.97, date, color=_SUBTEXT, fontsize=9, va="top", ha="right")
+    ax.add_patch(mpatches.Rectangle(
+        (0, 0), 0.016, 1,
+        facecolor=_BLUE, edgecolor="none",
+        transform=ax.transAxes, clip_on=False, zorder=10,
+    ))
 
-    tiles = [
-        ("Sessions",   str(sessions), _TEXT),
-        ("Time saved", _fmt_time(total_seconds), _ACCENT),
-        ("Cost",       _fmt_usd(total_cost_usd), _TEXT),
-        ("Saved",      _fmt_usd(total_savings_usd), _GREEN),
-        ("Tokens",     _fmt_tokens(total_tokens), _TEXT),
+    ax.text(0.043, 0.948, "askr", color=_BLUE, fontsize=10,
+            fontweight="bold", va="top", transform=ax.transAxes,
+            fontfamily="monospace")
+    ax.text(0.043, 0.908, "MORNING REPORT", color=_WHITE, fontsize=18,
+            fontweight="bold", va="top", transform=ax.transAxes)
+    ax.text(0.972, 0.948, date, color=_MUTED, fontsize=9,
+            va="top", ha="right", transform=ax.transAxes)
+
+    # Hero: sessions run autonomous
+    ax.text(0.5, 0.740, str(sessions), color=_BLUE, fontsize=58,
+            fontweight="bold", ha="center", va="center",
+            transform=ax.transAxes)
+    ax.text(0.5, 0.630, "autonomous sessions", color=_MUTED, fontsize=11,
+            ha="center", va="center", transform=ax.transAxes,
+            fontweight="bold")
+    ax.text(0.5, 0.578, f"Claude worked unattended for {_fmt_time(total_seconds)}",
+            color=_DIM, fontsize=9, ha="center", va="center",
+            transform=ax.transAxes)
+
+    ax.axhline(y=0.530, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
+
+    stats = [
+        (_fmt_time(total_seconds),    "total active",   _BLUE),
+        (_fmt_tokens(total_tokens),   "tokens used",    _TEXT),
+        (str(len(goals_completed)),   "goals shipped",  _GREEN),
+        (str(len(goals_open)),        "goals open",     _AMBER if goals_open else _TEXT),
     ]
-    tile_w = 1.0 / len(tiles)
-    for i, (label, value, color) in enumerate(tiles):
-        x = (i + 0.5) * tile_w
-        ax.text(x, 0.78, value, color=color, fontsize=20, fontweight="bold",
+    sw = 1.0 / len(stats)
+    for i, (v, lbl, col) in enumerate(stats):
+        x = (i + 0.5) * sw
+        ax.text(x, 0.465, v, color=col, fontsize=18, fontweight="bold",
                 ha="center", va="center", transform=ax.transAxes)
-        ax.text(x, 0.55, label, color=_SUBTEXT, fontsize=9,
+        ax.text(x, 0.403, lbl, color=_MUTED, fontsize=8,
                 ha="center", va="center", transform=ax.transAxes)
 
-    ax.axhline(y=0.44, color=_SUBTEXT, linewidth=0.4, xmin=0.02, xmax=0.98)
+    ax.axhline(y=0.360, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
 
-    y = 0.34
+    L, R, y0 = 0.043, 0.52, 0.315
+
     if goals_completed:
-        goal_str = "  ✓ " + "   ✓ ".join(g[:45] for g in goals_completed[:4])
-        ax.text(0.03, y, goal_str, color=_GREEN, fontsize=9, va="center", transform=ax.transAxes)
-        y -= 0.13
+        ax.text(L, y0, "Shipped", color=_GREEN, fontsize=8,
+                fontweight="bold", va="top", transform=ax.transAxes)
+        for i, g in enumerate(goals_completed[:4]):
+            ax.text(L, y0 - 0.056 * (i + 1), f"✓  {g[:56]}",
+                    color=_GREEN, fontsize=8.5, va="top",
+                    transform=ax.transAxes, fontfamily="monospace")
 
     if goals_open:
-        open_str = "  → " + "   → ".join(g[:45] for g in goals_open[:3])
-        ax.text(0.03, y, open_str, color=_SUBTEXT, fontsize=9, va="center", transform=ax.transAxes)
+        ax.text(R, y0, "In progress", color=_AMBER, fontsize=8,
+                fontweight="bold", va="top", transform=ax.transAxes)
+        for i, g in enumerate(goals_open[:4]):
+            ax.text(R, y0 - 0.056 * (i + 1), f"→  {g[:56]}",
+                    color=_MUTED, fontsize=8.5, va="top",
+                    transform=ax.transAxes, fontfamily="monospace")
 
     fd, path = tempfile.mkstemp(suffix=".png", prefix="askr_report_")
     os.close(fd)
