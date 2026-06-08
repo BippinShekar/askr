@@ -318,9 +318,10 @@ def create_checkpoint(
     except Exception:
         pass
 
+    session_duration = 0
     try:
         from askr.state.analytics import record_session_end
-        record_session_end(trigger_type, developer)
+        session_duration = record_session_end(trigger_type, developer)
     except Exception:
         pass
 
@@ -332,6 +333,7 @@ def create_checkpoint(
         "handover_path": handover_path or "",
         "developer": developer,
         "completed_goals": completed_goals,
+        "duration_seconds": session_duration,
     }
 
     try:
@@ -483,8 +485,7 @@ def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
         cost_summary = get_session_cost_summary(project_path)
         record_checkpoint_cost(trigger_type, developer, cost_summary)
 
-        analytics = today_summary()
-        duration_seconds = analytics.get("total_seconds", 0)
+        duration_seconds = result.get("duration_seconds", 0)
 
         context_history = _context_history_for_session(project_path)
 

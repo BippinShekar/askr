@@ -304,33 +304,10 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
     except Exception as e:
         _log(f"notification write failed: {e}")
 
-    # Always also open a Terminal.app window as fallback — extension may not be active.
-    try:
-        safe_prompt = prompt_arg.replace("'", "").replace('"', "")
-        cmd = f"cd {project_path} && {claude_bin} '{safe_prompt}'"
-        script = (
-            f'tell application "Terminal"\n'
-            f'  do script "{cmd}"\n'
-            f'  activate\n'
-            f'end tell'
-        )
-        subprocess.run(["osascript", "-e", script], check=True, timeout=5,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        _log(f"opened Terminal window for claude in {project_path}")
-    except Exception as e:
-        _log(f"Terminal launch failed: {e} — falling back to headless")
-        try:
-            proc = subprocess.Popen(
-                ["claude", prompt_arg],
-                cwd=project_path,
-                start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _write_claude_pid(proc.pid)
-            _log(f"started headless claude session (pid={proc.pid})")
-        except FileNotFoundError:
-            _log("ERROR: 'claude' not in PATH — cannot start new session")
+    # The VS Code/Cursor extension handles the goal_launch notification above and
+    # opens an integrated terminal. Only fall back to headless if the extension
+    # isn't installed (e.g. running without an IDE).
+    _log(f"goal_launch notification written — extension will open IDE terminal for {project_path}")
 
 
 def _wait_for_reset(reset_at_iso: str):

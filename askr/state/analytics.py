@@ -24,17 +24,17 @@ def record_session_start():
         pass
 
 
-def record_session_end(trigger_type: str, developer: str):
-    """Calculate duration from last session_start, append to analytics.json."""
+def record_session_end(trigger_type: str, developer: str) -> int:
+    """Calculate duration from last session_start, append to analytics.json. Returns this session's duration_seconds."""
     try:
         if not os.path.exists(_SESSION_START_PATH):
-            return
+            return 0
         with open(_SESSION_START_PATH) as f:
             start_data = json.load(f)
         started_at = datetime.fromisoformat(start_data["started_at"])
         duration_seconds = int((datetime.now(timezone.utc) - started_at).total_seconds())
         if duration_seconds < 10:
-            return
+            return 0
 
         entry = {
             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -52,8 +52,9 @@ def record_session_end(trigger_type: str, developer: str):
             json.dump(entries, f, indent=2)
 
         os.remove(_SESSION_START_PATH)
+        return duration_seconds
     except Exception:
-        pass
+        return 0
 
 
 def today_summary() -> dict:

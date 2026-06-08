@@ -85,8 +85,11 @@ def session_card(
     goals_completed = goals_completed or []
     files_changed   = files_changed or []
 
+    has_files    = bool(files_changed)
+    has_goals    = bool(goals_completed)
+    content_rows = (len(goals_completed[:3]) if has_goals else 0) + (min(len(files_changed), 5) if has_files else 0)
     has_timeline = bool(context_history and len(context_history) >= 3)
-    fig_height   = 7.0 if has_timeline else 5.5
+    fig_height   = max(7.5 if has_timeline else 6.0, 5.5 + content_rows * 0.25)
     fig, ax_main = plt.subplots(figsize=(10, fig_height))
     fig.patch.set_facecolor(_BG)
     ax_main.set_visible(False)
@@ -145,20 +148,26 @@ def session_card(
     # ---- divider ----
     ax_card.axhline(y=0.38, color=_SUBTEXT, linewidth=0.4, xmin=0.02, xmax=0.98)
 
-    # ---- goals / files ----
-    y_pos = 0.28
-    if goals_completed:
-        goal_text = "  ✓ " + "   ✓ ".join(g[:40] for g in goals_completed[:3])
-        ax_card.text(0.03, y_pos, goal_text, color=_GREEN, fontsize=9,
-                     va="center", transform=ax_card.transAxes)
-        y_pos -= 0.14
+    # ---- goals / files — split into two columns ----
+    col_split = 0.52  # goals on left, files on right
 
+    # Left column: goals
+    if goals_completed:
+        goal_lines = ["Goals completed"]
+        goal_lines += [f"  ✓ {g[:48]}" for g in goals_completed[:4]]
+        ax_card.text(0.03, 0.30, "\n".join(goal_lines), color=_GREEN, fontsize=8.5,
+                     va="top", transform=ax_card.transAxes, linespacing=1.6,
+                     fontfamily="monospace")
+
+    # Right column: files changed
     if files_changed:
-        file_text = "  " + "   ".join(f[:30] for f in files_changed[:4])
-        if len(files_changed) > 4:
-            file_text += f"  +{len(files_changed) - 4} more"
-        ax_card.text(0.03, y_pos, file_text, color=_SUBTEXT, fontsize=8,
-                     va="center", transform=ax_card.transAxes)
+        file_lines = ["Files changed"]
+        file_lines += [f"  {f[:42]}" for f in files_changed[:5]]
+        if len(files_changed) > 5:
+            file_lines.append(f"  +{len(files_changed) - 5} more")
+        ax_card.text(col_split, 0.30, "\n".join(file_lines), color=_SUBTEXT, fontsize=8.5,
+                     va="top", transform=ax_card.transAxes, linespacing=1.6,
+                     fontfamily="monospace")
 
     # ---- timeline ----
     if ax_time and context_history:
@@ -173,8 +182,8 @@ def session_card(
         ax_time.text(xs[-1] + 0.3, ys[-1] + 2, "trigger", color=_YELLOW,
                      fontsize=7, va="bottom")
 
-        ax_time.axhline(y=90, color=_RED, linewidth=0.6, linestyle=":", alpha=0.6)
-        ax_time.text(0.5, 91, "90% threshold", color=_RED, fontsize=7, va="bottom")
+        ax_time.axhline(y=75, color=_RED, linewidth=0.6, linestyle=":", alpha=0.6)
+        ax_time.text(0.5, 76, "75% checkpoint", color=_RED, fontsize=7, va="bottom")
 
         ax_time.set_ylim(0, 105)
         ax_time.set_ylabel("context %", color=_SUBTEXT, fontsize=8)

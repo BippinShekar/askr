@@ -86,13 +86,12 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         return False
 
 
-def _broadcast_session_end(developer: str, completed_goals: list, project_path: str):
+def _broadcast_session_end(developer: str, completed_goals: list, project_path: str, duration_seconds: int = 0):
     try:
         from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
         from askr.session.report_image import session_card
         from askr.session.checkpoint import _context_history_for_session
         from askr.clients.discord import send_file, send_message
-        from askr.state.analytics import today_summary
 
         # collect files changed
         files_changed = []
@@ -111,8 +110,7 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
         cost_summary = get_session_cost_summary(project_path)
         record_checkpoint_cost("stop", developer, cost_summary)
 
-        analytics   = today_summary()
-        duration    = analytics.get("total_seconds", 0)
+        duration    = duration_seconds
         context_h   = _context_history_for_session(project_path)
 
         img_path = session_card(
@@ -136,7 +134,6 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
             except Exception:
                 pass
             if not sent:
-                # fall back to text
                 _broadcast_session_text(developer, completed_goals, project_path)
         else:
             _broadcast_session_text(developer, completed_goals, project_path)
@@ -204,7 +201,8 @@ def main():
     )
 
     completed_goals = result.get("completed_goals", [])
-    _broadcast_session_end(developer, completed_goals, load_project_path())
+    duration_seconds = result.get("duration_seconds", 0)
+    _broadcast_session_end(developer, completed_goals, load_project_path(), duration_seconds)
     _advance_launch_goal()
 
 
