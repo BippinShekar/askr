@@ -1,25 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 19:04
+Last updated: 2026-06-08 19:06
 
 # Handover Document
 
 ## Task
-Fix the root cause of goal inference returning empty and handover being written to wrong project state directory — `get_state_dir()` was calling `load_project_path()` which returned the globally stored leaps path instead of the current project path.
+Debug and fix incorrect cost/token metrics being reported in session summary cards sent to Discord.
 
 ## Status
-- **Root cause identified and fixed in `/Users/bippin/Desktop/askr/askr/state/config.py`**
-- The bug affected all hooks that call `get_state_dir()`: they were reading/writing to leaps' state directory instead of askr's
-- This caused:
-  - Goal inference to read from leaps' `goals.md` (empty for askr)
-  - Handover to be written to leaps' state (wrong context for autonomous resume)
-  - Discord silence (goals not found in correct location)
-- **Commit made**: "fix: get_state_dir" — changes staged and committed to git
-- Session confirmed the fix was implemented in the correct repo (askr, not leaps)
-- User requested verification that changes are visible and working
+- Root cause identified in previous session: `get_state_dir()` in `config.py` was calling `load_project_path()` which read the globally stored leaps path instead of the current project path. This caused all hooks to read/write to leaps' state directory instead of askr's state directory.
+- Fix applied: Modified `/Users/bippin/Desktop/askr/askr/state/config.py` to correct `get_state_dir()` behavior. Commit made with message "fix: get_state_dir".
+- Phase 3.8 session card manually triggered and sent to Discord.
+- Current issue: Session cost summary metrics are incorrect. `get_session_cost_summary()` is reading wrong data — reported cost of ~$140 and 500+ turns for a single goal execution is implausible. Time and files changed metrics appear correct.
+- User confirmed: implementation was done correctly in the askr repo only. Duration_seconds: 0 is a secondary issue and should not block parallel session execution.
 
 ## Failed Approaches
-- None explicitly rejected in final state
+- None identified in final state.
 
 ## Next Action
-Generate and display the session card for Phase 3.8 showing `completed_goals` populated (non-empty) to confirm the fix is working and changes are visible in the system output
+Inspect `get_session_cost_summary()` function (location: likely in `askr
