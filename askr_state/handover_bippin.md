@@ -1,18 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 19:17
+Last updated: 2026-06-08 19:18
+
+# HANDOVER DOCUMENT
 
 ## Task
-Determine how askr can leverage Claude's prompt caching to improve cost efficiency and what metrics should be displayed in session summaries to reflect actual cache performance.
+Determine which metrics to display on the Phase 3.8 session card that actually reflect Askr's autonomous session handling value, and remove metrics that provide no actionable insight or misrepresent Askr's contribution.
 
 ## Status
-- Session cost summary currently reads the most recently active JSONL, which can be the wrong session (confirmed: `get_session_cost_summary` was reading this conversation's 525 turns instead of Phase 3.8's data)
-- Available token metrics from JSONL usage object: `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`
-- Thinking tokens are NOT exposed by Claude Code API — cannot be extracted or displayed
-- Cache hit % calculation is viable: `cache_read_input_tokens / (cache_read_input_tokens + input_tokens)` represents actual cost savings (cache reads cost $0.30/M vs $3.00/M for regular input)
-- Current "savings calculation" is incorrect and based on wrong session data
-- Agreed metrics for Phase 3.8 snapshot: goal's token consumption, % of session context limit used, execution time, files changed, cache hit %, input vs output token breakdown
+- Current card displays: cost savings ($68), token count (500+), duration, files changed, cache metrics
+- Root issue identified: cost savings calculation reads wrong session JSONL (most recently active, not Phase 3.8's actual session)
+- Cache hit % metric was proposed but rejected — Anthropic manages caching automatically, Askr has no influence over it, displaying it implies false credit
+- Available token-level data from JSONL: input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens
+- Thinking tokens are NOT exposed in Claude Code's usage object — cannot be calculated or displayed
+- Files changed and duration are confirmed accurate and valuable
+- Decision: drop cache hit % from card display entirely
 
 ## Failed Approaches
-- Displaying "savings vs projected cost" — calculation was wrong and the concept is not actionable
-- Extracting thinking token usage — not available in Claude
+- Showing cache hit % as an Askr efficiency metric — rejected because Askr does not control caching; Anthropic's infrastructure manages it automatically
+- Calculating thinking token percentage — rejected because thinking tokens are not exposed in the JSONL usage object
+- Using `get_session_cost_summary` to
