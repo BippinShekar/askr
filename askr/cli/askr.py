@@ -438,16 +438,24 @@ def cmd_init():
         console.print(f"  [dim]- skipped {f} (already exists)[/dim]")
 
     # Generate architecture.md and implementation_state.md from codebase snapshot
-    has_snapshot = os.path.exists(SNAPSHOT_PATH)
-    if has_snapshot:
+    if not os.path.exists(SNAPSHOT_PATH):
+        console.print()
+        with console.status("  indexing codebase...", spinner="dots"):
+            try:
+                from askr.qa.snapshot import build_snapshot
+                build_snapshot(show_progress=False)
+            except Exception as e:
+                console.print(f"  [yellow]⚠ snapshot failed: {e}[/yellow]")
+        if os.path.exists(SNAPSHOT_PATH):
+            console.print("  [green]✓[/green] codebase indexed")
+        else:
+            console.print("  [yellow]⚠ indexing failed — architecture.md will use template[/yellow]")
+
+    if os.path.exists(SNAPSHOT_PATH):
         generated = _generate_architecture_from_snapshot(developer)
         if not generated:
             _create_fallback_generated_files(developer)
     else:
-        console.print()
-        console.print("  [yellow]no codebase snapshot found[/yellow]")
-        console.print("  [dim]run[/dim] [bold]ask init[/bold] [dim]first to index your codebase,[/dim]")
-        console.print("  [dim]then re-run[/dim] [bold]askr init[/bold] [dim]to generate a real architecture.md[/dim]")
         _create_fallback_generated_files(developer)
 
     console.print()
