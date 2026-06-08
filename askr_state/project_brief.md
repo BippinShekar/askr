@@ -1,4 +1,4 @@
-Last updated: 2026-06-08 19:13
+Last updated: 2026-06-08 19:17
 
 # Project Brief
 
@@ -6,13 +6,13 @@ Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when c
 
 ## What's In Flight
 
-- Session cost reporting: fixing `get_session_cost_summary()` to report metrics from the correct session (currently reads most recently active JSONL, causing wrong data when called after session ends). Target metrics: cache hit %, input/output tokens, total tokens, context limit % used, execution duration, files changed.
-- Discord card generation for goal execution summaries (currently displays wrong session data pending cost reporting fix).
-- Test status verification from last bash output and fixing any failures.
+- Session cost summary metrics: fixing bug where `get_session_cost_summary` reads wrong JSONL file; implementing cache hit % calculation using `cache_read_input_tokens / (cache_read_input_tokens + input_tokens)` to show actual cost savings from prompt caching.
+- Phase 3.8 snapshot: defining agreed metrics (token consumption, context % used, execution time, files changed, cache hit %, input/output breakdown) for session summaries.
+- Test verification: checking bash output from last session for failures and fixing any broken tests.
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision log and JSONL session metrics files, enabling developer handoffs without external databases.
-- Session lifecycle split into five phases: start (context injection), prompt submission (objective extraction), active monitoring (token forecasting), safe pause validation, and stop (handover doc generation and state commit).
-- Cache hit % is the primary efficiency metric; "savings vs projected cost" calculations rejected as misleading.
-- Thinking tokens not exposed by Claude Code API; final metrics use only available JSONL fields (input_
+- Prompt caching metrics are viable and worth displaying; thinking tokens are not exposed by Claude Code API and cannot be extracted.
+- "Savings vs projected cost" metric was incorrect and removed; cache hit % is the actionable metric instead.
+- State persists in git via append-only decisions.md and JSONL session logs; session resumption injects prior context through `session_start.py` hook.
+- Safe interruption validated before

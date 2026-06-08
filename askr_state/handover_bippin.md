@@ -1,22 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 19:13
-
-# HANDOVER DOCUMENT
+Last updated: 2026-06-08 19:17
 
 ## Task
-Implement session cost reporting that accurately reflects individual goal execution metrics (tokens, cache hit %, duration, files changed) instead of aggregating wrong session data.
+Determine how askr can leverage Claude's prompt caching to improve cost efficiency and what metrics should be displayed in session summaries to reflect actual cache performance.
 
 ## Status
-- `get_session_cost_summary()` currently reads the most recently active JSONL file, which causes it to report metrics from the wrong session when called after the target session has ended
-- Phase 3.8 goal execution completed successfully with 4 commits across correct repo; JSONL exists but is no longer "active" when queried
-- Current metrics being reported: input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens (thinking tokens not exposed by Claude Code API)
-- Discord card generation works but displays wrong session data
-- Agreed final metrics to display per goal: cache hit %, input token count, output token count, total tokens consumed, session context limit % used, execution duration, files changed, breakdown of thinking vs non-thinking token ratio (if calculable from available fields)
+- Session cost summary currently reads the most recently active JSONL, which can be the wrong session (confirmed: `get_session_cost_summary` was reading this conversation's 525 turns instead of Phase 3.8's data)
+- Available token metrics from JSONL usage object: `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`
+- Thinking tokens are NOT exposed by Claude Code API — cannot be extracted or displayed
+- Cache hit % calculation is viable: `cache_read_input_tokens / (cache_read_input_tokens + input_tokens)` represents actual cost savings (cache reads cost $0.30/M vs $3.00/M for regular input)
+- Current "savings calculation" is incorrect and based on wrong session data
+- Agreed metrics for Phase 3.8 snapshot: goal's token consumption, % of session context limit used, execution time, files changed, cache hit %, input vs output token breakdown
 
 ## Failed Approaches
-- Fake "savings vs projected cost" calculation — rejected as misleading; cache hit % is the actual efficiency metric
-- Attempting to extract thinking tokens separately — not available in JSONL usage object
-
-## Next Action
-Modify `get_session_cost_summary()` to accept a specific session JSON
+- Displaying "savings vs projected cost" — calculation was wrong and the concept is not actionable
+- Extracting thinking token usage — not available in Claude
