@@ -1,19 +1,21 @@
-Last updated: 2026-06-09 00:05
+Last updated: 2026-06-09 00:06
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before degradation occurs. It enables seamless handoffs between developers and sessions by persisting structured context, decisions, and progress—solving the problem of losing work mid-task when Claude Code runs out of tokens or context window.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress snapshots that Claude can resume from.
 
 ## What's In Flight
 
-- Emergency checkpoint implementation in `askr/session/checkpoint.py` — needs completion and testing
-- Integration validation across hooks (`session_start.py`, `user_prompt_submit.py`, `stop.py`, `pre_compact.py`) to ensure state flows correctly through session lifecycle
-- Test suite verification — last session had failures that need diagnosis and fixes
-- State file format refinement in `askr/state/` to ensure handover documents are human-readable and actionable
+- Emergency checkpoint implementation in `askr/session/safe_pause.py` — validates safe interruption points before pausing a session
+- Integration testing across session lifecycle hooks (`session_start.py`, `user_prompt_submit.py`, `stop.py`, `pre_compact.py`)
+- State persistence layer (`askr/state/`) — reader/writer modules for task tracking and decision logging
+- Context forecasting in `askr/session/forecast.py` — predicts which limit (context or quota) will be hit first
 
 ## Key Decisions Made
 
-- Append-only decision log in `decisions.md` — never edit existing lines, only add new ones with timestamp and reasoning
-- Git as source of truth for project state — all checkpoints commit structured context, tasks, and decisions
-- Forecast module predicts which limit (context or quota) hits first to trigger checkpoint at optimal time
-- Safe pause validation before interruption — `safe_pause.py` ensures Claude Code is at a logical stopping
+- State is append-only and stored in git; decisions.md is never edited, only appended to, ensuring full audit trail
+- Handover documents are auto-generated on session end and committed alongside state files to enable context recovery
+- Safe pause validation must occur before any checkpoint to prevent interrupting mid-operation
+- Project context is loaded and snapshotted by `context_loader.py` to give resumed sessions full visibility into prior work
+
+## Open Goals

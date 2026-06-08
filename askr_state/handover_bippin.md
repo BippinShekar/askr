@@ -1,21 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-09 00:05
+Last updated: 2026-06-09 00:06
 
 # Handover Document
 
 ## Task
-Refine YC application answers about past technical projects by removing marketing language, correcting technical details, and ensuring answers are concise and human-sounding rather than resume-like.
+Evaluate and refine YC application answers for Leaps startup, specifically addressing whether technical depth in project descriptions is sufficient and whether mentioning the same project (Heuretos) across multiple answers damages credibility.
 
 ## Status
-Three project answers being refined for YC application:
-
-1. **Askr (Open source)** — FINAL: "I was building multiple projects simultaneously and Claude Code kept losing context mid-task. Askr watches the session, checkpoints before Claude degrades, commits structured project state to git, and resumes automatically. Building it for myself, while using it every day."
-
-2. **AI Audit Engine** — FINAL: Correction made — uses Google Calendar directly for booking, NOT Calendly. Pipeline confirmed: Apollo → Serper → Claude → Gmail → Google Calendar → Razorpay. Queue-based execution via BullMQ on schedule. Remove emphasis formatting (em dashes).
-
-3. **Heuretos (heuretos.com)** — For "most impressive thing" question: Answer currently reads as architecture description rather than achievement. User mentioned NotebookLM was in original paste but transcript does not show that mention — clarification needed on whether NotebookLM should be included.
+- User is applying to YC with Leaps startup
+- Three projects reviewed: Askr, AI Audit Engine, Heuretos (heuretos.com)
+- AI Audit Engine uses Google Calendar for booking (not Calendly) — direct integration with Google Calendar API
+- AI Audit Engine pipeline confirmed: Apollo → Serper → Claude → Gmail → Google Calendar → Razorpay, queue-based with BullMQ
+- Heuretos architecture: 9 specialized agents, Neo4j DAG orchestration, parallel execution, query rewriter pipeline, containerized Next.js frontend
+- Heuretos was deliberately shut down despite working functionality due to non-viable CAC model and closing differentiation window from base model capabilities
+- Final decision: Do NOT repeat Heuretos mention across multiple YC application answers — including it in both the "most impressive thing" question and the main Leaps description would damage credibility
 
 ## Failed Approaches
-- Calendly integration — user cannot afford subscription, switched to Google Calendar API instead.
-- Marketing-style language
+- Including NotebookLM mention in Heuretos description — was not in final version
+- Repeating Heuretos details
