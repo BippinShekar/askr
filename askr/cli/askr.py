@@ -506,6 +506,12 @@ def cmd_init():
     console.print()
     console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
+    try:
+        from askr.clients.discord import send_message
+        send_message(f"**[askr] {developer} is online** — session orchestration active on `{os.path.basename(os.getcwd())}`")
+    except Exception:
+        pass
+
 
 def _reset_countdown(reset_at_iso: str) -> str:
     """Format time remaining until quota reset as '↺2h34m' or '↺42m'."""
