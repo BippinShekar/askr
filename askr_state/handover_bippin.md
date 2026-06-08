@@ -1,21 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 23:36
+Last updated: 2026-06-08 23:37
 
 Task
-Refine YC founder profile form response for the "hacked a system" question based on applicant's actual experience.
+Refine YC founder profile response for the "hacked a system" question based on applicant's actual story.
 
 Status
-- Applicant is CTO with 51% equity; co-founder CEO is filling their own section separately
-- Applicant has not yet completed the "hacked a system" question on the form
-- Final answer direction: Use the story of convincing professor in 1st year to exempt from attendance and exams by asserting intellectual superiority and commitment to building a company, then joining 8bit as intern
-- Story is confirmed as genuine and positioned as the most "mischievous and downright wrong usage of avenues" applicant had access to
-- Previous context items (NeoVj typo, Pulsegen 3-month duration, toxic workplace note) are form-level fixes but not the focus of this session
+- Question prompt: "Please tell us about a time you most successfully hacked some (non-computer) system to your advantage."
+- Applicant's actual story identified: In 1st year of college, told professor directly to stop calling him to attend classes (deemed useless), skipped exams to build 8bit startup, took 5 years to graduate instead of 4 due to exam skips but shipped real product during that time.
+- Previous suggestions (generic hackathon answers, college grading exploits) were rejected as not matching applicant's actual experience.
+- Final direction: Write the response using the 1st-year professor confrontation + 8bit building + 5-year graduation arc as the core narrative.
 
 Failed Approaches
-- Generic hackathon answer from 2023 or prior — rejected as insufficient
-- Leaving the question blank — rejected
-- Writing something generic without personality — rejected
+- Suggesting hackathon participation from 2023 or prior — applicant clarified he hadn't actually answered the question yet and this wasn't his story.
+- Generic "gamed a system" examples (visa, admissions, bureaucracy) — applicant had a specific real story that superseded these.
+- 3rd-year timeline — applicant corrected to 1st year, which is the stronger version.
 
 Next Action
-Write the "hacked a system" answer for the YC form using the professor exemption story: applicant convinced professor in 1st year to waive attendance and exams by making direct case about intellectual capability and company-building priority, then joined 8bit as intern. Tone should be confident but not arrog
+Write the final YC response for the "hacked
