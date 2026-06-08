@@ -1,24 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 12:25
+Last updated: 2026-06-08 18:33
 
 # Handover Document
 
 ## Task
-Implement Discord welcome message on askr init and verify multi-developer setup with shared webhook works correctly.
+Fix Discord notification failure in askr goal completion by correcting state directory resolution in hook execution.
 
 ## Status
-- `askr/qa/pipeline.py`: Modified to include rolling window of last 5 Q&A exchanges as context for every ask query. Committed.
-- `askr/cli/askr.py`: Modified to send Discord welcome message tagged with developer name on askr init. Committed.
-- State file architecture confirmed working: per-developer files (`handover_[name].md`, `current_task_[name].md`) already in place, Git syncs both automatically at every checkpoint.
-- Multi-developer Discord setup finalized: single shared webhook, both developers' checkpoints/goals/alerts land in one channel tagged by developer name.
-- Environment variable strategy confirmed: co-founder keeps shared `ASKR_DISCORD_WEBHOOK`, replaces `ANTHROPIC_API_KEY` with own key.
+- Root cause identified: `get_state_dir()` in `config.py` calls `load_project_path()` which reads the globally stored leaps path instead of the current project path
+- This causes all hooks (stop hook, checkpoint hook, etc.) to read/write state from the wrong project directory
+- Last commit: `fix: get_state_dir` — modified `/Users/bippin/Desktop/askr/askr/state/config.py` to resolve state directory correctly per-project instead of globally
+- Goal completion Phase 3.8 executed but Discord notification did not fire because stop hook was reading wrong project state
+- Lifecycle behavior confirmed working: `askr goal add` writes notification immediately, spawns background watcher, falls back to Terminal.app after 6 seconds if Cursor extension not reloaded
 
 ## Failed Approaches
-None.
+- None documented in transcript.
 
 ## Next Action
-Verify the Discord welcome message implementation by running askr init with a test developer name and confirming the tagged welcome message appears in the shared Discord channel.
+Verify Discord notification fires on next goal completion by running a test goal add/completion cycle and confirming the stop hook reads the correct project state directory.
 
 ## Open Questions
 None.

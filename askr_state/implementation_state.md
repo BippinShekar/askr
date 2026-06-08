@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [18:33] Ran: git add askr/state/config.py && git commit -m "$(cat <<'EOF'
+fix: get_state_dir 
+- [18:33] Modified: /Users/bippin/Desktop/askr/askr/state/config.py
 - [12:25] Ran: git add askr/cli/askr.py && git commit -m "feat: Discord welcome message on askr
 - [12:25] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [12:24] Ran: grep -n "discord\|send_message" /Users/bippin/Desktop/askr/askr/cli/askr.py | he

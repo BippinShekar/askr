@@ -1,18 +1,23 @@
-Last updated: 2026-06-08 12:25
+Last updated: 2026-06-08 18:34
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It maintains developer context and task continuity across session boundaries, enabling seamless handoffs between developers and resumption of work without losing progress or context.
 
 ## What's In Flight
 
-- Discord integration: Welcome messages tagged with developer name on askr init, verified working with shared webhook for multi-developer setups.
-- Rolling context window: Last 5 Q&A exchanges now included in every ask query to improve Claude's continuity (committed to pipeline.py).
-- Multi-developer state architecture: Per-developer handover and task files synced automatically at every checkpoint; co-founder and team member can share webhook while maintaining separate API keys.
-- Verification pending: Test Discord welcome message implementation end-to-end and confirm tagged messages appear in shared channel.
+- Discord notification system for goal completion: stop hook generates handover docs and commits state, but notifications are not firing due to state directory resolution bug in config.py
+- State directory resolution fix: get_state_dir() was reading globally stored leaps path instead of per-project path; corrected in latest commit but needs verification
+- Test cycle pending: need to run goal add/completion cycle to confirm Discord notifications fire with corrected state directory
 
 ## Key Decisions Made
 
-- State persisted in git as append-only markdown files (handover_[name].md, current_task_[name].md, decisions.md) rather than database; enables offline access and natural diffs.
-- Checkpoint triggered before context auto-compaction and on session end; safe_pause.py validates interruption points to avoid mid-operation breaks.
-- Single shared Discord webhook per team with developer name tags in messages; reduces credential sprawl
+- Append-only decision log in decisions.md to maintain audit trail of architectural choices
+- State persisted to git as source of truth for handoffs; enables developer context recovery across sessions
+- Hook-based integration with Claude Code (session_start, user_prompt_submit, stop, pre_compact) rather than direct API integration
+- Forecast module predicts which limit (context or quota) exhausts first to optimize checkpoint timing
+- Safe pause validation before interruption to avoid checkpointing mid-operation
+
+## Open Goals
+
+- Verify Discord notification fires on
