@@ -1,22 +1,19 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 23:54
+Last updated: 2026-06-08 23:55
 
-# Handover Document
+Task
+Refine YC application answers for Leaps startup by improving technical depth and removing formatting inconsistencies (em-dashes) to match user's confident, arrogant-but-backed-up voice.
 
-## Task
-Refine the answer to "Tell us about things you've built before" for a YC application by adding technical depth to existing project descriptions while removing formatting inconsistencies.
+Status
+Three application answers finalized and ready to copy-paste:
 
-## Status
-Four projects identified for the answer:
-- Askr (Open source): Claude Code context checkpointing tool. Final state: description is accurate and punchy, no changes needed.
-- AI Audit Engine: Lead generation pipeline with queue-based architecture (BullMQ). Uses Apollo for prospecting, Serper for research, Claude for analysis, Gmail for outreach, Google Calendar for scheduling (not Calendly), Razorpay for payments. Final state: needs technical depth added to the answer but implementation is verified and working.
-- Rex: Autonomous agent framework with documented architecture. Final state: included in project list.
-- Leaps: Current YC application startup. Final state: primary focus, other projects are supporting context.
-- campusedecision.in: Website reviewed for context on decision-making platform work.
+1. "Tell us about things you've built before" answer: Askr (open source), AI Audit Engine (production pipeline using Apollo, Serper, Claude, Google Calendar, Razorpay with BullMQ queue), Rex (autonomous agent framework). All three repos verified on desktop. Formatting cleaned (em-dashes removed).
 
-Formatting requirement: Remove all em-dashes from final answer. Write in confident, borderline-arrogant tone backed by technical substance. No markdown decorations.
+2. "Most impressive thing other than this startup" answer: Heuretos (heuretos.com) — multi-agent research assistant with 9 specialized agents, Neo4j DAG orchestration, parallel execution, query rewriter pipeline, containerized Next.js frontend. Answer truncated mid-sentence in transcript but direction confirmed.
 
-## Failed Approaches
-- Using Calendly for AI Audit Engine booking: rejected due to cost constraints, replaced with direct Google Calendar integration.
-- Em-
+3. College/first-year story answer: Rewritten to remove em-dashes, inject confidence and arrogance while maintaining credibility (refused internal marks bribes, fought externals alone, built company during degree, took 5 years instead of 4, graduated with highest placement).
+
+All three answers confirmed as final versions. User explicitly requested all three at once for copy-paste into application form.
+
+Failed
