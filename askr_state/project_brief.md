@@ -1,23 +1,19 @@
-Last updated: 2026-06-08 22:15
+Last updated: 2026-06-08 22:39
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or momentum.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) that can be resumed without losing context.
 
 ## What's In Flight
 
-- Snapshot image generation for test scenarios complete; all 6 scenario cards (stop_auto, stop, context, quota, manual, emergency) generated and sent to Discord for validation
-- Emergency checkpoint implementation in progress; needs completion and testing
-- Test suite validation pending; recent changes to cost.py, lifecycle.py, and post_tool_use.py need verification
+- Emergency checkpoint implementation: completing the `safe_pause.py` validation logic to detect safe interruption points before context auto-compaction triggers
+- State persistence layer: finalizing `reader.py` and `writer.py` to reliably load/save developer context, tasks, and decisions across session boundaries
+- Hook integration with Claude Code: wiring `session_start.py`, `user_prompt_submit.py`, `stop.py`, and `pre_compact.py` to inject context on begin and generate handover docs on end
+- Test suite: verifying all modules pass unit tests after recent changes
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision log and structured state files (tasks, progress, context snapshots) to enable developer handoffs
-- Checkpoint triggered before context auto-compaction and on quota exhaustion; safe interruption validated before pause
-- Session lifecycle managed through Claude Code hooks: session_start injects context, user_prompt_submit captures objectives, stop generates handover docs
-- Snapshot reporting uses matplotlib for visual scenario validation; Python environment uses system python3 with dotenv from askr venv
-- Changes committed without Claude as co-collaborator to maintain clean git history
-
-## Open Goals
-
-- Complete and test
+- Append-only decision log in `decisions.md` to maintain audit trail of architectural choices without rewriting history
+- Git as source of truth for project state: all checkpoints committed with structured metadata for resumption
+- Forecast module predicts which limit (context or quota) hits first to prioritize checkpoint timing
+- Handover documents auto-generated on session end to brief next developer on
