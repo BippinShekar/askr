@@ -157,7 +157,10 @@ function checkNotification() {
       vscode.window.showInformationMessage(`Askr: Context saved — switching chats, no context lost.${goal}`);
       const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
       terminal.show();
-      terminal.sendText('claude "Read the handover and start on the Next Action immediately. Work autonomously."');
+      const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+        ? ` --allowedTools ${n.allowed_tools.join(',')}`
+        : '';
+      terminal.sendText(`claude${toolsFlag} "Read the handover and start on the Next Action immediately. Work autonomously."`);
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
       const goals = (n.goals || []).map(g => g.text);

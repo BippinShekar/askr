@@ -281,6 +281,18 @@ def _kill_claude(project_path: str = ""):
     _clear_claude_pid()
 
 
+def _load_allowed_tools(project_path: str) -> list:
+    """Read allowedTools from the project's .claude/settings.json."""
+    try:
+        settings_path = os.path.join(project_path, ".claude", "settings.json")
+        if os.path.exists(settings_path):
+            with open(settings_path) as f:
+                return json.load(f).get("allowedTools", [])
+    except Exception:
+        pass
+    return []
+
+
 def _start_claude(project_path: str, initial_prompt: str = ""):
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
@@ -288,6 +300,9 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
 
     claude_bin = shutil.which("claude") or "claude"
     prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
+
+    allowed_tools = _load_allowed_tools(project_path)
+    tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
 
     # Signal the VS Code/Cursor extension to open an integrated terminal.
     notification_written = False
@@ -320,7 +335,7 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
         f"        _d = json.load(_f)\n"
         f"    if _d.get('shown'): exit(0)\n"
         f"except Exception: pass\n"
-        f"_cmd = 'cd {project_path} && {claude_bin} \"{safe_prompt}\"'\n"
+        f"_cmd = 'cd {project_path} && {claude_bin}{tools_flag} \"{safe_prompt}\"'\n"
         f"_script = 'tell application \"Terminal\"\\n  do script \"' + _cmd + '\"\\n  activate\\nend tell'\n"
         f"subprocess.run(['osascript', '-e', _script], timeout=5, "
         f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
@@ -401,7 +416,7 @@ def _clear_checkpoint_pending():
         pass
 
 
-def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False):
+def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = ""):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         pct_str = f"{round(pct * 100)}%" if trigger == "context" else f"{round(pct)}%"
@@ -417,6 +432,8 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
             "shown": False,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+        if project_path:
+            payload["allowed_tools"] = _load_allowed_tools(project_path)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
     except Exception:
@@ -481,7 +498,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
-    _write_notification(trigger, next_goal, pct, handover_has_content)
+    _write_notification(trigger, next_goal, pct, handover_has_content, project_path)
     _kill_claude(project_path)
 
     if trigger == "quota":

@@ -115,10 +115,13 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
 
         pct = pending.get("context_pct", 0)
         pct_str = f"{round(pct * 100)}%"
+        from askr.session.lifecycle import _load_allowed_tools
+        allowed_tools = _load_allowed_tools(os.getcwd())
         payload = {
             "type": "context",
             "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
             "goal": next_goal,
+            "allowed_tools": allowed_tools,
             "shown": False,
             "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),
         }
