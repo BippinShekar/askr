@@ -28,6 +28,9 @@ HOOK_MAP = {
     "Notification":       "notification.py",
 }
 
+# Minimum tool set for autonomous operation — stop hook expands this over time from JSONL
+BASELINE_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "TodoWrite", "Write"]
+
 # Stop and PreCompact make a Haiku API call for handover generation — need more headroom
 # PreToolUse must be fast — it blocks Claude's tool execution until it exits
 HOOK_TIMEOUTS = {
@@ -89,6 +92,18 @@ def _install_statusline():
     if existing.get("command") != cmd or existing.get("type") != "command":
         settings["statusLine"] = {"type": "command", "command": cmd}
         _save_claude_settings(settings)
+
+
+def _install_allowed_tools() -> tuple[list, list]:
+    """Merge baseline tools into allowedTools in .claude/settings.json.
+    Returns (new_tools_added, already_present)."""
+    settings = _load_claude_settings()
+    existing = set(settings.get("allowedTools", []))
+    new_tools = [t for t in BASELINE_ALLOWED_TOOLS if t not in existing]
+    if new_tools:
+        settings["allowedTools"] = sorted(existing | set(BASELINE_ALLOWED_TOOLS))
+        _save_claude_settings(settings)
+    return new_tools, [t for t in BASELINE_ALLOWED_TOOLS if t in existing]
 
 
 def _install_ide_extension():
@@ -473,6 +488,13 @@ def cmd_init():
     _install_hooks()
     for event in HOOK_MAP:
         console.print(f"  [green]✓[/green] hook  [dim]{event}[/dim]")
+
+    new_tools, _ = _install_allowed_tools()
+    tools_list = ", ".join(sorted(set(BASELINE_ALLOWED_TOOLS)))
+    if new_tools:
+        console.print(f"  [green]✓[/green] allowedTools  [dim]{tools_list}[/dim]")
+    else:
+        console.print(f"  [dim]- allowedTools already configured ({tools_list})[/dim]")
 
     claude_md_result = _install_claude_md()
     if claude_md_result == "created":
