@@ -1,23 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 03:33
+Last updated: 2026-06-08 12:25
+
+# Handover Document
 
 ## Task
-Determine if askr is ready for installation and use in a co-founder's separate repository.
+Implement Discord welcome message on askr init and verify multi-developer setup with shared webhook works correctly.
 
 ## Status
-- askr rolling window implementation complete: last 5 exchanges injected into prompt context via `_load_recent_history` function in `/Users/bippin/Desktop/askr/askr/qa/pipeline.py`
-- Rolling window approach confirmed as correct decision: eliminates need for in-memory tokenization/retrieval (each CLI invocation is fresh process)
-- Quota impact measured: compaction burns 4-5% of quota window silently, takes ~4 minutes, drops untracked context
-- askr now prevents compaction by maintaining rolling context window
-- Git commit made: "feat: rolling window of last 5 his" (incomplete message but changes staged)
+- `askr/qa/pipeline.py`: Modified to include rolling window of last 5 Q&A exchanges as context for every ask query. Committed.
+- `askr/cli/askr.py`: Modified to send Discord welcome message tagged with developer name on askr init. Committed.
+- State file architecture confirmed working: per-developer files (`handover_[name].md`, `current_task_[name].md`) already in place, Git syncs both automatically at every checkpoint.
+- Multi-developer Discord setup finalized: single shared webhook, both developers' checkpoints/goals/alerts land in one channel tagged by developer name.
+- Environment variable strategy confirmed: co-founder keeps shared `ASKR_DISCORD_WEBHOOK`, replaces `ANTHROPIC_API_KEY` with own key.
 
 ## Failed Approaches
-- In-memory tokenization and retrieval: rejected because askr is stateless CLI tool (fresh process per invocation), making persistent memory impossible and slower than rolling window
+None.
 
 ## Next Action
-Verify askr installation and functionality in co-founder's separate repository before declaring ready for shared use. Test that rolling window context injection works correctly in new environment.
+Verify the Discord welcome message implementation by running askr init with a test developer name and confirming the tagged welcome message appears in the shared Discord channel.
 
 ## Open Questions
-- What is the exact installation procedure for askr in a new repository (dependencies, configuration, environment setup)?
-- Are there any co-founder-specific setup requirements or shared configuration needs for
+None.

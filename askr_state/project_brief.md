@@ -1,15 +1,18 @@
-Last updated: 2026-06-08 03:33
+Last updated: 2026-06-08 12:25
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining a rolling window of recent conversation history and persisting decisions, progress, and code changes. The core problem: Claude Code sessions hit limits unpredictably, losing context and forcing manual recovery. Askr makes this invisible.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Rolling window implementation complete: last 5 exchanges injected into prompt context via `_load_recent_history` in `askr/qa/pipeline.py`. Eliminates need for in-memory tokenization since askr is a stateless CLI tool (fresh process per invocation).
-- Installation and functionality verification in co-founder's separate repository. Testing that rolling window context injection works correctly in new environment before declaring ready for shared use.
-- Quota impact measurement: compaction burns 4-5% of quota window silently over ~4 minutes. Askr now prevents compaction by maintaining rolling context window.
+- Discord integration: Welcome messages tagged with developer name on askr init, verified working with shared webhook for multi-developer setups.
+- Rolling context window: Last 5 Q&A exchanges now included in every ask query to improve Claude's continuity (committed to pipeline.py).
+- Multi-developer state architecture: Per-developer handover and task files synced automatically at every checkpoint; co-founder and team member can share webhook while maintaining separate API keys.
+- Verification pending: Test Discord welcome message implementation end-to-end and confirm tagged messages appear in shared channel.
 
 ## Key Decisions Made
 
-- Rolling window approach (last 5 exchanges) chosen over in-memory tokenization/retrieval. Reason: askr is stateless CLI tool where each invocation is a fresh process, making persistent memory impossible and slower than rolling window
+- State persisted in git as append-only markdown files (handover_[name].md, current_task_[name].md, decisions.md) rather than database; enables offline access and natural diffs.
+- Checkpoint triggered before context auto-compaction and on session end; safe_pause.py validates interruption points to avoid mid-operation breaks.
+- Single shared Discord webhook per team with developer name tags in messages; reduces credential sprawl
