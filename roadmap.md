@@ -218,7 +218,7 @@ The killer stat: "without askr this session would have cost $X and hit the conte
 
 ---
 
-## Phase 3.8 - Permission Continuity
+## Phase 3.8 - Permission Continuity ✅
 
 **Goal:** Auto-launched sessions never prompt for tool permissions. Full autonomy means zero interruptions — not just "new session starts" but "new session runs without asking you anything."
 
@@ -226,10 +226,10 @@ The problem: Claude Code permissions granted as "allow once" die with the sessio
 
 | Feature | Status |
 |---|---|
-| `askr init` writes a baseline `allowedTools` list to `.claude/settings.json` covering tools needed for autonomous operation (Bash, Edit, Write, Read, etc.) | 🔲 Todo |
-| Stop hook reads tool usage from session JSONL, adds any newly-used tools to `.claude/settings.json` so next session inherits them | 🔲 Todo |
-| `askr launch` shows which tools are pre-approved and which would still prompt | 🔲 Todo |
-| Auto-launched sessions (from goal add or context trigger) get `--allowedTools` flag populated from settings at launch time | 🔲 Todo |
+| `askr init` writes a baseline `allowedTools` list to `.claude/settings.json` covering tools needed for autonomous operation (Bash, Edit, Write, Read, etc.) | ✅ Done |
+| Stop hook reads tool usage from session JSONL, adds any newly-used tools to `.claude/settings.json` so next session inherits them | ✅ Done |
+| `askr launch` shows which tools are pre-approved and which would still prompt | ✅ Done |
+| Auto-launched sessions (from goal add or context trigger) get `--allowedTools` flag populated from settings at launch time | ✅ Done |
 
 **Done when:** askr starts a new session autonomously overnight, runs Bash, Edit, Write, and git push without a single permission prompt.
 
