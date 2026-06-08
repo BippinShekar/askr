@@ -29,15 +29,20 @@ def setup_keys():
         console.print("  [red]✗ anthropic key required[/red]\n")
         raise SystemExit(1)
 
-    openai_key = getpass.getpass("  OPENAI_API_KEY (optional  - press enter to skip): ").strip()
+    openai_key = getpass.getpass("  OPENAI_API_KEY (optional — press enter to skip): ").strip()
+    discord_webhook = getpass.getpass("  ASKR_DISCORD_WEBHOOK (optional — press enter to skip): ").strip()
 
     os.makedirs(config_dir, exist_ok=True)
     with open(env_file, "w") as f:
         f.write(f"ANTHROPIC_API_KEY={anthropic_key}\n")
         if openai_key:
             f.write(f"OPENAI_API_KEY={openai_key}\n")
+        if discord_webhook:
+            f.write(f"ASKR_DISCORD_WEBHOOK={discord_webhook}\n")
+        else:
+            f.write(f"# ASKR_DISCORD_WEBHOOK=https://discord.com/api/webhooks/... (add to enable Discord alerts)\n")
 
-    console.print("\n  [green]✓ saved[/green]  [dim]now run[/dim] [bold]ask init[/bold] [dim]in your project\n[/dim]")
+    console.print("\n  [green]✓ saved[/green]  [dim]keys stored at[/dim] ~/.config/askr/.env\n")
 
 
 def init_project():
