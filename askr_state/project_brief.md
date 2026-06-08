@@ -1,22 +1,25 @@
-Last updated: 2026-06-08 19:28
+Last updated: 2026-06-08 19:29
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent developer context, active objectives, and progress tracking in version control.
 
 ## What's In Flight
 
-- Token usage reporting and visual card formatting for Discord: extracting input/output/cache tokens from session JSONL data and rendering metrics in Discord embeds with hero numbers, accent bars, and two-column layouts.
-- Autonomous session detection: wiring detection logic through stop.py to identify when sessions run without developer interruption.
-- Live verification of Discord card rendering and token field population from session data.
+- Emergency checkpoint system: detecting safe interruption points and persisting state before context auto-compaction
+- Session resumption orchestration: injecting prior context and objectives when Claude Code restarts
+- Token forecasting: predicting which limit (context or quota) will be hit first to trigger checkpoints proactively
+- Handover documentation: generating developer-to-developer context on session end with git commits
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision logs and task files, enabling handoffs and audit trails.
-- Session monitoring split into discrete modules: forecast.py predicts exhaustion, checkpoint.py persists state, lifecycle.py triggers resumption, safe_pause.py validates interruption safety.
-- Claude Code integration via hooks at session start, prompt submission, session stop, and pre-compaction.
-- Discord bot reports session metrics with token counts, turn count, duration, and developer interruption frequency.
+- State persisted in git (not external database) to keep project portable and version-controlled
+- Append-only decision log in decisions.md to maintain audit trail without rewrites
+- Safe pause validation before checkpoint to avoid interrupting mid-operation
+- Hook-based integration with Claude Code (session_start, user_prompt_submit, stop, pre_compact) rather than direct API patching
+- Modular architecture: session lifecycle, hooks, state layer, and QA analysis separated into distinct modules
 
 ## Open Goals
 
-- Verify Discord card rendering on live channel and confirm all token fields populate correctly from
+- Verify test status from last Bash output and fix any failures
+- Review files
