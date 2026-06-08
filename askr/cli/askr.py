@@ -430,6 +430,16 @@ def cmd_init():
     console.print(f"  [green]✓[/green] [dim]project:[/dim] [bold]{os.getcwd()}[/bold]")
     console.print()
 
+    # Ensure API keys are configured globally before doing anything that needs them
+    from askr.utils import env as _env
+    _env.load()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        console.print("  [yellow]no API keys found — let's set them up[/yellow]")
+        console.print()
+        from askr.cli.ask import setup_keys
+        setup_keys()
+        _env.load()
+
     # Create session-specific files from templates
     created, skipped = _create_skeleton_files(developer)
     for f in created:
