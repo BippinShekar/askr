@@ -1,20 +1,18 @@
-Last updated: 2026-06-08 19:09
+Last updated: 2026-06-08 19:13
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task/decision/progress context that Claude can resume from.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Fixing session cost/metrics reporting: `get_session_cost_summary()` currently reads the wrong JSONL file during multi-session testing, causing cross-contamination of token/cost data. Need to bind metrics to specific goal execution data instead of most-recently-active file.
-- Implementing goal-specific metrics snapshot: session token consumption (input/output split), context % used, execution duration, thinking vs output token ratio.
-- Verifying test status from last bash output and fixing any failures.
+- Session cost reporting: fixing `get_session_cost_summary()` to report metrics from the correct session (currently reads most recently active JSONL, causing wrong data when called after session ends). Target metrics: cache hit %, input/output tokens, total tokens, context limit % used, execution duration, files changed.
+- Discord card generation for goal execution summaries (currently displays wrong session data pending cost reporting fix).
+- Test status verification from last bash output and fixing any failures.
 
 ## Key Decisions Made
 
-- State persists in git as append-only decision log, task files, and progress snapshots — enables full context recovery across sessions and developers.
-- Session monitoring happens via hooks into Claude Code lifecycle (start, prompt submit, stop, pre-compact) rather than external polling.
-- Forecast module predicts which limit hits first (context vs quota) to trigger checkpoint at optimal time.
-- Cost/metrics are goal-scoped, not session-scoped — prevents metrics pollution when multiple sessions run in parallel.
-
-##
+- State persisted to git as append-only decision log and JSONL session metrics files, enabling developer handoffs without external databases.
+- Session lifecycle split into five phases: start (context injection), prompt submission (objective extraction), active monitoring (token forecasting), safe pause validation, and stop (handover doc generation and state commit).
+- Cache hit % is the primary efficiency metric; "savings vs projected cost" calculations rejected as misleading.
+- Thinking tokens not exposed by Claude Code API; final metrics use only available JSONL fields (input_
