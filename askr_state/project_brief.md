@@ -1,19 +1,17 @@
-Last updated: 2026-06-08 19:19
+Last updated: 2026-06-08 19:26
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—objectives, decisions, progress—so work can resume without context loss or manual context injection.
 
 ## What's In Flight
 
-- Phase 3.8 session card metrics refinement: identifying which metrics actually reflect Askr's autonomous value (files changed, duration confirmed; cost savings calculation and cache hit % under review)
-- Cost savings calculation bug: currently reads wrong session JSONL file (most recently active instead of Phase 3.8's actual session)
-- Verification of test status from last bash output and fixing any failures
-- Review of files changed since last session and cross-check against decisions.md
+- Session metrics redesign: building visually polished, shareable metric cards (screenshot/tweet-worthy) that highlight autonomous session continuations as the core value metric rather than generic token counts. New `report_image.py` module created; Discord webhook testing in progress to validate card appearance.
+- Autonomous session detection: wired logic into `stop.py` to identify sessions that completed without developer interruption, feeding into report generation.
+- Verification: confirming Discord test card was received and meets visual standards; if not, iterate on card template and re-test.
 
 ## Key Decisions Made
 
-- Cache hit % metric rejected from card display: Anthropic's infrastructure manages caching automatically; Askr has no control over it, so displaying it implies false credit for efficiency gains
-- Thinking tokens cannot be displayed: Claude Code's usage object does not expose thinking token counts, making percentage calculations impossible
-- State persistence via git: all session context, tasks, and decisions stored in append-only decision logs and state files to enable developer handoffs
-- Safe pause validation required before checkpoint: `safe_pause.py` ensures interruption only
+- State persists in git as append-only decision logs and task snapshots, enabling handoffs without external databases.
+- Session lifecycle is split into discrete hooks (start, prompt submit, stop, pre-compact) rather than monolithic monitoring, allowing targeted intervention at safe points.
+- Metrics focus on autonomous continuations and context wall avoidance (checkpoint interception) rather than raw token counts—this is the
