@@ -1,21 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-09 00:08
+Last updated: 2026-06-09 00:16
 
 # HANDOVER DOCUMENT
 
 ## Task
-Refine application answers for a startup/achievement question set by removing resume-speak, sharpening credibility framing, and ensuring monetary impact doesn't overshadow integrity/decision-making narrative.
+Evaluate and refine answers to YC application questions about personal achievements, test scores, and project shutdowns for credibility and impact.
 
 ## Status
-Three answers under revision:
+Four application answers reviewed and feedback provided:
 
-1. "Most impressive thing built" answer: Heuretos description finalized. Decision made to include the shutdown reasoning (CAC model not viable, base model capabilities closing differentiation window) because it demonstrates clear-eyed judgment, not failure. Frame is: deliberate strategic decision, not product failure.
+1. "Most impressive thing built" — final version settled: mention Heuretos (9 agents, Neo4j DAG, containerized Next.js), emphasize the deliberate shutdown decision and CAC/differentiation reasoning as the real achievement, not just the architecture.
 
-2. "First year at college" answer: Current version emphasizes monetary outcome (highest placement package). Identified risk: leading with monetary impact may undermine the integrity narrative (refused bribes, fought through externals alone, 5-year degree). Decision pending on rebalancing emphasis toward decision-making/integrity first, then outcome as proof.
+2. "Highest placement package" answer — confirmed as strong. Conviction → cost → result structure is intact. Monetization impact is appropriate for YC context, not vanity.
 
-3. Askr and AI Audit Engine answers: Previously drafted. AI Audit Engine correction made: uses Google Calendar directly (not Calendly). Emdashes removed per user preference (more conversational tone).
+3. "Test scores" answer — FINAL DECISION: Do not submit the CAT/AFCAT answer as written. Both tests were framed around proving worth to father, not demonstrating capability relevant to startup building. The motivation undermines credibility with YC.
+
+4. Askr, AI Audit Engine, and Rex project descriptions — reviewed and approved for use in other sections.
 
 ## Failed Approaches
-- Including NotebookLM in Heuretos answer: was not in the original paste, user clarified it was not part of the final version.
-- Leading with monetary impact in college answer: identified as credibility risk
+- Including NotebookLM mention in Heuretos answer — was not in original transcript, user corrected.
+- Submitting test scores answer focused on paternal validation — explicitly identified as credibility-damaging by final exchange.
+- Emdashe punctuation in
