@@ -96,6 +96,7 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
             lines.extend(f"✓ {g}" for g in completed_goals)
 
         try:
+            # Files changed
             result = subprocess.run(
                 ["git", "diff", "HEAD~1", "--name-only"],
                 capture_output=True, text=True, cwd=project_path, timeout=5,
@@ -109,6 +110,25 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
                 lines.extend(f"  {f}" for f in files[:10])
                 if len(files) > 10:
                     lines.append(f"  …and {len(files) - 10} more")
+
+            # What changed and why — last commit message
+            msg_result = subprocess.run(
+                ["git", "log", "-1", "--pretty=%s"],
+                capture_output=True, text=True, cwd=project_path, timeout=5,
+            )
+            commit_msg = msg_result.stdout.strip()
+            if commit_msg and not commit_msg.startswith("askr:"):
+                lines.append(f"**Last commit:** {commit_msg}")
+
+            # One-line diff stat
+            stat_result = subprocess.run(
+                ["git", "diff", "HEAD~1", "--stat", "--no-color"],
+                capture_output=True, text=True, cwd=project_path, timeout=5,
+            )
+            stat_lines = [l for l in stat_result.stdout.strip().splitlines()
+                         if "changed" in l]
+            if stat_lines:
+                lines.append(f"**{stat_lines[-1].strip()}**")
         except Exception:
             pass
 

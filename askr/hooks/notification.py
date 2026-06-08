@@ -56,7 +56,8 @@ def main():
         return
 
     _log_notification(message, level)
-    _send_discord(message, level)
+    if level != "INFO":
+        _send_discord(message, level)
 
 
 if __name__ == "__main__":
