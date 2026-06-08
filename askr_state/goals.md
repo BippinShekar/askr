@@ -1,3 +1,9 @@
+## Today - 2026-06-08
+
+- [ ] Resume and complete the emergency checkpoint implementation <!-- added: 2026-06-08T19:31 -->
+
+- [ ] Review implementation_state.md and recent git diff to identify in-progress work <!-- added: 2026-06-08T19:31 -->
+
 ## Today - 2026-06-06
 
 - [x] Commit staged changes and test that handover files capture complete state <!-- added: 2026-06-06T15:50 -->
