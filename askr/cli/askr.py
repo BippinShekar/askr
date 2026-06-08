@@ -741,13 +741,15 @@ def _maybe_launch_for_goal(goal_text: str):
         from askr.session.lifecycle import (
             _claude_cli_available, _start_claude, _write_launch_mode,
         )
-        from askr.state.config import load_project_path
 
         if not _claude_cli_available():
             console.print("  [yellow]warn:[/yellow] claude not in PATH — start it manually\n")
             return
 
-        project_path = load_project_path()
+        # Always use cwd — never the stored global project path.
+        # Running `askr goal add` in /askr should launch in /askr, not whatever
+        # repo last ran `askr init`.
+        project_path = os.getcwd()
         _write_launch_mode(goal_text)
         _start_claude(project_path, initial_prompt=f"Read the handover and work on this goal autonomously: {goal_text}")
         console.print("  [green]→[/green] starting autonomous session for this goal\n")
