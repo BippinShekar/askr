@@ -88,30 +88,81 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
 
 def _broadcast_session_end(developer: str, completed_goals: list, project_path: str):
     try:
+        from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
+        from askr.session.report_image import session_card
+        from askr.session.checkpoint import _context_history_for_session
+        from askr.clients.discord import send_file, send_message
+        from askr.state.analytics import today_summary
+
+        # collect files changed
+        files_changed = []
+        try:
+            res = subprocess.run(
+                ["git", "diff", "HEAD~1", "--name-only"],
+                capture_output=True, text=True, cwd=project_path, timeout=5,
+            )
+            files_changed = [
+                f for f in res.stdout.strip().splitlines()
+                if not f.startswith("askr_state/")
+            ]
+        except Exception:
+            pass
+
+        cost_summary = get_session_cost_summary(project_path)
+        record_checkpoint_cost("stop", developer, cost_summary)
+
+        analytics   = today_summary()
+        duration    = analytics.get("total_seconds", 0)
+        context_h   = _context_history_for_session(project_path)
+
+        img_path = session_card(
+            trigger_type="stop",
+            developer=developer,
+            cost_summary=cost_summary,
+            duration_seconds=duration,
+            goals_completed=completed_goals,
+            files_changed=files_changed,
+            context_history=context_h,
+        )
+
+        caption = f"**[askr] Session ended** — {developer}"
+        if completed_goals:
+            caption += "\n" + "  ".join(f"✓ {g}" for g in completed_goals[:3])
+
+        if img_path:
+            sent = send_file(img_path, caption)
+            try:
+                os.remove(img_path)
+            except Exception:
+                pass
+            if not sent:
+                # fall back to text
+                _broadcast_session_text(developer, completed_goals, project_path)
+        else:
+            _broadcast_session_text(developer, completed_goals, project_path)
+    except Exception:
+        _broadcast_session_text(developer, completed_goals, project_path)
+
+
+def _broadcast_session_text(developer: str, completed_goals: list, project_path: str):
+    """Text-only fallback for when image generation fails."""
+    try:
         from askr.clients.discord import send_message
         lines = [f"**[askr] Session ended** — {developer}"]
-
         if completed_goals:
             lines.append("**Goals completed:**")
             lines.extend(f"✓ {g}" for g in completed_goals)
-
         try:
-            # Files changed
             result = subprocess.run(
                 ["git", "diff", "HEAD~1", "--name-only"],
                 capture_output=True, text=True, cwd=project_path, timeout=5,
             )
-            files = [
-                f for f in result.stdout.strip().splitlines()
-                if not f.startswith("askr_state/")
-            ]
+            files = [f for f in result.stdout.strip().splitlines() if not f.startswith("askr_state/")]
             if files:
                 lines.append("**Files changed:**")
                 lines.extend(f"  {f}" for f in files[:10])
                 if len(files) > 10:
                     lines.append(f"  …and {len(files) - 10} more")
-
-            # What changed and why — last commit message
             msg_result = subprocess.run(
                 ["git", "log", "-1", "--pretty=%s"],
                 capture_output=True, text=True, cwd=project_path, timeout=5,
@@ -119,19 +170,8 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
             commit_msg = msg_result.stdout.strip()
             if commit_msg and not commit_msg.startswith("askr:"):
                 lines.append(f"**Last commit:** {commit_msg}")
-
-            # One-line diff stat
-            stat_result = subprocess.run(
-                ["git", "diff", "HEAD~1", "--stat", "--no-color"],
-                capture_output=True, text=True, cwd=project_path, timeout=5,
-            )
-            stat_lines = [l for l in stat_result.stdout.strip().splitlines()
-                         if "changed" in l]
-            if stat_lines:
-                lines.append(f"**{stat_lines[-1].strip()}**")
         except Exception:
             pass
-
         if len(lines) > 1:
             send_message("\n".join(lines))
     except Exception:
