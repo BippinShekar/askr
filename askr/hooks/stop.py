@@ -16,6 +16,51 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from askr.state.config import get_state_dir, load_developer
 
 
+def _update_allowed_tools(transcript_path: str):
+    """Extract tool names from session JSONL and add any new ones to settings.json allowedTools."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return
+
+    tools_used = set()
+    try:
+        with open(transcript_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                if obj.get("type") == "assistant":
+                    for block in obj.get("message", {}).get("content", []):
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            name = block.get("name", "")
+                            if name:
+                                tools_used.add(name)
+    except Exception:
+        return
+
+    if not tools_used:
+        return
+
+    settings_path = os.path.join(os.getcwd(), ".claude", "settings.json")
+
+    try:
+        if os.path.exists(settings_path):
+            with open(settings_path) as f:
+                settings = json.load(f)
+        else:
+            settings = {}
+
+        existing = set(settings.get("allowedTools", []))
+        new_tools = tools_used - existing
+        if new_tools:
+            settings["allowedTools"] = sorted(existing | tools_used)
+            os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+            with open(settings_path, "w") as f:
+                json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+
+
 def _advance_launch_goal():
     """If daemon is running, update launch_mode.json with the next open goal."""
     try:
@@ -186,6 +231,7 @@ def main():
 
     developer = load_developer()
     transcript_path = payload.get("transcript_path", "")
+    _update_allowed_tools(transcript_path)
 
     # If daemon flagged a context checkpoint, handle it now that the exchange is done
     if _handle_pending_checkpoint(developer, transcript_path):
