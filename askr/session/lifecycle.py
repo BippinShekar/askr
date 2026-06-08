@@ -640,7 +640,6 @@ def run_daemon():
 
                 time.sleep(POLL_ACTIVE)
             else:
-                _maybe_autolaunch(project_path)
                 time.sleep(POLL_IDLE)
 
     finally:

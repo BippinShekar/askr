@@ -526,7 +526,28 @@ def cmd_init():
 
     try:
         from askr.clients.discord import send_message
-        send_message(f"**[askr] {developer} is online** — session orchestration active on `{os.path.basename(os.getcwd())}`")
+        from askr.clients.claude import call_claude
+        from askr.qa.context_loader import load_inventory
+
+        repo_name = os.path.basename(os.getcwd())
+        brief = ""
+        if os.path.exists(SNAPSHOT_PATH):
+            inventory = load_inventory()
+            with console.status("  generating repo brief for Discord...", spinner="dots"):
+                brief = call_claude(
+                    "You write concise technical onboarding briefs.",
+                    f"In 5 bullet points, describe what this codebase is, what's built, "
+                    f"and what looks in-progress. Be factual and specific. No fluff.\n\nFILES:\n{inventory}",
+                    mode="default",
+                    query_preview="onboarding brief"
+                )
+
+        welcome = f"**[askr] {developer} is online** — `{repo_name}`"
+        if brief:
+            welcome += f"\n\n**Repo brief:**\n{brief.strip()}"
+        send_message(welcome)
+        if brief:
+            console.print("  [green]✓[/green] repo brief posted to Discord")
     except Exception:
         pass
 
