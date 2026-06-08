@@ -1,18 +1,20 @@
-Last updated: 2026-06-08 19:07
+Last updated: 2026-06-08 19:09
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task/decision/progress context that Claude can resume from.
 
 ## What's In Flight
 
-- Fixing incorrect cost and token metrics in Discord session summary cards. Root cause identified: `get_state_dir()` was reading the wrong project path. Fix applied to `askr/state/config.py` but `get_session_cost_summary()` is still reporting implausible values (~$140, 500+ turns for single goal execution).
+- Fixing session cost/metrics reporting: `get_session_cost_summary()` currently reads the wrong JSONL file during multi-session testing, causing cross-contamination of token/cost data. Need to bind metrics to specific goal execution data instead of most-recently-active file.
+- Implementing goal-specific metrics snapshot: session token consumption (input/output split), context % used, execution duration, thinking vs output token ratio.
 - Verifying test status from last bash output and fixing any failures.
-- Reviewing files changed since last session against decisions.md.
 
 ## Key Decisions Made
 
-- State is append-only and stored in git. Decisions are logged with timestamp, developer, and reason; existing lines are never edited.
-- Session lifecycle is split across four modules: monitoring (token forecasting), hooks (Claude Code integration points), state persistence (reader/writer), and QA (context analysis).
-- Hooks inject context at session start, extract objectives from user prompts, generate handover docs on stop, and emergency checkpoint before context auto-compaction.
-- Safe interruption is validated before checkpoint to avoid corrupting
+- State persists in git as append-only decision log, task files, and progress snapshots — enables full context recovery across sessions and developers.
+- Session monitoring happens via hooks into Claude Code lifecycle (start, prompt submit, stop, pre-compact) rather than external polling.
+- Forecast module predicts which limit hits first (context vs quota) to trigger checkpoint at optimal time.
+- Cost/metrics are goal-scoped, not session-scoped — prevents metrics pollution when multiple sessions run in parallel.
+
+##
