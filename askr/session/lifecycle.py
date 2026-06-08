@@ -296,6 +296,7 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
             json.dump({
                 "type": "goal_launch",
                 "goal": initial_prompt or prompt_arg,
+                "message": f"Starting autonomous session — {initial_prompt or prompt_arg}",
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
