@@ -984,63 +984,80 @@ def cmd_uninstall():
 
 
 def cmd_report():
-    """Send a morning/daily report to Discord and print it to stdout."""
+    """Send a morning/daily report to Discord as a PNG card, print summary to stdout."""
     from askr.state.analytics import today_summary, _load_all
     from askr.state.goals import load_today_goals, load_open_goals
+    from askr.session.cost import today_cost_summary
     from datetime import datetime as _dt
 
     developer = load_developer()
     today = _dt.now().strftime("%Y-%m-%d")
 
-    summary = today_summary()
-    all_entries = _load_all()
-    today_entries = [e for e in all_entries if e.get("date") == today]
-
+    summary      = today_summary()
+    cost_today   = today_cost_summary()
     open_goals   = load_open_goals() or []
     today_goals  = load_today_goals() or []
-    done_today   = [g for g in today_goals if g.startswith("[x]") or "✓" in g]
+    done_today   = [g.lstrip("[x] ✓ ").strip() for g in today_goals
+                    if g.startswith("[x]") or "✓" in g]
 
-    lines = [f"**[askr] Daily Report — {developer} — {today}**"]
-
+    console.print()
+    console.print(f"[bold]Daily Report — {developer} — {today}[/bold]")
     if summary["sessions"] > 0:
-        lines.append(f"Sessions today: {summary['sessions']}  |  Time saved: {summary['total_human']}")
-
+        console.print(f"  Sessions: {summary['sessions']}  |  Time saved: {summary['total_human']}")
+    if cost_today:
+        console.print(
+            f"  Cost: ${cost_today.get('total_cost_usd', 0):.2f}  |  "
+            f"Saved: ${cost_today.get('total_savings_usd', 0):.2f}"
+        )
     if done_today:
-        lines.append("\n**Completed today:**")
-        lines.extend(f"✓ {g.lstrip('[x] ').strip()}" for g in done_today)
-
+        console.print("  Completed: " + ", ".join(done_today[:3]))
     if open_goals:
-        lines.append("\n**Open goals:**")
-        lines.extend(f"- {g}" for g in open_goals[:5])
-
-    # Next action from latest handover
-    try:
-        handover_path = state_path(f"handover_{developer}.md")
-        if os.path.exists(handover_path):
-            with open(handover_path) as f:
-                content = f.read()
-            for section in content.split("##"):
-                if section.strip().lower().startswith("next action"):
-                    next_action = section.split("\n", 1)[1].strip()[:200]
-                    lines.append(f"\n**Next action:**\n{next_action}")
-                    break
-    except Exception:
-        pass
-
-    report = "\n".join(lines)
-    console.print()
-    console.print(report)
+        console.print("  Open: " + ", ".join(open_goals[:3]))
     console.print()
 
+    # Try to send a PNG morning report card
+    discord_ok = False
     try:
-        from askr.clients.discord import send_message
-        ok = send_message(report)
-        if ok:
-            console.print("  [green]✓[/green] sent to Discord")
-        else:
-            console.print("  [yellow]Discord webhook not configured[/yellow] — set ASKR_DISCORD_WEBHOOK in .env")
+        from askr.session.report_image import morning_report_card
+        from askr.clients.discord import send_file, send_message
+
+        img_path = morning_report_card(
+            date=today,
+            sessions=summary.get("sessions", 0),
+            total_seconds=summary.get("total_seconds", 0),
+            total_cost_usd=cost_today.get("total_cost_usd", 0.0),
+            total_savings_usd=cost_today.get("total_savings_usd", 0.0),
+            total_tokens=cost_today.get("total_tokens", 0),
+            goals_completed=done_today,
+            goals_open=open_goals[:4],
+        )
+
+        caption = f"**[askr] Daily Report — {developer} — {today}**"
+        if img_path:
+            discord_ok = send_file(img_path, caption)
+            try:
+                os.remove(img_path)
+            except Exception:
+                pass
+
+        if not discord_ok:
+            # text fallback
+            lines = [caption]
+            if summary["sessions"] > 0:
+                lines.append(f"Sessions: {summary['sessions']}  |  Time: {summary['total_human']}")
+            if done_today:
+                lines.extend(f"✓ {g}" for g in done_today)
+            if open_goals:
+                lines.extend(f"- {g}" for g in open_goals[:4])
+            discord_ok = send_message("\n".join(lines))
+
     except Exception as e:
-        console.print(f"  [red]Discord send failed:[/red] {e}")
+        console.print(f"  [yellow]Report image failed:[/yellow] {e}")
+
+    if discord_ok:
+        console.print("  [green]✓[/green] sent to Discord")
+    else:
+        console.print("  [yellow]Discord webhook not configured[/yellow] — set ASKR_DISCORD_WEBHOOK in .env")
 
 
 def main():

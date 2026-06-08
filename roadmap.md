@@ -197,7 +197,7 @@ The problem with Phase 3.5: the guard warns but doesn't act. Claude proceeds wit
 
 ---
 
-## Phase 3.7 - Rich Visual Reports
+## Phase 3.7 - Rich Visual Reports ✅
 
 **Goal:** Replace text-wall Discord messages with a single shareable image — session stats, cost savings, context timeline, goals completed. The screenshot that makes people want askr.
 
@@ -207,12 +207,12 @@ The killer stat: "without askr this session would have cost $X and hit the conte
 
 | Feature | Status |
 |---|---|
-| Cost calculation — tokens used × model rate, projected cost without askr checkpointing | 🔲 Todo |
-| Session timeline image — context % curve, trigger fire point, goal completions marked | 🔲 Todo |
-| Summary card — time saved, tokens saved, cost delta, files changed, goals completed | 🔲 Todo |
-| Discord file attachment — send PNG via multipart/form-data, delete temp file after | 🔲 Todo |
-| Fires on checkpoint (context + quota triggers) and goal completion | 🔲 Todo |
-| Morning report image — daily rollup of all sessions, total saved, goals shipped | 🔲 Todo |
+| Cost calculation — tokens used × model rate, projected cost without askr checkpointing | ✅ Done |
+| Session timeline image — context % curve, trigger fire point, goal completions marked | ✅ Done |
+| Summary card — time saved, tokens saved, cost delta, files changed, goals completed | ✅ Done |
+| Discord file attachment — send PNG via multipart/form-data, delete temp file after | ✅ Done |
+| Fires on checkpoint (context + quota triggers) and goal completion | ✅ Done |
+| Morning report image — daily rollup of all sessions, total saved, goals shipped | ✅ Done |
 
 **Done when:** A checkpoint fires, Discord receives a dark-card PNG with session stats and cost savings that's worth screenshotting and posting.
 
