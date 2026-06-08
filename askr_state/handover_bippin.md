@@ -1,19 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-09 00:04
+Last updated: 2026-06-09 00:05
 
 # Handover Document
 
 ## Task
-Refine YC application answers for three questions by adding technical depth, removing em-dashes, and adopting a confident, arrogant-but-backed-up tone that matches the applicant's voice.
+Refine YC application answers about past technical projects by removing marketing language, correcting technical details, and ensuring answers are concise and human-sounding rather than resume-like.
 
 ## Status
-Three application answers finalized and ready to copy-paste:
+Three project answers being refined for YC application:
 
-1. **Askr (Open source)** — Answer complete. Describes session checkpointing, git-based state management, and daily use. Em-dashes removed. Tone: confident, direct.
+1. **Askr (Open source)** — FINAL: "I was building multiple projects simultaneously and Claude Code kept losing context mid-task. Askr watches the session, checkpoints before Claude degrades, commits structured project state to git, and resumes automatically. Building it for myself, while using it every day."
 
-2. **AI Audit Engine** — Answer complete. Pipeline documented: Apollo → Serper → Claude → Gmail → Google Calendar (not Calendly) → Razorpay. Queue-based execution via BullMQ. Em-dashes removed. Tone adjusted.
+2. **AI Audit Engine** — FINAL: Correction made — uses Google Calendar directly for booking, NOT Calendly. Pipeline confirmed: Apollo → Serper → Claude → Gmail → Google Calendar → Razorpay. Queue-based execution via BullMQ on schedule. Remove emphasis formatting (em dashes).
 
-3. **Most impressive thing (non-startup)** — Answer incomplete. Applicant provided partial text about Heuretos (heuretos.com): multi-agent research assistant, 9 specialized agents, Neo4j DAG orchestration, parallel execution, query rewriter pipeline, containerized Next.js frontend. Applicant rejected this as "resume bullet" language. Session ended before final rewrite was delivered.
+3. **Heuretos (heuretos.com)** — For "most impressive thing" question: Answer currently reads as architecture description rather than achievement. User mentioned NotebookLM was in original paste but transcript does not show that mention — clarification needed on whether NotebookLM should be included.
 
-Applicant clarified: NotebookLM was stripped from Heuretos answer because it was not the core accomplishment — the architectural design
+## Failed Approaches
+- Calendly integration — user cannot afford subscription, switched to Google Calendar API instead.
+- Marketing-style language
