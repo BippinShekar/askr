@@ -895,6 +895,12 @@ def cmd_launch(args: list):
     if os.path.exists(_STATS_PATH):
         console.print(f"  [dim]session:[/dim] {_statusline_text()}")
 
+    allowed = _load_claude_settings().get("allowedTools", [])
+    if allowed:
+        console.print(f"  [dim]pre-approved ({len(allowed)}):[/dim] {', '.join(sorted(allowed))}")
+    else:
+        console.print("  [yellow]⚠ no tools pre-approved[/yellow]  [dim]— run askr init[/dim]")
+
     console.print()
     console.print(f"  [dim]log:[/dim] {log_path}")
     console.print(f"  [dim]stop:[/dim] [bold]askr launch --stop[/bold]")
