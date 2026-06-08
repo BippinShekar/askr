@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [19:04] Ran: source venv/bin/activate && python3 -c "
+import sys
+sys.path.insert(0, '.')
+from
 - [18:36] Ran: cat ~/.config/askr/analytics.json 2>/dev/null | python3 -c "import json,sys; dat
 - [18:36] Ran: git log --format="%h %ai %s" -8
 - [18:33] Ran: git add askr/state/config.py && git commit -m "$(cat <<'EOF'
