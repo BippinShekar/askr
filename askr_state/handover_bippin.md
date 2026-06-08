@@ -1,18 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 22:53
+Last updated: 2026-06-08 23:36
 
 Task
-Analyze and provide feedback on YC founder profile form responses, specifically addressing the "hack a non-computer system" question which remains unanswered.
+Provide feedback on YC founder profile form responses and help refine answers, specifically the "hacked a system" question.
 
 Status
-User has a co-founder CEO already filling their side of the application. User is CTO with 51% equity. Form is incomplete — the "hack a non-computer system" question has not been answered yet. User mentioned participating in hackathons in 2023 or prior but has not formulated a response. Previous feedback identified typo "NeoVj" and noted Pulsegen duration (3 months) needs context about toxic workplace departure.
+- User is CTO with 51% equity (co-founder CEO handling their own section)
+- NeoVj typo identified in form
+- Pulsegen duration listed as 3 months without context explanation
+- "Hacked a system" question remains unanswered in form
+- User provided final answer direction: leverage the professor rapport story (told professor he was too intellectually advanced for attendance/exams requirements, joined 8bit as intern afterward)
 
 Failed Approaches
-Suggesting user reframe CTO title — rejected because co-founder CEO exists and this is founder profile section only. Suggesting user add "left due to toxic environment" context to Pulsegen — user clarified form is incomplete and this question hasn't been addressed yet.
+- Generic hackathon answer for "hacked a system" question — rejected as insufficient
+- Leaving the system-hacking field blank — rejected
 
 Next Action
-Draft a response to the "hack a non-computer system" question using the hackathon participation from 2023 or prior as the foundation. The response should demonstrate resourcefulness and creative problem-solving in a non-technical domain. Provide 2-3 concrete options for the user to choose from or refine.
+Craft the "hacked a system" answer using the professor rapport exploit story: user convinced professor to waive attendance and exam requirements by claiming superior intellect and startup focus, then joined 8bit as intern. Shape this into a 2-3 sentence response that demonstrates resourcefulness and persuasion without appearing arrogant or unethical to YC reviewers.
 
 Open Questions
-What specific hackathon(s) did the user participate in during 2023 or prior, and what was the outcome or achievement
+- How to frame the professor story tone to avoid appearing manipulative or dishonest to YC partners
+- Whether to mention 8bit internship as the outcome or focus purely on the system hack itself

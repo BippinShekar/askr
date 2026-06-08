@@ -1,19 +1,19 @@
-Last updated: 2026-06-08 22:53
+Last updated: 2026-06-08 23:36
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—objectives, decisions, progress—so work can resume without losing context or repeating analysis.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context window or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent developer context, active objectives, and progress tracking in version control.
 
 ## What's In Flight
 
-- Emergency checkpoint implementation: completing the `safe_pause.py` validation logic to ensure interruptions happen only at safe points in the codebase
-- Session resumption flow: wiring `lifecycle.py` to inject prior context and objectives when Claude Code restarts
-- Hook integration with Claude Code: finalizing `pre_compact.py` to trigger checkpoints before context auto-compaction
-- Test coverage: fixing failures identified in recent test runs and validating checkpoint/resume end-to-end
+- Emergency checkpoint implementation: completing safe_pause.py validation logic and pre_compact.py hook integration to catch context exhaustion before Claude auto-compacts
+- State persistence layer: finalizing reader.py and writer.py to load/update developer context, task lists, and decisions from git-tracked state files
+- Session resumption flow: wiring lifecycle.py to inject prior context on session start and restore developer objectives from last checkpoint
+- Test suite: verifying all modules pass unit tests and integration tests for checkpoint-resume cycle
 
 ## Key Decisions Made
 
-- State persisted to git, not a separate database—enables version control, diffs, and handoffs without external infrastructure
-- Append-only decision log in `decisions.md`—immutable record of why choices were made, aids onboarding and prevents revisiting settled questions
-- Forecast module predicts which limit (context or quota) hits first—allows proactive checkpointing rather than reactive recovery
-- Hooks injected at four Claude Code lifecycle points (start, prompt submit, stop,
+- State stored in git as source of truth for developer handoffs; enables code review and audit trail of context/decisions across sessions
+- Checkpoint triggered by forecast.py prediction (whichever limit hits first) rather than reactive; prevents mid-task interruption
+- Hooks injected into Claude Code lifecycle (session_start, user_prompt_submit, stop, pre_compact) rather than external polling; tighter integration and lower latency
+- safe_pause.py validates interruption safety
