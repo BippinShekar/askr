@@ -1,22 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-08 19:26
+Last updated: 2026-06-08 19:28
+
+# HANDOVER DOCUMENT
 
 ## Task
-Redesign askr's session metrics cards to be visually polished and shareable (screenshot/tweet-worthy), focusing on autonomous session continuation as the core value metric rather than generic token counts.
+Implement token usage reporting and autonomous session detection in the askr Discord bot, with visual card formatting for session metrics.
 
 ## Status
-- Identified core metrics to track: autonomous continuations (sessions without developer interruption) and context wall avoidance (checkpoint interception point)
-- Created `/Users/bippin/Desktop/askr/askr/session/report_image.py` — new card generation module with improved visual design
-- Modified `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — added autonomous session detection logic and wired it through to report generation
-- Confirmed available JSONL fields from session data: `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens` (no thinking tokens exposed)
-- Tested card generation with Discord webhook send to validate visual output
-- Changes committed to git with message referencing implementation
+- `/Users/bippin/Desktop/askr/askr/session/report_image.py` — written with token field extraction (input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens) and Discord card formatting
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — modified to detect autonomous mode and wire detection through to reporting
+- Discord card layout finalized: hero number (developer interruptions count), left accent bar by trigger type, token metrics (input/output/context %), turn count, duration, goals and files in two-column layout
+- Changes committed to git
+- Test card successfully sent to Discord and verified visually
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Verify the Discord test card was received and visually acceptable. If the card appearance meets "screenshot/tweet-worthy" standard, the redesign is complete. If visual refinements are needed, iterate on the card template in `report_image.py` and re-test the Discord webhook output.
+Verify the Discord card is rendering correctly on the live channel and confirm all token fields are populating accurately from the JSONL session data.
 
 ## Open Questions
+None.
