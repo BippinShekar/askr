@@ -42,6 +42,12 @@ def load_project_path() -> str:
 
 
 def get_state_dir() -> str:
+    # Prefer cwd-relative askr_state — hooks run inside Claude with the correct
+    # project cwd, so this is always right for multi-repo installs.
+    # Falls back to stored path for daemon/CLI calls that may run elsewhere.
+    cwd_state = os.path.join(os.getcwd(), _STATE_DIR_NAME)
+    if os.path.isdir(cwd_state):
+        return cwd_state
     return os.path.join(load_project_path(), _STATE_DIR_NAME)
 
 
