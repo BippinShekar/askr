@@ -1,24 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-09 22:03
-
-# Handover: Claude Session — askr Kill/Restart Flow Analysis
+Last updated: 2026-06-10 00:05
 
 ## Task
-Analyze why askr killed the Claude session during pre-compact hooks in the leaps repo but failed to auto-restart it, stopping instead of recovering. Provide thorough tabular analysis of failure points in the kill→restart flow.
+Fix context-aware restart mechanism for Claude Code integration by ensuring project_path and allowed_tools are passed through notification chain from lifecycle manager to extension terminal handler.
 
 ## Status
-- Grep searches executed for kill/restart related functions: `_wait_for_exchange_end_then_kill`, `_write_checkpoint_pending`, `_execute_t`, `_kill_claude`, `_start_claude`, `def _kill`, `def _start`
-- File reads initiated on lifecycle.py and related session management code
-- Session ended mid-investigation before analysis table was generated
-- No root cause identified yet
-- No fixes applied
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified `_handle_pending_checkpoint` in stop.py handler and `_start_claude` to include `project_path` and `allowed_tools` in notification.json payload
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Modified `_handle_pending_checkpoint` to write `project_path` to notification.json for daemon fallback
+- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Added `goal_launch` handler and fixed all `createTerminal` calls to use `cwd` parameter from notification payload; applied fix to both checkpoint and goal_launch restart paths
+- All three files edited and staged for commit with message "fix: reliable context-trigger restart and full permission transfer"
 
 ## Failed Approaches
-None.
+- Attempted to pass `project_path` as kwarg to `create_checkpoint()` — function does not accept this parameter; instead passed it through notification.json payload to extension
 
 ## Next Action
-Complete the interrupted analysis by:
-1. Read the full output from the grep searches for kill/restart function signatures in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
-2. Trace the execution path: when `_kill_claude` is called during pre-compact hooks, identify where `_start_claude` should be triggered but isn't
-3. Check for conditional guards, exception handling, or state flags that prevent restart after kill in non-askr repos (specifically leaps repo context)
+Push the staged commit to verify the changes integrate correctly with the daemon

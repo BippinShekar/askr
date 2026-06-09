@@ -1,18 +1,18 @@
-Last updated: 2026-06-09 22:03
+Last updated: 2026-06-10 00:05
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or momentum.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context.
 
 ## What's In Flight
 
-- Emergency checkpoint implementation during pre-compact hooks: detecting when Claude auto-compacts context and saving state before it happens.
-- Kill/restart flow analysis in lifecycle.py: investigating why askr killed a Claude session in the leaps repo but failed to auto-restart it, leaving the session stopped instead of recovering.
-- State persistence layer: completing reader.py and writer.py to load and update developer context from git-backed state files.
-- Hook integration: wiring session_start.py, user_prompt_submit.py, and stop.py to inject context, extract objectives, and generate handover docs on session end.
+- Context-aware restart mechanism: ensuring project_path and allowed_tools flow through the notification chain from lifecycle manager to extension terminal handler. Three files staged and ready to commit: lifecycle.py, stop.py, extension.js.
+- Emergency checkpoint implementation: completing the safe_pause validation logic that detects safe interruption points before context auto-compaction.
+- Test suite verification: fixing any failures from recent changes and ensuring all modules pass.
 
 ## Key Decisions Made
 
-- State stored in git, not a separate database: enables version control, diffs, and handoffs without external infrastructure.
-- Append-only decisions log: all decisions recorded with timestamp and reason; never edited, only appended.
-- Safe pause validation before checkpoint: safe_pause.py ensures interruption happens at a stable point, not mid-operation.
+- State persisted to git, not a database. Enables offline handoffs and version control of developer context.
+- Checkpoint triggered by forecast, not by hard limit hit. Proactive rather than reactive—predicts which limit (context or quota) will be exhausted first.
+- Extension-daemon split: Claude Code extension handles terminal creation and session lifecycle hooks; daemon handles monitoring and state orchestration. Notification.json is the contract between them.
+- Append-only decisions log. Never edit past decisions; new decisions always appended with timestamp and reasoning.
