@@ -1,17 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 03:06
+Last updated: 2026-06-10 03:08
 
 # Handover Document
 
 ## Task
-Implement Phase 3.9: behavior pattern detection with user confirmation (Cursor-based) and Discord notification (headless), plus fix Phase 3.8 incomplete initialization of permission carry-on.
+Fix permission persistence across sessions in askr: ensure `askr init` seeds both `allowedTools` and `permissions.allow` in settings, and add `WebSearch` to baseline allowed tools so users don't re-grant web search permission repeatedly.
 
 ## Status
-- **roadmap.md**: Updated to add Phase 3.9 as new phase with two-mode design (Cursor interactive confirmation vs. headless Discord receipt). Phase 3.8 marked as incomplete — `askr init` does not seed `permissions.allow` to `settings.local.json`.
-- **askr/cli/askr.py**: Modified to seed `permissions.allow` with `BASELINE_ALLOWED_TOOLS` during `askr init`. Change committed.
-- **Architecture decision finalized**: Cursor sessions use `behavior_confirm` notification type (existing VS Code popup infrastructure with action buttons). Headless sessions use Discord webhook (one-way receipt only, no blocking on user input).
-- **Permission carry-on confirmed working**: After first Stop hook execution, subsequent sessions read persisted rules from `~/.claude/CLAUDE.md`. Initial session still prompts because `settings.local.json` was not seeded at init.
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Modified to seed `permissions.allow` with `BASELINE_ALLOWED_TOOLS` during init, and added `WebSearch` to `BASELINE_ALLOWED_TOOLS` list
+- `/Users/bippin/Desktop/askr/roadmap.md`: Updated Phase 3.8 entry to reflect that permission seeding was incomplete and is now fixed
+- Both askr and leaps projects confirmed to already have `WebSearch` in their `settings.local.json`
+- Changes committed and pushed to git
 
 ## Failed Approaches
-- Unified confirmation flow for both Cursor and headless: rejected because headless sessions would block indefinitely waiting for input that cannot arrive
+None.
+
+## Next Action
+Verify that a fresh `askr init` on a new project now creates `settings.local.json` with both `allowedTools` and `permissions.allow` populated with `BASELINE_ALLOWED_TOOLS` (including `WebSearch`), and that this persists across session boundaries without re-prompting for web search permission.
+
+## Open Questions
+None.

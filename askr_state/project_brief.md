@@ -1,17 +1,18 @@
-Last updated: 2026-06-10 03:06
+Last updated: 2026-06-10 03:08
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so any developer can resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so work can resume without losing context or re-granting permissions.
 
 ## What's In Flight
 
-- Phase 3.9: Behavior pattern detection with user confirmation. Cursor sessions use interactive popups (existing infrastructure); headless sessions notify via Discord webhook (one-way receipt, no blocking).
-- Phase 3.8 fix: `askr init` now seeds `permissions.allow` with baseline allowed tools to `settings.local.json`, so permission carry-on works from session two onward.
-- Permission system validation: Confirmed that persisted rules in `~/.claude/CLAUDE.md` are read correctly by subsequent sessions.
+- Permission persistence across sessions: `askr init` now seeds both `allowedTools` and `permissions.allow` with baseline tools including WebSearch, so users don't re-grant permissions on resumption.
+- Verification that fresh init creates properly populated `settings.local.json` and that permissions persist across session boundaries without re-prompting.
+- Test status review from last session output and fixing any failures.
 
 ## Key Decisions Made
 
-- Two-mode confirmation design: Cursor uses `behavior_confirm` notification type with action buttons; headless uses Discord webhooks. Unified flow rejected because headless cannot block on user input.
-- State persistence via git: All session state (tasks, decisions, progress) stored in version control to enable developer handoffs and audit trail.
-- Permission carry-on: Rules persist in `~/.claude/CLAUDE.md` after first
+- State is append-only in git (decisions.md, handover docs) to maintain audit trail and enable easy rebasing across sessions.
+- Session lifecycle is split into five stages: monitor (token tracking), forecast (predict which limit hits first), checkpoint (persist before exhaustion), safe_pause (validate interruption points), and lifecycle (trigger resumption).
+- Baseline allowed tools (including WebSearch) are seeded during init to avoid repeated permission prompts across session boundaries.
+- Handover documents are generated on session end and committed automatically, making context transfer
