@@ -257,10 +257,10 @@ def session_card(
                  "checkpoint", color=_AMBER, fontsize=7,
                  ha="right", va="bottom")
 
-        # 75% threshold
-        tax.axhline(y=75, color=_RED, linewidth=0.7,
+        # 65% threshold
+        tax.axhline(y=65, color=_RED, linewidth=0.7,
                     linestyle=":", alpha=0.6, zorder=2)
-        tax.text(0.5, 76, "75% threshold", color=_RED,
+        tax.text(0.5, 66, "65% threshold", color=_RED,
                  fontsize=7, va="bottom")
 
         tax.set_ylim(0, 105)
