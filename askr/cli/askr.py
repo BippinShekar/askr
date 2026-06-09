@@ -95,7 +95,7 @@ def _install_statusline():
 
 
 def _install_allowed_tools() -> tuple[list, list]:
-    """Merge baseline tools into allowedTools in .claude/settings.json.
+    """Merge baseline tools into allowedTools (settings.json) and permissions.allow (settings.local.json).
     Returns (new_tools_added, already_present)."""
     settings = _load_claude_settings()
     existing = set(settings.get("allowedTools", []))
@@ -103,6 +103,26 @@ def _install_allowed_tools() -> tuple[list, list]:
     if new_tools:
         settings["allowedTools"] = sorted(existing | set(BASELINE_ALLOWED_TOOLS))
         _save_claude_settings(settings)
+
+    # permissions.allow is what actually silences tool prompts — seed it at init
+    local_path = os.path.join(".claude", "settings.local.json")
+    try:
+        if os.path.exists(local_path):
+            with open(local_path) as f:
+                local = json.load(f)
+        else:
+            local = {}
+        perms = local.setdefault("permissions", {})
+        existing_allow = set(perms.get("allow", []))
+        baseline_set = set(BASELINE_ALLOWED_TOOLS)
+        if baseline_set - existing_allow:
+            perms["allow"] = sorted(existing_allow | baseline_set)
+            os.makedirs(".claude", exist_ok=True)
+            with open(local_path, "w") as f:
+                json.dump(local, f, indent=2)
+    except Exception:
+        pass
+
     return new_tools, [t for t in BASELINE_ALLOWED_TOOLS if t in existing]
 
 

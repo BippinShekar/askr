@@ -226,8 +226,8 @@ The problem: Claude Code permissions granted as "allow once" die with the sessio
 
 | Feature | Status |
 |---|---|
-| `askr init` writes a baseline `allowedTools` list to `.claude/settings.json` covering tools needed for autonomous operation (Bash, Edit, Write, Read, etc.) | ✅ Done |
-| Stop hook reads tool usage from session JSONL, adds any newly-used tools to `.claude/settings.json` so next session inherits them | ✅ Done |
+| `askr init` writes baseline tools to `allowedTools` (settings.json) AND `permissions.allow` (settings.local.json) — first session never prompts | ✅ Done |
+| Stop hook reads tool usage from session JSONL, adds any newly-used tools to both `allowedTools` and `permissions.allow` so next session inherits them | ✅ Done |
 | `askr launch` shows which tools are pre-approved and which would still prompt | ✅ Done |
 | Auto-launched sessions (from goal add or context trigger) get `--allowedTools` flag populated from settings at launch time | ✅ Done |
 
