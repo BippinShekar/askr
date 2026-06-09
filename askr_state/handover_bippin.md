@@ -1,19 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 02:30
+Last updated: 2026-06-10 02:38
 
-# Handover Document
+# HANDOVER DOCUMENT
 
 ## Task
-Investigated how to persist user behavior patterns and command preferences across Claude Code sessions without manual setup, and evaluated whether askr should implement automatic behavior persistence.
+Design and implement a behavioral pattern detection system for askr that automatically identifies user coding patterns (e.g., "build in stages, commit and push after each stage, show tabular view"), notifies the user when patterns are detected, and allows them to persist these patterns persistently across sessions without manual configuration.
 
 ## Status
-- Researched whether CLAUDE.md is the correct mechanism for persisting session behaviors (confirmed: yes, `~/.claude/CLAUDE.md` loads automatically in every session)
-- Identified that askr's session lifecycle system (hooks in `askr/session/lifecycle.py` and `askr/hooks/stop.py`) is not the right layer for behavior persistence
-- Confirmed that `~/.claude/CLAUDE.md` already works as a global, automatic persistence mechanism across all projects and sessions
-- Conducted web search to determine if other users face this problem and whether existing solutions exist (search completed but results not yet analyzed in transcript)
-- Determined that askr *could* add `~/.config/askr/session_behaviors.md` as a future feature for project-specific behavior rules layered on top of global CLAUDE.md
+- Decision made: CLAUDE.md is the correct persistence mechanism for global behavioral rules across all sessions
+- Decision made: askr should implement automatic pattern detection that triggers notifications when user behavior matches learned patterns
+- Decision made: pattern matching should be expansive and user-specific, not limited to a predefined set (user will create patterns only they know)
+- Decision made: users should be able to accept/discard detected patterns via notification UI, with accepted patterns persisting automatically
+- Research completed: GitHub issues #22292 and #14227 confirm this is a real, documented problem with persistent preferences in Claude Code
+- Current implementation state: No code written yet; this is a feature design that was validated as needed and feasible
 
 ## Failed Approaches
-- Using askr's memory/handover system to persist user behavior patterns — rejected because CLAUDE.md already solves this at the OS level and is automatically loaded by every Claude Code session
-- Storing behavior rules in askr's session lifecycle hooks — rejected because this couples user preferences to the orchestration layer rather
+- Storing behavioral patterns in askr's session_behaviors.md without user consent — rejected because it requires manual setup and doesn't capture emergent patterns
+- Matching against a fixed set of predefined patterns — rejected because user patterns are unique and unknowable in advance
+
+## Next Action
+Implement pattern
