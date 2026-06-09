@@ -1,19 +1,17 @@
-Last updated: 2026-06-10 03:02
+Last updated: 2026-06-10 03:06
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent developer context, active objectives, and coding patterns—so work can resume without losing momentum or repeating decisions.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so any developer can resume work without losing context.
 
 ## What's In Flight
 
-- Behavioral pattern detection system: automatically identifying user coding patterns, confirming them via Cursor popup or Discord webhook (for headless), and persisting them to `~/.claude/CLAUDE.md` or project-specific `.claude/CLAUDE.md`
-- Implementation of `behavior_confirm` notification type in Cursor mode using existing `goal_check` infrastructure
-- Discord integration for headless environment notifications (one-way, no response channel required)
-- Test verification and fix of any failures from last session output
+- Phase 3.9: Behavior pattern detection with user confirmation. Cursor sessions use interactive popups (existing infrastructure); headless sessions notify via Discord webhook (one-way receipt, no blocking).
+- Phase 3.8 fix: `askr init` now seeds `permissions.allow` with baseline allowed tools to `settings.local.json`, so permission carry-on works from session two onward.
+- Permission system validation: Confirmed that persisted rules in `~/.claude/CLAUDE.md` are read correctly by subsequent sessions.
 
 ## Key Decisions Made
 
-- Two-mode notification system: interactive `behavior_confirm` popup in Cursor (keep/discard buttons), Discord webhook in headless (one-way notification only)
-- Expansive user-specific patterns, not fixed set: users create patterns only they know; system learns from behavior rather than enforcing predefined rules
-- Pattern persistence in global or project-specific `.claude/CLAUDE.md` files, keyed by user confirmation
-- Reuse existing
+- Two-mode confirmation design: Cursor uses `behavior_confirm` notification type with action buttons; headless uses Discord webhooks. Unified flow rejected because headless cannot block on user input.
+- State persistence via git: All session state (tasks, decisions, progress) stored in version control to enable developer handoffs and audit trail.
+- Permission carry-on: Rules persist in `~/.claude/CLAUDE.md` after first
