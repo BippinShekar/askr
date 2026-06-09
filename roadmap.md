@@ -235,6 +235,38 @@ The problem: Claude Code permissions granted as "allow once" die with the sessio
 
 ---
 
+## Phase 3.9 - Behavioral Preference Persistence
+
+**Goal:** You never write CLAUDE.md manually. Askr detects when you give an instruction that should apply to every future session, and persists it automatically — confirmed by you in Cursor, or auto-persisted with Discord notification when headless.
+
+The problem: every tool that claims to "remember" preferences still requires manual config files. You have to know what to write, where to write it, and remember to update it. In practice, you repeat the same instructions every session. This phase makes askr close that loop automatically — it reads what you actually said, extracts the behavioral signal, and writes it to the right place.
+
+**Two-mode delivery (by context):**
+
+| Context | Behavior |
+|---|---|
+| Cursor open | `behavior_confirm` IDE popup — shows detected rules with Keep / Discard. User confirms before anything is written. |
+| Headless / autonomous | Auto-writes to CLAUDE.md immediately. Discord sends "Detected and persisted: X. `askr prefs remove` to undo." |
+
+**Features:**
+
+| Feature | Status |
+|---|---|
+| Stop hook scans user messages from session JSONL for behavioral instructions | 🔲 Todo |
+| Haiku call extracts structured rules — filters task-specific instructions vs. persistent preferences | 🔲 Todo |
+| Diff against existing CLAUDE.md — never re-surface already-persisted rules | 🔲 Todo |
+| LLM classifies global (`~/.claude/CLAUDE.md`) vs. project-specific rule scope | 🔲 Todo |
+| `behavior_confirm` notification type in extension — Keep / Discard buttons | 🔲 Todo |
+| Headless path: auto-write + Discord "Detected and persisted: X. `askr prefs remove` to undo." | 🔲 Todo |
+| `askr prefs` CLI — list all persisted behavioral rules across global + project CLAUDE.md | 🔲 Todo |
+| `askr prefs remove "rule"` — delete a specific rule from CLAUDE.md | 🔲 Todo |
+| `askr prefs pending` — list rules detected but not yet confirmed (Cursor was closed mid-session) | 🔲 Todo |
+| Conservative detection — only fire notification when confidence is high; silent if ambiguous | 🔲 Todo |
+
+**Done when:** You tell Claude "always build in stages and commit each stage" once. Askr detects it, asks you to confirm, writes it to CLAUDE.md. Every subsequent session — including overnight autonomous ones — follows that rule without you repeating it.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
