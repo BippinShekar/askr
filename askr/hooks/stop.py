@@ -17,7 +17,7 @@ from askr.state.config import get_state_dir, load_developer
 
 
 def _update_allowed_tools(transcript_path: str):
-    """Extract tool names from session JSONL and add any new ones to settings.json allowedTools."""
+    """Extract tool names from session JSONL and persist to allowedTools + permissions.allow."""
     if not transcript_path or not os.path.exists(transcript_path):
         return
 
@@ -41,9 +41,10 @@ def _update_allowed_tools(transcript_path: str):
     if not tools_used:
         return
 
-    settings_path = os.path.join(os.getcwd(), ".claude", "settings.json")
+    project_dir = os.path.join(os.getcwd(), ".claude")
 
     try:
+        settings_path = os.path.join(project_dir, "settings.json")
         if os.path.exists(settings_path):
             with open(settings_path) as f:
                 settings = json.load(f)
@@ -51,12 +52,29 @@ def _update_allowed_tools(transcript_path: str):
             settings = {}
 
         existing = set(settings.get("allowedTools", []))
-        new_tools = tools_used - existing
-        if new_tools:
+        if tools_used - existing:
             settings["allowedTools"] = sorted(existing | tools_used)
-            os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+            os.makedirs(project_dir, exist_ok=True)
             with open(settings_path, "w") as f:
                 json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+
+    # permissions.allow in settings.local.json is what actually silences prompts
+    try:
+        local_path = os.path.join(project_dir, "settings.local.json")
+        if os.path.exists(local_path):
+            with open(local_path) as f:
+                local = json.load(f)
+        else:
+            local = {}
+        perms = local.setdefault("permissions", {})
+        existing_allow = set(perms.get("allow", []))
+        if tools_used - existing_allow:
+            perms["allow"] = sorted(existing_allow | tools_used)
+            os.makedirs(project_dir, exist_ok=True)
+            with open(local_path, "w") as f:
+                json.dump(local, f, indent=2)
     except Exception:
         pass
 

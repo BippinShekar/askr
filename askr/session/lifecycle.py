@@ -565,7 +565,8 @@ def _pre_kill_update_tools(project_path: str):
                             tools_used.add(name)
         if not tools_used:
             return
-        settings_path = os.path.join(project_path, ".claude", "settings.json")
+        project_dir = os.path.join(project_path, ".claude")
+        settings_path = os.path.join(project_dir, "settings.json")
         try:
             if os.path.exists(settings_path):
                 with open(settings_path) as f:
@@ -576,12 +577,30 @@ def _pre_kill_update_tools(project_path: str):
             merged = sorted(existing | tools_used)
             if merged != sorted(existing):
                 settings["allowedTools"] = merged
-                os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+                os.makedirs(project_dir, exist_ok=True)
                 with open(settings_path, "w") as f:
                     json.dump(settings, f, indent=2)
                 _log(f"pre-kill: wrote {len(merged)} allowedTools to {settings_path}")
         except Exception as e:
             _log(f"pre-kill tool update failed: {e}")
+        # permissions.allow in settings.local.json is what actually silences prompts
+        local_path = os.path.join(project_dir, "settings.local.json")
+        try:
+            if os.path.exists(local_path):
+                with open(local_path) as f:
+                    local = json.load(f)
+            else:
+                local = {}
+            perms = local.setdefault("permissions", {})
+            existing_allow = set(perms.get("allow", []))
+            if tools_used - existing_allow:
+                perms["allow"] = sorted(existing_allow | tools_used)
+                os.makedirs(project_dir, exist_ok=True)
+                with open(local_path, "w") as f:
+                    json.dump(local, f, indent=2)
+                _log(f"pre-kill: wrote {len(tools_used)} tools to permissions.allow in {local_path}")
+        except Exception as e:
+            _log(f"pre-kill permissions.allow update failed: {e}")
     except Exception as e:
         _log(f"pre-kill update error: {e}")
 
