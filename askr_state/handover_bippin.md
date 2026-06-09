@@ -1,23 +1,19 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 03:23
+Last updated: 2026-06-10 03:29
 
 # Handover Document
 
 ## Task
-Implement session restart mechanism for pre-compact hook to enable checkpoint + context-preserving session restart instead of in-session compaction.
+Fix the compaction trigger logic so that PreCompact hook distinguishes between context-based and quota-based triggers, and Stop hook respects the trigger type when deciding whether to write an immediate restart notification.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py` rewritten to trigger Claude process termination via PID file (`_CLAUDE_PID_FILE`) after checkpoint, enabling new session start without context loss
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py` modified to seed `WebSearch` in `BASELINE_ALLOWED_TOOLS` for all future `askr init` runs
-- Existing projects (leaps, askr) already have `WebSearch` in `permissions.allow` — no action needed for them
-- Changes committed and pushed to git
+- `/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py` — rewritten to read `session_stats.json`, check both context percentage AND quota percentage, and write `checkpoint_pending.json` with `trigger` field set to either `"context"` or `"quota"` depending on which threshold was exceeded.
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — identified that it currently always writes `type: "context"` notification regardless of what caused PreCompact. Needs to be edited to read the `trigger` field from `checkpoint_pending.json` and only write immediate restart notification if `trigger == "context"`. If `trigger == "quota"`, should write deferred restart notification instead.
+- Both files staged in git but Stop hook edit not yet completed.
 
 ## Failed Approaches
-- In-session compaction with `custom_instructions` injection to "continue from where it left off" — identified as worse than daemon trigger approach because compaction still happens within same session, defeating the purpose of context reset
+- Using `custom_instructions` to prevent compaction — rejected because it only injects text into the compaction prompt; compaction still happens. Killing the process is the only way to actually escape compaction.
 
 ## Next Action
-Verify that pre_compact.py correctly reads `_CLAUDE_PID_FILE`, terminates the Claude process, and allows new session to start cleanly without manual intervention. Test with a project that triggers compaction threshold.
-
-## Open Questions
-None
+Edit `/
