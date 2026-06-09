@@ -1,23 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 03:08
+Last updated: 2026-06-10 03:23
 
 # Handover Document
 
 ## Task
-Fix permission persistence across sessions in askr: ensure `askr init` seeds both `allowedTools` and `permissions.allow` in settings, and add `WebSearch` to baseline allowed tools so users don't re-grant web search permission repeatedly.
+Implement session restart mechanism for pre-compact hook to enable checkpoint + context-preserving session restart instead of in-session compaction.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Modified to seed `permissions.allow` with `BASELINE_ALLOWED_TOOLS` during init, and added `WebSearch` to `BASELINE_ALLOWED_TOOLS` list
-- `/Users/bippin/Desktop/askr/roadmap.md`: Updated Phase 3.8 entry to reflect that permission seeding was incomplete and is now fixed
-- Both askr and leaps projects confirmed to already have `WebSearch` in their `settings.local.json`
+- `/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py` rewritten to trigger Claude process termination via PID file (`_CLAUDE_PID_FILE`) after checkpoint, enabling new session start without context loss
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py` modified to seed `WebSearch` in `BASELINE_ALLOWED_TOOLS` for all future `askr init` runs
+- Existing projects (leaps, askr) already have `WebSearch` in `permissions.allow` — no action needed for them
 - Changes committed and pushed to git
 
 ## Failed Approaches
-None.
+- In-session compaction with `custom_instructions` injection to "continue from where it left off" — identified as worse than daemon trigger approach because compaction still happens within same session, defeating the purpose of context reset
 
 ## Next Action
-Verify that a fresh `askr init` on a new project now creates `settings.local.json` with both `allowedTools` and `permissions.allow` populated with `BASELINE_ALLOWED_TOOLS` (including `WebSearch`), and that this persists across session boundaries without re-prompting for web search permission.
+Verify that pre_compact.py correctly reads `_CLAUDE_PID_FILE`, terminates the Claude process, and allows new session to start cleanly without manual intervention. Test with a project that triggers compaction threshold.
 
 ## Open Questions
-None.
+None
