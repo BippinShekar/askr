@@ -29,7 +29,7 @@ HOOK_MAP = {
 }
 
 # Minimum tool set for autonomous operation — stop hook expands this over time from JSONL
-BASELINE_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "TodoWrite", "Write"]
+BASELINE_ALLOWED_TOOLS = ["Bash", "Edit", "Read", "TodoWrite", "WebSearch", "Write"]
 
 # Stop and PreCompact make a Haiku API call for handover generation — need more headroom
 # PreToolUse must be fast — it blocks Claude's tool execution until it exits
