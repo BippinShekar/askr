@@ -9,6 +9,19 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:43] Ran: git add askr/session/forecast.py askr/session/lifecycle.py askr/session/report_i
+- [21:42] Modified: /Users/bippin/Desktop/askr/askr/session/report_image.py
+- [21:42] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [21:42] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [21:42] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [21:42] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [21:42] Modified: /Users/bippin/Desktop/askr/askr/session/forecast.py
+- [21:42] Ran: grep -n "0\.75\|75\|trigger\|TRIGGER\|context_label" /Users/bippin/Desktop/askr/
+- [21:41] Ran: grep -n "CONTEXT_TRIGGER\|context_trigger\|0\.75\|0\.80\|0\.60" /Users/bippin/De
+- [21:39] Ran: python3 - <<'EOF'
+import os, json, glob
+
+projects_dir = os.path.expanduser("~/.c
 - [23:51] Ran: cat /Users/bippin/Desktop/rex/ARCHITECTURE.md
 - [23:51] Ran: ls /Users/bippin/Desktop/AI-Audit-Engine/src/services/ && ls /Users/bippin/Deskt
 - [23:51] Ran: cat /Users/bippin/Desktop/Research_Buddy/orchestrator/graph.py

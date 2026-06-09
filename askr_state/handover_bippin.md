@@ -1,21 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-09 00:23
+Last updated: 2026-06-09 21:43
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Finalize YC application answers for "most impressive thing you've built" and "relevant test scores" sections with brutally honest framing that emphasizes decision-making and outcomes over resume metrics.
+Investigate and fix token counting discrepancy in askr session monitoring — Claude's reported context usage (92%) did not match the calculated usage from JSONL data (61%), and update threshold logic accordingly.
 
 ## Status
-Two application answers finalized:
+Root cause identified: ~62K extended thinking tokens are in-flight during Claude's turn and not yet written to JSONL until turn completion. This accounts for the gap between displayed percentage and actual context usage.
 
-**Most Impressive Thing Built:**
-Built Heuretos solo from scratch: 9 specialized agents orchestrated via a Neo4j DAG for real parallel execution, full-stack containerized. Shut it down when it was working because I couldn't convince myself the CAC model was viable and base model capabilities were closing the differentiation window faster than I could move. That decision-making clarity is the achievement, not the architecture.
+Files modified:
+- `/Users/bippin/Desktop/askr/askr/session/forecast.py` — context threshold logic updated from 75% to 65%
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` — context threshold logic updated from 75% to 65%
+- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` — color thresholds and tooltip text updated to match 65% threshold
+- `/Users/bippin/Desktop/askr/askr/session/report_image.py` — timeline graph threshold line moved from 75% to 65%
 
-**Test Scores Answer:**
-CAT 2023: 95.46 percentile with one week of prep. Got calls. Couldn't join, not a graduate yet. Didn't want to either.
+Git staging completed for all four files.
 
-AFCAT 2024: Qualified the Air Force officer entrance exam, went to Mysore for the 5-day SSB interview. Didn't get commissioned, not a graduate yet. Wasn't going anyway.
-
-Both answers now include the context of deliberate choice and constraint (graduation timing) rather than just the score. CAT overall percentile is 95.46 (Quant subsection was 75.54 — weaker than headline
+## Failed Approaches
+- Simple window size change (160K tokens) — did not resolve the discrepancy; confirmed the gap was not a calculation error but an

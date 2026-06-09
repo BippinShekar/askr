@@ -1,18 +1,23 @@
-Last updated: 2026-06-09 00:23
+Last updated: 2026-06-09 21:43
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—objectives, decisions, progress—so work can resume without context loss or repetition.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
 
 ## What's In Flight
 
-- Emergency checkpoint implementation: completing the safe-pause validation logic that detects safe interruption points before context auto-compaction triggers
-- State persistence layer: finalizing reader.py and writer.py to load/update developer context, tasks, and decisions across session boundaries
-- Hook integration with Claude Code: wiring session_start.py, user_prompt_submit.py, and stop.py to inject context on begin and generate handover docs on end
-- Test suite: verifying all modules pass unit tests after recent changes to session lifecycle and state management
+- Token counting discrepancy investigation: root cause identified (in-flight extended thinking tokens not yet written to JSONL). Context threshold updated from 75% to 65% across forecast.py, lifecycle.py, extension.js, and report_image.py. Changes staged and ready for review.
+- Emergency checkpoint implementation: needs completion and testing.
+- Test suite validation: verify all tests pass after recent threshold changes.
 
 ## Key Decisions Made
 
-- Append-only decision log in decisions.md: every decision is timestamped and reasoned, never edited, to maintain audit trail and prevent context drift
-- Git as source of truth for state: all checkpoints, handover docs, and project context are committed to the repo so any developer can resume from the last known good state
-- Forecast-first approach: predict which limit (context or quota) will be hit first so checkpoint timing
+- Append-only decision log in decisions.md to maintain audit trail of all architectural choices.
+- State persisted to git (not database) to enable developer handoffs and version control integration.
+- Threshold logic accounts for in-flight tokens during Claude's turn, not just completed JSONL entries.
+- Modular architecture: session lifecycle, hooks (Claude Code integration), state management, and QA analysis separated into distinct modules.
+- Safe pause validation before checkpointing to avoid interrupting critical operations.
+
+## Open Goals
+
+- Complete and test emergency checkpoint implementation in askr/session
