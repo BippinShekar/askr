@@ -9,6 +9,21 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [00:36] Modified: /Users/bippin/Desktop/askr/askr_state/handover_bippin.md
+- [00:36] Modified: /Users/bippin/Desktop/askr/askr_state/goals.md
+- [00:36] Modified: /Users/bippin/Desktop/askr/askr_state/goals.md
+- [00:33] Ran: sed -n '110,145p' /Users/bippin/Desktop/askr/askr/hooks/stop.py
+- [00:33] Ran: grep -n "project_path\|notification\|checkpoint_pending" /Users/bippin/Desktop/a
+- [00:33] Ran: sed -n '140,220p' /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extens
+- [00:33] Ran: grep -n "createTerminal\|cwd\|goal_launch\|checkpoint" /Users/bippin/.cursor/ext
+- [00:33] Ran: git -C /Users/bippin/Desktop/askr show d384faf --stat && echo "---" && git -C /U
+- [00:33] Ran: cat /Users/bippin/Desktop/askr/askr_state/goals.md && echo "---BLOCKERS---" && c
+- [00:33] Ran: git -C /Users/bippin/Desktop/askr log --oneline origin/main -3
+- [00:33] Ran: cat /Users/bippin/Desktop/askr/askr_state/current_task_bippin.md && cat /Users/b
+- [00:33] Ran: git -C /Users/bippin/Desktop/askr status && git -C /Users/bippin/Desktop/askr lo
+- [00:33] Ran: cat /Users/bippin/Desktop/askr/askr_state/handover_bippin.md
+- [00:32] Ran: ls /Users/bippin/Desktop/askr/askr_state/ && cat /Users/bippin/Desktop/askr/.ask
+- [00:32] Ran: cat /Users/bippin/Desktop/askr/askr_state/handover.md 2>/dev/null || echo "No ha
 - [00:05] Ran: git commit -m "fix: reliable context-trigger restart and full permission transfe
 - [00:04] Ran: git add askr/session/lifecycle.py askr/hooks/stop.py && git diff --cached --stat
 - [00:04] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py

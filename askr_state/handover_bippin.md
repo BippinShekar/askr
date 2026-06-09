@@ -1,18 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 00:05
+Last updated: 2026-06-10 00:36
+
+# Handover for Next Session
 
 ## Task
-Fix context-aware restart mechanism for Claude Code integration by ensuring project_path and allowed_tools are passed through notification chain from lifecycle manager to extension terminal handler.
+Verify that the Cursor extension correctly launches terminals with the project path when receiving notifications from the askr daemon, and confirm the notification flow is working end-to-end.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified `_handle_pending_checkpoint` in stop.py handler and `_start_claude` to include `project_path` and `allowed_tools` in notification.json payload
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Modified `_handle_pending_checkpoint` to write `project_path` to notification.json for daemon fallback
-- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Added `goal_launch` handler and fixed all `createTerminal` calls to use `cwd` parameter from notification payload; applied fix to both checkpoint and goal_launch restart paths
-- All three files edited and staged for commit with message "fix: reliable context-trigger restart and full permission transfer"
+- Commit d384faf pushed to origin/main: wired `project_path` and `allowed_tools` through both notification paths (Stop hook in stop.py and daemon fallback in lifecycle.py)
+- Extension code verified: notification.json is read by extension, `cwd` parameter is passed to `createTerminal()` for both `context` and `goal_launch` notification types
+- goals.md updated: marked "Wire project_path through notification chain" as complete
+- Implementation is complete and correctly wired end-to-end
 
 ## Failed Approaches
-- Attempted to pass `project_path` as kwarg to `create_checkpoint()` — function does not accept this parameter; instead passed it through notification.json payload to extension
+None
 
 ## Next Action
-Push the staged commit to verify the changes integrate correctly with the daemon
+Test the notification flow by triggering a goal launch in Cursor and verify that the terminal opens with the correct working directory (project_path from notification.json).
+
+## Open Questions
+None

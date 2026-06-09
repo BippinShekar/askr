@@ -1,16 +1,4 @@
-## Today - 2026-06-08
-
-- [ ] Resume and complete the emergency checkpoint implementation <!-- added: 2026-06-08T19:31 -->
-
-- [ ] Review implementation_state.md and recent git diff to identify in-progress work <!-- added: 2026-06-08T19:31 -->
-
-## Today - 2026-06-06
-
-- [x] Commit staged changes and test that handover files capture complete state <!-- added: 2026-06-06T15:50 -->
-
-- [x] Complete daemon reload command and verify pending spawn flag works end-to-end <!-- added: 2026-06-06T15:50 -->
-
-# Goals
+## Today - 2026-06-10
 
 ## Backlog
 - [ ] Verify test status from last Bash output and fix any failures
@@ -19,6 +7,9 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-10 00:38] Verified extension cwd fix and project_path notification chain — commit d384faf pushed to origin/main
+[2026-06-10 00:36] DISCARDED: Review implementation_state.md and recent git diff to identify in-progress work
+[2026-06-10 00:36] DISCARDED: Resume and complete the emergency checkpoint implementation
 [2026-06-06 23:02] Test Stage 10 project brief generation end-to-end with real checkpoint
 [2026-06-06 22:32] ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
 [2026-06-06 22:30] DISCARDED: ensure the roadmap is updated with that phase 3.6 completion and ensure it's commmited
