@@ -1,23 +1,18 @@
-Last updated: 2026-06-09 21:43
+Last updated: 2026-06-09 22:03
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without losing context or momentum.
 
 ## What's In Flight
 
-- Token counting discrepancy investigation: root cause identified (in-flight extended thinking tokens not yet written to JSONL). Context threshold updated from 75% to 65% across forecast.py, lifecycle.py, extension.js, and report_image.py. Changes staged and ready for review.
-- Emergency checkpoint implementation: needs completion and testing.
-- Test suite validation: verify all tests pass after recent threshold changes.
+- Emergency checkpoint implementation during pre-compact hooks: detecting when Claude auto-compacts context and saving state before it happens.
+- Kill/restart flow analysis in lifecycle.py: investigating why askr killed a Claude session in the leaps repo but failed to auto-restart it, leaving the session stopped instead of recovering.
+- State persistence layer: completing reader.py and writer.py to load and update developer context from git-backed state files.
+- Hook integration: wiring session_start.py, user_prompt_submit.py, and stop.py to inject context, extract objectives, and generate handover docs on session end.
 
 ## Key Decisions Made
 
-- Append-only decision log in decisions.md to maintain audit trail of all architectural choices.
-- State persisted to git (not database) to enable developer handoffs and version control integration.
-- Threshold logic accounts for in-flight tokens during Claude's turn, not just completed JSONL entries.
-- Modular architecture: session lifecycle, hooks (Claude Code integration), state management, and QA analysis separated into distinct modules.
-- Safe pause validation before checkpointing to avoid interrupting critical operations.
-
-## Open Goals
-
-- Complete and test emergency checkpoint implementation in askr/session
+- State stored in git, not a separate database: enables version control, diffs, and handoffs without external infrastructure.
+- Append-only decisions log: all decisions recorded with timestamp and reason; never edited, only appended.
+- Safe pause validation before checkpoint: safe_pause.py ensures interruption happens at a stable point, not mid-operation.
