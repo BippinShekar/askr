@@ -1,23 +1,25 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 02:38
+Last updated: 2026-06-10 03:02
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Design and implement a behavioral pattern detection system for askr that automatically identifies user coding patterns (e.g., "build in stages, commit and push after each stage, show tabular view"), notifies the user when patterns are detected, and allows them to persist these patterns persistently across sessions without manual configuration.
+Design and implement a behavioral pattern detection system for askr that automatically identifies user coding patterns, notifies the user with confirmation UI, persists confirmed patterns, and extends to headless environments via Discord.
 
 ## Status
-- Decision made: CLAUDE.md is the correct persistence mechanism for global behavioral rules across all sessions
-- Decision made: askr should implement automatic pattern detection that triggers notifications when user behavior matches learned patterns
-- Decision made: pattern matching should be expansive and user-specific, not limited to a predefined set (user will create patterns only they know)
-- Decision made: users should be able to accept/discard detected patterns via notification UI, with accepted patterns persisting automatically
-- Research completed: GitHub issues #22292 and #14227 confirm this is a real, documented problem with persistent preferences in Claude Code
-- Current implementation state: No code written yet; this is a feature design that was validated as needed and feasible
+- Roadmap.md updated with Phase 3.9: Behavioral Pattern Detection
+- Design decision finalized: two-mode notification system
+  - Cursor mode: `behavior_confirm` popup with keep/discard buttons (uses existing `goal_check` infrastructure)
+  - Headless mode: Discord webhook notification (one-way, no response channel)
+- Core problem validated: GitHub issues #22292 and #14227 confirm users need persistent behavioral preferences
+- Pattern detection approach settled: expansive user-specific patterns (not fixed set) — user creates patterns only they know
+- Discord integration already exists in askr; reuse for headless notifications
+- Persistence mechanism: patterns confirmed by user stored in `~/.claude/CLAUDE.md` (global) or project-specific `leaps/.claude/CLAUDE.md`
 
 ## Failed Approaches
-- Storing behavioral patterns in askr's session_behaviors.md without user consent — rejected because it requires manual setup and doesn't capture emergent patterns
-- Matching against a fixed set of predefined patterns — rejected because user patterns are unique and unknowable in advance
+- Fixed pattern set: rejected because user patterns are unique and unknowable in advance
+- Single-mode notification: rejected because headless environments cannot receive interactive confirmations; two-mode design required
 
 ## Next Action
-Implement pattern
+Implement `behavior_confirm` notification type in Cursor mode
