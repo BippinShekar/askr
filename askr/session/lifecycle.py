@@ -270,12 +270,21 @@ def _kill_claude(project_path: str = ""):
         os.kill(pid, signal.SIGTERM)
         _log(f"sent SIGTERM to claude pid {pid}")
     except ProcessLookupError:
-        pass
-    time.sleep(2)
+        _clear_claude_pid()
+        return
+    # Give Claude 15s to run Stop hook and exit gracefully.
+    # 2s was too short for extended-thinking sessions mid-API-call.
+    for _ in range(15):
+        time.sleep(1)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            _log(f"claude pid {pid} exited cleanly after SIGTERM")
+            _clear_claude_pid()
+            return
     try:
-        os.kill(pid, 0)
         os.kill(pid, signal.SIGKILL)
-        _log(f"sent SIGKILL to claude pid {pid}")
+        _log(f"sent SIGKILL to claude pid {pid} (still alive after 15s)")
     except ProcessLookupError:
         pass
     _clear_claude_pid()
@@ -312,6 +321,8 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
             json.dump({
                 "type": "goal_launch",
                 "goal": initial_prompt or prompt_arg,
+                "project_path": project_path,
+                "allowed_tools": allowed_tools,
                 "message": f"Starting autonomous session — {initial_prompt or prompt_arg}",
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -523,6 +534,105 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
 # Main daemon loop
 # ---------------------------------------------------------------------------
 
+def _pre_kill_update_tools(project_path: str):
+    """
+    Before killing Claude, extract all tools used in the active JSONL and
+    persist them to the project's .claude/settings.json allowedTools.
+    This ensures the new session inherits full permissions even if SIGKILL
+    prevents the Stop hook from running _update_allowed_tools.
+    """
+    try:
+        from askr.session.monitor import _find_active_jsonl
+        jsonl = _find_active_jsonl(project_path)
+        if not jsonl or not os.path.exists(jsonl):
+            return
+        tools_used = set()
+        with open(jsonl) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                if obj.get("type") != "assistant":
+                    continue
+                for block in obj.get("message", {}).get("content", []):
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        name = block.get("name", "")
+                        if name:
+                            tools_used.add(name)
+        if not tools_used:
+            return
+        settings_path = os.path.join(project_path, ".claude", "settings.json")
+        try:
+            if os.path.exists(settings_path):
+                with open(settings_path) as f:
+                    settings = json.load(f)
+            else:
+                settings = {}
+            existing = set(settings.get("allowedTools", []))
+            merged = sorted(existing | tools_used)
+            if merged != sorted(existing):
+                settings["allowedTools"] = merged
+                os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+                with open(settings_path, "w") as f:
+                    json.dump(settings, f, indent=2)
+                _log(f"pre-kill: wrote {len(merged)} allowedTools to {settings_path}")
+        except Exception as e:
+            _log(f"pre-kill tool update failed: {e}")
+    except Exception as e:
+        _log(f"pre-kill update error: {e}")
+
+
+def _wait_for_stop_hook_or_fallback(project_path: str):
+    """
+    After killing Claude, wait up to 20s for the Stop hook to consume
+    checkpoint_pending.json (which means it ran, created the checkpoint,
+    and wrote notification.json). If it's still there, the Stop hook didn't
+    fire (likely SIGKILL) — handle the restart directly.
+    """
+    WAIT = 20
+    for _ in range(WAIT):
+        time.sleep(1)
+        if not os.path.exists(_CHECKPOINT_PENDING):
+            _log("Stop hook consumed checkpoint_pending — restart delegated to extension")
+            return
+    # Stop hook didn't run — do it ourselves
+    _log("Stop hook didn't fire after kill — running checkpoint + restart directly")
+    _clear_checkpoint_pending()
+    try:
+        from askr.state.config import load_developer
+        from askr.session.checkpoint import create_checkpoint
+        developer = load_developer()
+        state_dir = os.path.join(project_path, "askr_state") if os.path.isdir(os.path.join(project_path, "askr_state")) else None
+        result = create_checkpoint(trigger_type="context", developer=developer, state_dir=state_dir)
+        _log(f"daemon fallback checkpoint: {result.get('trigger')} at {result.get('timestamp','')[:19]}")
+    except Exception as e:
+        _log(f"daemon fallback checkpoint error: {e}")
+    next_goal = _get_next_goal()
+    _write_launch_mode(next_goal)
+    allowed_tools = _load_allowed_tools(project_path)
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump({
+                "type": "context",
+                "message": "Context limit — Stop hook didn't fire. State saved to git. Opening new chat.",
+                "goal": next_goal,
+                "project_path": project_path,
+                "allowed_tools": allowed_tools,
+                "shown": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
+        _log("daemon fallback: wrote notification.json — extension will open new terminal")
+    except Exception as e:
+        _log(f"daemon fallback notification error: {e}")
+    # Also spawn Terminal.app fallback in case extension isn't active
+    _start_claude(project_path)
+
+
 def _wait_for_exchange_end_then_kill(project_path: str):
     """
     Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
@@ -566,11 +676,15 @@ def _wait_for_exchange_end_then_kill(project_path: str):
             idle_since  = time.time()
         elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
             _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
+            _pre_kill_update_tools(project_path)
             _kill_claude(project_path)
+            _wait_for_stop_hook_or_fallback(project_path)
             return
 
     _log("exchange wait timed out — killing Claude anyway")
+    _pre_kill_update_tools(project_path)
     _kill_claude(project_path)
+    _wait_for_stop_hook_or_fallback(project_path)
 
 
 def _maybe_autolaunch(project_path: str):
