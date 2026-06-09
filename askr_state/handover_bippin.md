@@ -1,19 +1,19 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 02:26
+Last updated: 2026-06-10 02:30
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Fix permission prompts in askr by writing to the correct configuration keys — `allowedTools` in `settings.json` controls tool availability, but `permissions.allow` in `settings.local.json` controls whether permission prompts appear.
+Investigated how to persist user behavior patterns and command preferences across Claude Code sessions without manual setup, and evaluated whether askr should implement automatic behavior persistence.
 
 ## Status
-- **Root cause identified**: Two separate configuration mechanisms were conflated. `allowedTools` in `settings.json` controls which tools the model can call; `permissions.allow` in `settings.local.json` controls the "Do you want to make this edit?" prompts.
-- **Files modified**:
-  - `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — updated `_update_allowed_tools()` to write to both `allowedTools` (settings.json) and `permissions.allow` (settings.local.json)
-  - `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` — updated `_pre_kill_update_tools()` with the same dual-write fix
-- **Changes committed and pushed** to git repository at `/Users/bippin/Desktop/askr`
+- Researched whether CLAUDE.md is the correct mechanism for persisting session behaviors (confirmed: yes, `~/.claude/CLAUDE.md` loads automatically in every session)
+- Identified that askr's session lifecycle system (hooks in `askr/session/lifecycle.py` and `askr/hooks/stop.py`) is not the right layer for behavior persistence
+- Confirmed that `~/.claude/CLAUDE.md` already works as a global, automatic persistence mechanism across all projects and sessions
+- Conducted web search to determine if other users face this problem and whether existing solutions exist (search completed but results not yet analyzed in transcript)
+- Determined that askr *could* add `~/.config/askr/session_behaviors.md` as a future feature for project-specific behavior rules layered on top of global CLAUDE.md
 
 ## Failed Approaches
-- Writing only to `allowedTools` in `settings.json` — this controls tool availability but does not silence permission prompts
-- Assuming `allowedTools
+- Using askr's memory/handover system to persist user behavior patterns — rejected because CLAUDE.md already solves this at the OS level and is automatically loaded by every Claude Code session
+- Storing behavior rules in askr's session lifecycle hooks — rejected because this couples user preferences to the orchestration layer rather
