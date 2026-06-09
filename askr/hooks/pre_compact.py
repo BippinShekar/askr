@@ -4,9 +4,11 @@ Claude Code Hook - PreCompact
 
 Emergency fallback — fires when Claude is about to auto-compact the context.
 The 65% daemon trigger should prevent this from ever firing in normal operation.
-When it does fire (e.g. single-turn extended-thinking jump from <65% to 100%+),
-we checkpoint, kill the process, and let the Stop hook handle the clean restart.
-PreCompact cannot block compaction via its return value, so killing the process
+When it does fire (single-turn extended-thinking jump, or quota exhaustion
+causing Claude Code to auto-compact), we checkpoint and kill the session.
+The Stop hook then handles restart vs wait-for-reset based on quota state.
+
+PreCompact cannot block compaction via its return value — killing the process
 is the only way to guarantee a fresh session instead of a compressed one.
 """
 
@@ -21,6 +23,8 @@ from askr.state.config import get_state_dir, load_developer
 
 _CLAUDE_PID_PATH    = os.path.expanduser("~/.config/askr/claude_session.pid")
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
+_STATS_PATH         = os.path.expanduser("~/.config/askr/session_stats.json")
+QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 
 def _read_claude_pid():
@@ -29,6 +33,14 @@ def _read_claude_pid():
             pid = int(f.read().strip())
         os.kill(pid, 0)
         return pid
+    except Exception:
+        return None
+
+
+def _quota_pct() -> float | None:
+    try:
+        with open(_STATS_PATH) as f:
+            return json.load(f).get("quota_pct")
     except Exception:
         return None
 
@@ -51,23 +63,32 @@ def main():
         transcript_path=payload.get("transcript_path", ""),
     )
 
-    # Kill the Claude process so the Stop hook fires and handles a clean restart
-    # via checkpoint_pending.json → notification.json → extension opens new session.
-    # If the PID isn't tracked (e.g. manually started session), fall back to the
-    # old behaviour — compaction happens but state is at least saved.
     pid = _read_claude_pid()
-    if pid:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        # Return nothing — process is dying, output doesn't matter
+    if not pid:
+        # No tracked PID — can't kill, at least state is saved
+        print(json.dumps({
+            "custom_instructions": "Askr has checkpointed state to git. A new session will resume from the handover."
+        }))
         return
 
-    # Fallback: no PID, can't kill — at least state is saved
-    print(json.dumps({
-        "custom_instructions": "Askr has checkpointed state to git. A new session will resume from the handover."
-    }))
+    # If quota is high, mark checkpoint_pending as quota-type so the Stop hook
+    # waits for reset instead of immediately opening a new session.
+    quota = _quota_pct()
+    if quota is not None and quota >= QUOTA_HIGH:
+        try:
+            with open(_CHECKPOINT_PENDING) as f:
+                pending = json.load(f)
+        except Exception:
+            pending = {}
+        pending["trigger"] = "quota"
+        os.makedirs(os.path.dirname(_CHECKPOINT_PENDING), exist_ok=True)
+        with open(_CHECKPOINT_PENDING, "w") as f:
+            json.dump(pending, f)
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
 
 
 if __name__ == "__main__":

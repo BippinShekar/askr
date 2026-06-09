@@ -103,8 +103,10 @@ def _advance_launch_goal():
 
 def _handle_pending_checkpoint(developer: str, transcript_path: str):
     """
-    If the daemon flagged a context checkpoint, execute it now that the
-    current exchange is complete. Spawns a new session via the IDE notification.
+    If the daemon (or PreCompact hook) flagged a checkpoint, execute it now
+    that the current exchange is complete.
+    - trigger==context: open new session immediately via IDE notification
+    - trigger==quota:   inform only; daemon will wait for reset and resume
     """
     _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
     _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
@@ -120,10 +122,13 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
 
     try:
         from askr.session.checkpoint import create_checkpoint
-        from askr.session.lifecycle import _get_next_goal, _write_launch_mode
+        from askr.session.lifecycle import _get_next_goal, _write_launch_mode, _load_allowed_tools
+        import datetime as _dt
 
-        result = create_checkpoint(
-            trigger_type="context",
+        trigger = pending.get("trigger", "context")
+
+        create_checkpoint(
+            trigger_type=trigger if trigger in ("context", "quota") else "context",
             developer=developer,
             transcript_path=transcript_path,
         )
@@ -131,20 +136,33 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         next_goal = _get_next_goal()
         _write_launch_mode(next_goal)
 
-        pct = pending.get("context_pct", 0)
-        pct_str = f"{round(pct * 100)}%"
-        from askr.session.lifecycle import _load_allowed_tools
-        project_path = os.getcwd()
+        project_path  = os.getcwd()
         allowed_tools = _load_allowed_tools(project_path)
-        payload = {
-            "type": "context",
-            "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
-            "goal": next_goal,
-            "project_path": project_path,
-            "allowed_tools": allowed_tools,
-            "shown": False,
-            "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),
-        }
+        now           = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+        if trigger == "quota":
+            quota_pct = pending.get("quota_pct", 0)
+            pct_str   = f"{round(quota_pct)}%" if quota_pct else "high"
+            payload = {
+                "type": "quota",
+                "message": f"Quota at {pct_str} — state saved. Askr will resume after reset.",
+                "goal": next_goal,
+                "shown": False,
+                "timestamp": now,
+            }
+        else:
+            pct     = pending.get("context_pct", 0)
+            pct_str = f"{round(pct * 100)}%"
+            payload = {
+                "type": "context",
+                "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
+                "goal": next_goal,
+                "project_path": project_path,
+                "allowed_tools": allowed_tools,
+                "shown": False,
+                "timestamp": now,
+            }
+
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
