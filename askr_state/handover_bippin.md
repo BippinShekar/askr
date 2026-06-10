@@ -1,21 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 14:09
+Last updated: 2026-06-10 14:14
 
 ## Task
-Fix askr daemon's stale context trigger by restarting it after per-project stats refactor deployment.
+Debug and fix the askr daemon's context trigger mechanism, which was not firing auto-continue despite context reaching 73% when the threshold was set to 50%.
 
 ## Status
-- Per-project stats refactor completed: `session_stats.json` replaced with per-project files at `~/.config/askr/stats/-Users-bippin-Desktop-askr.json`
-- CONTEXT_TRIGGER lowered to 50% (was 75% → 65% → 50%)
-- Daemon process (PID 73526) running since Monday 3PM with old code in memory
-- Daemon still checking obsolete `session_stats.json` which stopped updating at 11:47am when refactor deployed
-- At session end: daemon killed (PIDs 73526, 59467, 59527), new daemon launched via `venv/bin/python askr/cli/askr.py launch --restart`
-- Daemon log shows fresh startup with new code path reading per-project stats files
-- Current session context: 73% (below 50% trigger threshold, auto-continue should fire on next tool use)
+- Root cause identified: daemon process (PID 73526) was running since Monday 3PM with old code loaded in memory, before the per-project stats refactor deployed at 11:47am.
+- Per-project stats refactor changed session tracking from global `session_stats.json` to per-project files at `~/.config/askr/stats/-Users-bippin-Desktop-askr.json`.
+- Old daemon code still checked the deprecated global `session_stats.json`, which stopped being updated after refactor, so daemon saw no active session and never fired trigger.
+- Daemon restarted via `venv/bin/python askr/cli/askr.py launch --restart` and now runs new code.
+- After restart, daemon correctly detected ctx:76% and fired Trigger A, waiting for current exchange to finish before checkpointing.
+- In leaps repo, auto-continue switch already occurred. In askr repo, switch has not yet occurred despite daemon firing trigger.
+- CONTEXT_TRIGGER threshold confirmed at 50% (lowered from 75% → 65% → 50%).
 
 ## Failed Approaches
-None.
+- None.
 
-## Next Action
-Verify daemon is reading per-project stats correctly by running a tool in askr and confirming auto-continue fires when context exceeds 50% threshold. Check `~/.config/askr/daemon
+##
