@@ -9,6 +9,42 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [16:49] Ran: ls -la ~/.cursor/extensions/askr.askr-status-1.0.0/ && echo "---" && ls ~/.curso
+- [16:48] Ran: stat ~/.config/askr/stats/Users-bippin-Desktop-askr.json 2>/dev/null
+- [16:47] Ran: cat ~/.config/askr/stats/Users-bippin-Desktop-askr.json 2>/dev/null | python3 -m
+- [16:47] Ran: /Users/bippin/Desktop/askr/venv/bin/python /Users/bippin/Desktop/askr/askr/cli/a
+- [16:47] Ran: cat /Users/bippin/Desktop/askr/.claude/settings.json | python3 -m json.tool 2>/d
+- [16:47] Ran: grep -n "IDE\|extension\|install" /Users/bippin/Desktop/askr/askr/session/lifecy
+- [16:47] Ran: grep -rn "IDE extension install failed\|extension install failed\|see /status" /
+- [16:47] Ran: cat ~/.config/askr/daemon.log | tail -50 2>/dev/null
+- [16:46] Ran: cat /Users/bippin/Desktop/askr/.claude/settings.json 2>/dev/null | python3 -m js
+- [16:46] Ran: cat ~/.claude/settings.json 2>/dev/null | python3 -m json.tool 2>/dev/null | hea
+- [16:46] Ran: cat ~/.claude/settings.json 2>/dev/null | python3 -m json.tool | grep -A5 -B5 "s
+- [16:46] Ran: grep -n "_statusline_text\|statusline" /Users/bippin/Desktop/askr/askr/cli/askr.
+- [16:46] Ran: grep -rn "IDE extension install failed\|extension install failed\|see /status" ~
+- [16:46] Ran: grep -rn "IDE extension install failed\|extension install failed\|see /status" /
+- [16:46] Ran: grep -rn "IDE extension install failed\|extension install failed\|see /status" /
+- [16:46] Ran: grep -n "cmd_status\|def cmd_status\|/status" /Users/bippin/Desktop/askr/askr/cl
+- [16:46] Ran: grep -n "status\|/status" /Users/bippin/Desktop/askr/askr/cli/askr.py | grep -i 
+- [16:46] Ran: grep -rn "install failed" /Users/bippin/Desktop/askr/askr/ --include="*.py" | gr
+- [16:46] Ran: grep -rn "IDE extension install failed\|extension install failed" /Users/bippin/
+- [16:46] Ran: ls /Users/bippin/Desktop/askr/askr/ide/vscode-extension/
+- [16:46] Ran: grep -n "install failed\|IDE extension install" /Users/bippin/Desktop/askr/askr/
+- [16:45] Ran: ls /Users/bippin/Desktop/askr/askr/ide/ 2>/dev/null || echo "no ide dir"
+- [16:45] Ran: grep -n "ide\|extension\|install\|IDE" /Users/bippin/Desktop/askr/askr/cli/askr.
+- [16:45] Ran: ls ~/.config/askr/ 2>/dev/null && echo "---" && ls ~/.config/askr/stats/ 2>/dev/
+- [16:45] Ran: find /Users/bippin/Desktop/askr -type f -name "*.py" | xargs grep -l "ide\|exten
+- [16:45] Ran: cat /Users/bippin/Desktop/askr/.askr_history | tail -50 2>/dev/null || echo "no 
+- [16:45] Ran: ls /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ 2>/dev/null && echo 
+- [14:19] Ran: sed -n '252,275p' /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [14:19] Ran: grep -n "_find_claude_pid_by_project\|pgrep\|lsof\|cwd" /Users/bippin/Desktop/as
+- [14:18] Ran: for pid in $(pgrep -x claude); do echo -n "PID $pid cwd: "; lsof -p $pid 2>/dev/
+- [14:18] Ran: tail -15 ~/.config/askr/daemon.log
+- [14:17] Ran: ls -lt ~/.config/askr/stats/ && echo "---" && cat ~/.config/askr/stats/Users-bip
+- [14:17] Ran: cat ~/.config/askr/handover_bippin.md 2>/dev/null | head -5 && echo "---" && pgr
+- [14:16] Ran: cat ~/.config/askr/notification.json
+- [14:16] Ran: cat ~/.config/askr/notification.json 2>/dev/null && echo "---" && tail -5 ~/.con
+- [14:15] Ran: tail -20 ~/.config/askr/daemon.log && echo "---" && pgrep -a -f "lifecycle.py"
 - [14:08] Ran: tail -8 ~/.config/askr/daemon.log
 - [14:08] Ran: kill 73526 2>/dev/null; kill 59467 2>/dev/null; kill 59527 2>/dev/null; sleep 2 
 - [14:08] Ran: tail -5 ~/.config/askr/daemon.log
