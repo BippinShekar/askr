@@ -123,6 +123,10 @@ function readStats() {
 
     if (staleMs > 7_200_000) return null;  // hide if > 2h stale
 
+    // Only show stats if they belong to the current workspace
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
+    if (workspaceRoot && s.project_path && s.project_path !== workspaceRoot) return null;
+
     const ctxPct       = Math.round((s.context_pct || 0) * 100);
     const ctxLabel     = s.context_label  || 'ok';
     const quotaPct     = s.quota_pct      ?? null;

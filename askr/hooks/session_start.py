@@ -111,11 +111,55 @@ def _maybe_suggest_goals(developer: str) -> list[str]:
         return []
 
 
+_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
+
+
+def _reset_stats_for_project():
+    """
+    Write a blank stats entry for the current project immediately on session start.
+    This makes the status bar snap to ctx:0% for the right project before any
+    message is sent, rather than showing stale stats from the previous project.
+    Quota fields are preserved from the last write so the display stays accurate.
+    """
+    try:
+        project_path = os.getcwd()
+        existing = {}
+        try:
+            with open(_STATS_PATH) as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+        os.makedirs(os.path.dirname(_STATS_PATH), exist_ok=True)
+        with open(_STATS_PATH, "w") as f:
+            json.dump({
+                "project_path":    project_path,
+                "context_pct":     0.0,
+                "context_tokens":  0,
+                "output_tokens":   0,
+                "context_window":  200000,
+                "context_label":   "ok",
+                "turns":           0,
+                "next_trigger":    None,
+                # Preserve quota fields — they're API-sourced and still valid
+                "quota_pct":       existing.get("quota_pct"),
+                "quota_reset_at":  existing.get("quota_reset_at"),
+                "quota_7d_pct":    existing.get("quota_7d_pct"),
+                "quota_updated_at": existing.get("quota_updated_at"),
+                "model":           existing.get("model", ""),
+                "session_id":      "",
+                "updated_at":      datetime.now(timezone.utc).isoformat(),
+            }, f)
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
     except Exception:
         payload = {}
+
+    _reset_stats_for_project()
 
     if os.path.isdir(get_state_dir()):
         git_pull()
