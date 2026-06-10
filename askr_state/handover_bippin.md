@@ -1,19 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 11:50
+Last updated: 2026-06-10 14:09
 
 ## Task
-Migrate the askr status tracking system from workspace-level to per-project file paths, updating the Cursor extension, Python backend, and CLI to read/write project-specific stats files.
+Fix askr daemon's stale context trigger by restarting it after per-project stats refactor deployment.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Updated to compute project hash from workspace root
-- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Modified `readStats()` to use per-project path; removed workspace guard; updated file watcher to monitor stats directory for project-specific file
-- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Updated `_load_stats()` to use per-project path function
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py`: Replaced all `_STATS_PATH` references with `_stats_path()` function call (verified via grep; sed replacement completed)
-- Extension.js backed up to `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/` (copy operation initiated at session end)
+- Per-project stats refactor completed: `session_stats.json` replaced with per-project files at `~/.config/askr/stats/-Users-bippin-Desktop-askr.json`
+- CONTEXT_TRIGGER lowered to 50% (was 75% → 65% → 50%)
+- Daemon process (PID 73526) running since Monday 3PM with old code in memory
+- Daemon still checking obsolete `session_stats.json` which stopped updating at 11:47am when refactor deployed
+- At session end: daemon killed (PIDs 73526, 59467, 59527), new daemon launched via `venv/bin/python askr/cli/askr.py launch --restart`
+- Daemon log shows fresh startup with new code path reading per-project stats files
+- Current session context: 73% (below 50% trigger threshold, auto-continue should fire on next tool use)
 
 ## Failed Approaches
-None
+None.
 
 ## Next Action
-Verify the sed replacement in `/Users/bippin/Desktop/askr/askr/cli
+Verify daemon is reading per-project stats correctly by running a tool in askr and confirming auto-continue fires when context exceeds 50% threshold. Check `~/.config/askr/daemon
