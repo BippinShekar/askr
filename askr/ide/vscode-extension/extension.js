@@ -15,9 +15,9 @@ const COLOR_CRIT = '#ff5555';  // bright red
 const COLOR_IDLE = '#6b7280';  // grey — no active session
 
 function severityColor(pct) {
-  if (pct >= 75) return COLOR_CRIT;   // checkpoint fires here
-  if (pct >= 60) return COLOR_HIGH;   // getting full
-  if (pct >= 40) return COLOR_WARN;
+  if (pct >= 65) return COLOR_CRIT;   // checkpoint fires here
+  if (pct >= 50) return COLOR_HIGH;   // getting full
+  if (pct >= 35) return COLOR_WARN;
   return COLOR_OK;
 }
 
@@ -81,7 +81,7 @@ function buildTooltip(s, ctxPct, isLive) {
 
   const ctxAlerts = {
     'checkpoint':   '\n\nCheckpointing now — askr saves state and opens a new chat.',
-    'getting full': '\n\nPast 60%. Askr checkpoints at 75% before quality degrades further.',
+    'getting full': '\n\nPast 50%. Askr checkpoints at 65% to buffer extended-thinking turns.',
   };
   const ctxAlert = ctxAlerts[ctxLabel] || '';
 
@@ -105,7 +105,7 @@ function buildTooltip(s, ctxPct, isLive) {
     + `${statusLine}\n\n`
     + `---\n\n`
     + `**This chat: ${ctxPct}% full** (${ctxTokens} / ${ctxWindow} tokens)\n\n`
-    + `Each new chat starts at 0%. Askr checkpoints at 75% — research shows quality degrades well before 90%.`
+    + `Each new chat starts at 0%. Askr checkpoints at 65% — extended thinking can add 40-80K tokens per turn, so we fire early to avoid Claude auto-compacting first.`
     + ctxAlert
     + `\n\n${turns} turns · ${model}`
     + quotaBlock
@@ -155,18 +155,33 @@ function checkNotification() {
     if (n.type === 'context') {
       const goal = n.goal ? ` Picking up: ${n.goal}` : '';
       vscode.window.showInformationMessage(`Askr: Context saved — switching chats, no context lost.${goal}`);
-      const terminal = vscode.window.createTerminal({ name: 'askr — new session' });
+      const termOpts = { name: 'askr — new session' };
+      if (n.project_path) termOpts.cwd = n.project_path;
+      const terminal = vscode.window.createTerminal(termOpts);
       terminal.show();
       const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
         ? ` --allowedTools ${n.allowed_tools.join(',')}`
         : '';
       terminal.sendText(`claude${toolsFlag} "Read the handover and start on the Next Action immediately. Work autonomously."`);
+    } else if (n.type === 'goal_launch') {
+      const goal = n.goal || '';
+      const termOpts = { name: `askr — ${goal.slice(0, 40)}` };
+      if (n.project_path) termOpts.cwd = n.project_path;
+      const terminal = vscode.window.createTerminal(termOpts);
+      terminal.show();
+      const safeGoal = goal.replace(/"/g, '').replace(/`/g, '');
+      const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+        ? ` --allowedTools ${n.allowed_tools.join(',')}`
+        : '';
+      terminal.sendText(`claude${toolsFlag} "Read the handover and work on this goal autonomously: ${safeGoal}"`);
+      vscode.window.showInformationMessage(`Askr: Starting session — ${goal.slice(0, 80)}`);
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
       const goals = (n.goals || []).map(g => g.text);
+      const preview = goals.slice(0, 2).map(g => `"${g.length > 40 ? g.slice(0, 40) + '…' : g}"`).join(', ');
       const summary = goals.length === 1
         ? `Goal stale for ${n.goals[0].hours}h: "${goals[0]}"`
-        : `${goals.length} goals stale 6h+`;
+        : `${goals.length} goals stale 6h+: ${preview}`;
       vscode.window.showWarningMessage(
         `Askr: ${summary}`,
         'Mark Done', 'Discard', 'Keep'

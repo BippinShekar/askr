@@ -71,7 +71,7 @@ POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.65  # fire at 65% — extended thinking adds 40-80K tokens per turn not visible until turn completes
+CONTEXT_TRIGGER    = 0.50  # fire at 50% — Claude Code auto-compacts at ~43% measured; 50% gives one-turn buffer for extended thinking
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 TRIGGER_COOLDOWN   = 300   # seconds to ignore further triggers after one fires
 
