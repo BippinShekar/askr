@@ -1,4 +1,4 @@
-Last updated: 2026-06-10 11:40
+Last updated: 2026-06-10 11:50
 
 # Project Brief
 
@@ -6,15 +6,18 @@ Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when c
 
 ## What's In Flight
 
-- Fix VS Code extension status bar to display accurate context percentage for current workspace, eliminating stale data from other projects. Root cause identified: extension reads session_stats.json without validating project_path matches current workspace.
-- SessionStart hook modified to write blank stats entry (ctx: 0%) immediately when session begins.
-- Extension needs modification to validate session_stats.project_path against VS Code workspace root before displaying stats.
-- Verify test status from last Bash output and fix any failures.
+- Migrating status tracking from workspace-level to per-project file paths. Updates completed in lifecycle.py, cost.py, CLI, and Cursor extension; pending verification of sed replacements in askr.py and test suite validation.
+- Verifying test status from last session and fixing any failures.
+- Reviewing files changed since last session against decisions.md for consistency.
 
 ## Key Decisions Made
 
-- State persisted in git via append-only decision log and handover documents, enabling context transfer between developers without external databases.
-- Forecast module predicts which limit (context or quota) hits first to prioritize checkpoint timing.
-- Safe interruption validation required before pausing to prevent mid-operation checkpoints.
-- Stats file location centralized at ~/.config/askr/session_stats.json with project_path field for workspace validation.
-- Hook-based integration with Claude Code (session_start, user_prompt_submit
+- State persists in git as append-only decision logs and handover documents, not in ephemeral workspace metadata.
+- Status tracking uses project-specific file paths (derived from workspace root hash) rather than global workspace paths, enabling multi-project isolation.
+- Session lifecycle is managed by hooks into Claude Code (session_start, user_prompt_submit, stop, pre_compact) rather than polling.
+- Safe interruption is validated before checkpoint to avoid corrupting mid-operation state.
+
+## Open Goals
+
+- Verify sed replacement in askr.py completed correctly (grep for remaining _STATS_PATH references).
+- Run full test suite
