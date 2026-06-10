@@ -1,21 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 16:54
-
-# Handover Document
+Last updated: 2026-06-10 17:08
 
 ## Task
-Update session report card to display project name, user message count, and API exchange count with proper formatting.
+Update session report card rendering to display project name and distinguish user messages from API exchanges in the turns stat.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Updated to pass `user_turns` parameter through function calls.
-- `/Users/bippin/Desktop/askr/askr/session/report_image.py`: Updated to extract project name from session data, render project name in top-right header, display turns stat as "N messages (M exchanges)" where N is user message count and M is API exchange count.
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Updated to pass `project_path` parameter to `session_card()` call.
-- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py`: Updated to pass `project_path` parameter to `session_card()` calls from checkpoint triggers (context/quota cards).
-- Git changes staged and pushed. Final report renders with format: "askr · [username] · [timestamp]" in top-right and turns display as "2 messages (48 exchanges)" pattern verified.
+- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Updated (specific changes not detailed in transcript)
+- `/Users/bippin/Desktop/askr/askr/session/report_image.py`: Multiple iterations completed. Final state shows project name in header, turns stat displays user message count with API exchange count as subscript label (e.g. "2 messages (48 exchanges)")
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Updated to pass `project_path` parameter to `session_card` function
+- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py`: Updated to pass `project_path` from checkpoint triggers (context/quota cards) to `session_card`
+- Changes committed and pushed to git
+- Report card rendering verified: top-right displays format `askr · bippin · 2026-06-10 16:53`, turns stat shows `2 messages (48 exchanges)`
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Verify that all `session_card()` calls across the codebase now receive `
+Determine which repository this session was ended for and document that information for future reference.
+
+## Open Questions
+- Which repository (by name or path)
