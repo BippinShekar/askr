@@ -1,26 +1,19 @@
-Last updated: 2026-06-10 16:49
+Last updated: 2026-06-10 16:54
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent state—objectives, decisions, progress—so work can resume without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or API quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and orchestrating safe resumption without losing work or context.
 
 ## What's In Flight
 
-- Daemon restart detection to prevent stale code execution after daemon restarts
-- Verification that auto-continue switch fires correctly in the askr repo after daemon trigger
-- Investigation of IDE extension installation failures and daemon status reporting issues
-- Test suite validation and fixes from last session output
+- Session report card display: project name, user message count, and API exchange count now render with proper formatting across all checkpoint triggers (context exhaustion, quota exhaustion, session end).
+- Daemon restart detection: preventing stale code execution after daemon restarts.
+- Auto-continue verification: confirming the auto-continue switch fires correctly in the askr repo after daemon trigger.
+- Test suite validation: verifying all tests pass after recent changes to cost.py, report_image.py, stop.py, and checkpoint.py.
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision log and structured state files (tasks, progress, context snapshots)
-- Checkpoint triggered before context auto-compaction to preserve work mid-session
-- Session hooks injected at four points: start (context injection), prompt submit (objective extraction), stop (handover docs), pre-compact (emergency checkpoint)
-- Daemon monitors token usage and forecasts which limit (context or quota) will be hit first to trigger proactive checkpoints
-- Extension status verified via filesystem checks rather than relying on IDE error messages
-
-## Open Goals
-
-- Add daemon restart detection to prevent stale code execution
-- Verify auto-continue switch fires in askr repo after daemon trigger
-- Verify test status
+- State persists in git as append-only decision log and task/progress files, enabling handoffs without database dependencies.
+- Session monitoring uses token forecasting to predict which limit (context or quota) hits first, triggering checkpoint before exhaustion.
+- Safe pause validation ensures interruption only occurs at safe points in the development workflow.
+- Report card displays user turns as "N messages (M exchanges)" format to distinguish user prompts from total API calls

@@ -1,24 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 16:49
+Last updated: 2026-06-10 16:54
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Investigate IDE extension installation failures and daemon/status reporting issues in the askr project, with focus on understanding error messages, configuration state, and extension installation status.
+Update session report card to display project name, user message count, and API exchange count with proper formatting.
 
 ## Status
-- Searched for "IDE extension install failed" and "extension install failed" error messages across filesystem — no matches found in initial searches
-- Examined ~/.claude/settings.json configuration file (multiple attempts to parse and inspect)
-- Examined /Users/bippin/Desktop/askr/.claude/settings.json configuration file
-- Checked ~/.config/askr/daemon.log (last 50 lines reviewed)
-- Checked ~/.config/askr/stats/Users-bippin-Desktop-askr.json statistics file
-- Verified askr.askr-status-1.0.0 extension directory exists at ~/.cursor/extensions/askr.askr-status-1.0.0/
-- Searched for "IDE", "extension", "install" keywords in relevant log and config files
-- No error messages matching the failure pattern were located in any searched locations
+- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Updated to pass `user_turns` parameter through function calls.
+- `/Users/bippin/Desktop/askr/askr/session/report_image.py`: Updated to extract project name from session data, render project name in top-right header, display turns stat as "N messages (M exchanges)" where N is user message count and M is API exchange count.
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Updated to pass `project_path` parameter to `session_card()` call.
+- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py`: Updated to pass `project_path` parameter to `session_card()` calls from checkpoint triggers (context/quota cards).
+- Git changes staged and pushed. Final report renders with format: "askr · [username] · [timestamp]" in top-right and turns display as "2 messages (48 exchanges)" pattern verified.
 
 ## Failed Approaches
-- Broad filesystem grep for error messages returned no results — indicates either errors are not being logged to standard locations or error message text differs from search pattern
-- Assumption that errors would appear in daemon.log — log exists but does not contain matching error text
+None.
 
-## Next
+## Next Action
+Verify that all `session_card()` calls across the codebase now receive `
