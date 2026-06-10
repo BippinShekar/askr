@@ -1,23 +1,24 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 17:08
+Last updated: 2026-06-10 17:12
+
+# Handover Document
 
 ## Task
-Update session report card rendering to display project name and distinguish user messages from API exchanges in the turns stat.
+Modified session reporting to display project name, user, timestamp, and message/exchange counts on the session card image, then committed changes to the askr repository.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/cost.py`: Updated (specific changes not detailed in transcript)
-- `/Users/bippin/Desktop/askr/askr/session/report_image.py`: Multiple iterations completed. Final state shows project name in header, turns stat displays user message count with API exchange count as subscript label (e.g. "2 messages (48 exchanges)")
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Updated to pass `project_path` parameter to `session_card` function
-- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py`: Updated to pass `project_path` from checkpoint triggers (context/quota cards) to `session_card`
-- Changes committed and pushed to git
-- Report card rendering verified: top-right displays format `askr · bippin · 2026-06-10 16:53`, turns stat shows `2 messages (48 exchanges)`
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — edited to pass `project_path` from checkpoint triggers
+- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py` — edited to propagate `project_path` to `session_card` calls
+- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py` — committed
+- Session card now renders with format: `askr · bippin · 2026-06-10 16:53` (top-right) and displays `2 messages (48 exchanges)` stat
+- Changes pushed to git remote
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Determine which repository this session was ended for and document that information for future reference.
+Generate a Discord update message showing a sample session card image with the new format (project name, user, timestamp, and message/exchange counts visible).
 
 ## Open Questions
-- Which repository (by name or path)
+- Whether to display git remote (e.g. `BippinShekar/askr`) instead of directory name (`askr`) in the top-right of the card — identified as one-line change in `report_image.py` but
