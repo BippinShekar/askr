@@ -1,14 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 11:29
+Last updated: 2026-06-10 11:40
 
-# Handover Document
+# Handover: askr Status Bar Context % Display Fix
 
 ## Task
-Investigate and fix three issues in askr's quota/context measurement and notification system: (1) goal notification UX showing stale goals without context, (2) clarify quota percentage direction (used vs. remaining), (3) determine why Claude Code auto-compacts at ~43% context despite askr's 65% daemon trigger threshold.
+Fix the askr VS Code extension status bar to display accurate context percentage for the current workspace, eliminating stale data from other projects bleeding into the display.
 
 ## Status
-- **Goal notification bug identified**: `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js` displays "goals stale 6h+" without goal text, making it impossible for user to decide what to keep/discard. File has been located but fix not yet applied.
-- **Quota direction confirmed**: `quota:5%` means 5% USED, 95% remaining. Previous analysis was inverted.
-- **Context measurement verified as correct**: askr reads actual `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from API response in JSONL, divides by 200K context window. `ctx:43%` = ~86K input tokens.
-- **Auto-compact trigger mismatch identified**: Claude Code fires auto-compact at approximately 43% context (askr's own measurement), but askr's daemon trigger is set to 65%. This means Claude
+- **Root cause identified**: Extension reads `session_stats.json` without validating that `project_path` matches the current VS Code workspace. Stale stats from other projects persist in the display until a new message is sent in the current project.
+- **SessionStart hook** (`/Users/bippin/Desktop/askr/askr/hooks/session_start.py`): Modified to write a blank stats entry with `ctx: 0%` for the current project immediately when a session starts, before any user message is sent.
+- **Extension** (`/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`): Needs modification to validate `session_stats.project_path` against current VS Code workspace root before displaying stats. If project_path does not match current workspace, display should show `ctx:0%` or "no session" state.
+- **Stats file location**: `/Users/bippin/.config/askr/session_stats.json` — contains `project_path`, `ctx_used`, and other fields.
+- **Backup of
