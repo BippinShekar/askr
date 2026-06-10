@@ -91,6 +91,7 @@ def session_card(
     files_changed: list[str] | None = None,
     context_history: list[float] | None = None,
     autonomous: bool = False,
+    project_path: str = "",
 ) -> Optional[str]:
     """
     Generate a session summary card PNG.
@@ -113,10 +114,12 @@ def session_card(
     title  = _LABEL.get(trigger_type, trigger_type.upper())
 
     # ── Hero content ─────────────────────────────────────────────────────
-    ctx_pct   = round(cost_summary.get("context_pct", 0) * 100)
-    in_tok    = cost_summary.get("context_tokens", 0)
-    out_tok   = cost_summary.get("output_tokens", 0)
-    turns     = cost_summary.get("turns", 0)
+    ctx_pct    = round(cost_summary.get("context_pct", 0) * 100)
+    in_tok     = cost_summary.get("context_tokens", 0)
+    out_tok    = cost_summary.get("output_tokens", 0)
+    turns      = cost_summary.get("turns", 0)
+    user_turns = cost_summary.get("user_turns", 0)
+    project_name = os.path.basename(project_path.rstrip("/")) if project_path else ""
 
     if trigger_type == "stop" and autonomous:
         hero_val  = "0"
@@ -179,7 +182,8 @@ def session_card(
             fontfamily="monospace")
     ax.text(0.03, 0.908, title, color=_WHITE, fontsize=18,
             fontweight="bold", va="top", transform=ax.transAxes)
-    ax.text(0.972, 0.948, f"{developer}  ·  {ts}",
+    project_label = f"{project_name}  ·  " if project_name else ""
+    ax.text(0.972, 0.948, f"{project_label}{developer}  ·  {ts}",
             color=_MUTED, fontsize=9, va="top", ha="right",
             transform=ax.transAxes)
 
@@ -197,11 +201,13 @@ def session_card(
     ax.axhline(y=0.530, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
 
     # Stats row
+    turns_label = f"messages ({turns} exchanges)" if user_turns else f"exchanges"
+    turns_val   = str(user_turns) if user_turns else str(turns)
     stats = [
         (_fmt_tokens(in_tok),         "input tokens",    _TEXT),
         (_fmt_tokens(out_tok),        "output tokens",   _TEXT),
         (f"{ctx_pct}%",              "ctx window",       _AMBER if ctx_pct >= 60 else _TEXT),
-        (str(turns),                  "turns",            _TEXT),
+        (turns_val,                   turns_label,        _TEXT),
         (_fmt_time(duration_seconds), "duration",         _BLUE),
     ]
     sw = 1.0 / len(stats)

@@ -516,6 +516,7 @@ def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
             goals_completed=completed_goals,
             files_changed=files_changed,
             context_history=context_history,
+            project_path=project_path,
         )
 
         ts = result.get("timestamp", "")[:16].replace("T", " ")

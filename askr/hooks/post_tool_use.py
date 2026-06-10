@@ -137,6 +137,7 @@ def _write_session_stats():
             "context_window": stats.context_window,
             "context_label": forecast.context_label,
             "turns": stats.turns,
+            "user_turns": stats.user_turns,
             "next_trigger": forecast.next_trigger,
             "quota_pct": quota_pct,
             "quota_reset_at": quota_reset_at,

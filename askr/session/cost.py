@@ -71,6 +71,7 @@ def get_session_cost_summary(project_path: str = "") -> dict:
     context_window = stats.get("context_window", 200_000)
     context_pct    = stats.get("context_pct", 0.0)
     turns          = stats.get("turns", 0)
+    user_turns     = stats.get("user_turns", 0)
 
     # Fallback: estimate output from context if not yet tracked in stats
     if not output_tokens:
@@ -87,6 +88,7 @@ def get_session_cost_summary(project_path: str = "") -> dict:
         "context_window": context_window,
         "context_pct": context_pct,
         "turns": turns,
+        "user_turns": user_turns,
         "cost_usd": round(actual_cost, 4),
         "projected_usd": round(projected_cost, 4),
         "savings_usd": round(savings, 4),

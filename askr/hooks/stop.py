@@ -208,6 +208,7 @@ def _broadcast_session_end(developer: str, completed_goals: list, project_path: 
             files_changed=files_changed,
             context_history=context_h,
             autonomous=autonomous,
+            project_path=project_path,
         )
 
         caption = f"**[askr] Session ended** — {developer}"

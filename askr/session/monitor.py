@@ -40,7 +40,8 @@ class SessionStats:
     output_tokens:  int
     context_window: int
     context_pct:    float   # 0.0 to 1.0
-    turns:          int
+    turns:          int     # assistant API exchanges (includes tool calls)
+    user_turns:     int     # human messages sent
     model:          str
     last_updated:   datetime
 
@@ -101,8 +102,12 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
     model = "claude-sonnet-4-6"
     tokens_per_turn = []
     output_tokens   = 0
+    user_turns      = 0
 
     for e in entries:
+        if e.get("type") == "human":
+            user_turns += 1
+            continue
         if e.get("type") != "assistant":
             continue
         msg   = e.get("message", {})
@@ -127,6 +132,7 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
         context_window=context_window,
         context_pct=context_pct,
         turns=len(tokens_per_turn),
+        user_turns=user_turns,
         model=model,
         last_updated=datetime.now(timezone.utc),
     )
