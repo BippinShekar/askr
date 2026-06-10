@@ -14,6 +14,14 @@ from typing import Optional
 
 
 CLAUDE_PROJECTS_DIR = os.path.expanduser("~/.claude/projects")
+_STATS_DIR           = os.path.expanduser("~/.config/askr/stats")
+
+
+def stats_path_for_project(project_path: str) -> str:
+    """Per-project stats file — isolates concurrent sessions from overwriting each other."""
+    hash_ = project_path.replace("/", "-").lstrip("-")
+    return os.path.join(_STATS_DIR, hash_ + ".json")
+
 
 _MODEL_CONTEXT_WINDOWS = {
     "claude-sonnet-4-6": 200_000,

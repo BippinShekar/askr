@@ -3,9 +3,15 @@ const fs     = require('fs');
 const path   = require('path');
 const os     = require('os');
 
-const STATS_PATH        = path.join(os.homedir(), '.config', 'askr', 'session_stats.json');
+const STATS_DIR         = path.join(os.homedir(), '.config', 'askr', 'stats');
 const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
+
+function projectStatsPath() {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+  const hash = root.replace(/\//g, '-').replace(/^-/, '');
+  return path.join(STATS_DIR, hash + '.json');
+}
 
 // Colours — applied to the entire status bar item
 const COLOR_OK   = '#98c379';  // green
@@ -117,15 +123,12 @@ function buildTooltip(s, ctxPct, isLive) {
 
 function readStats() {
   try {
-    const raw     = fs.readFileSync(STATS_PATH, 'utf8');
+    const statsPath = projectStatsPath();
+    const raw     = fs.readFileSync(statsPath, 'utf8');
     const s       = JSON.parse(raw);
-    const staleMs = Date.now() - fs.statSync(STATS_PATH).mtimeMs;
+    const staleMs = Date.now() - fs.statSync(statsPath).mtimeMs;
 
     if (staleMs > 7_200_000) return null;  // hide if > 2h stale
-
-    // Only show stats if they belong to the current workspace
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
-    if (workspaceRoot && s.project_path && s.project_path !== workspaceRoot) return null;
 
     const ctxPct       = Math.round((s.context_pct || 0) * 100);
     const ctxLabel     = s.context_label  || 'ok';
@@ -237,13 +240,12 @@ function activate(context) {
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
   try {
-    const statsDir = path.dirname(STATS_PATH);
-    if (fs.existsSync(statsDir)) {
-      const watcher = fs.watch(statsDir, (_, filename) => {
-        if (filename === 'session_stats.json') refresh();
-      });
-      context.subscriptions.push({ dispose: () => watcher.close() });
-    }
+    const projectFile = path.basename(projectStatsPath());
+    if (!fs.existsSync(STATS_DIR)) fs.mkdirSync(STATS_DIR, { recursive: true });
+    const watcher = fs.watch(STATS_DIR, (_, filename) => {
+      if (filename === projectFile) refresh();
+    });
+    context.subscriptions.push({ dispose: () => watcher.close() });
   } catch {}
 }
 

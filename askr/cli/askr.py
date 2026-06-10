@@ -39,7 +39,9 @@ HOOK_TIMEOUTS = {
     "PreToolUse":  10,
 }
 
-_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
+def _stats_path() -> str:
+    from askr.session.monitor import stats_path_for_project
+    return stats_path_for_project(os.getcwd())
 
 
 def _python_cmd() -> str:
@@ -635,9 +637,9 @@ def _statusline_text() -> str:
             saved_str = f" saved:{_fmt(saved)}" if saved else ""
             return f"askr ↺ Resumed{saved_str}"
 
-        if not os.path.exists(_STATS_PATH):
+        if not os.path.exists(_stats_path()):
             return "askr ·"
-        with open(_STATS_PATH) as f:
+        with open(_stats_path()) as f:
             s = json.load(f)
 
         ctx_pct   = int(round(s.get("context_pct", 0) * 100))
@@ -696,11 +698,11 @@ def cmd_status(args: list = None):
         )
         console.print(f"  [dim]CLAUDE.md[/dim]   {'[green]behavioral instructions active[/green]' if has_behavioral else '[yellow]missing — run askr init[/yellow]'}")
 
-    if os.path.exists(_STATS_PATH):
+    if os.path.exists(_stats_path()):
         try:
             import time as _time
-            stats_age = _time.time() - os.path.getmtime(_STATS_PATH)
-            with open(_STATS_PATH) as f:
+            stats_age = _time.time() - os.path.getmtime(_stats_path())
+            with open(_stats_path()) as f:
                 s = json.load(f)
             console.print()
             if stats_age > 600:
@@ -912,7 +914,7 @@ def cmd_launch(args: list):
     except Exception:
         pass
 
-    if os.path.exists(_STATS_PATH):
+    if os.path.exists(_stats_path()):
         console.print(f"  [dim]session:[/dim] {_statusline_text()}")
 
     allowed = _load_claude_settings().get("allowedTools", [])

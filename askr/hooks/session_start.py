@@ -111,26 +111,25 @@ def _maybe_suggest_goals(developer: str) -> list[str]:
         return []
 
 
-_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
-
-
 def _reset_stats_for_project():
     """
     Write a blank stats entry for the current project immediately on session start.
     This makes the status bar snap to ctx:0% for the right project before any
-    message is sent, rather than showing stale stats from the previous project.
-    Quota fields are preserved from the last write so the display stays accurate.
+    message is sent, rather than showing stale stats from a different project.
+    Quota fields are preserved — they're per-account and still valid.
     """
     try:
+        from askr.session.monitor import stats_path_for_project
         project_path = os.getcwd()
+        stats_path   = stats_path_for_project(project_path)
         existing = {}
         try:
-            with open(_STATS_PATH) as f:
+            with open(stats_path) as f:
                 existing = json.load(f)
         except Exception:
             pass
-        os.makedirs(os.path.dirname(_STATS_PATH), exist_ok=True)
-        with open(_STATS_PATH, "w") as f:
+        os.makedirs(os.path.dirname(stats_path), exist_ok=True)
+        with open(stats_path, "w") as f:
             json.dump({
                 "project_path":    project_path,
                 "context_pct":     0.0,

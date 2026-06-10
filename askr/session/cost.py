@@ -22,7 +22,7 @@ _MODEL_RATES: dict[str, tuple[float, float]] = {
 }
 _DEFAULT_RATES = (3.00, 15.00)  # fall back to Sonnet pricing
 
-_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
+_STATS_PATH = None  # legacy; use stats_path_for_project() instead
 _COST_HISTORY_PATH = os.path.expanduser("~/.config/askr/cost_history.json")
 
 
@@ -38,10 +38,12 @@ def tokens_to_usd(input_tokens: int, output_tokens: int, model: str = "claude-so
     return (input_tokens * rate_in + output_tokens * rate_out) / 1_000_000
 
 
-def _load_stats() -> dict:
+def _load_stats(project_path: str = "") -> dict:
     try:
-        if os.path.exists(_STATS_PATH):
-            with open(_STATS_PATH) as f:
+        from askr.session.monitor import stats_path_for_project
+        p = stats_path_for_project(project_path or os.getcwd())
+        if os.path.exists(p):
+            with open(p) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -62,7 +64,7 @@ def get_session_cost_summary(project_path: str = "") -> dict:
       - context_pct: how full the context window is
       - turns: number of assistant turns
     """
-    stats = _load_stats()
+    stats = _load_stats(project_path)
     model          = stats.get("model", "claude-sonnet-4-6")
     context_tokens = stats.get("context_tokens", 0)
     output_tokens  = stats.get("output_tokens", 0)

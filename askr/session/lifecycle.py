@@ -169,25 +169,42 @@ def _stop_caffeinate():
 # Session liveness — based on stats file mtime
 # ---------------------------------------------------------------------------
 
+_STATS_DIR = os.path.expanduser("~/.config/askr/stats")
+
+
 def _session_is_active() -> bool:
+    """True if any per-project stats file was updated within the stale window."""
     try:
-        return time.time() - os.path.getmtime(_STATS_PATH) < SESSION_STALE_SECS
+        if not os.path.isdir(_STATS_DIR):
+            return False
+        now = time.time()
+        return any(
+            now - os.path.getmtime(os.path.join(_STATS_DIR, f)) < SESSION_STALE_SECS
+            for f in os.listdir(_STATS_DIR) if f.endswith(".json")
+        )
     except Exception:
         return False
 
 
 def _read_stats() -> dict:
     """
-    Read session_stats.json. Returns {} if the file is missing or stale.
-    Stats are written by post_tool_use.py after every tool execution.
+    Return stats from the most recently modified per-project stats file.
+    Each project writes to its own file so concurrent sessions never collide.
     """
     try:
-        if not _session_is_active():
+        if not os.path.isdir(_STATS_DIR):
             return {}
-        with open(_STATS_PATH) as f:
+        now = time.time()
+        candidates = [
+            (os.path.getmtime(os.path.join(_STATS_DIR, f)), os.path.join(_STATS_DIR, f))
+            for f in os.listdir(_STATS_DIR)
+            if f.endswith(".json") and now - os.path.getmtime(os.path.join(_STATS_DIR, f)) < SESSION_STALE_SECS
+        ]
+        if not candidates:
+            return {}
+        _, active_path = max(candidates)
+        with open(active_path) as f:
             data = json.load(f)
-        # Extra guard: reject stats whose updated_at is older than SESSION_STALE_SECS
-        # (mtime and updated_at should agree, but belt-and-suspenders)
         ua = data.get("updated_at", "")
         if ua:
             age = (datetime.now(timezone.utc) - datetime.fromisoformat(ua)).total_seconds()
@@ -770,24 +787,9 @@ def run_daemon():
             if active:
                 stats = _read_stats()
                 if stats:
-                    # project_path written by PostToolUse hook (uses os.getcwd — always correct).
-                    # Fall back to global config only if stats predate this fix.
+                    # Each project writes its own stats file — no cross-project contamination.
+                    # _read_stats() already picked the most recently active file.
                     project_path = stats.get("project_path") or fallback_path
-
-                    # Multi-repo guard: verify the stats belong to a currently active JSONL
-                    # in this project. If the JSONL for project_path hasn't been updated in
-                    # the last 3 minutes, these stats are stale from a different repo's session
-                    # that last wrote session_stats.json. Skip to avoid triggering in the wrong repo.
-                    try:
-                        from askr.session.monitor import _find_active_jsonl
-                        jsonl = _find_active_jsonl(project_path)
-                        jsonl_age = time.time() - os.path.getmtime(jsonl) if jsonl else 999
-                    except Exception:
-                        jsonl_age = 999
-                    if jsonl_age > 180:
-                        _log(f"skip: stats project_path={project_path} but its JSONL is {int(jsonl_age)}s stale — likely a different repo's stats")
-                        time.sleep(POLL_ACTIVE)
-                        continue
 
                     ctx_pct    = stats.get("context_pct", 0)
                     ctx_label  = stats.get("context_label", "ok")

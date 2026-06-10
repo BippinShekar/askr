@@ -23,7 +23,6 @@ from askr.state.config import get_state_dir, load_developer
 
 _CLAUDE_PID_PATH    = os.path.expanduser("~/.config/askr/claude_session.pid")
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
-_STATS_PATH         = os.path.expanduser("~/.config/askr/session_stats.json")
 QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 
@@ -39,7 +38,9 @@ def _read_claude_pid():
 
 def _quota_pct() -> float | None:
     try:
-        with open(_STATS_PATH) as f:
+        from askr.session.monitor import stats_path_for_project
+        stats_path = stats_path_for_project(os.getcwd())
+        with open(stats_path) as f:
             return json.load(f).get("quota_pct")
     except Exception:
         return None

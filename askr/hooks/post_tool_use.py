@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, state_path, load_developer
 
-_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
+_LEGACY_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
 
 _SKIP_TOOLS = {"Read", "Glob", "Grep", "LS", "WebSearch", "WebFetch", "TodoRead"}
 
@@ -92,24 +92,22 @@ def _quota_needs_refresh(existing: dict) -> bool:
 
 def _write_session_stats():
     try:
-        from askr.session.monitor import get_session_stats
+        from askr.session.monitor import get_session_stats, stats_path_for_project
         from askr.session.forecast import get_forecast
 
-        # Use cwd — this hook runs inside Claude, so cwd is the actual project.
-        # load_project_path() returns the globally stored path from last `askr init`,
-        # which is wrong when multiple repos have askr installed.
         project_path = os.getcwd()
         stats = get_session_stats(project_path)
         if not stats:
             return
 
-        forecast = get_forecast(stats)
-        os.makedirs(os.path.dirname(_STATS_PATH), exist_ok=True)
+        forecast  = get_forecast(stats)
+        stats_path = stats_path_for_project(project_path)
+        os.makedirs(os.path.dirname(stats_path), exist_ok=True)
 
-        # Load existing stats to carry over quota cache when within throttle window
+        # Carry over quota cache from per-project file (not the legacy global)
         existing = {}
         try:
-            with open(_STATS_PATH) as f:
+            with open(stats_path) as f:
                 existing = json.load(f)
         except Exception:
             pass
@@ -148,7 +146,7 @@ def _write_session_stats():
             "session_id": stats.session_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        with open(_STATS_PATH, "w") as f:
+        with open(stats_path, "w") as f:
             json.dump(payload, f, indent=2)
     except Exception:
         pass
