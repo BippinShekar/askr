@@ -1,22 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 21:56
+Last updated: 2026-06-11 22:17
 
-# Handover Document
+# HANDOVER DOCUMENT
 
 ## Task
-Fix autonomous session continuation by ensuring the `claude` command auto-submits handover prompts without requiring manual input, and assess askr's readiness for external users.
+Fix autonomous session continuation by implementing two-phase prompt delivery to the Claude Code extension (send initialization first, then prompt via stdin) so context-triggered handover sessions auto-submit without manual intervention.
 
 ## Status
-- extension.js (source): Modified to send prompt via stdin after process initialization instead of passing as CLI arg. Change not yet committed.
-- extension.js (installed at ~/.cursor/extensions/askr.askr-status-1.0.0/): Same fix applied.
-- Git commit attempted but incomplete (message truncated: "fix: send promp").
-- Cursor extension reload notification attempted but command execution incomplete.
-- Readiness assessment: askr is NOT ready for external users. Core session monitoring and checkpointing work, but QA pipeline, snapshot modules, and several hook files are empty or incomplete. Multiple critical paths lack implementation.
-- Current blocking issue: CLI prompt arg never auto-submits regardless of content. The two-sendText fix (start process without prompt arg, then send prompt to stdin after initialization) is the solution.
+- Extension source file modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js — changed to start `claude` without prompt arg, wait 4 seconds for initialization, then send prompt to stdin
+- Installed extension updated: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js — same two-phase fix applied
+- Reload notification sent via askr_state/notifications.log to trigger Cursor extension reload
+- Git commit pending (incomplete in transcript: "fix: send promp" — needs completion)
+- Current session context: 52% / quota: 79%
+- User concern: This session (pre-fix) will NOT auto-trigger the next autonomous session because the old code is still active. The fix only takes effect after Cursor reloads the new extension code.
 
 ## Failed Approaches
-- Passing prompt as CLI argument to `claude` command — does not trigger auto-submission.
+- Single-phase prompt delivery via CLI arg (`claude "prompt"`) — never auto-submits regardless of content, requires manual user action to send
 
 ## Next Action
-Complete the git commit for extension.js changes with message "fix: send prompt via stdin instead of CLI arg for auto-submission", then verify the installed extension reloads in Cursor
+Complete and push the git commit for
