@@ -9,6 +9,11 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [13:31] Ran: sleep 3 && launchctl list | grep askr
+- [13:30] Ran: launchctl stop com.askr.daemon && sleep 2 && launchctl start com.askr.daemon && 
+- [13:30] Ran: launchctl list | grep askr
+- [13:30] Ran: cat /Users/bippin/Desktop/askr/askr/cli/askr.py | grep -n "daemon\|start\|stop\|
+- [13:30] Ran: askr stop && sleep 2 && askr start && echo "daemon restarted"
 - [13:16] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
 - [13:10] Ran: ls -lt /Users/bippin/Desktop/askr/askr_state/handover_*.md 2>/dev/null | head -5
 - [13:10] Ran: grep -n "MAX_TRANSCRIPT\|limit\|[:400]\|[:300]\|[:80]\|truncat" /Users/bippin/De

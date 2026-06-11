@@ -1,19 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 13:17
+Last updated: 2026-06-11 13:31
 
 # Handover Document
 
 ## Task
-Verify that the handover file generation logic produces complete, untruncated transcripts and that the checkpoint→handover→resume flow works end-to-end without introducing new race conditions or verification loops.
+Fix daemon bytecode caching issue preventing lifecycle.py changes from taking effect in long-running askr daemon process; verify session auto-resumption works end-to-end after daemon restart.
 
 ## Status
-- **lifecycle.py**: `_start_claude()` updated to auto-detect handover file and inject it as `@file` prompt
-- **stop.py**: `_handle_pending_checkpoint()` now captures checkpoint result and extracts `handover_path` to build `handover_prompt` string with `@{rel}` syntax and next goal
-- **extension.js**: Updated to use `n.prompt` field from checkpoint result
-- **Handover generation logic**: Unchanged from pre-implementation — same `_build_transcript_text()` → same Haiku call → same template. Improvement is input quality only: pre-fix, truncated transcripts on mid-extended-thinking kills; post-fix, complete transcripts passed to Haiku
-- **Git diff staged**: Changes to lifecycle.py, stop.py, extension.js confirmed in place
-- **Identified risk**: Daemon liveness check in `_read_claude_pid()` has a race condition between PID file read and process probe
+- **askr/hooks/stop.py**: Modified `_handle_pending_checkpoint()` to capture `checkpoint_result` and extract `handover_path` for constructing autonomous resumption prompt. Changes written to disk but not yet loaded by running daemon.
+- **.askr_history**: Updated with recent session transcript entries (tweets/design discussion context).
+- **Daemon process**: Still running old bytecode from initial startup. Requires restart to load modified lifecycle.py and stop.py.
+- **launchctl daemon (com.askr.daemon)**: Confirmed running but serving stale code. Restart commands executed (`launchctl stop` + `launchctl start`) in final exchange.
 
 ## Failed Approaches
-- Modifying handover generation template itself — determined unnecessary
+- Attempting to verify fix without restarting daemon — bytecode caching meant changes were on disk but not in memory.
+
+## Next Action
+Verify daemon successfully restarted and is running new bytecode by: (1) confirm `launchctl list | grep askr` shows daemon active, (2) trigger a session checkpoint/resumption flow and verify the new handover prompt with `@handover

@@ -1,17 +1,19 @@
-Last updated: 2026-06-11 13:17
+Last updated: 2026-06-11 13:31
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. On session resume, it injects the previous state and objectives back into Claude, enabling seamless handoffs between developers and across interrupted sessions without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It then orchestrates resumption in a fresh session with a handover document, enabling seamless developer handoffs and long-running coding tasks that exceed single-session limits.
 
 ## What's In Flight
 
-- End-to-end checkpoint→handover→resume flow: lifecycle.py auto-detects handover files and injects them as @file prompts; stop.py captures checkpoint results and builds handover prompts with next goals; extension.js wired to use checkpoint result payload.
-- Handover file generation: verified that transcript generation logic produces complete, untruncated output when fed clean input (pre-fix: mid-extended-thinking kills truncated transcripts; post-fix: complete transcripts passed to Haiku).
-- Race condition fix: identified PID file read/process probe race in _read_claude_pid(); needs daemon liveness check before execution.
-- Test verification and git diff review from last session.
+- Daemon bytecode caching fix: stop.py and lifecycle.py changes are on disk but stale code is running in the long-lived daemon process. Requires launchctl restart to load new bytecode and verify end-to-end session auto-resumption.
+- Session card display: deciding whether to show git remote or directory name in card top-right for clarity in multi-project workflows.
+- Discord integration: generating sample session card image and update message for team visibility.
+- Daemon restart detection: adding safeguards to prevent stale code execution after daemon restarts.
 
 ## Key Decisions Made
 
-- State persisted to git (not database) to enable developer handoffs and session resumption without external infrastructure.
-- Checkpoint triggered before exhaustion, not after — forecast.py predicts which limit hits first and triggers safe_pause.
+- State persisted to git, not database: enables handoffs between developers and sessions without external infrastructure.
+- Append-only decision log: all decisions recorded with timestamp and rationale; never edited, only appended.
+- Checkpoint triggered before exhaustion, not after: forecast module predicts which limit hits first (context or quota) and pauses safely before hitting it.
+-
