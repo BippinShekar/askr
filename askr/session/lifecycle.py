@@ -66,12 +66,50 @@ _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
 _CHECKPOINT_PENDING    = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 
+# ---------------------------------------------------------------------------
+# Source self-watch — detect when askr code changes and restart cleanly.
+# launchd KeepAlive:true means a clean exit triggers an automatic restart,
+# so sys.exit(0) here is equivalent to "reload with new code".
+# ---------------------------------------------------------------------------
+
+_ASKR_SRC_DIR = os.path.join(_ASKR_ROOT, "askr")
+_EXTENSION_PATHS = [
+    os.path.expanduser("~/.cursor/extensions/askr.askr-status-1.0.0/extension.js"),
+    os.path.expanduser("~/.vscode/extensions/askr.askr-status-1.0.0/extension.js"),
+]
+
+
+def _max_source_mtime() -> float:
+    try:
+        return max(
+            os.path.getmtime(os.path.join(root, f))
+            for root, _, files in os.walk(_ASKR_SRC_DIR)
+            for f in files
+            if f.endswith(".py") and "__pycache__" not in root
+        )
+    except Exception:
+        return 0.0
+
+
+def _extension_mtime() -> float:
+    try:
+        return max(
+            (os.path.getmtime(p) for p in _EXTENSION_PATHS if os.path.exists(p)),
+            default=0.0,
+        )
+    except Exception:
+        return 0.0
+
+
+_STARTUP_SOURCE_MTIME    = _max_source_mtime()
+_STARTUP_EXTENSION_MTIME = _extension_mtime()
+
 POLL_ACTIVE        = 30    # seconds when session is live
 POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.50  # fire at 50% — Claude Code auto-compacts at ~43% measured; 50% gives one-turn buffer for extended thinking
+CONTEXT_TRIGGER    = 0.65  # fire at 65% — gives enough runway before auto-compact while reducing spurious kills on extended-thinking sessions
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 TRIGGER_COOLDOWN   = 300   # seconds to ignore further triggers after one fires
 
@@ -319,16 +357,39 @@ def _load_allowed_tools(project_path: str) -> list:
     return []
 
 
-def _start_claude(project_path: str, initial_prompt: str = ""):
+def _start_claude(project_path: str, initial_prompt: str = "", handover_path: str = ""):
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
 
     claude_bin = shutil.which("claude") or "claude"
-    prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
 
     allowed_tools = _load_allowed_tools(project_path)
     tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
+
+    # Auto-find the handover file if not explicitly provided
+    if not handover_path:
+        try:
+            from askr.state.config import load_developer as _load_dev
+            dev = _load_dev()
+            candidate = os.path.join(project_path, "askr_state", f"handover_{dev}.md")
+            if os.path.exists(candidate):
+                handover_path = candidate
+        except Exception:
+            pass
+
+    # Build prompt: @file reference for clean handover injection, fallback to vague instruction
+    if handover_path and os.path.exists(handover_path):
+        try:
+            rel = os.path.relpath(handover_path, project_path)
+        except ValueError:
+            rel = handover_path
+        goal_part = f" Next goal: {initial_prompt}." if initial_prompt else ""
+        prompt_arg = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
+    else:
+        prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
+
+    display_goal = initial_prompt or "autonomous session"
 
     # Signal the VS Code/Cursor extension to open an integrated terminal.
     notification_written = False
@@ -337,10 +398,11 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
                 "type": "goal_launch",
-                "goal": initial_prompt or prompt_arg,
+                "goal": display_goal,
+                "prompt": prompt_arg,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
-                "message": f"Starting autonomous session — {initial_prompt or prompt_arg}",
+                "message": f"Starting autonomous session — {display_goal}",
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
@@ -444,7 +506,7 @@ def _clear_checkpoint_pending():
         pass
 
 
-def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = ""):
+def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = "", handover_path: str = ""):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         pct_str = f"{round(pct * 100)}%" if trigger == "context" else f"{round(pct)}%"
@@ -462,6 +524,13 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
         }
         if project_path:
             payload["allowed_tools"] = _load_allowed_tools(project_path)
+        if handover_path and project_path and os.path.exists(handover_path):
+            try:
+                rel = os.path.relpath(handover_path, project_path)
+                goal_part = f" Next goal: {goal}." if goal else ""
+                payload["prompt"] = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
+            except Exception:
+                pass
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
     except Exception:
@@ -526,7 +595,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
-    _write_notification(trigger, next_goal, pct, handover_has_content, project_path)
+    _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""))
     _kill_claude(project_path)
 
     if trigger == "quota":
@@ -638,18 +707,28 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     # Stop hook didn't run — do it ourselves
     _log("Stop hook didn't fire after kill — running checkpoint + restart directly")
     _clear_checkpoint_pending()
+    checkpoint_result = {}
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
         developer = load_developer()
         state_dir = os.path.join(project_path, "askr_state") if os.path.isdir(os.path.join(project_path, "askr_state")) else None
-        result = create_checkpoint(trigger_type="context", developer=developer, state_dir=state_dir)
-        _log(f"daemon fallback checkpoint: {result.get('trigger')} at {result.get('timestamp','')[:19]}")
+        checkpoint_result = create_checkpoint(trigger_type="context", developer=developer, state_dir=state_dir)
+        _log(f"daemon fallback checkpoint: {checkpoint_result.get('trigger')} at {checkpoint_result.get('timestamp','')[:19]}")
     except Exception as e:
         _log(f"daemon fallback checkpoint error: {e}")
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
+    handover_path = checkpoint_result.get("handover_path", "")
+    handover_prompt = ""
+    if handover_path and os.path.exists(handover_path):
+        try:
+            rel = os.path.relpath(handover_path, project_path)
+            goal_part = f" Next goal: {next_goal}." if next_goal else ""
+            handover_prompt = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
+        except Exception:
+            pass
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
@@ -659,6 +738,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
+                "prompt": handover_prompt or "Read the handover and start on the Next Action immediately. Work autonomously.",
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
@@ -666,7 +746,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     except Exception as e:
         _log(f"daemon fallback notification error: {e}")
     # Also spawn Terminal.app fallback in case extension isn't active
-    _start_claude(project_path)
+    _start_claude(project_path, handover_path=handover_path)
 
 
 def _wait_for_exchange_end_then_kill(project_path: str):
@@ -674,21 +754,27 @@ def _wait_for_exchange_end_then_kill(project_path: str):
     Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
     the current exchange is done — kill Claude so the Stop hook fires and
     consumes checkpoint_pending.json to run the checkpoint.
-    """
-    IDLE_SECS   = 20   # seconds of JSONL silence → exchange is done
-    TIMEOUT     = 300  # give up after 5 min if exchange never ends
-    POLL        = 5
 
-    from askr.session.monitor import _find_active_jsonl, _project_hash
-    import glob as _glob
+    No hard timeout: extended-thinking turns can run for 10+ minutes and must
+    not be killed mid-API-call. PreCompact is the backstop for sessions that
+    blow past the threshold in a single turn — it fires at a clean turn
+    boundary, never mid-thinking.
+    """
+    IDLE_SECS = 20   # seconds of JSONL silence → exchange is done
+    POLL      = 5
 
     _log("waiting for exchange to finish before killing Claude...")
-    deadline = time.time() + TIMEOUT
     last_mtime = None
     idle_since = None
 
-    while time.time() < deadline:
+    while True:
         time.sleep(POLL)
+
+        # If Claude exited on its own (user stopped it, crash, etc.), nothing to kill
+        if _read_claude_pid() is None:
+            _log("claude process gone during exchange wait — skipping kill")
+            return
+
         try:
             sessions_dir = os.path.join(
                 os.path.expanduser("~/.claude/projects"),
@@ -716,11 +802,6 @@ def _wait_for_exchange_end_then_kill(project_path: str):
             _kill_claude(project_path)
             _wait_for_stop_hook_or_fallback(project_path)
             return
-
-    _log("exchange wait timed out — killing Claude anyway")
-    _pre_kill_update_tools(project_path)
-    _kill_claude(project_path)
-    _wait_for_stop_hook_or_fallback(project_path)
 
 
 def _maybe_autolaunch(project_path: str):
@@ -817,6 +898,28 @@ def run_daemon():
                 time.sleep(POLL_ACTIVE)
             else:
                 time.sleep(POLL_IDLE)
+
+            # Source self-watch: if any .py file in the askr package changed since
+            # startup, exit cleanly. launchd KeepAlive:true restarts us with the
+            # new code — no manual daemon restart needed after a git pull.
+            if _max_source_mtime() > _STARTUP_SOURCE_MTIME:
+                _log("source files updated — exiting for launchd restart")
+                # If extension.js also changed, prompt the user to reload their IDE
+                if _extension_mtime() > _STARTUP_EXTENSION_MTIME:
+                    try:
+                        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+                        with open(_NOTIFICATION_PATH, "w") as f:
+                            json.dump({
+                                "type": "reload_extension",
+                                "message": "askr updated — reload your IDE window to activate the new extension.",
+                                "shown": False,
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }, f)
+                    except Exception:
+                        pass
+                _stop_caffeinate()
+                _clear_pid()
+                sys.exit(0)
 
     finally:
         _stop_caffeinate()

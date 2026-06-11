@@ -295,6 +295,21 @@ def create_checkpoint(
     else:
         # Try LLM-generated handover first; fall back to mechanical if unavailable
         transcript_text = _build_transcript_text(entries)
+
+        # Append git diff so Haiku sees what actually changed, not just which files
+        # were touched. This grounds Status and Next Action in reality — especially
+        # important when the transcript is thin (autonomous sessions with few text turns).
+        try:
+            diff_result = subprocess.run(
+                ["git", "diff", "HEAD"],
+                capture_output=True, text=True, timeout=10,
+            )
+            git_diff = diff_result.stdout.strip()
+            if git_diff:
+                transcript_text += f"\n\nGIT DIFF (actual changes this session, not yet committed):\n{git_diff[:5000]}"
+        except Exception:
+            pass
+
         llm_summary = _generate_handover_with_llm(transcript_text)
         if llm_summary:
             summary = llm_summary

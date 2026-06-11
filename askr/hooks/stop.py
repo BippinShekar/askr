@@ -127,7 +127,7 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
 
         trigger = pending.get("trigger", "context")
 
-        create_checkpoint(
+        checkpoint_result = create_checkpoint(
             trigger_type=trigger if trigger in ("context", "quota") else "context",
             developer=developer,
             transcript_path=transcript_path,
@@ -153,12 +153,22 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         else:
             pct     = pending.get("context_pct", 0)
             pct_str = f"{round(pct * 100)}%"
+            handover_path = (checkpoint_result or {}).get("handover_path", "")
+            handover_prompt = ""
+            if handover_path and os.path.exists(handover_path):
+                try:
+                    rel = os.path.relpath(handover_path, project_path)
+                    goal_part = f" Next goal: {next_goal}." if next_goal else ""
+                    handover_prompt = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
+                except Exception:
+                    pass
             payload = {
                 "type": "context",
                 "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
+                "prompt": handover_prompt or "Read the handover and start on the Next Action immediately. Work autonomously.",
                 "shown": False,
                 "timestamp": now,
             }
