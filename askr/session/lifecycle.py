@@ -362,6 +362,12 @@ def _start_claude(project_path: str, initial_prompt: str = "", handover_path: st
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
 
+    # Refuse to open a new session if Claude is already running for this project
+    existing = _find_claude_pid_by_project(project_path)
+    if existing:
+        _log(f"Claude pid {existing} already running for {project_path} — skipping launch to prevent double-session")
+        return
+
     claude_bin = shutil.which("claude") or "claude"
 
     allowed_tools = _load_allowed_tools(project_path)
@@ -704,7 +710,15 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
         if not os.path.exists(_CHECKPOINT_PENDING):
             _log("Stop hook consumed checkpoint_pending — restart delegated to extension")
             return
-    # Stop hook didn't run — do it ourselves
+    # Stop hook didn't run — do it ourselves, but only if Claude is actually dead.
+    # If the kill failed (PID mismatch, timing), the original session is still alive.
+    # Opening a new session alongside it causes dual-session chaos.
+    still_alive = _read_claude_pid() or _find_claude_pid_by_project(project_path)
+    if still_alive:
+        _log(f"Claude pid {still_alive} still running after kill attempt — skipping fallback launch to prevent double-session")
+        _clear_checkpoint_pending()
+        return
+
     _log("Stop hook didn't fire after kill — running checkpoint + restart directly")
     _clear_checkpoint_pending()
     checkpoint_result = {}
