@@ -1,22 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 19:33
+Last updated: 2026-06-11 19:42
+
+# HANDOVER DOCUMENT
 
 ## Task
-Fix double-session bug in Askr daemon where kill operation fails silently, causing fallback to open a new Claude session while the original is still running.
+Investigate how the Claude CLI handles positional arguments and determine the mechanism by which Askr should pass session context/state to a new Claude Code instance when resuming after quota exhaustion.
 
 ## Status
-- Root cause identified: `launchctl stop com.askr.daemon` fails silently (PID mismatch or permission issue), but fallback timer fires anyway after 20s and opens new session
-- Modified `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` twice to add guards:
-  - First edit: added guard in `_wait_for_idle` to prevent fallback if kill is still pending
-  - Second edit: added guard in `_start_claude` itself as belt-and-suspenders protection
-- VSCode extension reloaded and confirmed working (workspace filter now correctly claims notifications for askr repo only)
-- Daemon restart command incomplete in transcript (sleep 3 && launchctl list | grep askr ran but full restart not confirmed)
-- Changes staged but not yet committed/pushed
+- Examined Cursor extension directory structure at /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ to understand notification/lifecycle hooks
+- Checked ~/.config/askr/notification.json and ~/.config/askr/lifecycle.log for existing state management patterns
+- Searched codebase for polling mechanisms, terminal creation, and text-sending patterns (setInterval, checkNotification, openTerminal, createTerminal, sendText)
+- Ran `claude --help` to inspect CLI argument handling
+- Located potential extension files in /Users/bippin/Desktop/askr/.cursor/ and /Users/bippin/Desktop/askr/askr/ide/vscode-extension/
+- Session ended mid-investigation: final bash commands to list extension files were executed but output not yet reviewed
 
 ## Failed Approaches
-- Relying on single guard in `_wait_for_idle` — added second guard in `_start_claude` to prevent any path opening duplicate session
-- Assuming kill would succeed silently — now explicitly checking kill status before allowing fallback
+- Attempting to determine if `claude` CLI accepts positional arguments for session context — investigation incomplete, no conclusion reached
 
 ## Next Action
-Commit the lifecycle.py changes to git,
+Review the output of the final bash commands that listed extension files. Specifically: check /Users/bippin/Desktop/askr/.cursor
