@@ -156,6 +156,12 @@ function checkNotification() {
     const n = JSON.parse(fs.readFileSync(NOTIFICATION_PATH, 'utf8'));
     if (n.shown) return;
 
+    // If the notification targets a specific project, only handle it in the
+    // matching workspace. Other windows skip it; Terminal.app fallback fires
+    // after 6s if no window claims it.
+    const currentWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
+    if (n.project_path && currentWorkspace && n.project_path !== currentWorkspace) return;
+
     n.shown = true;
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 

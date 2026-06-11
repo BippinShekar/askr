@@ -775,6 +775,24 @@ def _wait_for_exchange_end_then_kill(project_path: str):
             _log("claude process gone during exchange wait — skipping kill")
             return
 
+        # Hard override: if context is within striking distance of auto-compact,
+        # kill immediately regardless of exchange state. Active human conversation
+        # can continue in the new session via handover; losing in-progress output
+        # is better than letting auto-compact destroy the session silently.
+        try:
+            from askr.session.monitor import stats_path_for_project
+            stats_path = stats_path_for_project(project_path)
+            with open(stats_path) as _sf:
+                current_ctx = json.load(_sf).get("context_pct", 0)
+            if current_ctx >= 0.80:
+                _log(f"context at {current_ctx:.1%} — compaction imminent, killing now without waiting for idle")
+                _pre_kill_update_tools(project_path)
+                _kill_claude(project_path)
+                _wait_for_stop_hook_or_fallback(project_path)
+                return
+        except Exception:
+            pass
+
         try:
             sessions_dir = os.path.join(
                 os.path.expanduser("~/.claude/projects"),
