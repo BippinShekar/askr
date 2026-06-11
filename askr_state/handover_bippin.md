@@ -1,22 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 20:15
+Last updated: 2026-06-11 20:17
 
 # Handover Document
 
 ## Task
-Investigate why autonomous session continuation (checkpoint → handover → resume) stopped working, identify the regression commit, and determine whether the @file attachment mechanism for passing handover context is necessary or if Claude can read referenced files by name alone.
+Refactor Claude Code session lifecycle to use autonomous handover prompts instead of file-based handover paths, and remove dead code from the refactoring.
 
 ## Status
-- Root cause identified: Commit `cd774a3` (Jun 11, 13:41) titled "inject handover via @file" changed the launch command structure
-- Previous working state (commit `baa2d37`): Claude was launched with handover content passed directly in the command string with instruction "Read the handover and start on the Next Action immediately."
-- Current broken state (commit `cd774a3` onward): Launch command was modified to use @file attachment mechanism instead of inline handover
-- Git history reviewed: commits `5f73050`, `baa2d37`, `c9e40b4`, `cd774a3`, `5723c66` examined
-- Regression confirmed by comparing extension.js diffs between working and broken states
-- Question raised: whether @file attachment adds meaningful benefit over Claude's ability to read files referenced by name in the prompt
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Updated prompt construction in four locations to use `"Read the handover and start on the Next Action immediately. Work autonomously."` with goal appended where relevant. Removed unused `handover_path` auto-find block. Removed `handover_path` parameter from `_start_claude()` function signature.
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Updated to use new autonomous handover prompt format instead of `handover_path` variable.
+- All references to `handover_path` in prompt construction paths have been eliminated.
+- Git diff staged but commit message incomplete: `git add askr/hooks/stop.py askr/session/lifecycle.py && git commit -m "fix: drop` — needs completion.
 
 ## Failed Approaches
-- Using @file attachment for handover injection (introduced in `cd774a3`, broke autonomous continuation)
+None.
 
 ## Next Action
-Revert the launch command in `/Users/bippin
+Complete and push the git commit with message `"fix: drop handover_path parameter and dead code from lifecycle refactor"` using `git commit --amend -m "fix: drop handover_path parameter and dead code from

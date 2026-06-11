@@ -1,17 +1,19 @@
-Last updated: 2026-06-11 20:15
+Last updated: 2026-06-11 20:17
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. When a session ends, it generates handover documentation so another developer (or the same one in a new session) can resume work without losing context or progress. The core problem it solves: Claude Code sessions are stateless and ephemeral, so developers lose their working context and have to re-explain their objectives every time they start a new session.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Debugging autonomous session continuation: checkpoints are being created but resumption is broken. Root cause identified in commit cd774a3 (Jun 11, 13:41) where the launch command was changed to use @file attachment for handover injection instead of inline content. Previous working state (commit baa2d37) passed handover directly in the command string.
-- Determining whether @file attachment mechanism is necessary or if Claude can read referenced files by name alone in the prompt.
-- Reverting launch command structure in extension.js to restore autonomous continuation.
-- Verifying test status and fixing any failures from recent changes.
+- Refactoring Claude Code session lifecycle to use autonomous handover prompts instead of file-based handover paths. Lifecycle.py and stop.py updated; git commit pending completion with message "fix: drop handover_path parameter and dead code from lifecycle refactor".
+- Generating Discord update messages with session card images for team visibility.
+- Verifying test status from last Bash output and fixing any failures.
+- Reviewing files changed since last session and cross-checking against decisions.md.
 
 ## Key Decisions Made
 
-- Session state is persisted in git (tasks, decisions, progress) to enable handoffs between developers and sessions.
-- Checkpoint is triggered before context auto-compaction (
+- Session state persists in git as append-only decision logs and task snapshots, enabling context recovery across developer handoffs.
+- Handover prompts are now autonomous ("Read the handover and start on the Next Action immediately. Work autonomously.") rather than file-path-based, reducing coupling between session lifecycle and file system.
+- Four integration hooks into Claude Code (session_start, user_prompt_submit, stop, pre_compact) capture context at critical points without requiring manual intervention.
+- Token
