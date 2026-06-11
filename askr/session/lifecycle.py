@@ -357,7 +357,7 @@ def _load_allowed_tools(project_path: str) -> list:
     return []
 
 
-def _start_claude(project_path: str, initial_prompt: str = "", handover_path: str = ""):
+def _start_claude(project_path: str, initial_prompt: str = ""):
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return
@@ -373,27 +373,8 @@ def _start_claude(project_path: str, initial_prompt: str = "", handover_path: st
     allowed_tools = _load_allowed_tools(project_path)
     tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
 
-    # Auto-find the handover file if not explicitly provided
-    if not handover_path:
-        try:
-            from askr.state.config import load_developer as _load_dev
-            dev = _load_dev()
-            candidate = os.path.join(project_path, "askr_state", f"handover_{dev}.md")
-            if os.path.exists(candidate):
-                handover_path = candidate
-        except Exception:
-            pass
-
-    # Build prompt: @file reference for clean handover injection, fallback to vague instruction
-    if handover_path and os.path.exists(handover_path):
-        try:
-            rel = os.path.relpath(handover_path, project_path)
-        except ValueError:
-            rel = handover_path
-        goal_part = f" Next goal: {initial_prompt}." if initial_prompt else ""
-        prompt_arg = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
-    else:
-        prompt_arg = initial_prompt or "Read the handover and start on the next goal. Work autonomously."
+    goal_part = f" Work on: {initial_prompt}." if initial_prompt else ""
+    prompt_arg = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
 
     display_goal = initial_prompt or "autonomous session"
 
@@ -530,13 +511,8 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
         }
         if project_path:
             payload["allowed_tools"] = _load_allowed_tools(project_path)
-        if handover_path and project_path and os.path.exists(handover_path):
-            try:
-                rel = os.path.relpath(handover_path, project_path)
-                goal_part = f" Next goal: {goal}." if goal else ""
-                payload["prompt"] = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
-            except Exception:
-                pass
+        if goal:
+            payload["prompt"] = f"Read the handover and start on the Next Action immediately. Work on: {goal}. Work autonomously."
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
     except Exception:
@@ -734,15 +710,8 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
-    handover_path = checkpoint_result.get("handover_path", "")
-    handover_prompt = ""
-    if handover_path and os.path.exists(handover_path):
-        try:
-            rel = os.path.relpath(handover_path, project_path)
-            goal_part = f" Next goal: {next_goal}." if next_goal else ""
-            handover_prompt = f"@{rel} —{goal_part} Start on the Next Action immediately. Work autonomously."
-        except Exception:
-            pass
+    goal_part = f" Work on: {next_goal}." if next_goal else ""
+    daemon_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
@@ -752,7 +721,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
-                "prompt": handover_prompt or "Read the handover and start on the Next Action immediately. Work autonomously.",
+                "prompt": daemon_prompt,
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
@@ -760,7 +729,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     except Exception as e:
         _log(f"daemon fallback notification error: {e}")
     # Also spawn Terminal.app fallback in case extension isn't active
-    _start_claude(project_path, handover_path=handover_path)
+    _start_claude(project_path)
 
 
 def _wait_for_exchange_end_then_kill(project_path: str):
