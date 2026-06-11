@@ -1,22 +1,25 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 12:55
+Last updated: 2026-06-11 13:06
 
 # HANDOVER DOCUMENT
 
 ## Task
-Resolve the fundamental contradiction in askr's session lifecycle: prevent mid-thinking-session kills while preserving autonomous handover capability and preventing context waste from compaction.
+Implement automatic handover mechanism for Claude Code sessions in the askr extension: capture checkpoint results with prompts, thread handover file paths through the notification system, and auto-load handover files with @file syntax in new sessions.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: CONTEXT_TRIGGER changed from 0.50 to 0.65 (65% context window threshold)
-- Root cause identified: daemon fires kill at 50% threshold via `_wait_for_exchange_end_then_kill()`, which polls JSONL for 20s silence before terminating
-- Extended thinking sessions trigger mid-turn kills because extended thinking blocks the 20s silence detection
-- Current handover mechanism is broken: new session receives only a pointer to handover file, not content, forcing cold discovery
-- Design contradiction confirmed: kill assumes seamless handover but `_start_claude()` provides insufficient context for autonomous continuation
+Implementation complete across 3 files:
+
+- **lifecycle.py**: Removed timeout/deadline logic. Added `handover_path` threading through `_execute_trigger`, `_wait_for_stop_hook_or_fallback`, and `_start_claude`. Modified `_start_claude` to auto-detect handover file in session directory and inject `@file <path>` into prompt. Modified `_wait_for_stop_hook_or_fallback` to capture checkpoint result and add `prompt` field to context notification.
+
+- **stop.py** (`_handle_pending_checkpoint`): Now captures checkpoint result and adds `prompt` field to notification payload before sending context notification.
+
+- **extension.js**: Updated to read `n.prompt` from incoming notifications and use it as the initial prompt text when launching Claude.
+
+All edits applied. No syntax errors detected in final grep verification.
 
 ## Failed Approaches
-- Allow mid-thinking kills with notification-only handover: removes askr's core differentiator of autonomous session continuity
-- Kill mid-thinking sessions: violates promise not to waste time/context; extended thinking compaction would still break context preservation guarantee
+None.
 
 ## Next Action
-Implement session kill guard: modify `_wait_for_exchange_end_then_kill()` to detect extended thinking
+Run the askr extension end-to-end: trigger a session, let it reach checkpoint/stop hook, verify the handover file
