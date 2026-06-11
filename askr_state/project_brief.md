@@ -1,19 +1,19 @@
-Last updated: 2026-06-11 14:13
+Last updated: 2026-06-11 19:33
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—tasks, decisions, progress—so work can resume without context loss or manual setup.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before the session breaks. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so anyone can resume exactly where the previous session left off.
 
 ## What's In Flight
 
-- Fix daemon context overflow during active chat: 80% hard override in lifecycle.py prevents indefinite waits when context climbs past threshold while daemon is idle (COMPLETED, pushed to main).
-- Fix workspace-mismatched extension notifications triggering unwanted session opens: added path validation to extension.js notification handler (COMPLETED, reloaded into ~/.cursor/extensions/).
-- Generate Discord update message with sample session card image for team visibility.
-- Verify test status from last Bash output and fix any failures.
-- Decide: display git remote or directory name in card top-right for clarity.
+- Fix double-session bug in daemon lifecycle where kill operation fails silently, causing fallback timer to spawn a new Claude session while the original is still running. Guards added to `lifecycle.py` in two places (`_wait_for_idle` and `_start_claude`). Changes staged, awaiting commit.
+- VSCode extension workspace filter corrected to claim notifications only for askr repo.
+- Daemon restart verification incomplete — need to confirm full launchctl restart sequence executed.
 
 ## Key Decisions Made
 
-- State is append-only and persisted to git: decisions.md, .askr_history, and task files are source of truth for session continuity across developers.
-- Checkpoint triggers at 80% context usage during active chat, not at auto-compact time, to prevent race conditions and indefinite JSONL exchanges.
-- Extension only processes notifications matching its workspace
+- State persisted to git (not database) to enable developer handoffs and version history of decisions/progress.
+- Checkpoint triggered before context auto-compaction or quota exhaustion, not after.
+- Session lifecycle managed by hooks into Claude Code (session_start, user_prompt_submit, stop, pre_compact) rather than external polling.
+- Forecast module predicts which limit (context or quota) hits first to prioritize checkpoint timing.
+- Safe pause validation ensures

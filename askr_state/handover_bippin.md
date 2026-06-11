@@ -1,21 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 14:13
+Last updated: 2026-06-11 19:33
 
 ## Task
-Debug why a new Claude Code session opens automatically in the askr repo without auto-continue enabled, and fix two critical daemon bugs: context overflow during active chat and workspace-mismatched extension notifications.
+Fix double-session bug in Askr daemon where kill operation fails silently, causing fallback to open a new Claude session while the original is still running.
 
 ## Status
-Two bugs fixed and pushed to origin/main:
-
-1. **lifecycle.py** — Added 80% hard override in the wait loop. When context climbs past 80% during active chat while daemon waits for idle, it triggers checkpoint immediately instead of allowing auto-compact to race. Prevents indefinite JSONL exchange waits.
-
-2. **extension.js** — Added workspace path validation to notification handler. Extension now only processes notifications matching its workspace root, preventing cross-workspace session triggers. Reloaded into ~/.cursor/extensions/ via manual copy and daemon restart (PID 13412).
-
-3. **Git state** — Both files committed and pushed. Daemon restarted successfully. Cursor window reloaded to pick up extension changes.
-
-4. **.askr_history** — Updated with session transcript entries (tweet discussion and codebase context). Goals marked DISCARDED: "Verify auto-continue switch fires in askr repo" and "Add daemon restart detection".
+- Root cause identified: `launchctl stop com.askr.daemon` fails silently (PID mismatch or permission issue), but fallback timer fires anyway after 20s and opens new session
+- Modified `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` twice to add guards:
+  - First edit: added guard in `_wait_for_idle` to prevent fallback if kill is still pending
+  - Second edit: added guard in `_start_claude` itself as belt-and-suspenders protection
+- VSCode extension reloaded and confirmed working (workspace filter now correctly claims notifications for askr repo only)
+- Daemon restart command incomplete in transcript (sleep 3 && launchctl list | grep askr ran but full restart not confirmed)
+- Changes staged but not yet committed/pushed
 
 ## Failed Approaches
-- Initial hypothesis that auto-continue was enabled — user confirmed it is not. Root cause is workspace-mismatched notifications triggering session open.
--
+- Relying on single guard in `_wait_for_idle` — added second guard in `_start_claude` to prevent any path opening duplicate session
+- Assuming kill would succeed silently — now explicitly checking kill status before allowing fallback
+
+## Next Action
+Commit the lifecycle.py changes to git,
