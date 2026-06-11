@@ -1,21 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 12:51
+Last updated: 2026-06-11 12:55
 
 # HANDOVER DOCUMENT
 
 ## Task
-Diagnose why askr daemon killed a Claude Code session mid-extended-thinking and implement context window management to prevent recurrence.
+Resolve the fundamental contradiction in askr's session lifecycle: prevent mid-thinking-session kills while preserving autonomous handover capability and preventing context waste from compaction.
 
 ## Status
-- Root cause identified: CONTEXT_TRIGGER threshold set to 0.50 (50%) in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
-- Daemon behavior confirmed: fires kill signal when context window reaches 50%, then polls JSONL for 20 seconds of silence before executing `_wait_for_exchange_end_then_kill()`
-- Extended thinking operations exceed 50% threshold, triggering premature session termination
-- Context window allocation increased from 50% to 65% per chat in lifecycle.py
-- File `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` was edited to raise CONTEXT_TRIGGER threshold
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: CONTEXT_TRIGGER changed from 0.50 to 0.65 (65% context window threshold)
+- Root cause identified: daemon fires kill at 50% threshold via `_wait_for_exchange_end_then_kill()`, which polls JSONL for 20s silence before terminating
+- Extended thinking sessions trigger mid-turn kills because extended thinking blocks the 20s silence detection
+- Current handover mechanism is broken: new session receives only a pointer to handover file, not content, forcing cold discovery
+- Design contradiction confirmed: kill assumes seamless handover but `_start_claude()` provides insufficient context for autonomous continuation
 
 ## Failed Approaches
-- Allowing mid-session kills with automatic context handover to new session — rejected because askr cannot reliably auto-start new sessions with complete context preservation; this creates data loss and broken continuity
+- Allow mid-thinking kills with notification-only handover: removes askr's core differentiator of autonomous session continuity
+- Kill mid-thinking sessions: violates promise not to waste time/context; extended thinking compaction would still break context preservation guarantee
 
 ## Next Action
-Verify the CONTEXT_TRIGGER threshold change to 0.65 in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` was persisted correctly, then test that extended thinking operations
+Implement session kill guard: modify `_wait_for_exchange_end_then_kill()` to detect extended thinking

@@ -1,21 +1,18 @@
-Last updated: 2026-06-11 12:52
+Last updated: 2026-06-11 12:55
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context window or token quota is about to exhaust, and automatically checkpoints project state to git before the session dies. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, so anyone can resume work without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state—objectives, decisions, progress—so work can resume autonomously without cold-start discovery.
 
 ## What's In Flight
 
-- Context window management: CONTEXT_TRIGGER threshold raised from 50% to 65% to prevent premature session kills during extended thinking operations. Verification and testing in progress.
-- Daemon restart detection: preventing stale code execution after daemon restarts.
-- Auto-continue verification: confirming the auto-continue switch fires in askr repo after daemon trigger.
-- Discord integration: generating update messages with session card images.
-- Test suite: verifying all tests pass after recent lifecycle.py changes.
+- Resolving session lifecycle contradiction: extended thinking sessions block the 20-second silence detection that triggers safe kills, causing mid-turn interruptions. Current work is implementing a kill guard in `_wait_for_exchange_end_then_kill()` to detect extended thinking blocks and defer termination.
+- Fixing handover mechanism: new sessions currently receive only a pointer to handover files, not content. Need to pass full context to `_start_claude()` for autonomous continuation.
+- Daemon restart detection to prevent stale code execution after daemon restarts.
+- Verification of auto-continue switch firing in askr repo after daemon trigger.
 
 ## Key Decisions Made
 
-- State persisted to git, not external databases. Enables offline work and natural developer handoffs.
-- Checkpoint triggered before context exhaustion, not after. Prevents data loss and broken continuity.
-- Auto-session-restart rejected. Askr cannot reliably preserve complete context across new sessions; manual resumption is safer.
-- Extended thinking operations require higher context buffer (65% threshold). Prevents daemon from killing sessions mid-computation.
-- Append-
+- Context exhaustion threshold set to 65% (changed from 50%) to provide buffer before Claude's auto-compaction kicks in and breaks context preservation.
+- Append-only decision log in decisions.md to maintain audit trail of all architectural choices.
+- State persisted in git (tasks, decisions, progress) rather
