@@ -357,16 +357,16 @@ def _load_allowed_tools(project_path: str) -> list:
     return []
 
 
-def _start_claude(project_path: str, initial_prompt: str = ""):
+def _start_claude(project_path: str, initial_prompt: str = "") -> bool:
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
-        return
+        return False
 
     # Refuse to open a new session if Claude is already running for this project
     existing = _find_claude_pid_by_project(project_path)
     if existing:
         _log(f"Claude pid {existing} already running for {project_path} — skipping launch to prevent double-session")
-        return
+        return False
 
     claude_bin = shutil.which("claude") or "claude"
 
@@ -412,9 +412,16 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
         f"        _d = json.load(_f)\n"
         f"    if _d.get('shown'): exit(0)\n"
         f"except Exception: pass\n"
-        f"_cmd = 'cd {project_path} && {claude_bin}{tools_flag} \"{safe_prompt}\"'\n"
-        f"_script = 'tell application \"Terminal\"\\n  do script \"' + _cmd + '\"\\n  activate\\nend tell'\n"
-        f"subprocess.run(['osascript', '-e', _script], timeout=5, "
+        f"# Step 1: open Terminal.app and start claude\n"
+        f"_start_cmd = 'cd {project_path} && {claude_bin}{tools_flag}'\n"
+        f"_open_script = 'tell application \"Terminal\"\\n  do script \"' + _start_cmd + '\"\\n  activate\\nend tell'\n"
+        f"subprocess.run(['osascript', '-e', _open_script], timeout=5, "
+        f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+        f"# Step 2: wait for claude TUI to load then type and submit the prompt\n"
+        f"time.sleep(10)\n"
+        f"_type_script = 'tell application \"Terminal\"\\n  tell front window\\n"
+        f"    keystroke {repr(safe_prompt)}\\n    key code 36\\n  end tell\\nend tell'\n"
+        f"subprocess.run(['osascript', '-e', _type_script], timeout=5, "
         f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
     )
     try:
@@ -427,6 +434,7 @@ def _start_claude(project_path: str, initial_prompt: str = ""):
         _log("fallback watcher spawned — Terminal.app fires in 6s if extension doesn't handle it")
     except Exception as e:
         _log(f"fallback watcher spawn failed: {e}")
+    return True
 
 
 def _wait_for_reset(reset_at_iso: str):
@@ -588,8 +596,9 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
             time.sleep(300)
 
     _log("starting new claude session")
-    _start_claude(project_path)
-    _notify_discord_resumed(trigger, next_goal)
+    launched = _start_claude(project_path)
+    if launched:
+        _notify_discord_resumed(trigger, next_goal)
     try:
         from askr.state.analytics import today_summary
         saved = today_summary().get("total_seconds", 0)
