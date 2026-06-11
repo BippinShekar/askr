@@ -1,21 +1,19 @@
-Last updated: 2026-06-11 13:38
+Last updated: 2026-06-11 13:41
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state and resuming work without manual context re-entry.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress so work can resume without losing context.
 
 ## What's In Flight
 
-- Daemon self-reload on source code changes: lifecycle.py now watches for .py file modifications, exits cleanly, and launchd restarts with new code loaded.
-- Extension reload notification: stop.py extracts handover path and sends reload_extension message to Cursor extension; extension.js displays clickable Reload button.
-- Verification of auto-continue trigger in askr repo after daemon restart.
-- Test status review from last Bash output and failure fixes.
-- File change review since last session and decisions.md audit.
+- Daemon auto-reload on Python file changes: file-watch loop in lifecycle.py detects `.py` modifications and triggers clean exit; launchd restarts daemon with new code. VSCode extension now has manual Reload button in status bar.
+- End-to-end verification of daemon reload cycle pending: need to make test change and confirm daemon picks it up within 30-60 seconds.
+- Discord integration: generate update message with sample session card image.
+- Stale code execution prevention: add daemon restart detection to session loop.
 
 ## Key Decisions Made
 
-- State persisted to git as append-only handover documents; enables context transfer without manual copy-paste.
-- Daemon lifecycle managed by launchd with KeepAlive: true; ensures daemon restarts on crash or code reload.
-- Session monitoring split into forecast (predict which limit hits first) and checkpoint (persist state before exhaustion).
-- Extension reload triggered by daemon notification rather than polling; reduces latency and manual intervention.
-- Safe pause validation
+- State persisted to git as append-only decision log and task/progress files; enables full handoff context between developers.
+- Daemon monitors token usage and forecasts which limit (context or quota) hits first; checkpoints before exhaustion, not after.
+- Safe interruption validated before pause: `safe_pause.py` ensures no mid-operation checkpoint.
+- VSCode extension synced from source at `askr/ide/vscode-extension/extension

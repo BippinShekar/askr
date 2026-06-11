@@ -1,14 +1,20 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 13:38
-
-# HANDOVER DOCUMENT
+Last updated: 2026-06-11 13:41
 
 ## Task
-Implement automatic daemon self-reload and extension reload notification system so that code changes to the askr daemon and Cursor extension are picked up without manual intervention or window reloads.
+Implement automatic daemon reload on Python file changes and add extension UI for manual reload trigger.
 
 ## Status
-- **askr/session/lifecycle.py**: Added file-watch logic to daemon loop. Daemon now detects when its own `.py` source files change since startup, exits cleanly, and launchd (configured with `KeepAlive: true`) automatically restarts it with new code loaded.
-- **askr/hooks/stop.py**: Modified `_handle_pending_checkpoint()` to extract `handover_path` from checkpoint result and construct a handover prompt that references the next goal. Payload now includes goal and handover file reference for extension notification.
-- **~/.cursor/extensions/askr.askr-status-1.0.0/extension.js**: Added handler for `reload_extension` notification type. Extension now displays a clickable Reload button when daemon sends this message, allowing user to reload the Cursor window without manual `Cmd+Shift+P` steps.
-- **Daemon restart**: Executed `launchctl stop com.askr.daemon && sleep 2 && launchctl start com.askr.daemon`. Daemon running with new PID 9985, confirming
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Added file-watch check in daemon loop before `time.sleep` to detect `.py` file changes and trigger clean daemon exit
+- `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: Added `reload_extension` command handler with clickable Reload button in status bar
+- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Synced from source at `askr/ide/vscode-extension/extension.js`
+- Daemon restarted (PID 11112) and confirmed to pick up self-watch code
+- Changes staged and pushed to git (askr/hooks/stop.py and askr/ide/vscode-extension/extension.js included in commit)
+- Workflow verified: git pull → daemon detects `.py` changes within 30s (active session) or 60s (idle) → daemon exits cleanly → launchd auto-restarts with new code
+
+## Failed Approaches
+None.
+
+## Next Action
+Verify daemon reload cycle end-to-end: make a test change
