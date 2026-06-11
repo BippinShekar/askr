@@ -1,26 +1,20 @@
-Last updated: 2026-06-11 22:32
+Last updated: 2026-06-11 22:36
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before pausing. When limits are hit, it orchestrates resumption by injecting prior context and objectives back into a new Claude session, enabling seamless handoffs between developers and across session boundaries.
 
 ## What's In Flight
 
-- Emergency checkpoint system: detecting safe interruption points and persisting state before context auto-compaction
-- Session resumption flow: injecting prior context and objectives when Claude Code restarts
-- Handover documentation: generating developer-to-developer context cards with session summary, blockers, and next steps
-- Discord integration: creating visual session cards for team updates
-- Test suite validation: verifying all recent changes pass CI
+- Autonomous session continuation: fixing prompt submission to Claude Code via Terminal.app fallback (CR vs LF line ending issue resolved in extension.js and lifecycle.py)
+- Discord notifications on session resumption (gated on successful Claude launch)
+- Verification of test suite status and fixing any failures from recent changes
+- Decision: whether to display git remote or directory name in session card UI
 
 ## Key Decisions Made
 
-- State persists in git, not external databases, so handoffs work across any environment and are auditable
-- Checkpointing happens automatically before exhaustion, not reactively after failure
-- Session hooks (start, prompt submit, stop, pre-compact) are the integration layer with Claude Code; no direct API dependency
-- Context forecasting predicts which limit (context or quota) hits first to prioritize checkpoint timing
-- Safe pause validation ensures interruption only happens at stable project states, not mid-operation
-
-## Open Goals
-
-- Decide whether to display git remote or directory name in handover card header
--
+- State persisted to git (not database) to enable developer handoffs and version control integration
+- Two-layer hook system: Claude Code hooks (session_start, user_prompt_submit, stop, pre_compact) feed into daemon lifecycle management (monitor, forecast, checkpoint, safe_pause)
+- Terminal.app fallback for prompt submission uses two-step spawn + keystroke approach (claude process launched first, then prompt sent via osascript)
+- Prompt submission requires CR line ending, not LF, to properly trigger Claude's input handler
+- Session resumption

@@ -9,6 +9,19 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [22:35] Ran: python3 -c "
+import json, os
+from datetime import datetime, timezone
+path = os.p
+- [22:35] Ran: git commit -m "$(cat <<'EOF'
+fix: send CR not LF to submit prompts in Claude's r
+- [22:35] Ran: git add askr/ide/vscode-extension/extension.js askr/session/lifecycle.py && git 
+- [22:35] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [22:35] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [22:35] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [22:35] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
+- [22:34] Ran: grep -n "_start_claude\|_notify_discord_resumed" /Users/bippin/Desktop/askr/askr
+- [22:34] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
 - [22:32] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - [22:27] Ran: cat ~/.config/askr/notification.json 2>/dev/null
 - [22:27] Ran: grep -n "sendText\|setTimeout\|launchPrompt" /Users/bippin/.cursor/extensions/as
