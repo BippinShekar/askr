@@ -1,18 +1,19 @@
-Last updated: 2026-06-11 22:17
+Last updated: 2026-06-11 22:20
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. When a limit is hit, it generates handover documentation and can trigger resumption in a fresh session without manual intervention. The core problem: long-running coding tasks in Claude Code hit token limits mid-work, losing context and requiring manual recovery. Askr makes these interruptions invisible to the developer.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It then orchestrates resumption in a fresh session with full context restored. The core problem: Claude Code sessions hit token limits mid-task, losing context and forcing manual recovery. Askr makes this seamless by treating sessions as resumable units.
 
 ## What's In Flight
 
-- Autonomous session continuation: implementing two-phase prompt delivery to Claude Code extension (initialize extension first, then send prompt via stdin) so handover sessions auto-submit without manual user action. Current blocker: extension reload timing and stdin delivery reliability.
-- Session state persistence: building out state reader/writer to maintain task context, decisions, and progress across session boundaries in git.
-- Token forecasting: predicting which limit (context or quota) will be hit first to trigger checkpoints at the right moment.
-- Discord integration: generating update messages with session card images for team visibility.
+- Extension fix validation: stdin-based prompt delivery (instead of command-line args) to work around Claude initialization timing. Currently at 52% context, deliberately burning tokens to reach 65% threshold where autonomous trigger fires.
+- Session monitoring and forecasting: predicting which limit (context or quota) hits first, with ~23-minute window before autonomous trigger in current session.
+- State persistence: task/decision/progress tracking across session boundaries via git commits.
 
 ## Key Decisions Made
 
-- State lives in git, not a database. Enables handoffs between developers and machines, version control, and offline operation.
-- Checkpoint before exhaustion, not after. Prevents mid-thought interruptions and lost work.
-- Two-phase extension initialization required. Single-phase
+- Append-only decision log in decisions.md; never edit existing lines, only add new ones.
+- State stored in git to enable developer handoffs and session resumption without manual context reconstruction.
+- Daemon triggers autonomous session at 65% context threshold; extension receives prompt via stdin after 4-second initialization wait.
+- Safe pause validation required before checkpoint to avoid interrupting mid-operation.
+- Two extension locations maintained: source
