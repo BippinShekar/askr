@@ -5,14 +5,14 @@
 - [ ] Generate Discord update message with sample session card image <!-- added: 2026-06-11T12:42 -->
 
 ## Backlog
-- [ ] Add daemon restart detection to prevent stale code execution <!-- added: 2026-06-10T14:16 -->
-- [ ] Verify auto-continue switch fires in askr repo after daemon trigger <!-- added: 2026-06-10T14:16 -->
 - [ ] Verify test status from last Bash output and fix any failures
 - [ ] Review files changed since last session and check decisions.md
 
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-11 14:10] DISCARDED: Verify auto-continue switch fires in askr repo after daemon trigger
+[2026-06-11 14:10] DISCARDED: Add daemon restart detection to prevent stale code execution
 [2026-06-10 00:38] Verified extension cwd fix and project_path notification chain — commit d384faf pushed to origin/main
 [2026-06-10 00:36] DISCARDED: Review implementation_state.md and recent git diff to identify in-progress work
 [2026-06-10 00:36] DISCARDED: Resume and complete the emergency checkpoint implementation

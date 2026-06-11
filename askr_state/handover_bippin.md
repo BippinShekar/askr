@@ -1,22 +1,21 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 14:05
-
-# Handover Document
+Last updated: 2026-06-11 14:13
 
 ## Task
-Fixed two critical bugs in askr daemon: (1) context compaction loop not respecting hard override when context hits high-water mark, causing indefinite wait during active chat; (2) VSCode extension firing notifications for unrelated workspace repos, triggering spurious Claude Code sessions.
+Debug why a new Claude Code session opens automatically in the askr repo without auto-continue enabled, and fix two critical daemon bugs: context overflow during active chat and workspace-mismatched extension notifications.
 
 ## Status
-- askr/session/lifecycle.py: Added high-water mark hard override inside the wait loop to force compaction when context threshold exceeded, preventing indefinite blocking during active user interaction.
-- askr/ide/vscode-extension/extension.js: Modified notification handler to filter events by workspace path, preventing cross-repo notification triggers.
-- Both files synced from repo to installed extension at ~/.cursor/extensions/askr.askr-status-1.0.0/extension.js.
-- Changes staged and pushed to remote.
-- Daemon restarted via launchctl stop com.askr.daemon.
-- askr_state/implementation_state.md updated with timestamps of modifications.
+Two bugs fixed and pushed to origin/main:
+
+1. **lifecycle.py** — Added 80% hard override in the wait loop. When context climbs past 80% during active chat while daemon waits for idle, it triggers checkpoint immediately instead of allowing auto-compact to race. Prevents indefinite JSONL exchange waits.
+
+2. **extension.js** — Added workspace path validation to notification handler. Extension now only processes notifications matching its workspace root, preventing cross-workspace session triggers. Reloaded into ~/.cursor/extensions/ via manual copy and daemon restart (PID 13412).
+
+3. **Git state** — Both files committed and pushed. Daemon restarted successfully. Cursor window reloaded to pick up extension changes.
+
+4. **.askr_history** — Updated with session transcript entries (tweet discussion and codebase context). Goals marked DISCARDED: "Verify auto-continue switch fires in askr repo" and "Add daemon restart detection".
 
 ## Failed Approaches
-- Attempting to handle context compaction without a hard override threshold — led to indefinite wait loops when user remained actively chatting while daemon was in checkpoint_pending state.
-
-## Next Action
-Co-founder pulls latest changes from remote. After git pull, he must manually run `askr init` to copy the updated extension.js
+- Initial hypothesis that auto-continue was enabled — user confirmed it is not. Root cause is workspace-mismatched notifications triggering session open.
+-
