@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 22:43
+Last updated: 2026-06-12 01:50
 
 ## Task
-Fixed three critical bugs in askr's Claude Code session orchestration: CR vs LF line ending in extension prompt submission, `_start_claude` return value for Discord notification gating, and Terminal.app fallback keystroke delivery.
+Fix Claude session resumption flow: make `_start_claude` return a boolean, gate Discord notifications on successful start, and replace Terminal.app single-command fallback with two-step keystroke script for proper CR submission.
 
 ## Status
-- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Fixed lines 180 and 195 to send CR (`\r`) instead of LF (`\n`) after prompts in both `context` and `goal_launch` handlers
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified `_start_claude()` to return boolean True on successful launch; added return statement after fallback watcher spawn; gated `_notify_discord_resumed()` call on the boolean return value at line 591; replaced Terminal.app fallback from single-command `claude "prompt"` approach to two-step script that starts claude then sends prompt via osascript keystroke
-- Changes staged and committed with message "fix: send CR not LF to submit prompts in Claude's raw-mode TUI"
-- Extension reload notification triggered via Python script to notify Cursor of updated extension code
-
-## Failed Approaches
-- Single-command Terminal.app approach (`claude "prompt"`) — replaced with two-step
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Three edits completed:
+  1. `_start_claude` function now returns `True` after fallback watcher spawn
+  2. Discord notification in `_notify_discord_resumed` gated on `_start_claude` return value (line ~591)
+  3. Terminal.app fallback replaced: old `claude "prompt"` single-command approach replaced with two-step script that launches Claude then sends prompt via osascript keystroke
+- `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: CR vs LF fix already committed — both `context` and `goal_launch` handlers now use `sendText(prompt, false)` + CR instead of appending `\n`
+- Changes committed with message "fix: send CR not LF to submit prompts in Claude's r..."
+- Reload notification triggered to Cursor extension loader (consumed by askr window only; leaps window requires manual reload via Cmd+Shift+P → Reload Window

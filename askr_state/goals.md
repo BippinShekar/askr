@@ -1,10 +1,12 @@
-## Today - 2026-06-11
+## Today - 2026-06-12
 
-- [ ] Decide: display git remote or directory name in card top-right <!-- added: 2026-06-11T12:42 -->
+- [ ] Verify Discord notification gating works with _start_claude boolean return <!-- added: 2026-06-12T01:44 -->
 
-- [ ] Generate Discord update message with sample session card image <!-- added: 2026-06-11T12:42 -->
+- [ ] Test Terminal.app keystroke fallback on macOS with actual Claude launch <!-- added: 2026-06-12T01:44 -->
 
 ## Backlog
+- [ ] Decide: display git remote or directory name in card top-right <!-- added: 2026-06-11T12:42 -->
+- [ ] Generate Discord update message with sample session card image <!-- added: 2026-06-11T12:42 -->
 - [ ] Verify test status from last Bash output and fix any failures
 - [ ] Review files changed since last session and check decisions.md
 
