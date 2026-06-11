@@ -9,6 +9,17 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:08] Ran: git show baa2d37:askr/ide/vscode-extension/extension.js | grep -A 10 "context'"
+- [20:07] Ran: git show 5723c66 -- askr/ide/vscode-extension/extension.js
+- [20:07] Ran: git show cd774a3 -- askr/ide/vscode-extension/extension.js
+- [20:07] Ran: git show c9e40b4 -- askr/ide/vscode-extension/extension.js
+- [20:06] Ran: git log --oneline -- askr/ide/vscode-extension/extension.js | head -15
+- [20:06] Ran: git show 5f73050 -- askr/ide/vscode-extension/extension.js
+- [20:06] Ran: git show baa2d37 -- askr/ide/vscode-extension/extension.js
+- [20:06] Ran: git show baa2d37 --stat
+- [20:06] Ran: git show 5f73050 --stat
+- [20:06] Ran: git log --oneline --all -- askr/ide/vscode-extension/extension.js | head -20
+- [20:06] Ran: git log --oneline --all | head -40
 - [19:41] Ran: ls /Users/bippin/Desktop/askr/askr/ide/vscode-extension/
 - [19:41] Ran: ls /Users/bippin/Desktop/askr/.cursor/ 2>/dev/null || ls /Users/bippin/Desktop/a
 - [19:41] Ran: find /Users/bippin/Desktop/askr -name "extension.ts" -o -name "extension.js" 2>/

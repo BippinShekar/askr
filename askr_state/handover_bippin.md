@@ -1,22 +1,26 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 19:42
+Last updated: 2026-06-11 20:09
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Investigate how the Claude CLI handles positional arguments and determine the mechanism by which Askr should pass session context/state to a new Claude Code instance when resuming after quota exhaustion.
+Identify and fix why autonomous session continuation (checkpoint → handover → resume) stopped working after a previous implementation.
 
 ## Status
-- Examined Cursor extension directory structure at /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/ to understand notification/lifecycle hooks
-- Checked ~/.config/askr/notification.json and ~/.config/askr/lifecycle.log for existing state management patterns
-- Searched codebase for polling mechanisms, terminal creation, and text-sending patterns (setInterval, checkNotification, openTerminal, createTerminal, sendText)
-- Ran `claude --help` to inspect CLI argument handling
-- Located potential extension files in /Users/bippin/Desktop/askr/.cursor/ and /Users/bippin/Desktop/askr/askr/ide/vscode-extension/
-- Session ended mid-investigation: final bash commands to list extension files were executed but output not yet reviewed
+- Session continuation feature was previously working (confirmed in git history)
+- Root cause identified: commit cd774a3 introduced a breaking change to askr/ide/vscode-extension/extension.js
+- The change removed or altered the event listener for `type: "context"` notifications that trigger session resumption
+- Git history examined: commits baa2d37 (working state), c9e40b4, cd774a3, 5723c66, 5f73050 reviewed
+- Commit cd774a3 is the regression point where the notification handler was modified
+- Current extension.js no longer properly listens for checkpoint notifications from the daemon
 
 ## Failed Approaches
-- Attempting to determine if `claude` CLI accepts positional arguments for session context — investigation incomplete, no conclusion reached
+None.
 
 ## Next Action
-Review the output of the final bash commands that listed extension files. Specifically: check /Users/bippin/Desktop/askr/.cursor
+Examine the exact diff between commit baa2d37 (last known working state) and cd774a3 to identify what changed in the notification listener logic. Then restore or reimplement the missing event handler in askr/ide/vscode-extension/extension.js that processes `type: "context"` notifications and triggers session resumption.
+
+## Open Questions
+- What specific change in cd774a3 broke the notification listener (exact lines modified)?
+- Does the daemon still correctly

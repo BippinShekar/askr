@@ -1,18 +1,20 @@
-Last updated: 2026-06-11 19:42
+Last updated: 2026-06-11 20:09
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. When a session ends, it generates handover documentation so another developer (or the same developer in a new session) can resume work without losing context or progress. The core problem: Claude Code sessions are stateless and ephemeral; Askr makes them persistent and transferable.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It then orchestrates seamless session resumption by injecting saved context back into the next Claude Code session, enabling long-running development work to survive session boundaries without manual handoff friction.
 
 ## What's In Flight
 
-- Investigating how Claude CLI accepts positional arguments to pass session context and state when resuming after quota exhaustion. Current blocker: need to review bash command output from extension file inspection to determine the mechanism for context injection into new Claude instances.
-- Building Discord integration to surface session cards and status updates.
-- Validating test suite and fixing any failures from recent changes.
-- Reviewing files changed since last session and cross-referencing against decisions log.
+- Fixing session continuation regression: commit cd774a3 broke the vscode-extension event listener that processes checkpoint notifications from the daemon. Need to restore the `type: "context"` notification handler in askr/ide/vscode-extension/extension.js.
+- Deciding on UI display: whether to show git remote or directory name in session card top-right corner.
+- Generating Discord update message with sample session card image for team visibility.
+- Verifying test status from last bash output and fixing any failures.
 
 ## Key Decisions Made
 
-- State is append-only and stored in git. Decisions are immutable once logged; new decisions are appended with timestamp and reasoning.
-- Session lifecycle is managed through Claude Code hooks: session_start injects context, user_prompt_submit captures objectives, stop generates handover docs and commits state, pre_compact triggers emergency checkpoints.
-- Persistent state lives in askr/state/ with separate readers and writers; config
+- State persisted to git (not database) to enable developer handoffs and version control of project context.
+- Checkpoint triggered before context auto-compaction, not after, to preserve full state.
+- Forecast module predicts which limit (context or quota) hits first to prioritize checkpoint timing.
+- Safe pause validation ensures interruption only at stable points in the codebase.
+- Handover documents auto-generated
