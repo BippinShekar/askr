@@ -1,20 +1,24 @@
-Last updated: 2026-06-11 22:36
+Last updated: 2026-06-11 22:43
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before pausing. When limits are hit, it orchestrates resumption by injecting prior context and objectives back into a new Claude session, enabling seamless handoffs between developers and across session boundaries.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Autonomous session continuation: fixing prompt submission to Claude Code via Terminal.app fallback (CR vs LF line ending issue resolved in extension.js and lifecycle.py)
-- Discord notifications on session resumption (gated on successful Claude launch)
-- Verification of test suite status and fixing any failures from recent changes
-- Decision: whether to display git remote or directory name in session card UI
+- Session lifecycle orchestration: monitoring token usage, forecasting which limit hits first, triggering safe checkpoints before exhaustion, and resuming with full context injected
+- Claude Code extension integration: hooks at session start, prompt submission, session end, and pre-compaction to extract objectives and persist state
+- Terminal.app fallback keystroke delivery for prompt submission when direct Claude APIs unavailable
+- Discord notifications on session resumption with session card metadata
 
 ## Key Decisions Made
 
-- State persisted to git (not database) to enable developer handoffs and version control integration
-- Two-layer hook system: Claude Code hooks (session_start, user_prompt_submit, stop, pre_compact) feed into daemon lifecycle management (monitor, forecast, checkpoint, safe_pause)
-- Terminal.app fallback for prompt submission uses two-step spawn + keystroke approach (claude process launched first, then prompt sent via osascript)
-- Prompt submission requires CR line ending, not LF, to properly trigger Claude's input handler
-- Session resumption
+- State persists in git as append-only decision logs and task files, enabling full audit trail and developer handoffs
+- Line ending protocol: CR (carriage return) required for prompt submission in Claude's raw-mode TUI, not LF
+- Session resumption gated on successful Claude launch confirmation (boolean return from _start_claude)
+- Extension reload triggered via Python script to notify Cursor of code updates without manual restart
+
+## Open Goals
+
+- Decide: display git remote or directory name in session card top-right
+- Generate Discord update message with sample session card image
