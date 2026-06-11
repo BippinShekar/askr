@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:20] Ran: cat /Users/bippin/Desktop/askr/roadmap.md
+- [20:20] Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | grep -v venv | grep -v __pyc
 - [20:17] Ran: git add askr/hooks/stop.py askr/session/lifecycle.py && git commit -m "fix: drop
 - [20:17] Ran: git diff --stat
 - [20:17] Modified: /Users/bippin/Desktop/askr/askr/session/lifecycle.py
