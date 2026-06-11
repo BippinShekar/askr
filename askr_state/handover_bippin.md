@@ -1,24 +1,22 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 20:25
+Last updated: 2026-06-11 21:56
 
-# HANDOVER DOCUMENT
+# Handover Document
 
 ## Task
-Assess whether askr is production-ready for users beyond the founders, identify reliability gaps, and research actual user pain points through web searches to inform the next development phase.
+Fix autonomous session continuation by ensuring the `claude` command auto-submits handover prompts without requiring manual input, and assess askr's readiness for external users.
 
 ## Status
-Codebase state as of final session exchange:
-- askr is in active development, not production-ready
-- Core session monitoring and checkpointing work in lifecycle.py and hooks/stop.py
-- Multiple critical paths incomplete: several hook files are empty, QA pipeline lacks implementation, snapshot modules lack content
-- Recent commits cleaned up dead `handover_path` variables from lifecycle.py and stop.py
-- README describes three core problems (session exhaustion, team drift, implementation holes) but implementation is incomplete across multiple critical paths
-- No web research was performed in this session despite being requested
+- extension.js (source): Modified to send prompt via stdin after process initialization instead of passing as CLI arg. Change not yet committed.
+- extension.js (installed at ~/.cursor/extensions/askr.askr-status-1.0.0/): Same fix applied.
+- Git commit attempted but incomplete (message truncated: "fix: send promp").
+- Cursor extension reload notification attempted but command execution incomplete.
+- Readiness assessment: askr is NOT ready for external users. Core session monitoring and checkpointing work, but QA pipeline, snapshot modules, and several hook files are empty or incomplete. Multiple critical paths lack implementation.
+- Current blocking issue: CLI prompt arg never auto-submits regardless of content. The two-sendText fix (start process without prompt arg, then send prompt to stdin after initialization) is the solution.
 
 ## Failed Approaches
-- Claiming askr is "shipped" or ready for external users — transcript explicitly contradicts this
-- Directing users to a non-existent product without acknowledging active development status
+- Passing prompt as CLI argument to `claude` command — does not trigger auto-submission.
 
 ## Next Action
-Perform web searches to identify: (1) how other teams handle Claude Code session exhaustion and context limit recovery, (2) what reliability issues users report with long-running AI coding sessions, (3) what session orchestration or checkpointing solutions exist in the market. Document findings in a new file `askr_state/user_pain_research
+Complete the git commit for extension.js changes with message "fix: send prompt via stdin instead of CLI arg for auto-submission", then verify the installed extension reloads in Cursor

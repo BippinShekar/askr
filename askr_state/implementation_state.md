@@ -9,6 +9,13 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:56] Ran: python3 -c "
+import json, os
+from datetime import datetime, timezone
+path = os.p
+- [21:56] Ran: git add askr/ide/vscode-extension/extension.js && git commit -m "fix: send promp
+- [21:55] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [21:55] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - [20:20] Ran: cat /Users/bippin/Desktop/askr/roadmap.md
 - [20:20] Ran: find /Users/bippin/Desktop/askr/askr -name "*.py" | grep -v venv | grep -v __pyc
 - [20:17] Ran: git add askr/hooks/stop.py askr/session/lifecycle.py && git commit -m "fix: drop

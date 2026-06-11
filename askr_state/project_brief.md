@@ -1,17 +1,21 @@
-Last updated: 2026-06-11 20:25
+Last updated: 2026-06-11 21:56
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in version control, solving the problem of lost context and wasted work when long-running AI coding sessions hit resource limits.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress so work can resume without context loss.
 
 ## What's In Flight
 
-- Production readiness assessment: identifying reliability gaps and incomplete critical paths (several hook files are empty, QA pipeline lacks implementation, snapshot modules lack content).
-- Web research on user pain points: how teams currently handle Claude Code session exhaustion, what reliability issues exist in long-running AI coding sessions, and what competing solutions exist in the market.
-- Session card UI: deciding whether to display git remote or directory name in card top-right, and generating Discord update messages with sample session card images.
-- Test verification: checking test status from last Bash output and fixing any failures.
+- Fix autonomous session continuation: the `claude` command must auto-submit handover prompts via stdin instead of CLI arguments. Extension changes are staged but not yet committed.
+- Complete git commit for extension.js with message "fix: send prompt via stdin instead of CLI arg for auto-submission".
+- Verify Cursor extension reloads after commit.
+- Readiness assessment: core session monitoring and checkpointing work, but QA pipeline, snapshot modules, and several hook files are incomplete. Not ready for external users yet.
 
 ## Key Decisions Made
 
-- State persistence via git: all session state (tasks, decisions, progress) is stored in version control to enable developer handoffs and audit trails.
-- Hook-based integration: Askr injects into Claude Code at five lifecycle points (session start, user prompt submit, session stop, pre-compact, and resumption) rather than wrapping the entire session.
+- State persists in git via append-only decision logs and state files, enabling developer handoffs without manual context transfer.
+- Session lifecycle is managed through Claude Code hooks (session_start, user_prompt_submit, stop, pre_compact) rather than external polling.
+- Forecast module predicts which limit (context or quota) will be hit first to prioritize checkpoint timing.
+- Safe pause validation ensures interruption only happens at safe points in the codebase.
+
+## Open Goals
