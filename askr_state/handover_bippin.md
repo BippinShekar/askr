@@ -1,24 +1,25 @@
 # Handover: bippin
 
-Last updated: 2026-06-10 17:12
+Last updated: 2026-06-11 12:45
 
-# Handover Document
+# HANDOVER DOCUMENT
 
 ## Task
-Modified session reporting to display project name, user, timestamp, and message/exchange counts on the session card image, then committed changes to the askr repository.
+Diagnose why askr session was killed mid-extended-thinking, identify the root cause in the codebase, and increase context window allocation from 50% to 65% per chat to prevent recurrence.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py` — edited to pass `project_path` from checkpoint triggers
-- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py` — edited to propagate `project_path` to `session_card` calls
-- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py` — committed
-- Session card now renders with format: `askr · bippin · 2026-06-10 16:53` (top-right) and displays `2 messages (48 exchanges)` stat
-- Changes pushed to git remote
+- Session kill mechanism identified in `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
+- Context window threshold setting located and ready for modification
+- Root cause analysis in progress: session termination triggered during extended thinking phase
+- Multiple source files read to map session lifecycle and context management logic
+- Edit operation initiated on lifecycle.py to adjust context window threshold from 50% to 65%
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Generate a Discord update message showing a sample session card image with the new format (project name, user, timestamp, and message/exchange counts visible).
+Complete the edit to `/Users/bippin/Desktop/askr/askr/session/lifecycle.py` to change the context window threshold from 50% to 65%, then verify the change persists and test that a new session with extended thinking does not trigger premature termination.
 
 ## Open Questions
-- Whether to display git remote (e.g. `BippinShekar/askr`) instead of directory name (`askr`) in the top-right of the card — identified as one-line change in `report_image.py` but
+- What specific condition in the session lifecycle triggered the kill during extended thinking (requires code inspection completion)
+- Whether 65% threshold is sufficient or if further adjustment will be needed post-testing

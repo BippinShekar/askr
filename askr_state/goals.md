@@ -1,10 +1,12 @@
-## Today - 2026-06-10
+## Today - 2026-06-11
 
-- [ ] Add daemon restart detection to prevent stale code execution <!-- added: 2026-06-10T14:16 -->
+- [ ] Decide: display git remote or directory name in card top-right <!-- added: 2026-06-11T12:42 -->
 
-- [ ] Verify auto-continue switch fires in askr repo after daemon trigger <!-- added: 2026-06-10T14:16 -->
+- [ ] Generate Discord update message with sample session card image <!-- added: 2026-06-11T12:42 -->
 
 ## Backlog
+- [ ] Add daemon restart detection to prevent stale code execution <!-- added: 2026-06-10T14:16 -->
+- [ ] Verify auto-continue switch fires in askr repo after daemon trigger <!-- added: 2026-06-10T14:16 -->
 - [ ] Verify test status from last Bash output and fix any failures
 - [ ] Review files changed since last session and check decisions.md
 
