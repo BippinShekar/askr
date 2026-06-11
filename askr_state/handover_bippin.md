@@ -1,21 +1,19 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 13:11
+Last updated: 2026-06-11 13:17
 
 # Handover Document
 
 ## Task
-Verify that handover file generation logic produces meaningfully different output post-implementation versus pre-implementation, or confirm it still generates identical boilerplate text.
+Verify that the handover file generation logic produces complete, untruncated transcripts and that the checkpoint→handover→resume flow works end-to-end without introducing new race conditions or verification loops.
 
 ## Status
-- Session implemented thread handover path integration across lifecycle.py, stop.py, and extension.js
-- Changes included: removed timeout logic, added PID check, threaded handover_path into notifications and _start_claude, captured checkpoint results, added prompt field to context notifications
-- User raised question at session end: does the handover file generation logic produce different output after these changes, or does it still recite the same text as before?
-- Attempted to investigate with grep searches for transcript building logic (MAX_TRANSCRIPT, truncation patterns) and recent handover files
-- Investigation incomplete — grep results not shown in transcript, file reads not completed before session ended
+- **lifecycle.py**: `_start_claude()` updated to auto-detect handover file and inject it as `@file` prompt
+- **stop.py**: `_handle_pending_checkpoint()` now captures checkpoint result and extracts `handover_path` to build `handover_prompt` string with `@{rel}` syntax and next goal
+- **extension.js**: Updated to use `n.prompt` field from checkpoint result
+- **Handover generation logic**: Unchanged from pre-implementation — same `_build_transcript_text()` → same Haiku call → same template. Improvement is input quality only: pre-fix, truncated transcripts on mid-extended-thinking kills; post-fix, complete transcripts passed to Haiku
+- **Git diff staged**: Changes to lifecycle.py, stop.py, extension.js confirmed in place
+- **Identified risk**: Daemon liveness check in `_read_claude_pid()` has a race condition between PID file read and process probe
 
 ## Failed Approaches
-None.
-
-## Next Action
-Read the most recent handover file generated (from /Users/bippin/Desktop/askr/askr_state/handover_*.md, sorted by modification time) and compare its content against a handover file generated before the lifecycle.py/stop.py/extension.js changes were made. Determine whether the prompt field, checkpoint_result, or handover_path references now appear in the generated output, or whether the text remains identical to pre-implementation versions. Document
+- Modifying handover generation template itself — determined unnecessary
