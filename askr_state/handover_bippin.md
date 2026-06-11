@@ -1,20 +1,14 @@
 # Handover: bippin
 
-Last updated: 2026-06-11 13:31
+Last updated: 2026-06-11 13:38
 
-# Handover Document
+# HANDOVER DOCUMENT
 
 ## Task
-Fix daemon bytecode caching issue preventing lifecycle.py changes from taking effect in long-running askr daemon process; verify session auto-resumption works end-to-end after daemon restart.
+Implement automatic daemon self-reload and extension reload notification system so that code changes to the askr daemon and Cursor extension are picked up without manual intervention or window reloads.
 
 ## Status
-- **askr/hooks/stop.py**: Modified `_handle_pending_checkpoint()` to capture `checkpoint_result` and extract `handover_path` for constructing autonomous resumption prompt. Changes written to disk but not yet loaded by running daemon.
-- **.askr_history**: Updated with recent session transcript entries (tweets/design discussion context).
-- **Daemon process**: Still running old bytecode from initial startup. Requires restart to load modified lifecycle.py and stop.py.
-- **launchctl daemon (com.askr.daemon)**: Confirmed running but serving stale code. Restart commands executed (`launchctl stop` + `launchctl start`) in final exchange.
-
-## Failed Approaches
-- Attempting to verify fix without restarting daemon — bytecode caching meant changes were on disk but not in memory.
-
-## Next Action
-Verify daemon successfully restarted and is running new bytecode by: (1) confirm `launchctl list | grep askr` shows daemon active, (2) trigger a session checkpoint/resumption flow and verify the new handover prompt with `@handover
+- **askr/session/lifecycle.py**: Added file-watch logic to daemon loop. Daemon now detects when its own `.py` source files change since startup, exits cleanly, and launchd (configured with `KeepAlive: true`) automatically restarts it with new code loaded.
+- **askr/hooks/stop.py**: Modified `_handle_pending_checkpoint()` to extract `handover_path` from checkpoint result and construct a handover prompt that references the next goal. Payload now includes goal and handover file reference for extension notification.
+- **~/.cursor/extensions/askr.askr-status-1.0.0/extension.js**: Added handler for `reload_extension` notification type. Extension now displays a clickable Reload button when daemon sends this message, allowing user to reload the Cursor window without manual `Cmd+Shift+P` steps.
+- **Daemon restart**: Executed `launchctl stop com.askr.daemon && sleep 2 && launchctl start com.askr.daemon`. Daemon running with new PID 9985, confirming
