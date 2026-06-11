@@ -1,19 +1,20 @@
-Last updated: 2026-06-11 13:41
+Last updated: 2026-06-11 13:45
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress so work can resume without losing context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Daemon auto-reload on Python file changes: file-watch loop in lifecycle.py detects `.py` modifications and triggers clean exit; launchd restarts daemon with new code. VSCode extension now has manual Reload button in status bar.
-- End-to-end verification of daemon reload cycle pending: need to make test change and confirm daemon picks it up within 30-60 seconds.
-- Discord integration: generate update message with sample session card image.
-- Stale code execution prevention: add daemon restart detection to session loop.
+- Daemon self-watch and extension reload flow: Python code changes now trigger daemon restart and VS Code extension reload without manual intervention. Launchd auto-restart confirmed working. Awaiting co-founder git pull to verify end-to-end flow.
+- Session card display: deciding whether to show git remote or directory name in top-right corner.
+- Discord integration: generating update messages with sample session card images.
+- Test verification: reviewing bash output from last session and fixing any failures.
 
 ## Key Decisions Made
 
-- State persisted to git as append-only decision log and task/progress files; enables full handoff context between developers.
-- Daemon monitors token usage and forecasts which limit (context or quota) hits first; checkpoints before exhaustion, not after.
-- Safe interruption validated before pause: `safe_pause.py` ensures no mid-operation checkpoint.
-- VSCode extension synced from source at `askr/ide/vscode-extension/extension
+- State persisted to git, not database: enables offline handoffs and full audit trail.
+- Append-only decisions.md: never edit existing lines, only append. Maintains decision history.
+- Daemon poll cycle: 30 seconds when session active, 60 seconds when idle. Balances responsiveness and resource usage.
+- Extension as source of truth: vscode-extension/extension.js is the canonical version; installed extension syncs from it.
+- Safe pause validation: interruption only happens at safe
