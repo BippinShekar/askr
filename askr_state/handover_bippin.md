@@ -1,15 +1,18 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 12:02
+Last updated: 2026-06-12 12:05
 
-Task
-Validate the CR/LF fix for Claude's raw-mode TUI submission and establish an overnight stress test scenario for autonomous session switching in the askr portfolio project.
+# Handover Document
 
-Status
-- Fixed extension to send CR (`\r`) instead of LF (`\n`) after prompts in both `context` and `goal_launch` handlers using `sendText(prompt, false)` — committed to git
-- Created reload notification trigger via Python script to notify Cursor to load updated extension
-- Leaps window consumed the notification (marked `shown: true`), so the leaps repo did not receive the reload signal — manual reload required via `Cmd+Shift+P` → Reload Window
-- Created `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetsis.md` with full checklist for overnight autonomous switching test, including gate to validate CR fix fires in real trigger before running
-- Askr stats showing in leaps repo display: `askr quota 8% ↺4h15m chat 64%!` with stale indicator (`...`) meaning no active Claude session running in that project currently
-- `.askr_history` updated with session conversation log including discussion of tweet messaging for askr launch (unresolved — user requested help writing tweet but no final tweet was committed)
-- `notifications.log` updated with latest "Claude
+## Task
+Fix UTF-8 encoding in askr status line output so terminal displays `↺` character correctly instead of garbled `âº`, and validate the CR (context recovery) fix in a real overnight stress test scenario.
+
+## Status
+- UTF-8 stdout encoding issue identified: `↺` (E2 86 BA in UTF-8) renders as `âº` when PYTHONIOENCODING is not forced to UTF-8 in shell environment
+- File `/Users/bippin/Desktop/askr/askr/cli/askr.py` modified to force UTF-8 stdout encoding
+- Git commit staged but incomplete: `git add askr/cli/askr.py && git commit -m "fix: force UTF-8 stdout so status lin` — commit message was cut off, needs completion
+- Stress test document created at `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetris.md` with full checklist including "validate CR fix first" gate
+- CR (context recovery) fix was recently committed but has never fired in a real trigger scenario yet — 8 second delay may be insufficient if Claude TUI takes longer to fully load
+- leaps repo session reached 96% context limit; previous checkpoint at 64% either already fired or missed entirely
+
+## Failed
