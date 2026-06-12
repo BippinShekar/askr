@@ -1,25 +1,23 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 20:17
+Last updated: 2026-06-12 20:40
 
 # Handover Document
 
 ## Task
-Implement Phase 3.10 of the Askr implementation guard system — a multi-stage checkpoint and context-refresh mechanism to prevent session degradation and maintain architectural consistency.
+Phase 3.10 implementation guard — all stages verified and operational.
 
 ## Status
-- Stage 4 (Guard Section Installation): `askr/cli/askr.py` modified to install/update guard section via `_install_claude_md`. Committed.
-- Stage 5 (Auto-regenerate architecture.md): `askr/session/checkpoint.py` modified to add `_regenerate_architecture_md` function near `_generate_project_brief`. Committed.
-- Stage 6 (Mid-session Context Refresh): `askr/hooks/post_tool_use.py` modified to add phase for mid-session context refresh. Committed.
-- Roadmap updated with Phase 3.10 implementation guard heading. Committed.
-- `.askr_history` and `askr_state/implementation_state.md` updated with session activity log.
-- All staged changes committed to git.
+- Stage 4 (`_install_claude_md`): behavioral + guard sections both installed in `CLAUDE.md`. Guard section live. Committed.
+- Stage 5 (`_regenerate_architecture_md`): confirmed called in `create_checkpoint()` at line 418 of `askr/session/checkpoint.py`. Runs at every checkpoint; failure is silent.
+- Stage 6 (`_maybe_refresh_constraints`): confirmed in `post_tool_use.py` main(); increments turn counter in `~/.config/askr/turn_counter.json`, prints top 5 decisions every 10 tool uses. Wiring correct.
+- All three stages verified functional. Guard section committed to git (commit 099de6b).
 
 ## Failed Approaches
 None.
 
 ## Next Action
-Verify that all three stages (4, 5, 6) are functioning correctly by running the full checkpoint and guard workflow end-to-end. Confirm that `_install_claude_md` properly installs the guard section, `_regenerate_architecture_md` executes at checkpoint, and `post_tool_use.py` triggers mid-session context refresh. If any stage fails, debug and fix before moving to Phase 3.11.
+Begin Phase 3.11. Review `roadmap.md` for the next planned phase and implement it.
 
 ## Open Questions
 None.
