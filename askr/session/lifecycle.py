@@ -373,8 +373,8 @@ def _start_claude(project_path: str, initial_prompt: str = "") -> bool:
     allowed_tools = _load_allowed_tools(project_path)
     tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
 
-    goal_part = f" Work on: {initial_prompt}." if initial_prompt else ""
-    prompt_arg = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
+    goal_part = f" (High-level goal for context: {initial_prompt}.)" if initial_prompt else ""
+    prompt_arg = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
 
     display_goal = initial_prompt or "autonomous session"
 

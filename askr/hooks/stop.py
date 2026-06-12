@@ -154,8 +154,8 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
             pct     = pending.get("context_pct", 0)
             pct_str = f"{round(pct * 100)}%"
             handover_path = (checkpoint_result or {}).get("handover_path", "")
-            goal_part = f" Work on: {next_goal}." if next_goal else ""
-            stop_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
+            goal_part = f" (High-level goal for context: {next_goal}.)" if next_goal else ""
+            stop_prompt = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
             payload = {
                 "type": "context",
                 "message": f"Context at {pct_str} — state saved to git. Opening new chat.",

@@ -25,10 +25,16 @@ def _get_client():
     return _client
 
 
+_MODE_MAX_TOKENS = {
+    "checkpoint": 1500,  # handover needs Task+Status+NextAction+OpenQ — 300 truncates mid-sentence
+}
+
+
 def call_claude(system, user, mode="default", query_preview=""):
+    max_tokens = _MODE_MAX_TOKENS.get(mode, MAX_TOKENS)
     res = _get_client().messages.create(
         model=MODEL,
-        max_tokens=MAX_TOKENS,
+        max_tokens=max_tokens,
         temperature=TEMPERATURE,
         system=system or "You are a helpful assistant.",
         messages=[{"role": "user", "content": user}]
