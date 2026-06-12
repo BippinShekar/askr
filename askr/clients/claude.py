@@ -27,6 +27,7 @@ def _get_client():
 
 _MODE_MAX_TOKENS = {
     "checkpoint": 2000,  # handover + Completed Goals section — 300 truncates mid-sentence
+    "guard":       500,  # JSON response: {"clean":..,"issues":[..],"summary":..} — 300 truncates
 }
 
 

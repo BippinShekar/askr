@@ -30,9 +30,10 @@ def _read(path: str, limit: int = 2000) -> str:
 
 def _load_context(developer: str, state_dir: str) -> dict:
     return {
-        "architecture": _read(os.path.join(state_dir, "architecture.md")),
-        "handover":     _read(os.path.join(state_dir, f"handover_{developer}.md")),
-        "decisions":    _read(os.path.join(state_dir, "decisions.md"), limit=1500),
+        "architecture":      _read(os.path.join(state_dir, "architecture.md")),
+        "handover":          _read(os.path.join(state_dir, f"handover_{developer}.md")),
+        "decisions":         _read(os.path.join(state_dir, "decisions.md"), limit=1500),
+        "failed_approaches": _read(os.path.join(state_dir, "failed_approaches.md"), limit=1500),
     }
 
 
@@ -56,7 +57,7 @@ def run_guard_check(trigger: dict, developer: str, state_dir: str) -> dict:
         "shared_interface": f"Claude is editing a shared/core interface: {file_path}",
     }.get(reason, f"Claude is modifying: {file_path}")
 
-    prompt = f"""An AI coding agent is about to make a significant change to a codebase. Your job is to check whether this change is likely to contradict the known architecture, create missing dependencies, or make assumptions that conflict with the real codebase.
+    prompt = f"""An AI coding agent is about to make a significant change to a codebase. Your job is to check whether this change contradicts the known architecture, repeats a previously-rejected approach, or conflicts with settled decisions.
 
 TRIGGER:
 {reason_label}
@@ -64,8 +65,11 @@ TRIGGER:
 ARCHITECTURE:
 {context['architecture'] or 'Not available.'}
 
-RECENT DECISIONS:
+SETTLED DECISIONS:
 {context['decisions'] or 'Not available.'}
+
+PREVIOUSLY REJECTED APPROACHES (do not repeat these):
+{context['failed_approaches'] or 'Not available.'}
 
 LATEST HANDOVER (what was in progress):
 {context['handover'] or 'Not available.'}
