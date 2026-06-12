@@ -132,21 +132,31 @@ def _build_transcript_text(entries: list) -> str:
     return "\n".join(lines)
 
 
-def _generate_handover_with_llm(transcript_text: str) -> Optional[str]:
+def _generate_handover_with_llm(transcript_text: str, open_goals: list = None) -> Optional[str]:
     """
     Call Haiku to generate an action-ready handover from the transcript.
-    The output is read by a Claude Code session, not a human — it must be
-    specific enough to act on without any additional context.
+    Also identifies which open goals were completed this session — keeping
+    goals and handover in sync without a separate LLM call.
     """
     if not transcript_text.strip():
         return None
     try:
         from askr.clients.claude import call_claude
+
+        goals_section = ""
+        if open_goals:
+            goals_list = "\n".join(f"- {g}" for g in open_goals)
+            goals_section = f"""
+OPEN GOALS (set before this session started):
+{goals_list}
+
+"""
+
         prompt = f"""A Claude Code session just ended. You are writing a handover document that the NEXT Claude Code session will read as its first instruction. It has no memory of this session. It needs to know exactly what to do and where — not a summary for a human.
 
 SESSION TRANSCRIPT:
 {transcript_text}
-
+{goals_section}
 Write the handover in this exact format. No emojis. No markdown decorations. No boilerplate phrases like "continue from where we left off" or "check implementation_state.md". Every line must be concrete and immediately actionable.
 
 Critical rules — read carefully before writing:
@@ -160,19 +170,22 @@ Sessions vary in type — implementation, testing/debugging, exploration, or dis
 - Exploration/discussion session: list decisions made, options ruled out, direction agreed on
 
 ## Task
-[One sentence: what was being worked on — could be implementing a feature, debugging a system, testing behavior, or making a design decision]
+[One sentence: what was being worked on]
 
 ## Status
-[Bullet list: concrete current state. For implementation: file paths and what changed. For testing: what was verified and what the outcome was. For debugging: what was found. Never write "Unknown" if the transcript contains relevant information — extract it.]
+[Bullet list: concrete current state. Never write "Unknown" if the transcript contains relevant information.]
 
 ## Failed Approaches
-[Bullet list of approaches that were tried and did not work OR were suggested and then rejected, with brief reason. Write "None" if none.]
+[Bullet list of approaches tried and rejected, with brief reason. Write "None" if none.]
 
 ## Next Action
-[The single next thing to do — specific enough that Claude can start immediately. Must reflect the FINAL state of the session, not any intermediate suggestion that was later reversed. For testing sessions this might be "run X test" or "verify Y behavior". For implementation it's a file path and change. One action only.]
+[The single next thing to do — specific enough that Claude can start immediately. One action only.]
 
 ## Open Questions
-[Bullet list of genuinely unresolved decisions or unknowns that were NOT answered during this session. If a question was raised and answered in the transcript, do not list it here. Write "None" if none.]
+[Bullet list of genuinely unresolved questions NOT answered during this session. Write "None" if none.]
+
+## Completed Goals
+[If OPEN GOALS were provided above: list the exact goal strings that were clearly completed this session based on the transcript. Write "None" if none were completed or no goals were provided. Be conservative — only mark done if the transcript shows the work was actually finished.]
 
 If a section truly has no information in the transcript, write "Unknown" — but exhaust the transcript first before concluding that."""
 
@@ -184,6 +197,33 @@ If a section truly has no information in the transcript, write "Unknown" — but
         )
     except Exception:
         return None
+
+
+def _parse_completed_goals_from_handover(handover_text: str, open_goals: list) -> list:
+    """Extract the Completed Goals section from the handover and match against open goals."""
+    if not handover_text or not open_goals:
+        return []
+    try:
+        import re
+        match = re.search(r'## Completed Goals\n(.*?)(?=\n## |\Z)', handover_text, re.DOTALL)
+        if not match:
+            return []
+        section = match.group(1).strip()
+        if section.lower() in ("none", "none.", ""):
+            return []
+        completed = []
+        for goal in open_goals:
+            # Check if the goal text appears (or a close substring) in the completed section
+            goal_lower = goal.lower()
+            if any(
+                goal_lower in line.lower() or line.lower() in goal_lower
+                for line in section.splitlines()
+                if line.strip().lstrip("- ")
+            ):
+                completed.append(goal)
+        return completed
+    except Exception:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +350,15 @@ def create_checkpoint(
         except Exception:
             pass
 
-        llm_summary = _generate_handover_with_llm(transcript_text)
+        # Load open goals so the handover can identify which were completed this session
+        open_goals = []
+        try:
+            from askr.state.goals import load_today_goals, load_open_goals
+            open_goals = load_today_goals() or load_open_goals() or []
+        except Exception:
+            pass
+
+        llm_summary = _generate_handover_with_llm(transcript_text, open_goals=open_goals)
         if llm_summary:
             summary = llm_summary
             tool_actions = _extract_tool_actions(entries)
@@ -324,12 +372,10 @@ def create_checkpoint(
 
     completed_goals = []
     try:
-        from askr.state.goals import load_today_goals, infer_completed_from_activity, complete_goal
-        goals = load_today_goals()
-        if goals and tool_actions:
-            completed_goals = infer_completed_from_activity(tool_actions, goals)
-            for g in completed_goals:
-                complete_goal(g)
+        from askr.state.goals import complete_goal
+        completed_goals = _parse_completed_goals_from_handover(summary, open_goals)
+        for g in completed_goals:
+            complete_goal(g)
     except Exception:
         pass
 

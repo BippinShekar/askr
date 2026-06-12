@@ -26,7 +26,7 @@ def _get_client():
 
 
 _MODE_MAX_TOKENS = {
-    "checkpoint": 1500,  # handover needs Task+Status+NextAction+OpenQ — 300 truncates mid-sentence
+    "checkpoint": 2000,  # handover + Completed Goals section — 300 truncates mid-sentence
 }
 
 
