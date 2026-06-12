@@ -7,6 +7,14 @@ ASKR_BIN="$BIN_DIR/askr"
 
 mkdir -p "$BIN_DIR"
 
+# Create venv and install dependencies if not already done
+if [ ! -f "$ASKR_DIR/venv/bin/python" ]; then
+    echo "Creating venv..."
+    python3 -m venv "$ASKR_DIR/venv"
+fi
+echo "Installing dependencies..."
+"$ASKR_DIR/venv/bin/pip" install -q -r "$ASKR_DIR/requirements.txt"
+
 cat > "$ASK_BIN" <<EOF
 #!/bin/bash
 cd "\$PWD" && source "$ASKR_DIR/venv/bin/activate" && python "$ASKR_DIR/ask.py" "\$@"
