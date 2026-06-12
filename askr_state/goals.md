@@ -1,8 +1,6 @@
 ## Today - 2026-06-12
 
-- [ ] Verify Discord notification gating works with _start_claude boolean return <!-- added: 2026-06-12T01:44 -->
 
-- [ ] Test Terminal.app keystroke fallback on macOS with actual Claude launch <!-- added: 2026-06-12T01:44 -->
 
 ## Backlog
 - [ ] Decide: display git remote or directory name in card top-right <!-- added: 2026-06-11T12:42 -->
@@ -13,6 +11,8 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-12 19:27] Test Terminal.app keystroke fallback on macOS with actual Claude launch
+[2026-06-12 19:27] Verify Discord notification gating works with _start_claude boolean return
 [2026-06-11 14:10] DISCARDED: Verify auto-continue switch fires in askr repo after daemon trigger
 [2026-06-11 14:10] DISCARDED: Add daemon restart detection to prevent stale code execution
 [2026-06-10 00:38] Verified extension cwd fix and project_path notification chain — commit d384faf pushed to origin/main

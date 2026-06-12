@@ -1,18 +1,17 @@
-Last updated: 2026-06-12 19:05
+Last updated: 2026-06-12 19:27
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining a persistent record of objectives, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in structured state files that Claude can read on resumption.
 
 ## What's In Flight
 
-- Goal completion detection: integrating completion inference into handover generation itself (pass open goals to Haiku, parse results back into goals.md). Staged changes in checkpoint.py and claude.py; git commit message incomplete.
-- Discord notification gating: verifying _start_claude boolean return properly gates notifications.
-- macOS Terminal.app keystroke fallback: testing actual Claude launch with Terminal.app on macOS.
-- Handover card UI: deciding whether to display git remote or directory name in top-right; generating sample Discord update message with session card image.
+- Implementation guard mechanism analysis: diagnosing why the current guard fails to prevent Claude from suggesting contradictory changes that break the codebase. Requires tabular failure-mode analysis and concrete improvements with tradeoffs.
+- Goal completion flow: refactored this session to integrate completed goals into handover generation via Haiku analysis of session transcript, with checkpoint parsing and goals.md updates before next session starts.
+- Discord notification gating: verify that _start_claude boolean return properly gates notifications; Terminal.app keystroke fallback testing on macOS with actual Claude launch.
+- Session card display: decide whether to show git remote or directory name in card top-right; generate sample Discord update message with session card image.
 
 ## Key Decisions Made
 
-- Goal completion detection belongs in handover generation, not as separate file-heuristic analysis. Haiku prompt identifies completed goals from session transcript; results parsed back into goals.md. This prevents sync drift between user accomplishment and system records.
-- Checkpoint token budget raised from 300 to 2000 tokens to accommodate goal completion section in handover text.
-- State persisted as append-only git commits with structured handover
+- Checkpoint max_tokens increased from 300 to 2000 to accommodate expanded handover with completed goals section.
+- Goal completion moved from file-heuristic inference to handover-integrated Haiku analysis: Claude identifies completed goals in transcript, checkpoint par

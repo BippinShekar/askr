@@ -1,31 +1,30 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 19:05
-
-# Handover Document
+Last updated: 2026-06-12 19:27
 
 ## Task
-Analyze and fix the stale goal persistence issue where completed goals remain marked as open across sessions, and integrate goal completion detection into the handover generation system.
+Improve the implementation guard mechanism to prevent Claude from suggesting changes that contradict current architecture and break the codebase.
 
 ## Status
-- Root cause identified: `_get_next_goal()` in checkpoint.py returns first unchecked goal with no staleness check or completion detection mechanism
-- Completion detection currently uses file-heuristic `infer_completed_from_activity()` with MAX_TOKENS=300 truncation, disconnected from handover generation
-- Decision made: fold goal completion into handover generation itself — pass open goals to Haiku prompt, ask it to identify completed goals from transcript, parse results back into goals.md
-- Modified files (staged, commit message incomplete):
-  - /Users/bippin/Desktop/askr/askr/session/checkpoint.py: added `_parse_completed_goals()` function to extract completed goals from handover text
-  - /Users/bippin/Desktop/askr/askr/session/checkpoint.py: wired completed goals into checkpoint flow (pass open_goals to handover call, use parser instead of infer_completed_from_activity)
-  - /Users/bippin/Desktop/askr/askr/clients/claude.py: bumped CHECKPOINT_MAX_TOKENS from 300 to 2000 to accommodate goal completion section
-- Git commit started but message incomplete ("feat" only)
+- Implementation guard currently exists but is ineffective: Claude has suggested contradictory changes in both askr and leaps repos that broke things instead of fixing them
+- Goal completion mechanism was refactored this session: open goals now passed to handover generation, Haiku identifies completed goals in transcript, checkpoint parses `## Completed Goals` section and marks them done in goals.md before new session starts
+- Checkpoint max_tokens increased from 300 to 2000 to accommodate expanded handover with completed goals section
+- Changes committed: checkpoint.py and claude.py updated with new goal completion flow
+- Implementation guard analysis requested but not yet completed — user asked for "thorough tabular analysis, be brutally honest" of why current guard fails
 
 ## Failed Approaches
-- Using file-touch heuristics as input to goal completion detection — too unreliable and creates disconnected system
-- Keeping goal completion separate from handover generation — causes sync drift between what user accomplished and what system records
+- File-heuristic based goal completion using `infer_completed_from_activity(tool_actions, goals)` with MAX_TOKENS=300 truncation — replaced with handover-integrated approach
+- Keeping goal completion separate from handover generation — folded into single Haiku call for consistency
 
 ## Next Action
-Complete the git commit with proper message: `git commit --amend -m "feat: integrate goal completion detection into handover generation"` then verify the checkpoint flow works end-to-end by running a test session that completes a goal and confirm it gets marked done in goals.md.
+Perform brutally honest tabular analysis of the implementation guard mechanism: identify why it fails to prevent contradictory suggestions, map failure modes (guard placement, prompt clarity, context window, authority hierarchy), and propose concrete improvements with tradeoff analysis.
 
 ## Open Questions
-None.
+- What specific contradictory suggestions did Claude make in askr and leaps repos that broke things?
+- Is the implementation guard a prompt instruction, a file-based constraint, or both?
+- Does the guard have authority to reject Claude's suggestions or only to warn?
+- How is the guard currently communicated to Claude — in system prompt, handover, or separate file?
 
 ## Completed Goals
-None.
+- Verify Discord notification gating works with _start_claude boolean return: Not addressed in transcript
+- Test Terminal.app keystroke fallback on macOS with actual Claude launch: Not addressed in transcript
