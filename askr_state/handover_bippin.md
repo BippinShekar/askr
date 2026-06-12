@@ -1,28 +1,28 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 20:33
+Last updated: 2026-06-12 20:35
 
-# Handover: askr Progress Bar Debug Session
+# Handover Document: askr Progress Bar Fix
 
 ## Task
-Debug why the askr progress bar shows fallback "·" instead of populated stats after `askr init` with new pull.
+Fix the askr progress bar showing only `·` (fallback character) after a fresh `init` pull by ensuring `install.sh` properly initializes the Python virtual environment and installs dependencies.
 
 ## Status
-- Progress bar displays "askr ·" indicating stats JSONL file is not being found/populated
-- `_find_active_jsonl` constructs path as `~/.claude/projects/<hash>/` using `project_path.replace("/", "-")` — this path construction logic is confirmed correct against actual Claude Code project directory structure
-- PostToolUse hook in `.claude/settings.json` exists and is configured
-- Last investigation: attempted to verify hook JSON structure and JSONL lookup mechanism via grep and python3 inspection (commands incomplete in transcript)
-- Git status: implementation_state.md and notifications.log have uncommitted changes from debugging session
+- Root cause identified: `install.sh` writes wrapper scripts but never creates the venv or runs `pip install`. When hooks fire post-pull, `import rich` fails silently, leaving stats file unpopulated.
+- `install.sh` has been modified to add venv creation and dependency installation (exact changes in git diff below).
+- Git commit prepared: `git add install.sh && git commit -m "fix(install): create venv and install depen"` — command was run but transcript cuts off before confirmation of successful commit.
+- Project path: `/Users/bippin/Desktop/askr/`
+- The stats file lookup path logic (`~/.claude/projects/<hash>/` with dash-replacement) is correct and not the issue.
 
 ## Failed Approaches
-- Assumed stats file path construction was wrong — verified it matches Claude Code's actual dash-replacement format, so path logic is not the issue
+- Debugging the hook's JSONL path construction — path logic was confirmed working; the real problem was missing venv/dependencies, not path resolution.
+- Asking the user to manually run debug commands on the friend's machine — user correctly rejected this as unsustainable; the fix must be in `install.sh` itself.
 
 ## Next Action
-Complete the interrupted python3 inspection of `.claude/settings.json` to confirm PostToolUse hook is correctly configured, then trace execution flow from hook trigger through `_find_active_jsonl` to identify where JSONL file creation or lookup is failing.
+Verify the git commit of `install.sh` completed successfully. If not, complete the commit. Then test the fix by having the friend run `install.sh` on a fresh clone and confirm the progress bar populates (no longer shows `·`).
 
 ## Open Questions
-- Why is the JSONL stats file not being created or found at the expected `~/.claude/projects/<hash>/` path after hook execution?
-- Is the PostToolUse hook actually being triggered on tool completion?
+None.
 
 ## Completed Goals
-None
+None provided.

@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:35] Ran: git add install.sh && git commit -m "fix(install): create venv and install depen
+- [20:35] Modified: /Users/bippin/Desktop/askr/install.sh
+- [20:34] Ran: cat /Users/bippin/Desktop/askr/pyproject.toml 2>/dev/null || cat /Users/bippin/D
+- [20:34] Ran: cat /Users/bippin/Desktop/askr/install.sh 2>/dev/null || echo "no install.sh fou
 - [20:32] Ran: python3 -c "import json; s=json.load(open('/Users/bippin/Desktop/askr/.claude/se
 - [20:32] Ran: grep -A2 '"PostToolUse"' /Users/bippin/Desktop/askr/.claude/settings.json 2>/dev
 - [20:31] Ran: ls ~/.claude/projects/ 2>/dev/null | head -5
