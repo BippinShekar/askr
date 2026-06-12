@@ -5,6 +5,11 @@ import os
 import json
 from datetime import datetime
 
+# Force UTF-8 stdout so Unicode characters render correctly in all terminal
+# environments (shell prompt, launchd, etc.) regardless of LANG/LC_ALL.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.utils.display import console
