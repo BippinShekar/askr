@@ -44,9 +44,21 @@ HOOK_TIMEOUTS = {
     "PreToolUse":  10,
 }
 
+def _project_root() -> str:
+    """Walk up from CWD to find the project root (has .claude or .askr_history)."""
+    d = os.getcwd()
+    while True:
+        if os.path.exists(os.path.join(d, ".claude")) or os.path.exists(os.path.join(d, ".askr_history")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return os.getcwd()
+        d = parent
+
+
 def _stats_path() -> str:
     from askr.session.monitor import stats_path_for_project
-    return stats_path_for_project(os.getcwd())
+    return stats_path_for_project(_project_root())
 
 
 def _python_cmd() -> str:
