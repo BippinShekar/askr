@@ -267,6 +267,30 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 ---
 
+## Phase 3.10 - Implementation Guard Hardening
+
+**Goal:** The guard is built. The data pipeline that feeds it is now automated. This phase closes the loop — every session contributes to a shared memory of what works and what doesn't, so Claude's contradictory suggestions are caught before they land in the codebase.
+
+**The problem this solves:** Claude re-suggests rejected approaches every session. It forgets settled decisions as context grows. Architecture.md was static and useless. The guard had nothing real to check against.
+
+| Stage | Feature | Status |
+|---|---|---|
+| S1 | Auto-capture `decisions.md` from stop hook — keyword-detects settled decisions each turn, no extra LLM call | ✅ Done |
+| S2 | Cumulative `failed_approaches.md` — checkpoint appends rejected approaches cross-session, deduped | ✅ Done |
+| S3 | Wire `failed_approaches.md` into guard check + fix guard JSON token limit (was 300, now 500) | ✅ Done |
+| S4 | CLAUDE.md guard directive — explicit instruction to check decisions + failures before any edit, respected every message | ✅ Done |
+| S5 | Auto-regenerate `architecture.md` from import/dependency analysis at each checkpoint — no longer static | ✅ Done |
+| S6 | Mid-session context refresh — PostToolUse injects top decisions every 10 tool uses, counteracts context burial | ✅ Done |
+
+**Honest risks:**
+- Decision keyword extraction will over-capture non-decisions and under-capture subtle ones. Quality improves over sessions as the file populates.
+- Architecture regeneration via grep is shallow. It improves as the codebase stabilises.
+- Mid-session refresh may be ignored by Claude. It's defensive, not authoritative.
+
+**Done when:** Claude makes a contradictory suggestion, the guard catches it, blocks the write, and Claude self-corrects with the specific constraint from decisions.md cited in its correction.
+
+---
+
 ## Phase 4 - Public Launch
 
 **Goal:** GitHub launch. Build-in-public presence. First external users.
