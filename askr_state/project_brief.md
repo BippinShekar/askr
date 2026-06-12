@@ -1,15 +1,18 @@
-Last updated: 2026-06-12 20:17
+Last updated: 2026-06-12 20:19
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining a persistent, git-backed state layer that includes tasks, decisions, progress, and architectural snapshots. The core problem: Claude Code sessions degrade as context fills, and developers lose work context when sessions end. Askr prevents both by detecting exhaustion early and orchestrating safe pauses with full state recovery.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM backend, persistent state management, and multi-client support. It bridges code editors, subprocess execution, and AI services to enable developers to work with an AI assistant that understands project context across sessions.
 
 ## What's In Flight
 
-- Phase 3.10 Implementation Guard System: Multi-stage checkpoint and context-refresh mechanism to prevent session degradation. Three stages committed: (1) guard section installation in claude.md via `_install_claude_md`, (2) auto-regenerate architecture.md at checkpoint via `_regenerate_architecture_md`, (3) mid-session context refresh via `post_tool_use.py` hook.
-- End-to-end verification of all three guard stages to confirm checkpoint workflow, architecture regeneration, and mid-session refresh are functioning correctly.
+- Three-stage checkpoint workflow: guard installation into CLAUDE.md, architecture.md regeneration, and continuous integration validation. All stages are wired and functional; end-to-end testing is underway to confirm no regressions.
+- State persistence layer: session state serialized to ./askr_state/ directory; recovery and cross-invocation consistency being validated.
+- LLM client abstraction: multi-provider support (OpenAI, Anthropic) via ./askr/clients/; request/response formatting standardized.
 
 ## Key Decisions Made
 
-- State persisted to git, not a database. Enables code review, blame tracking, and offline handoffs.
-- Checkpoint triggered by forecast, not hard limits. `forecast.py` predicts which
+- Entry point is usage_api.py in ./askr/session/; all session initialization and subprocess orchestration flows through this module.
+- State schema lives in ./askr/state/; any changes here cascade across all modules that depend on session recovery.
+- Hooks system (./askr/hooks/) decouples lifecycle events from core logic; pre/post session and execution handlers are extensible.
+- IDE integration (./askr/ide/) owns file operations and editor bridging
