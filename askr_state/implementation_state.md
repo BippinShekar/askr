@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [18:57] Ran: git add askr/ide/vscode-extension/extension.js && git commit -m "fix: reduce pro
+- [18:57] Modified: /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js
+- [18:57] Modified: /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js
 - [18:52] Ran: git add askr/clients/claude.py askr/session/lifecycle.py askr/hooks/stop.py && g
 - [18:52] Modified: /Users/bippin/Desktop/askr/askr/hooks/stop.py
 - [18:52] Ran: grep -n "goal_part\|prompt_arg\|stop_prompt\|handover" /Users/bippin/Desktop/ask
