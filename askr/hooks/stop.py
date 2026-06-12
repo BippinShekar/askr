@@ -176,6 +176,76 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         return False
 
 
+_DECISION_RE = __import__('re').compile(
+    r"(?i)\b("
+    r"we(?:'ll| will| should) use|going with|decided? to|the (?:approach|solution|fix) is|"
+    r"(?:will|won't) use|should not|must not|instead (?:use|of)|the correct (?:approach|fix)|"
+    r"we(?:'re| are) using|implemented? (?:as|using|with)|the right (?:approach|way)"
+    r")\b"
+)
+
+
+def _extract_and_save_decisions(transcript_path: str, state_dir: str):
+    """Keyword-detect settled decisions in Claude's last response and append to decisions.md."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return
+    try:
+        import re
+        lines = []
+        with open(transcript_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        lines.append(json.loads(line))
+                    except Exception:
+                        pass
+
+        # Collect text from all assistant blocks in the last turn
+        # (entries after the final user message)
+        last_user_idx = -1
+        for i, entry in enumerate(lines):
+            if entry.get("type") == "user":
+                last_user_idx = i
+
+        text_parts = []
+        for entry in lines[last_user_idx + 1:] if last_user_idx >= 0 else lines:
+            if entry.get("type") == "assistant":
+                for block in entry.get("message", {}).get("content", []):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+
+        full_text = " ".join(text_parts)
+        if not full_text.strip():
+            return
+
+        # Extract sentences containing decision language
+        sentences = re.split(r'(?<=[.!?])\s+', full_text)
+        decisions = []
+        for s in sentences:
+            s = re.sub(r'\*+', '', s).strip()
+            if 20 < len(s) < 250 and _DECISION_RE.search(s):
+                decisions.append(s)
+            if len(decisions) >= 5:
+                break
+
+        if not decisions:
+            return
+
+        decisions_path = os.path.join(state_dir, "decisions.md")
+        ts = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M")
+        header = ""
+        if not os.path.exists(decisions_path):
+            header = "# Decisions\n\nAuto-captured from session activity. Edit freely.\n\n"
+        with open(decisions_path, "a") as f:
+            if header:
+                f.write(header)
+            for d in decisions:
+                f.write(f"[{ts}] {d}\n")
+    except Exception:
+        pass
+
+
 def _broadcast_session_end(developer: str, completed_goals: list, project_path: str, duration_seconds: int = 0, autonomous: bool = False):
     try:
         from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
@@ -292,6 +362,7 @@ def main():
     transcript_path = payload.get("transcript_path", "")
     autonomous = _was_autonomous()
     _update_allowed_tools(transcript_path)
+    _extract_and_save_decisions(transcript_path, get_state_dir())
 
     # If daemon flagged a context checkpoint, handle it now that the exchange is done
     if _handle_pending_checkpoint(developer, transcript_path):
