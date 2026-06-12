@@ -38,8 +38,8 @@ def _read_claude_pid():
 
 def _quota_pct() -> float | None:
     try:
-        from askr.session.monitor import stats_path_for_project
-        stats_path = stats_path_for_project(os.getcwd())
+        from askr.session.monitor import stats_path_for_project, find_project_root
+        stats_path = stats_path_for_project(find_project_root())
         with open(stats_path) as f:
             return json.load(f).get("quota_pct")
     except Exception:

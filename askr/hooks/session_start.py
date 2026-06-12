@@ -119,8 +119,8 @@ def _reset_stats_for_project():
     Quota fields are preserved — they're per-account and still valid.
     """
     try:
-        from askr.session.monitor import stats_path_for_project
-        project_path = os.getcwd()
+        from askr.session.monitor import stats_path_for_project, find_project_root
+        project_path = find_project_root()
         stats_path   = stats_path_for_project(project_path)
         existing = {}
         try:

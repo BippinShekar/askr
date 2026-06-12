@@ -17,6 +17,18 @@ CLAUDE_PROJECTS_DIR = os.path.expanduser("~/.claude/projects")
 _STATS_DIR           = os.path.expanduser("~/.config/askr/stats")
 
 
+def find_project_root(start_dir: str = None) -> str:
+    """Walk up from start_dir to find the project root (.claude or .askr_history present)."""
+    d = start_dir or os.getcwd()
+    while True:
+        if os.path.exists(os.path.join(d, ".claude")) or os.path.exists(os.path.join(d, ".askr_history")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return start_dir or os.getcwd()
+        d = parent
+
+
 def stats_path_for_project(project_path: str) -> str:
     """Per-project stats file — isolates concurrent sessions from overwriting each other."""
     hash_ = project_path.replace("/", "-").lstrip("-")

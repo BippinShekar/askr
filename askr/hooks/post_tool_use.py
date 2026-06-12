@@ -92,10 +92,10 @@ def _quota_needs_refresh(existing: dict) -> bool:
 
 def _write_session_stats():
     try:
-        from askr.session.monitor import get_session_stats, stats_path_for_project
+        from askr.session.monitor import get_session_stats, stats_path_for_project, find_project_root
         from askr.session.forecast import get_forecast
 
-        project_path = os.getcwd()
+        project_path = find_project_root()
         stats = get_session_stats(project_path)
         if not stats:
             return
