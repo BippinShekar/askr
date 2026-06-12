@@ -1,20 +1,20 @@
-Last updated: 2026-06-12 12:05
+Last updated: 2026-06-12 12:10
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent state (tasks, decisions, progress) and orchestrating safe resumption without losing work or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- UTF-8 encoding fix for status line output: `↺` character rendering as garbled text instead of proper symbol. Staged but incomplete git commit needs completion.
-- Overnight stress test validation for context recovery (CR) fix: 8-second delay before Claude TUI fully loads may be insufficient; needs real-world trigger scenario testing.
-- Discord notification gating: verify _start_claude boolean return properly gates notifications.
-- Terminal.app keystroke fallback on macOS: test actual Claude launch integration.
-- Git remote vs directory name display decision for session card UI.
+- CLI status display: fixing context/quota percentage calculations and aligning stats file lookup between CLI and VS Code extension (currently in progress by bippin).
+- UTF-8 rendering in terminal: forced PYTHONIOENCODING=utf-8 to display status characters correctly; stats file path resolution now walks up directory tree to project root to match extension behavior.
+- Discord notification gating: verifying _start_claude boolean return triggers notifications correctly.
+- macOS Terminal.app keystroke fallback: testing Claude launch integration on actual hardware.
+- Session card display: deciding whether to show git remote or directory name in top-right corner; generating sample Discord update message with session card image.
 
 ## Key Decisions Made
 
-- State persisted to git with append-only decision log and handover documents to enable developer handoffs.
-- Session lifecycle split into discrete modules: monitoring, forecasting, checkpointing, safe pause validation, and resumption orchestration.
-- Claude Code integration via hooks at session start, prompt submission, session stop, and pre-compaction.
-- Context recovery (CR) uses 8
+- State persisted to git, not external database: enables offline handoffs and full audit trail in version control.
+- Append-only decision log: decisions.md never edited, only appended; enables clear history of reasoning.
+- Safe pause validation before checkpoint: safe_pause.py ensures interruption happens at safe points in code execution.
+- Stats

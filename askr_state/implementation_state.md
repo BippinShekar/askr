@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [12:10] Ran: git add askr/cli/askr.py && git commit -m "fix: walk up to project root for stat
+- [12:10] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [12:09] Ran: grep -n "stats_path_for_project\|def stats_path" /Users/bippin/Desktop/askr/askr
+- [12:09] Ran: grep -n "_stats_path\|stats_path\|STATS_DIR\|stats_dir" /Users/bippin/Desktop/as
 - [12:05] Ran: git add askr/cli/askr.py && git commit -m "fix: force UTF-8 stdout so status lin
 - [12:04] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [12:04] Ran: grep -rn "↺\|↺\|21ba\|PYTHONIOENCODING\|encoding\|ctx:" /Users/bippin/Desktop/as
