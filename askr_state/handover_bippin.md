@@ -1,18 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 01:53
+Last updated: 2026-06-12 11:55
 
 # Handover Document
 
 ## Task
-Implement CR vs LF fix for Claude TUI prompt submission, gate Discord notifications on session start success, and create overnight stress test scenario for autonomous session switching.
+Validate the CR vs LF fix for Claude's raw-mode TUI submission and establish an overnight stress test scenario for autonomous session switching in askr.
 
 ## Status
-- /Users/bippin/Desktop/askr/askr/session/lifecycle.py: Modified `_start_claude()` to return boolean True on success. Discord notification now gated on return value. Terminal.app fallback replaced with two-step script: starts claude, then sends prompt via osascript keystroke (CR not LF).
-- /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js: Both `context` and `goal_launch` handlers now use `sendText(prompt, false)` + CR instead of appending LF.
-- Changes committed with message "fix: send CR not LF to submit prompts in Claude's r[...]"
-- /Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetris.md: Created as placeholder for overnight autonomous test scenario.
-- Cursor leaps window did NOT receive reload notification (askr window consumed it). Manual reload required in leaps: Cmd+Shift+P → Reload Window.
-
-## Failed Approaches
-- Single-command `claude "prompt"` approach for Terminal.app fallback
+- File `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified to replace Terminal.app fallback with two-step script (start claude, then send prompt via osascript keystroke using CR instead of LF).
+- File `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: Modified to send `sendText(prompt, false)` + CR in both `context` and `goal_launch` handlers instead of appending `\n` (LF).
+- Changes committed with message "fix: send CR not LF to submit prompts in Claude's raw-mode TUI".
+- Reload notification triggered via Python script to notify Cursor of extension changes.
+- Stress test scenario documented at `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetris.md` with full checklist including "validate CR fix first" gate.
+- leaps repo window did not receive reload notification (askr window consumed it) — manual reload required via `Cmd+Shift+P` → Reload Window.
+- CR fix has never fired in
