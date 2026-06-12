@@ -1,18 +1,20 @@
-Last updated: 2026-06-12 11:55
+Last updated: 2026-06-12 12:02
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and across sessions by maintaining a persistent state layer (tasks, decisions, progress) and orchestrating safe resumption with full context injection.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress so work can resume without context loss.
 
 ## What's In Flight
 
-- Validating CR vs LF fix for Claude's raw-mode TUI submission (lifecycle.py and vscode-extension.js modified; changes committed but not yet tested in live session).
-- Establishing overnight stress test scenario for autonomous session switching with full checklist at `stress-tests/overnight-portfolio-tetris.md`.
-- Discord notification gating: verifying `_start_claude` boolean return properly gates notifications before session launch.
-- Terminal.app keystroke fallback on macOS: testing actual Claude launch with two-step script (start claude, then send prompt via osascript).
-- Deciding whether to display git remote or directory name in Discord card top-right.
+- Validating CR/LF fix for Claude's raw-mode TUI submission (switched from LF to CR in extension handlers; committed but needs real-world trigger validation before stress test)
+- Establishing overnight autonomous session switching stress test for the askr portfolio project (checklist created at `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetsis.md`)
+- Discord notification gating — verifying `_start_claude` boolean return properly gates notifications
+- Terminal.app keystroke fallback on macOS — testing actual Claude launch behavior
+- Session card display — deciding whether to show git remote or directory name in top-right
 
 ## Key Decisions Made
 
-- State is append-only and persisted to git; decisions.md is never edited, only appended (audit trail).
-- Session lifecycle splits into five stages: monitor (token tracking), forecast (predict which limit hits first), checkpoint (persist before exhaustion), safe_pause
+- State persists in git via append-only decision logs and handover documents; no external database
+- Session monitoring uses token forecasting to predict which limit (context or quota) hits first, triggering checkpoint before exhaustion
+- Extension integration via hooks at session start, prompt submit, session stop, and pre-compaction points
+- Notifications routed

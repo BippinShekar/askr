@@ -1,17 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 11:55
+Last updated: 2026-06-12 12:02
 
-# Handover Document
+Task
+Validate the CR/LF fix for Claude's raw-mode TUI submission and establish an overnight stress test scenario for autonomous session switching in the askr portfolio project.
 
-## Task
-Validate the CR vs LF fix for Claude's raw-mode TUI submission and establish an overnight stress test scenario for autonomous session switching in askr.
-
-## Status
-- File `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified to replace Terminal.app fallback with two-step script (start claude, then send prompt via osascript keystroke using CR instead of LF).
-- File `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: Modified to send `sendText(prompt, false)` + CR in both `context` and `goal_launch` handlers instead of appending `\n` (LF).
-- Changes committed with message "fix: send CR not LF to submit prompts in Claude's raw-mode TUI".
-- Reload notification triggered via Python script to notify Cursor of extension changes.
-- Stress test scenario documented at `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetris.md` with full checklist including "validate CR fix first" gate.
-- leaps repo window did not receive reload notification (askr window consumed it) — manual reload required via `Cmd+Shift+P` → Reload Window.
-- CR fix has never fired in
+Status
+- Fixed extension to send CR (`\r`) instead of LF (`\n`) after prompts in both `context` and `goal_launch` handlers using `sendText(prompt, false)` — committed to git
+- Created reload notification trigger via Python script to notify Cursor to load updated extension
+- Leaps window consumed the notification (marked `shown: true`), so the leaps repo did not receive the reload signal — manual reload required via `Cmd+Shift+P` → Reload Window
+- Created `/Users/bippin/Desktop/askr/stress-tests/overnight-portfolio-tetsis.md` with full checklist for overnight autonomous switching test, including gate to validate CR fix fires in real trigger before running
+- Askr stats showing in leaps repo display: `askr quota 8% ↺4h15m chat 64%!` with stale indicator (`...`) meaning no active Claude session running in that project currently
+- `.askr_history` updated with session conversation log including discussion of tweet messaging for askr launch (unresolved — user requested help writing tweet but no final tweet was committed)
+- `notifications.log` updated with latest "Claude
