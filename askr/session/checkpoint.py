@@ -415,6 +415,7 @@ def create_checkpoint(
 
     _generate_project_brief(state_dir, developer)
     _append_failed_approaches(summary, state_dir)
+    _regenerate_architecture_md(os.getcwd(), state_dir)
 
     completed_goals = []
     try:
@@ -455,6 +456,117 @@ def create_checkpoint(
     _notify_discord_checkpoint(trigger_type, developer, result)
 
     return result
+
+
+def _regenerate_architecture_md(project_path: str, state_dir: str):
+    """
+    Regenerate architecture.md from actual import/dependency analysis.
+    Runs at each checkpoint so architecture stays current with code changes.
+    Skips silently on any failure — never blocks the checkpoint.
+    """
+    try:
+        # Collect Python entry points (routes, main files, controllers)
+        py_result = subprocess.run(
+            ["find", ".", "-name", "*.py",
+             "-not", "-path", "*/venv/*", "-not", "-path", "*/__pycache__/*",
+             "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*"],
+            capture_output=True, text=True, timeout=10, cwd=project_path,
+        )
+        py_files = [f.strip() for f in py_result.stdout.splitlines() if f.strip()]
+
+        ts_result = subprocess.run(
+            ["find", ".", "(", "-name", "*.ts", "-o", "-name", "*.tsx", ")",
+             "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*",
+             "-not", "-path", "*/.next/*"],
+            capture_output=True, text=True, timeout=10, cwd=project_path,
+        )
+        ts_files = [f.strip() for f in ts_result.stdout.splitlines() if f.strip()]
+
+        if not py_files and not ts_files:
+            return
+
+        # Identify entry points by path pattern
+        entry_patterns = ("route", "controller", "main", "app", "index", "server", "api")
+        py_entries = [f for f in py_files if any(p in f.lower() for p in entry_patterns)][:15]
+        ts_entries = [f for f in ts_files if any(p in f.lower() for p in entry_patterns)][:15]
+
+        # Sample imports from entry points to show dependencies
+        def get_imports(filepath, cwd):
+            try:
+                result = subprocess.run(
+                    ["grep", "-h", "-E", r"^(from|import|require|import .* from)", filepath],
+                    capture_output=True, text=True, timeout=3, cwd=cwd,
+                )
+                lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+                return lines[:8]
+            except Exception:
+                return []
+
+        structure_lines = []
+        if py_entries:
+            structure_lines.append("Python entry points:")
+            for f in py_entries[:8]:
+                imps = get_imports(f, project_path)
+                structure_lines.append(f"  {f}")
+                for imp in imps[:4]:
+                    structure_lines.append(f"    {imp}")
+
+        if ts_entries:
+            structure_lines.append("TypeScript/Next.js entry points:")
+            for f in ts_entries[:8]:
+                imps = get_imports(f, project_path)
+                structure_lines.append(f"  {f}")
+                for imp in imps[:4]:
+                    structure_lines.append(f"    {imp}")
+
+        # Summarise directory structure
+        dir_result = subprocess.run(
+            ["find", ".", "-maxdepth", "2", "-type", "d",
+             "-not", "-path", "*/venv/*", "-not", "-path", "*/__pycache__/*",
+             "-not", "-path", "*/node_modules/*", "-not", "-path", "*/.git/*",
+             "-not", "-path", "*/.next/*"],
+            capture_output=True, text=True, timeout=5, cwd=project_path,
+        )
+        dirs = sorted(set(
+            "/".join(d.strip().split("/")[:3])
+            for d in dir_result.stdout.splitlines()
+            if d.strip() and d.strip() != "."
+        ))[:30]
+
+        structure_text = "\n".join(structure_lines)
+        dirs_text = "\n".join(dirs)
+
+        prompt = f"""Analyze this codebase structure and write a concise architecture.md that an AI coding agent can use to understand the system before making changes.
+
+DIRECTORY STRUCTURE (top 2 levels):
+{dirs_text}
+
+ENTRY POINTS AND THEIR IMPORTS:
+{structure_text}
+
+Write architecture.md covering:
+1. What the system does (one sentence)
+2. Entry points — what triggers execution
+3. Core services/modules and their responsibilities
+4. Data stores and external integrations
+5. Key relationships — which components call which
+6. Files that are shared interfaces (changing them affects multiple consumers)
+
+Be specific with file paths. Keep it under 400 words. No generic filler."""
+
+        from askr.clients.claude import call_claude
+        result = call_claude(
+            "You write concise technical architecture documents from code analysis. Be specific, no filler.",
+            prompt,
+            mode="checkpoint",
+            query_preview="architecture regeneration",
+        )
+        if result and len(result) > 100:
+            arch_path = os.path.join(state_dir, "architecture.md")
+            with open(arch_path, "w") as f:
+                f.write(f"# Architecture\n\n*Auto-generated at checkpoint — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n\n{result}\n")
+    except Exception:
+        pass
 
 
 def _generate_project_brief(state_dir: str, developer: str):
