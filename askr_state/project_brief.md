@@ -1,20 +1,20 @@
-Last updated: 2026-06-12 16:15
+Last updated: 2026-06-12 18:52
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before the session breaks. When a new session starts, Askr restores that state so developers can hand off work seamlessly between sessions without losing context or progress.
 
 ## What's In Flight
 
-- Stats file path synchronization: consolidating multiple modules writing to different filenames (`leaps-backend.json` vs `leaps.json`) via shared `get_project_root()` utility. Changes staged, awaiting commit.
-- Discord notification gating: verifying that `_start_claude` boolean return properly gates notifications.
-- macOS Terminal.app keystroke fallback: testing actual Claude launch integration.
-- Session card UI: deciding on display format (git remote vs directory name) and generating sample Discord update message with card image.
-- Test suite validation: verifying all tests pass after recent changes.
+- Fixing handover document truncation: token budget for Haiku model was too low (300 tokens), causing Next Action to be cut off mid-sentence. Three files staged with fixes to increase budget and reorder goal/handover priority in new session initialization.
+- Testing Discord notification gating with _start_claude boolean return value.
+- Testing Terminal.app keystroke fallback on macOS for actual Claude launch.
+- Deciding whether to display git remote or directory name in session card UI.
+- Generating sample Discord update message with session card image.
 
 ## Key Decisions Made
 
-- Session state persists in git via append-only decision log and handover documents, enabling context transfer between developers.
-- Project root detection centralized in shared utility to prevent path sync bugs across extension, CLI, and stats writer.
-- Checkpoint triggered before context auto-compaction to prevent data loss during Claude's internal cleanup.
-- Forecast module predicts which limit (context or quota) hits
+- State persists in git (not a database) to enable developer handoffs and version control integration.
+- Session lifecycle split into five stages: monitor (token tracking), forecast (predict which limit hits first), checkpoint (save state), safe_pause (validate interruption point), lifecycle (trigger resumption).
+- Claude Code integration via hooks at session start, user prompt submit, session stop, and pre-compaction.
+- Haiku
