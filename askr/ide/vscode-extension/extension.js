@@ -177,7 +177,7 @@ function checkNotification() {
         : '';
       const launchPrompt = (n.prompt || 'Read the handover and start on the Next Action immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
       terminal.sendText(`claude${toolsFlag}`);
-      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 8000);
+      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
     } else if (n.type === 'goal_launch') {
       const goal = n.goal || '';
       const termOpts = { name: `askr — ${goal.slice(0, 40)}` };
@@ -192,7 +192,7 @@ function checkNotification() {
         ? n.prompt.replace(/"/g, '').replace(/`/g, '')
         : `Read the handover and work on this goal autonomously: ${safeGoal}`;
       terminal.sendText(`claude${toolsFlag}`);
-      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 8000);
+      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
       vscode.window.showInformationMessage(`Askr: Starting session — ${goal.slice(0, 80)}`);
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
