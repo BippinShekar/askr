@@ -158,6 +158,8 @@ def _install_ide_extension():
 
 _CLAUDE_MD_MARKER_START = "<!-- askr:behavioral-start -->"
 _CLAUDE_MD_MARKER_END   = "<!-- askr:behavioral-end -->"
+_CLAUDE_MD_GUARD_START  = "<!-- askr:guard-start -->"
+_CLAUDE_MD_GUARD_END    = "<!-- askr:guard-end -->"
 
 _CLAUDE_MD_SECTION = """\
 <!-- askr:behavioral-start -->
@@ -179,42 +181,66 @@ overwrite content outside the fenced markers.
   confidence.
 <!-- askr:behavioral-end -->"""
 
+_CLAUDE_MD_GUARD_SECTION = """\
+<!-- askr:guard-start -->
+## Implementation Guard
+
+Before editing any file:
+1. Check `askr_state/decisions.md` for settled decisions that affect that file's domain.
+2. Check `askr_state/failed_approaches.md` for approaches already tried and rejected.
+3. If your planned change contradicts a settled decision or repeats a rejected approach, say so explicitly before implementing — do not proceed silently.
+<!-- askr:guard-end -->"""
+
 
 def _install_claude_md() -> str:
     """
-    Write (or update) the askr behavioral section in CLAUDE.md.
+    Write (or update) the askr behavioral + guard sections in CLAUDE.md.
     Preserves all user-written content outside the askr markers.
     Returns 'created', 'updated', or 'unchanged'.
     """
+    import re as _re
     claude_md_path = "CLAUDE.md"
+    changed = False
 
     if os.path.exists(claude_md_path):
         with open(claude_md_path) as f:
-            existing = f.read()
-
-        if _CLAUDE_MD_MARKER_START in existing:
-            # Replace the existing askr section
-            import re
-            new_content = re.sub(
-                rf"{re.escape(_CLAUDE_MD_MARKER_START)}.*?{re.escape(_CLAUDE_MD_MARKER_END)}",
-                _CLAUDE_MD_SECTION,
-                existing,
-                flags=re.DOTALL,
-            )
-            if new_content == existing:
-                return "unchanged"
-            with open(claude_md_path, "w") as f:
-                f.write(new_content)
-            return "updated"
-        else:
-            # Append to existing file
-            with open(claude_md_path, "a") as f:
-                f.write(f"\n\n{_CLAUDE_MD_SECTION}\n")
-            return "updated"
+            content = f.read()
     else:
-        with open(claude_md_path, "w") as f:
-            f.write(f"{_CLAUDE_MD_SECTION}\n")
-        return "created"
+        content = ""
+
+    # Behavioral section
+    if _CLAUDE_MD_MARKER_START in content:
+        updated = _re.sub(
+            rf"{_re.escape(_CLAUDE_MD_MARKER_START)}.*?{_re.escape(_CLAUDE_MD_MARKER_END)}",
+            _CLAUDE_MD_SECTION, content, flags=_re.DOTALL,
+        )
+        if updated != content:
+            content = updated
+            changed = True
+    else:
+        content = content + (f"\n\n{_CLAUDE_MD_SECTION}\n" if content else f"{_CLAUDE_MD_SECTION}\n")
+        changed = True
+
+    # Guard section
+    if _CLAUDE_MD_GUARD_START in content:
+        updated = _re.sub(
+            rf"{_re.escape(_CLAUDE_MD_GUARD_START)}.*?{_re.escape(_CLAUDE_MD_GUARD_END)}",
+            _CLAUDE_MD_GUARD_SECTION, content, flags=_re.DOTALL,
+        )
+        if updated != content:
+            content = updated
+            changed = True
+    else:
+        content = content + f"\n\n{_CLAUDE_MD_GUARD_SECTION}\n"
+        changed = True
+
+    if not changed:
+        return "unchanged"
+
+    existed = os.path.exists(claude_md_path)
+    with open(claude_md_path, "w") as f:
+        f.write(content)
+    return "created" if not existed else "updated"
 
 
 def _install_launchd() -> tuple[bool, str]:
