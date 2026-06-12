@@ -1,17 +1,24 @@
-Last updated: 2026-06-13 03:08
+Last updated: 2026-06-13 03:10
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state locally and supporting multi-client workflows. It bridges the gap between AI inference and actual code execution by managing conversation history, file operations, and IDE integration—letting developers collaborate with an AI agent that understands context across sessions.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It orchestrates AI-assisted coding workflows through subprocess execution, maintains session state across invocations, and integrates with IDEs and multiple LLM providers.
 
 ## What's In Flight
 
-- **Handover system analysis** — Diagnosing critical gaps in session handover creation that block stress-test readiness. Analysis initiated but not yet synthesized into actionable findings.
-- **Stress-test preparation** — Infrastructure exists at `./stress-tests/` but readiness unknown; depends on handover system validation.
-- **State persistence validation** — Ensuring session state serialization and recovery work reliably across session boundaries, particularly around transcript entry limits and context windows.
+- Stress-test readiness analysis: identifying and documenting 3-5 critical blockers in handover system and state management
+- Handover system implementation: transcript management and checkpoint persistence between sessions
+- Investigation of transcript limits (_MAX_TRANSCRIPT_ENTRIES) and potential data loss during stress tests
+- Tabular analysis of handover system gaps with evidence from examined files and state readers/writers
 
 ## Key Decisions Made
 
-- **Filesystem-based state storage** — Session state lives in `./askr_state/` directory, not a database. Enables offline-first workflows and simplifies deployment.
-- **Hook-driven extensibility** — Event callbacks (session_start, pre_compact, pre_tool_use) decouple features from core execution, reducing coupling and enabling third-party integrations.
-- **Subprocess execution model** — LLM agent invokes OS commands via `usage_api.py
+- Session orchestration routed through `usage_api.py` with platform-aware subprocess execution for cross-OS compatibility
+- Filesystem-based state persistence in `./askr_state/` directory rather than database backend for simplicity and portability
+- Multi-client abstraction layer in `./askr/clients/` to support multiple LLM providers without coupling to specific implementations
+- Lifecycle hooks system (`./askr/hooks/`) for extensibility rather than monolithic session logic
+- Append-only decision log to maintain audit trail of architectural choices
+
+## Open Goals
+
+- Complete grep analysis of transcript path

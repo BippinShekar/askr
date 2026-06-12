@@ -9,6 +9,14 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [03:09] Ran: grep -n "transcript_path\|transcript" /Users/bippin/Desktop/askr/askr/hooks/stop
+- [03:09] Ran: find /Users/bippin/Desktop/askr/askr/hooks -name "stop.py" -o -name "post_tool_u
+- [03:09] Ran: grep -n "_MAX_TRANSCRIPT_ENTRIES\|transcript_path\|transcri" /Users/bippin/Deskt
+- [03:09] Ran: find /Users/bippin/Desktop/askr/askr/state -name "writer.py" 2>/dev/null | xargs
+- [03:09] Ran: cat /Users/bippin/Desktop/leaps/askr_state/handover_bippin.md 2>/dev/null | head
+- [03:08] Ran: ls /Users/bippin/Desktop/askr/stress-tests/ 2>/dev/null
+- [03:08] Ran: find /Users/bippin/Desktop/askr/askr/session -name "checkpoint.py" -o -name "*.p
+- [03:08] Ran: find /Users/bippin/Desktop/askr -name "handover*" -o -name "HANDOVER*" 2>/dev/nu
 - [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py | head -80
 - [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py && echo "---" && cat /U
 - [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/state/reader.py 2>/dev/null | head -100
