@@ -9,6 +9,18 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [16:15] Ran: git add askr/session/monitor.py askr/hooks/post_tool_use.py askr/hooks/pre_compa
+- [16:15] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [16:15] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [16:15] Modified: /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py
+- [16:14] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
+- [16:14] Modified: /Users/bippin/Desktop/askr/askr/session/monitor.py
+- [16:14] Ran: grep -rn "stats_path_for_project\|write_session_stats\|update_session_stats" /Us
+- [16:14] Ran: grep -n "stats\|monitor" /Users/bippin/Desktop/askr/askr/hooks/stop.py | head -2
+- [16:14] Ran: grep -n "stats_path\|write_stats\|from askr.session.monitor\|update_stats\|_STAT
+- [16:14] Ran: grep -n "project_path\|stats_path\|write_stats\|_stats" /Users/bippin/Desktop/as
+- [16:12] Ran: cat ~/.config/askr/stats/Users-bippin-Desktop-leaps-backend.json && echo "---mti
+- [16:12] Ran: ls -la ~/.config/askr/stats/ && echo "---" && cat ~/.config/askr/stats/Users-bip
 - [12:10] Ran: git add askr/cli/askr.py && git commit -m "fix: walk up to project root for stat
 - [12:10] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [12:09] Ran: grep -n "stats_path_for_project\|def stats_path" /Users/bippin/Desktop/askr/askr

@@ -1,20 +1,20 @@
-Last updated: 2026-06-12 12:10
+Last updated: 2026-06-12 16:15
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to exhaust, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git. It enables seamless handoffs between developers and sessions by maintaining persistent context and decision history, so work can resume without losing progress or context.
 
 ## What's In Flight
 
-- CLI status display: fixing context/quota percentage calculations and aligning stats file lookup between CLI and VS Code extension (currently in progress by bippin).
-- UTF-8 rendering in terminal: forced PYTHONIOENCODING=utf-8 to display status characters correctly; stats file path resolution now walks up directory tree to project root to match extension behavior.
-- Discord notification gating: verifying _start_claude boolean return triggers notifications correctly.
-- macOS Terminal.app keystroke fallback: testing Claude launch integration on actual hardware.
-- Session card display: deciding whether to show git remote or directory name in top-right corner; generating sample Discord update message with session card image.
+- Stats file path synchronization: consolidating multiple modules writing to different filenames (`leaps-backend.json` vs `leaps.json`) via shared `get_project_root()` utility. Changes staged, awaiting commit.
+- Discord notification gating: verifying that `_start_claude` boolean return properly gates notifications.
+- macOS Terminal.app keystroke fallback: testing actual Claude launch integration.
+- Session card UI: deciding on display format (git remote vs directory name) and generating sample Discord update message with card image.
+- Test suite validation: verifying all tests pass after recent changes.
 
 ## Key Decisions Made
 
-- State persisted to git, not external database: enables offline handoffs and full audit trail in version control.
-- Append-only decision log: decisions.md never edited, only appended; enables clear history of reasoning.
-- Safe pause validation before checkpoint: safe_pause.py ensures interruption happens at safe points in code execution.
-- Stats
+- Session state persists in git via append-only decision log and handover documents, enabling context transfer between developers.
+- Project root detection centralized in shared utility to prevent path sync bugs across extension, CLI, and stats writer.
+- Checkpoint triggered before context auto-compaction to prevent data loss during Claude's internal cleanup.
+- Forecast module predicts which limit (context or quota) hits
