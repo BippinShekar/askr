@@ -199,6 +199,51 @@ If a section truly has no information in the transcript, write "Unknown" — but
         return None
 
 
+def _append_failed_approaches(handover_text: str, state_dir: str):
+    """Parse ## Failed Approaches from handover and append new entries to the cumulative file."""
+    if not handover_text:
+        return
+    try:
+        import re
+        match = re.search(r'## Failed Approaches\n(.*?)(?=\n## |\Z)', handover_text, re.DOTALL)
+        if not match:
+            return
+        section = match.group(1).strip()
+        if not section or section.lower() in ("none", "none.", "unknown"):
+            return
+
+        path = os.path.join(state_dir, "failed_approaches.md")
+        existing_text = ""
+        if os.path.exists(path):
+            with open(path) as f:
+                existing_text = f.read()
+
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        header = ""
+        if not existing_text:
+            header = "# Failed Approaches\n\nCumulative cross-session log. Never overwritten — append only.\n\n"
+
+        new_entries = []
+        for line in section.splitlines():
+            line = line.strip().lstrip("- ").strip()
+            if not line or len(line) < 10:
+                continue
+            # Dedup: skip if this exact line already exists (case-insensitive)
+            if line.lower() in existing_text.lower():
+                continue
+            new_entries.append(f"- [{ts}] {line}")
+
+        if not new_entries:
+            return
+
+        with open(path, "a") as f:
+            if header:
+                f.write(header)
+            f.write("\n".join(new_entries) + "\n")
+    except Exception:
+        pass
+
+
 def _parse_completed_goals_from_handover(handover_text: str, open_goals: list) -> list:
     """Extract the Completed Goals section from the handover and match against open goals."""
     if not handover_text or not open_goals:
@@ -369,6 +414,7 @@ def create_checkpoint(
     handover_path = write_handover(summary, developer)
 
     _generate_project_brief(state_dir, developer)
+    _append_failed_approaches(summary, state_dir)
 
     completed_goals = []
     try:
