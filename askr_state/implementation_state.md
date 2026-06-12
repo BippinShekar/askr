@@ -9,6 +9,18 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py | head -80
+- [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py && echo "---" && cat /U
+- [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/state/reader.py 2>/dev/null | head -100
+- [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/session_start.py | tail -120
+- [03:06] Ran: # Check how handover is read back at session start
+cat /Users/bippin/Desktop/ask
+- [03:06] Ran: # Check what _MAX_TRANSCRIPT_ENTRIES captures and what happens at context bounda
+- [03:06] Ran: cat /Users/bippin/Desktop/askr/askr/state/templates/handover_template.md && echo
+- [03:06] Ran: wc -l /Users/bippin/Desktop/leaps/askr_state/handover_bippin.md && echo "---" &&
+- [03:06] Ran: ls /Users/bippin/Desktop/leaps/askr_state/ 2>/dev/null && cat /Users/bippin/Desk
+- [03:05] Ran: cat /Users/bippin/Desktop/askr/askr_state/handover_bippin.md && echo "---" && ca
+- [03:05] Ran: ls /Users/bippin/Desktop/askr/stress-tests/ 2>/dev/null && cat /Users/bippin/Des
 - [20:35] Ran: git add install.sh && git commit -m "fix(install): create venv and install depen
 - [20:35] Modified: /Users/bippin/Desktop/askr/install.sh
 - [20:34] Ran: cat /Users/bippin/Desktop/askr/pyproject.toml 2>/dev/null || cat /Users/bippin/D

@@ -1,18 +1,17 @@
-Last updated: 2026-06-12 20:35
+Last updated: 2026-06-13 03:08
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with LLM integration. It tracks API usage and state across multiple IDE environments, allowing developers to invoke AI assistance directly from their editor while maintaining session history and cost tracking.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state locally and supporting multi-client workflows. It bridges the gap between AI inference and actual code execution by managing conversation history, file operations, and IDE integration—letting developers collaborate with an AI agent that understands context across sessions.
 
 ## What's In Flight
 
-- Progress bar display fix: `install.sh` was not creating Python venv or installing dependencies, causing `import rich` to fail silently post-pull. Modified `install.sh` to add venv creation and `pip install`. Awaiting verification that git commit completed and testing on fresh clone.
-- Core session orchestration via `usage_api.py` is stable; focus is on ensuring initialization pipeline works end-to-end.
+- **Handover system analysis** — Diagnosing critical gaps in session handover creation that block stress-test readiness. Analysis initiated but not yet synthesized into actionable findings.
+- **Stress-test preparation** — Infrastructure exists at `./stress-tests/` but readiness unknown; depends on handover system validation.
+- **State persistence validation** — Ensuring session state serialization and recovery work reliably across session boundaries, particularly around transcript entry limits and context windows.
 
 ## Key Decisions Made
 
-- Entry point is `./askr/session/usage_api.py` — all session lifecycle, usage tracking, and subprocess orchestration flows through here.
-- State persists locally to `./askr_state/` as JSON; no remote backend. Configuration via environment variables.
-- IDE communication uses subprocess execution with platform-aware adapters in `./askr/ide/`.
-- LLM clients abstracted in `./askr/clients/` to support multiple model providers; response format is consumed by session, hooks, and QA modules.
-- Hooks system (`./askr/hooks/`) fires pre/post execution
+- **Filesystem-based state storage** — Session state lives in `./askr_state/` directory, not a database. Enables offline-first workflows and simplifies deployment.
+- **Hook-driven extensibility** — Event callbacks (session_start, pre_compact, pre_tool_use) decouple features from core execution, reducing coupling and enabling third-party integrations.
+- **Subprocess execution model** — LLM agent invokes OS commands via `usage_api.py
