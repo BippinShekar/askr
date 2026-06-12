@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:32] Ran: python3 -c "import json; s=json.load(open('/Users/bippin/Desktop/askr/.claude/se
+- [20:32] Ran: grep -A2 '"PostToolUse"' /Users/bippin/Desktop/askr/.claude/settings.json 2>/dev
+- [20:31] Ran: ls ~/.claude/projects/ 2>/dev/null | head -5
 - [20:19] Ran: git add askr_state/handover_bippin.md && git commit -m "askr: checkpoint [bippin
 - [20:19] Modified: /Users/bippin/Desktop/askr/askr_state/handover_bippin.md
 - [20:19] Ran: git add CLAUDE.md askr_state/goals.md askr_state/implementation_state.md .askr_h
