@@ -1,28 +1,27 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 18:58
+Last updated: 2026-06-12 19:01
 
-# Handover Document
+# HANDOVER DOCUMENT
 
 ## Task
-Fix the handover document truncation issue in Claude Code sessions caused by insufficient output token allocation, and resolve the goal/handover directive conflict in session initialization.
+Investigate why autonomous session launched with stale "pricing and cost calculation" goal despite previous session marking it complete, and fix goal state management to prevent resurrection of finished work.
 
 ## Status
-- `/Users/bippin/Desktop/askr/askr/clients/claude.py`: Modified to prevent stored goal from overriding handover's Next Action directive. Goal is now context only, not a prompt override.
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Modified to apply same goal/handover separation logic.
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Modified to apply same goal/handover separation logic.
-- `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: Modified to reduce prompt initialization delay from 8s back to 4s (original was 0s with synchronous sendText, 4s was the working threshold before overcautious bump to 8s).
-- `/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Mirrored changes from vscode-extension.
-- Root cause identified: `MAX_TOKENS = 300` in claude.py is insufficient for full handover document output. Haiku truncates mid-sentence when token budget exhausted.
-- Git commits staged but transcript cuts off before final push confirmation.
+- `/Users/bippin/Desktop/askr/askr/clients/claude.py`: Fixed to prevent goal_part from overriding handover's Next Action with stale stored goal. Goal now passed as context, not directive.
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`: Applied same fix — goal context separation.
+- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`: Applied same fix — goal context separation.
+- `/Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js`: Reduced prompt delay from 8s to 4s (original was 0s, 4s is safe minimum for Claude TUI initialization).
+- `/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js`: Reduced prompt delay from 8s to 4s.
+- Root cause identified: `_get_next_goal()` logic is resurrecting completed goals instead of respecting completion state in goals.md.
 
 ## Failed Approaches
-- 8 second delay: Added as overcautious safety margin but original codebase used 0s (synchronous) and 4s was the actual working threshold. Reverted to 4s.
-- Echo command in prompt submission: Suggested but never implemented; no clear purpose identified.
+- 8 second delay: Added as overly cautious, reverted to 4s (original code had 0s, 4s is proven safe).
+- Storing goal as prompt_arg in session prompt: Rejected — causes new session to treat stale goal as active directive instead of reading fresh state from goals.md.
 
 ## Next Action
-Increase `MAX_TOKENS` value in `/Users/bippin/Desktop/askr/askr/clients/claude.py` from 300 to a value sufficient for complete handover document generation (recommend 1500-2000 minimum for Haiku). This is the root cause of truncation and must be fixed before testing session resumption.
+Read `/Users/bippin/Desktop/leaps/askr_state/goals.md` and examine `_get_next_goal()` implementation in the codebase to determine why completed goals are being returned as active. Trace the completion marking logic — verify that when a goal is marked done in goals.md, `_get_next_goal()` skips it and returns the next unfinished goal instead of cycling back to finished ones.
 
 ## Open Questions
-- What is the actual optimal `MAX_TOKENS` value for Haiku to reliably output complete handover documents without truncation?
-- Are there other locations in the codebase where token limits are hardcoded that could cause similar truncation issues?
+- What is the exact completion marker format in goals.md that `_get_next_goal()` checks for?
+- Is `_get_next_goal()` filtering by completion status at all, or is it returning goals in order without checking done/incomplete state?
