@@ -1,30 +1,32 @@
 # Handover: bippin
 
-Last updated: 2026-06-12 19:27
+Last updated: 2026-06-12 19:52
 
 ## Task
-Improve the implementation guard mechanism to prevent Claude from suggesting changes that contradict current architecture and break the codebase.
+Implement real-time enforcement hooks and rejection tracking to catch Claude making architecture-violating suggestions before they break the codebase, and improve the implementation guard system.
 
 ## Status
-- Implementation guard currently exists but is ineffective: Claude has suggested contradictory changes in both askr and leaps repos that broke things instead of fixing them
-- Goal completion mechanism was refactored this session: open goals now passed to handover generation, Haiku identifies completed goals in transcript, checkpoint parses `## Completed Goals` section and marks them done in goals.md before new session starts
-- Checkpoint max_tokens increased from 300 to 2000 to accommodate expanded handover with completed goals section
-- Changes committed: checkpoint.py and claude.py updated with new goal completion flow
-- Implementation guard analysis requested but not yet completed — user asked for "thorough tabular analysis, be brutally honest" of why current guard fails
+- Goal completion mechanism refactored: `infer_completed_from_activity()` replaced with Haiku-based parsing in handover generation
+- Checkpoint now passes open goals to Haiku and parses `## Completed Goals` section from handover before new session starts
+- `checkpoint.py` and `claude.py` modified; max_tokens bumped to 2000 in checkpoint call
+- Changes committed: "feat: fold goal completion into handover generation"
+- Current implementation guard analyzed and found fundamentally broken: records only raw tool actions (file modifications, bash runs) without semantic validation; cannot catch architectural violations in real-time; `architecture.md` is incomplete/outdated
+- No real-time enforcement hooks exist; no rejection tracking system in place; no failure record of why suggestions were rejected
 
 ## Failed Approaches
-- File-heuristic based goal completion using `infer_completed_from_activity(tool_actions, goals)` with MAX_TOKENS=300 truncation — replaced with handover-integrated approach
-- Keeping goal completion separate from handover generation — folded into single Haiku call for consistency
+- Using `infer_completed_from_activity()` with file-touch heuristics as completion signal — too unreliable, hit MAX_TOKENS truncation on its own LLM call
+- Relying on `implementation_state.md` as a guard — it only records command history, not architectural intent; Claude can and has violated architecture while passing this check
 
 ## Next Action
-Perform brutally honest tabular analysis of the implementation guard mechanism: identify why it fails to prevent contradictory suggestions, map failure modes (guard placement, prompt clarity, context window, authority hierarchy), and propose concrete improvements with tradeoff analysis.
+Build a rejection tracking system: create `askr/validation/rejection_log.py` that logs every suggestion Claude makes (via a pre-execution hook), validates it against `architecture.md` rules in real-time, and records rejections with reason codes (e.g., "violates_module_boundary", "contradicts_existing_impl", "breaks_interface_contract"). Wire this hook into the checkpoint flow so each session inherits the rejection history and can learn from it.
 
 ## Open Questions
-- What specific contradictory suggestions did Claude make in askr and leaps repos that broke things?
-- Is the implementation guard a prompt instruction, a file-based constraint, or both?
-- Does the guard have authority to reject Claude's suggestions or only to warn?
-- How is the guard currently communicated to Claude — in system prompt, handover, or separate file?
+- What specific architectural rules should be machine-checkable vs. requiring human judgment?
+- How should the rejection log be surfaced to Claude at session start — as warnings, as constraints, or as examples of what not to do?
+- Should rejected suggestions be stored in git history or kept ephemeral in the session state?
 
 ## Completed Goals
-- Verify Discord notification gating works with _start_claude boolean return: Not addressed in transcript
-- Test Terminal.app keystroke fallback on macOS with actual Claude launch: Not addressed in transcript
+- Decide: display git remote or directory name in card top-right — Not completed; no work on this in transcript
+- Generate Discord update message with sample session card image — Not completed; no work on this in transcript
+- Verify test status from last Bash output and fix any failures — Not completed; no test runs in transcript
+- Review files changed since last session and check decisions.md — Not completed; session focused on goal completion and guard mechanisms instead

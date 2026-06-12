@@ -1,17 +1,17 @@
-Last updated: 2026-06-12 19:27
+Last updated: 2026-06-12 19:52
 
 # Project Brief
 
-Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or quota limits are about to be exhausted, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by persisting objectives, decisions, and progress in structured state files that Claude can read on resumption.
+Askr is a daemon and CLI tool that monitors Claude Code sessions, detects when context or token quota is about to exhaust, and automatically checkpoints project state to git before interruption. It enables seamless handoffs between developers and sessions by maintaining persistent task context, decisions, and progress in version control.
 
 ## What's In Flight
 
-- Implementation guard mechanism analysis: diagnosing why the current guard fails to prevent Claude from suggesting contradictory changes that break the codebase. Requires tabular failure-mode analysis and concrete improvements with tradeoffs.
-- Goal completion flow: refactored this session to integrate completed goals into handover generation via Haiku analysis of session transcript, with checkpoint parsing and goals.md updates before next session starts.
-- Discord notification gating: verify that _start_claude boolean return properly gates notifications; Terminal.app keystroke fallback testing on macOS with actual Claude launch.
-- Session card display: decide whether to show git remote or directory name in card top-right; generate sample Discord update message with session card image.
+- Building a rejection tracking system (`askr/validation/rejection_log.py`) to catch architectural violations in real-time before Claude implements them. Currently the implementation guard only records raw file modifications and bash commands without semantic validation.
+- Wiring rejection tracking into checkpoint flow so each new session inherits rejection history and learns from past mistakes.
+- Refactored goal completion detection to use Haiku-based parsing in handover generation instead of unreliable file-touch heuristics; checkpoint now passes open goals to Claude and parses completed goals from response.
 
 ## Key Decisions Made
 
-- Checkpoint max_tokens increased from 300 to 2000 to accommodate expanded handover with completed goals section.
-- Goal completion moved from file-heuristic inference to handover-integrated Haiku analysis: Claude identifies completed goals in transcript, checkpoint par
+- State is append-only and persisted in git (decisions.md, handover files, implementation_state.md) to enable developer handoffs and session resumption without data loss.
+- Goal completion is determined by Haiku parsing of handover text, not by inferring from file activity — the latter was hitting token limits and producing false signals.
+- Architecture validation must happen at suggestion time (pre-execution hook), not post-hoc, because by then Claude

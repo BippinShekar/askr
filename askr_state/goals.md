@@ -3,14 +3,14 @@
 
 
 ## Backlog
-- [ ] Decide: display git remote or directory name in card top-right <!-- added: 2026-06-11T12:42 -->
-- [ ] Generate Discord update message with sample session card image <!-- added: 2026-06-11T12:42 -->
-- [ ] Verify test status from last Bash output and fix any failures
-- [ ] Review files changed since last session and check decisions.md
 
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-12 19:52] Review files changed since last session and check decisions.md
+[2026-06-12 19:52] Verify test status from last Bash output and fix any failures
+[2026-06-12 19:52] Generate Discord update message with sample session card image
+[2026-06-12 19:52] Decide: display git remote or directory name in card top-right
 [2026-06-12 19:27] Test Terminal.app keystroke fallback on macOS with actual Claude launch
 [2026-06-12 19:27] Verify Discord notification gating works with _start_claude boolean return
 [2026-06-11 14:10] DISCARDED: Verify auto-continue switch fires in askr repo after daemon trigger
