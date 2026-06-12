@@ -1,5 +1,9 @@
 ## Today - 2026-06-12
 
+- [ ] Debug and fix any failures in guard installation, architecture.md regen, or cont <!-- added: 2026-06-12T20:17 -->
+
+- [ ] Run end-to-end checkpoint workflow test to verify all 3 stages function <!-- added: 2026-06-12T20:17 -->
+
 
 
 ## Backlog

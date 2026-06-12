@@ -16,3 +16,13 @@ overwrite content outside the fenced markers.
 - **Honest uncertainty.** If you do not know, say so. Do not fabricate
   confidence.
 <!-- askr:behavioral-end -->
+
+
+<!-- askr:guard-start -->
+## Implementation Guard
+
+Before editing any file:
+1. Check `askr_state/decisions.md` for settled decisions that affect that file's domain.
+2. Check `askr_state/failed_approaches.md` for approaches already tried and rejected.
+3. If your planned change contradicts a settled decision or repeats a rejected approach, say so explicitly before implementing — do not proceed silently.
+<!-- askr:guard-end -->
