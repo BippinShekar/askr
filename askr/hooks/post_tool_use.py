@@ -153,7 +153,44 @@ def _write_session_stats():
         pass
 
 
-_GUARD_BLOCKS_PATH = os.path.expanduser("~/.config/askr/guard_blocks.json")
+_GUARD_BLOCKS_PATH   = os.path.expanduser("~/.config/askr/guard_blocks.json")
+_TURN_COUNTER_PATH   = os.path.expanduser("~/.config/askr/turn_counter.json")
+_REFRESH_EVERY_N     = 10  # inject constraint reminder every N tool uses
+
+
+def _maybe_refresh_constraints():
+    """Every N tool uses, print top decisions as a reminder so they don't fade mid-session."""
+    try:
+        counter_data = {}
+        if os.path.exists(_TURN_COUNTER_PATH):
+            with open(_TURN_COUNTER_PATH) as f:
+                counter_data = json.load(f)
+
+        # Reset counter if it's a new session (state dir changed or counter stale)
+        count = counter_data.get("count", 0) + 1
+        counter_data["count"] = count
+
+        os.makedirs(os.path.dirname(_TURN_COUNTER_PATH), exist_ok=True)
+        with open(_TURN_COUNTER_PATH, "w") as f:
+            json.dump(counter_data, f)
+
+        if count % _REFRESH_EVERY_N != 0:
+            return
+
+        # Load top 5 decisions (most recent lines)
+        decisions_path = state_path("decisions.md")
+        if not os.path.exists(decisions_path):
+            return
+        with open(decisions_path) as f:
+            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+        recent = lines[-5:]
+        if not recent:
+            return
+
+        reminder = "askr reminder — settled decisions:\n" + "\n".join(f"  {l}" for l in recent)
+        print(reminder, flush=True)
+    except Exception:
+        pass
 
 
 def _check_guard_resolution(tool_name: str, file_path: str):
@@ -231,6 +268,7 @@ def main():
         _append_to_section(dev, f"- [{ts}] {activity}")
 
     _write_session_stats()
+    _maybe_refresh_constraints()
 
 
 if __name__ == "__main__":
