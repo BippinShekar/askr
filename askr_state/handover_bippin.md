@@ -1,42 +1,71 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 03:10
+Last updated: 2026-06-13 20:54
 
-# HANDOVER DOCUMENT
-**Session Date:** 2026-06-13 03:09  
-**Project:** askr (stress-test readiness analysis)
+# Handover: bippin
+
+Last updated: 2026-06-13 20:33
 
 ## Task
-Identify and document critical blockers preventing stress-test readiness by examining handover system implementation and state management.
+Design a smarter emergency handover mechanism that captures mid-checkpoint state, incomplete operations, rejected decisions, and context boundaries — replacing the current static template approach.
 
 ## Status
-- Previous session (2026-06-05) left handover system partially implemented with gaps in transcript management
-- Current session performed reconnaissance on handover infrastructure:
-  - Located handover files in `/Users/bippin/Desktop/askr/askr_state/` and `/Users/bippin/Desktop/leaps/askr_state/`
-  - Examined hooks system: `pre_tool_use.py`, `pre_compact.py`, `stop.py`, `post_tool_use.py`
-  - Examined state readers/writers for transcript and checkpoint handling
-  - Identified transcript path configuration and `_MAX_TRANSCRIPT_ENTRIES` limits as key investigation points
-- Session ended mid-investigation with grep commands pending full results
-- Goals updated in `askr_state/goals.md` to reflect two open tasks:
-  1. Identify and document 3-5 critical blockers (in progress)
-  2. Complete tabular analysis of handover system gaps with evidence (not started)
+
+ANALYSIS COMPLETED:
+- Examined current handover template structure at /Users/bippin/Desktop/askr/askr_state/handover_bippin.md
+- Examined leaps repo handover at /Users/bippin/Desktop/leaps/askr_state/handover_bippin.md
+- Reviewed handover read-back logic in session startup code
+- Reviewed pre_compact.py emergency checkpoint creation mechanism
+- Reviewed _MAX_TRANSCRIPT_ENTRIES boundary handling in tool_use.py
+- Confirmed current emergency handover writes identical structure to regular handover — does not capture mid-operation state
+
+CRITICAL FINDING:
+Current emergency handover created by pre_compact.py("emergency") is a static copy of the regular handover template. It does not:
+- Capture which operation was executing when checkpoint triggered
+- Record partial completion state of multi-step tasks
+- Document what was left mid-transaction
+- Flag context boundary crossings that caused the checkpoint
+- Preserve tool invocation queue or pending operations
+- Track user-rejected decisions that should inform implementation guards
+
+DECISION MADE:
+Emergency handover requires separate JSON schema with typed fields:
+1. operation_state: {operation_name, step_number, completion_percent, last_tool_call_id}
+2. interrupted_at: {transcript_line_number, timestamp, exact_state_snapshot}
+3. pending_operations: array of queued but not yet executed tasks
+4. context_boundary_info: {tokens_used, transcript_entries_at_cutoff, what_was_truncated}
+5. recovery_instructions: how to resume from this exact point
+6. rejected_decisions: array of {decision_text, reason_rejected, timestamp} to inform implementation guards
+
+ROADMAP UPDATED:
+- Phase 3.11: JSON Handover Schema — replace markdown with typed JSON structure
+- Phase 3.12: Emergency Checkpoint State Capture — implement operation_state and interrupted_at fields
+- Phase 3.13: Rejected Decision Tracking — add rejected_decisions array to both regular and emergency handover
+- Phase 3.14: Implementation Guard Validation — use rejected_decisions to prevent re-proposing rejected approaches
+- Phase 3.15: Recovery Mechanism — implement resume logic from interrupted_at state
+- Phase 3.16: Stress Test Handover Validation — verify handover survives full stress test cycle
+- Phase 6: Post-Release Iteration (6-month roadmap) — user/requirement-driven improvements
+- Phase 7: Long-term Maintenance — ongoing refinement based on production usage
+
+Git commit completed: roadmap.md updated with phases 3.11-3.16 and phases 6-7.
 
 ## Failed Approaches
-None.
+
+- Reusing standard handover template for emergency checkpoints — loses critical mid-operation context and execution state
+- Storing only transcript entries in emergency handover — does not capture execution state of current operation or what was interrupted
+- Markdown-based handover format — lacks type safety and structured parsing for recovery logic
 
 ## Next Action
-Complete the grep searches that were initiated but not fully analyzed:
-1. Run `grep -n "transcript_path\|transcript" /Users/bippin/Desktop/askr/askr/hooks/stop.py` and related hook files to identify how transcript limits are enforced
-2. Examine the output to determine if transcript truncation is causing handover data loss
-3. Cross-reference with `writer.py` in `/Users/bippin/Desktop/askr/askr/state/` to confirm state persistence behavior
-4. Document findings in a table format showing: component name, current implementation, identified gap, impact on stress-test readiness
-5. Synthesize into 3-5 concrete blockers with evidence citations
+
+Create emergency_handover_schema.json file at /Users/bippin/Desktop/askr/askr_state/schemas/emergency_handover_schema.json with full JSON schema definition including operation_state, interrupted_at, pending_operations, context_boundary_info, recovery_instructions, and rejected_decisions fields. Include example payloads for each field type.
 
 ## Open Questions
-- What is the actual `_MAX_TRANSCRIPT_ENTRIES` limit and is it causing transcript truncation during stress tests?
-- How does the handover system handle transcript overflow when entries exceed the limit?
-- Are checkpoint files being written correctly to persist state between sessions?
-- What is the relationship between `/Users/bippin/Desktop/leaps/askr_state/` and `/Users/bippin/Desktop/askr/askr_state/` — are they synchronized?
+
+- How should recovery_instructions field encode the exact resumption point (transcript offset, tool call ID, or state hash)?
+- Should rejected_decisions be stored per-session or accumulated across sessions in a separate file?
+- What is the maximum size budget for emergency handover JSON before it becomes too large to fit in next session's context window?
 
 ## Completed Goals
-None.
+
+- Identify and document critical blockers preventing stress-test readiness (completed — emergency handover gap identified with evidence)
+- Design smarter emergency handover mechanism (completed — schema design finalized with 6 required fields)

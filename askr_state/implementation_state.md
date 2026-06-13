@@ -9,6 +9,11 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [20:53] Ran: git add roadmap.md && git commit -m "roadmap: add phases 3.11-3.16, 6, 7 — JSON 
+- [20:53] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [20:48] Ran: sed -n '/## Phase 3.9/,$p' /Users/bippin/Desktop/askr/roadmap.md
+- [20:48] Ran: cat /Users/bippin/Desktop/askr/roadmap.md | wc -l && grep "^## Phase" /Users/bip
+- [20:48] Ran: cat /Users/bippin/Desktop/askr/roadmap.md 2>/dev/null | head -80 && echo "---" &
 - [03:09] Ran: grep -n "transcript_path\|transcript" /Users/bippin/Desktop/askr/askr/hooks/stop
 - [03:09] Ran: find /Users/bippin/Desktop/askr/askr/hooks -name "stop.py" -o -name "post_tool_u
 - [03:09] Ran: grep -n "_MAX_TRANSCRIPT_ENTRIES\|transcript_path\|transcri" /Users/bippin/Deskt
