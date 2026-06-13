@@ -316,19 +316,22 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 **Problem it solves:** The .md handover is a blob. Reader.py dumps it raw into context. Downstream code can't query "which files were in play last session" without grepping markdown. JSON gives typed fields that smart injection and the guard can use directly.
 
-**Fields introduced:** `task`, `discussion_summary`, `accomplishments[]`, `in_progress[{file, what, last_known_line}]`, `next_actions[]` (ordered, 3–5, not 1), `decisions[]`, `user_rejected_decisions[]`, `failed_approaches[]`, `files_in_play[]`, `uncommitted_files[]`, `blockers[]`, `completion_pct`, `session_metadata`.
+**Fields introduced:** `task`, `discussion_summary`, `accomplishments[]`, `in_progress[{file, what, last_line}]`, `next_actions[]` (ordered, 3–5, not 1), `decisions[]`, `user_rejected_decisions[]`, `failed_approaches[]`, `files_in_play[]`, `relational_files[{file, relationship, why}]`, `uncommitted_files[]`, `blockers[]`, `completion_pct`, `session_metadata`.
+
+**On `last_line` accuracy:** PostToolUse already receives the exact `file_path`, `old_string`, and `new_string` for every Edit tool call. After each edit, find `new_string` in the file — that's the exact line. No LLM inference needed. A session state file (`~/.config/askr/edit_cursor.json`) tracks `{file, line, what_was_being_done}` updated on every write tool use, and is included directly in the JSON handover at checkpoint. Ground truth, not approximation.
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | New handover LLM prompt outputs JSON, not markdown | 🔲 Todo |
-| S2 | `writer.py` write_handover writes .json (keeps .md as human-readable derived copy) | 🔲 Todo |
-| S3 | `reader.py` load_own_handover reads JSON, formats targeted context string | 🔲 Todo |
-| S4 | Migration: if .json missing, fall back to .md — no existing projects break | 🔲 Todo |
-| S5 | `next_actions` prompt changed from "one action only" to "ordered list of 3–5" | 🔲 Todo |
+| S1 | `post_tool_use.py` — on Write/Edit, find new content in file, write `{file, line, ts}` to `edit_cursor.json` | 🔲 Todo |
+| S2 | New handover LLM prompt outputs JSON, not markdown | 🔲 Todo |
+| S3 | `checkpoint.py` — merge `edit_cursor.json` into `in_progress[]` before LLM call | 🔲 Todo |
+| S4 | `writer.py` write_handover writes .json (keeps .md as human-readable derived copy) | 🔲 Todo |
+| S5 | `reader.py` load_own_handover reads JSON, formats targeted context string | 🔲 Todo |
+| S6 | Migration: if .json missing, fall back to .md — no existing projects break | 🔲 Todo |
+| S7 | `next_actions` prompt changed from "one action only" to "ordered list of 3–5" | 🔲 Todo |
 
 **Honest risks:**
-- LLM must output valid JSON every time. Malformed JSON = no handover. Need robust fallback parser + mechanical JSON construction from transcript if LLM fails.
-- `last_known_line` in in_progress entries will often be wrong. Haiku can't reliably infer line numbers from transcript text. Treat as best-effort, not authoritative.
+- LLM must output valid JSON every time. Malformed JSON = no handover. Need robust fallback: mechanical JSON construction from transcript + edit_cursor.json if LLM fails.
 - JSON is harder for users to hand-edit when they want to fix a bad handover. Mitigation: always write a .md copy as human-readable view.
 
 ---
@@ -336,86 +339,105 @@ The problem: every tool that claims to "remember" preferences still requires man
 ## Phase 3.12 — User-Rejection Tracking
 *Target: pre-stress-test*
 
-**Goal:** Track decisions Claude proposed that the user rejected. Separate from failed_approaches (technical dead ends) and decisions (settled choices). Feeds the implementation guard so it can catch re-suggestion of vetoed approaches.
+**Goal:** Track decisions Claude proposed that the user rejected. Separate from failed_approaches (technical dead ends) and decisions (settled choices). Feeds the implementation guard so it can catch re-suggestion of vetoed approaches across sessions.
 
-**Problem it solves:** Claude re-proposes the same approach it got shot down on two sessions ago. The guard can't catch it because there's no record of the user veto — only the current session's context holds that signal, and it's lost at session end.
+**Problem it solves — validated:** This is the documented #1 pain point with Claude Code. GitHub issue #37314 on the official repo: *"Claude repeatedly fails to apply its own memory/feedback — same mistakes recur across sessions."* Qodo's State of AI Code Quality 2025 report: frustration drops from 44% to 16% when context is persistently stored and reused. Developers accept less than 44% of AI code generations — rejections happen constantly and are immediately forgotten. The user should never have to re-correct Claude about the same thing twice. Ever.
 
-**New artifact:** `rejected_decisions.json` — cumulative, cross-session. Each entry: `{what_was_proposed, user_signal, context_file, date, confidence}`.
+**What this is NOT:** Failed approaches (technical dead ends Claude tried and they broke). This is specifically: Claude proposed an approach, the user said no for a reason (style, architecture, preference, prior decision), and that veto must persist cross-session.
+
+**New artifact:** `rejected_decisions.json` — cumulative, cross-session, append-only. Each entry: `{what_was_proposed, user_signal, domain, context_file, date, confidence}`.
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | Handover LLM prompt extracts suggestion/rejection pairs from transcript | 🔲 Todo |
-| S2 | `checkpoint.py` writes extracted rejections to `rejected_decisions.json` | 🔲 Todo |
-| S3 | `pre_tool_use.py` guard check queries `rejected_decisions.json` for the target file's domain | 🔲 Todo |
-| S4 | CLAUDE.md guard directive updated to include rejected_decisions check | 🔲 Todo |
+| S1 | Handover LLM prompt extracts suggestion/rejection pairs from transcript with confidence score | 🔲 Todo |
+| S2 | `checkpoint.py` — `_write_rejections_from_handover()` appends above-threshold entries to `rejected_decisions.json` | 🔲 Todo |
+| S3 | `pre_tool_use.py` guard — query `rejected_decisions.json` by domain/file before allowing writes | 🔲 Todo |
+| S4 | Mid-session: `post_tool_use.py` also scans last user message in real time for high-confidence rejection signals, writes immediately (not just at checkpoint) | 🔲 Todo |
+| S5 | CLAUDE.md guard directive updated: check `rejected_decisions.json` before any edit | 🔲 Todo |
 
 **Honest risks:**
-- "No, that's wrong" about the user's own code looks identical to "no, don't do that" to Claude's suggestion. LLM extraction will conflate them. Needs confidence threshold — only write to file above 0.8 confidence.
-- False positives in the guard are worse than false negatives. A spurious rejection block erodes trust fast. Better to under-capture than over-capture.
+- "No, that's wrong" about the user's own code is structurally identical to rejecting Claude's suggestion. Extraction must classify the target of rejection, not just the rejection signal. Confidence threshold of 0.8 before writing — under-capture is acceptable, false positives in the guard erode trust faster than missed captures.
+- Real-time detection in S4 (post_tool_use) runs on every tool call — must be fast. Cap at simple pattern matching for real-time; full LLM extraction only at checkpoint.
 
 ---
 
 ## Phase 3.13 — Incremental Snapshot as Architecture Source
 *Target: pre-stress-test*
 
-**Goal:** The `.llm_snapshot/summary.json` becomes the live, always-current architecture record. At each checkpoint, only changed files are re-scanned and their entries updated. `architecture.md` becomes a derived view, not a maintained file.
+**Goal:** The `.llm_snapshot/summary.json` becomes the live, always-current architecture record. After every session, changed files are re-scanned, the reverse dependency graph is updated, and `architecture.md` becomes a derived view generated on demand — not a maintained file.
 
-**Problem it solves:** Current architecture.md is regenerated from import lines by Haiku — shallow, speculative, wrong for JS/CSS-heavy projects. The snapshot already has real file content and LLM-generated purpose. It just goes stale after init.
+**Problem it solves:** Current architecture.md is regenerated from import lines by Haiku — shallow, speculative, wrong for JS/CSS-heavy projects. The snapshot already has real file content and LLM-generated purpose. It goes stale after init because nothing updates it. Any change to the codebase must be immediately and accurately reflected in the snapshot — it is the guiding light of the implementation guard.
+
+**Update strategy — post-session batch, not mid-checkpoint per-file:**
+Snapshot update happens in the Stop hook after the session ends, when we have complete knowledge of all changes. `git diff --name-only HEAD~1..HEAD` gives the exact set of changed files. All changed files are sent to Haiku in a single batched call (one API request, all files as separate items in the prompt). No per-file individual calls. No latency added to the checkpoint itself.
+
+**Reverse dependency index — non-negotiable:**
+If file B changes and file A imports B, file A's snapshot entry is now stale. The reverse dependency index maps `{file → files_that_import_it}`. Built at init from AST/regex import analysis, updated incrementally. Every changed file's importers are added to the re-scan batch automatically. This is not optional — without it, the snapshot lies.
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | `qa/snapshot.py` — add `update_snapshot_for_files(changed_files[])` function | 🔲 Todo |
-| S2 | `checkpoint.py` — replace `_regenerate_architecture_md` with `_update_snapshot_for_changed_files` using `git diff --name-only HEAD` | 🔲 Todo |
-| S3 | `reader.py` — `load_architecture()` reads from snapshot entries, not architecture.md | 🔲 Todo |
-| S4 | Build reverse dependency index: if file B changes and file A imports B, re-scan A too | 🔲 Todo |
-| S5 | Handle deleted/renamed files: remove stale snapshot entries on checkpoint | 🔲 Todo |
+| S1 | `qa/snapshot.py` — build reverse dependency index at init (regex import scan for Python + TS/JS) | 🔲 Todo |
+| S2 | `qa/snapshot.py` — `update_snapshot_batch(files[])`: send all files in one Haiku call, parse structured response | 🔲 Todo |
+| S3 | `stop.py` — after checkpoint, call `update_snapshot_batch(changed_files + their_importers)` | 🔲 Todo |
+| S4 | Deleted files: compare snapshot keys against `git ls-files`, remove entries for missing files | 🔲 Todo |
+| S5 | Renamed files: `git diff --name-status` detects R entries — update snapshot key, preserve history | 🔲 Todo |
+| S6 | `reader.py` — `load_architecture()` reads from snapshot entries, not architecture.md | 🔲 Todo |
+| S7 | Reverse dependency index persisted to `.llm_snapshot/rdep.json`, updated on each batch run | 🔲 Todo |
 
 **Honest risks:**
-- LLM calls per changed file at checkpoint adds latency proportional to session breadth. A session touching 20 files = 20 Haiku calls. Need batching (send files in groups of 5) or a threshold above which a full re-snapshot runs instead.
-- Reverse dependency index in S4 is non-trivial. Without it, consumers of changed files have stale entries. Initial implementation can skip it and accept this limitation.
-- Snapshot was designed for read-only Q&A. Making it the authority for context injection raises the cost of any snapshot bug.
+- Haiku's context window is 200k tokens. 20 files at ~100 lines each is ~15k tokens — well within one call. But a session that changes 80 files across a large codebase approaches the limit. Need a token count check before batching and split into ≤2 calls if needed.
+- The reverse dependency index built from regex import analysis will miss dynamic requires, re-exports through barrel files, and runtime-resolved imports. These gaps are acceptable — the index doesn't need to be perfect, just not wrong about what it does cover.
+- Snapshot is now the authority. A bug that corrupts snapshot entries will silently mislead context injection and the guard. Need a validation step: snapshot entries must have non-empty `purpose` field or they are discarded and re-scanned.
 
 ---
 
 ## Phase 3.14 — Smart Context Injection
 *Target: pre-stress-test*
 
-**Goal:** Session start injection is targeted. Use `files_in_play` from the JSON handover to pull only relevant snapshot entries, filtered decisions, and recent (not cumulative) failed approaches. Stops the context dump from eating 8,000+ tokens before Claude does anything.
+**Goal:** Session start injection is precise and complete — not a dump, not a surgical cut. Pulls the exact context the current session's work requires: the in-play files, their relational context (what they depend on and what depends on them), and the decisions/rejections that are semantically relevant to the upcoming work. Nothing more, nothing less.
 
-**Problem it solves:** Current `build_context_injection()` dumps everything: full handover, all team handovers, all current tasks, last 20 decisions, full architecture, all blockers. By session 4 of a long project this consumes 6–8% of the context window before work starts.
+**Problem it solves:** Current `build_context_injection()` dumps everything regardless of relevance. By session 4 of a long project this burns 6–8% of the context window before Claude does anything. But naive filtering by file path alone is equally wrong — a session touching `api/auth.ts` needs context about `middleware/jwt.ts` even if it's not explicitly in files_in_play.
+
+**Relational context is first-class:** The JSON handover (Phase 3.11) stores not just `files_in_play[]` but `relational_files[{file, relationship, why}]` — files that are architecturally connected to the session's work. This is populated by the handover LLM from the transcript (it knows which other modules were discussed, imported, or affected) and from the reverse dependency index (3.13). Context injection uses both sets.
+
+**Relevance, not just recency:** Decisions and rejections are filtered by semantic match to the current session's task and files — not just "last N entries." A TF-IDF or lightweight embedding match against the handover's `task` field selects the most relevant prior decisions, regardless of when they were made.
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | `reader.py` — `build_context_injection()` rewritten: pull snapshot entries only for `files_in_play` | 🔲 Todo |
-| S2 | Decisions filtered to those referencing in-play files or their module path | 🔲 Todo |
-| S3 | Failed approaches: last 3 sessions only, not full cumulative log | 🔲 Todo |
-| S4 | Rejected decisions: filter to domain of files_in_play | 🔲 Todo |
-| S5 | Fallback: if files_in_play empty, revert to current full-dump behaviour | 🔲 Todo |
+| S1 | `reader.py` — `build_context_injection()` rewritten around `files_in_play` + `relational_files` from handover JSON | 🔲 Todo |
+| S2 | Snapshot entries pulled for `files_in_play` + `relational_files` (union, deduped) | 🔲 Todo |
+| S3 | Decisions: TF-IDF match against handover `task` + `next_actions` — top 10 by relevance score, not recency | 🔲 Todo |
+| S4 | Rejected decisions: filter by `domain` field matching in-play or relational file paths | 🔲 Todo |
+| S5 | Failed approaches: semantic match to current task, last 3 sessions as recency floor | 🔲 Todo |
+| S6 | Context budget enforced: injection capped at 15% of model context window (~30k tokens), truncated by priority if exceeded | 🔲 Todo |
+| S7 | Fallback: if `files_in_play` empty and no relational context, revert to full-dump (current behaviour) | 🔲 Todo |
 
 **Honest risks:**
-- Dependent on Phase 3.11 (JSON with files_in_play) and Phase 3.13 (snapshot as architecture). If either is incomplete, this phase doesn't work.
-- Relevance filtering by file path is blunt. A session touching `api/auth.ts` also needs context about `middleware/jwt.ts`. Without the reverse dependency index from 3.13, this cross-file relevance is missed.
-- Under-injection is as dangerous as over-injection. If the session starts with too little context, Claude goes in the wrong direction silently. The fallback in S5 is the safety net.
+- Dependent on Phase 3.11 (JSON handover with relational_files) and Phase 3.13 (snapshot + rdep index). Build those first — this phase doesn't function without them.
+- TF-IDF relevance matching is lightweight but imprecise for short decision strings. Acceptable for v1 — upgrade to embedding-based retrieval in Phase 6 if needed.
+- The 15% context cap in S6 is a hard ceiling. If a session genuinely requires more context than that to continue safely, the cap will silently drop relevant information. Mitigation: order by priority (rejections > decisions > architecture > failed approaches) so most critical context survives a truncation event.
 
 ---
 
 ## Phase 3.15 — Emergency Handover Fix
 *Target: pre-stress-test*
 
-**Goal:** PreCompact generates a real, LLM-quality handover — not boilerplate. All trigger types go through the same handover path.
+**Goal:** PreCompact generates a real, LLM-quality handover — not boilerplate. All trigger types go through the same handover path. SIGTERM fires only after the handover is complete — no fixed timeout, dynamic wait.
 
-**Problem it solves:** The current emergency path outputs: "Emergency checkpoint triggered. Check implementation_state.md." This is generated when context is highest and Claude is mid-work — exactly when a good handover matters most.
+**Problem it solves:** The current emergency path outputs: "Emergency checkpoint triggered. Check implementation_state.md." This is generated when context is highest and Claude is mid-work — exactly when a good handover matters most. A fixed 60s timeout is the wrong model: SIGTERM should be a consequence of completion, not a race condition.
+
+**Dynamic timeout design:** The PreCompact hook starts the Haiku call, waits for it to return, writes the file (Python `with` block guarantees flush on close), then sends SIGTERM. The hook's registered timeout in Claude Code settings is set high (120s) as an absolute ceiling — but in practice SIGTERM fires the moment the handover is written, typically 15–30s. No sleep, no polling, no race.
 
 | Stage | Change | Status |
 |---|---|---|
 | S1 | Remove `if trigger_type == "emergency"` branch in `create_checkpoint` | 🔲 Todo |
-| S2 | Write mechanical handover from transcript first (safety net, no LLM) | 🔲 Todo |
-| S3 | Then call LLM to improve it and overwrite — LLM result replaces mechanical version | 🔲 Todo |
-| S4 | Sequence: mechanical write → LLM call → overwrite → SIGTERM. SIGTERM only after both writes. | 🔲 Todo |
+| S2 | Mechanical handover written first from transcript + `edit_cursor.json` (instant, no LLM) — safety net | 🔲 Todo |
+| S3 | Haiku call runs, LLM handover overwrites mechanical version on success | 🔲 Todo |
+| S4 | SIGTERM sent only after file write + close completes. No fixed sleep. | 🔲 Todo |
+| S5 | Update `HOOK_TIMEOUTS["PreCompact"]` from 60 to 120 in `askr.py` — ceiling, not target | 🔲 Todo |
 
-**Honest risks:**
-- PreCompact timeout is 60s. LLM call takes 8–25s. SIGTERM must fire after the handover is written. If LLM hangs, the mechanical version is the fallback — this is acceptable.
-- The race condition between handover write and process kill requires explicit sequencing. Get this wrong and you SIGTERM before the file is flushed.
+**Honest risk:**
+- If the Haiku call hangs indefinitely (API outage, network timeout), the hook blocks until Claude Code's 120s ceiling kills it. The mechanical handover written in S2 survives this — it's on disk before the LLM call starts. The next session gets the mechanical version, which is sparse but not the current useless boilerplate.
 
 ---
 
