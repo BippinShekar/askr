@@ -1,5 +1,9 @@
 ## Today - 2026-06-13
 
+- [ ] Verify context checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-13T22:07 -->
+
+- [ ] Commit and push report_image.py fixes for turns-until-auto-compact calculation <!-- added: 2026-06-13T22:07 -->
+
 
 
 ## Today - 2026-06-12

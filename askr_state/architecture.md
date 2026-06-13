@@ -1,6 +1,6 @@
 # Architecture
 
-*Auto-generated at checkpoint — 2026-06-13 16:36 UTC*
+*Auto-generated at checkpoint — 2026-06-13 16:44 UTC*
 
 # Architecture
 
@@ -8,51 +8,54 @@
 Askr is a CLI-based AI coding agent that manages interactive sessions, tracks usage, and integrates with IDE/notification systems.
 
 ## Entry Points
-- `./askr/session/usage_api.py` — Primary execution point; handles session initialization, usage tracking, and subprocess orchestration via CLI commands
+- `./askr/session/usage_api.py` — Primary execution point; handles session initialization, usage tracking, and subprocess orchestration via CLI invocation.
 
 ## Core Modules
 
 **Session Management** (`./askr/session/`)
 - `usage_api.py` — Orchestrates session lifecycle, subprocess execution, platform detection
-- Manages state persistence and usage metrics
+- Manages session state persistence and API interactions
 
 **CLI** (`./askr/cli/`)
 - Command parsing and routing
-- User input handling
+- User input handling for interactive workflows
 
 **State Management** (`./askr/state/`)
-- Session state persistence (`./askr_state/` directory)
-- State serialization/deserialization
+- Session state tracking and persistence
+- Shared state across components
 
 **Clients** (`./askr/clients/`)
-- External service integrations (likely LLM/API clients)
-- Request/response handling
+- External API clients (LLM providers, backend services)
+- Request/response handling for AI interactions
 
 **IDE Integration** (`./askr/ide/`)
-- IDE-specific adapters and communication
-- Code context extraction
+- Editor plugin communication
+- Code context extraction and injection
 
 **Notifications** (`./askr/notifications/`)
-- User notification delivery (desktop/console)
+- User alerts and status updates
+- Multi-channel delivery (console, IDE, external)
 
 **Hooks** (`./askr/hooks/`)
-- Event handlers and lifecycle callbacks
+- Event listeners for session lifecycle
+- Pre/post-execution handlers
 
 **QA** (`./askr/qa/`)
-- Testing/validation utilities
+- Testing and validation utilities
+- Response quality checks
 
-**Utils** (`./askr/utils/`)
+**Utilities** (`./askr/utils/`)
 - Shared helper functions
+- Logging, formatting, file operations
 
 ## Data Stores
-- `./askr_state/` — Local session state storage (JSON/serialized format)
-- Environment variables (platform, config via `os` module)
+- `./askr_state/` — Local session state directory (persisted between runs)
+- In-memory session objects in `./askr/session/`
 
 ## External Integrations
-- Subprocess execution (platform-specific CLI tools)
-- IDE communication (via `./askr/ide/`)
-- Notification systems (via `./askr/notifications/`)
-- LLM/API clients (via `./askr/clients/`)
+- Subprocess execution (platform-aware via `platform` module)
+- IDE communication layer (`./askr/ide/`)
+- Backend API clients (`./askr/clients/`)
 
 ## Key Relationships
 ```
@@ -61,18 +64,19 @@ usage_api.py (entry)
   ├→ session/ (manage lifecycle)
   ├→ state/ (persist/load state)
   ├→ clients/ (call external APIs)
-  ├→ ide/ (get code context)
+  ├→ ide/ (inject code/context)
   ├→ notifications/ (alert user)
-  └→ hooks/ (trigger callbacks)
+  ├→ hooks/ (trigger events)
+  └→ utils/ (shared helpers)
 ```
 
-## Shared Interfaces (High Impact)
-- `./askr/state/` — Any state schema changes affect session persistence across all modules
-- `./askr/clients/` — API contract changes impact CLI, session, and IDE modules
+## Shared Interfaces
+- `./askr/state/` — All modules read/write session state; changes affect session persistence
+- `./askr/clients/` — API contract changes impact all modules calling external services
 - `./askr/utils/` — Utility function signatures affect all consumers
-- `./askr/session/usage_api.py` — Entry point changes affect CLI routing and subprocess handling
+- `./askr/session/usage_api.py` — Core orchestration; changes to subprocess/platform handling cascade to CLI behavior
 
-## Build/Environment
-- `./venv/` — Python virtual environment
-- `./stress-tests/` — Load/performance testing
-- `./.llm_snapshot/` — LLM context snapshots (likely for debugging)
+## Configuration
+- `./askr_state/` — Runtime state directory
+- `./.llm_snapshot/` — Cached LLM responses/context
+- `./.claude/` — Agent-specific metadata
