@@ -548,10 +548,11 @@ def create_checkpoint(
 
     completed_goals = []
     try:
-        from askr.state.goals import complete_goal
+        from askr.state.goals import complete_goal, expire_auto_suggested_goals
         completed_goals = _parse_completed_goals_from_handover(summary, open_goals)
         for g in completed_goals:
             complete_goal(g)
+        expire_auto_suggested_goals()
     except Exception:
         pass
 

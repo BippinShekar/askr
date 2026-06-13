@@ -105,7 +105,7 @@ def _maybe_suggest_goals(developer: str) -> list[str]:
             return []  # user already has goals — don't touch them
         suggestions = suggest_goals_from_handover(developer)
         for g in suggestions:
-            add_goal(g, "today")
+            add_goal(g, "today", auto_suggested=True)
         return suggestions
     except Exception:
         return []

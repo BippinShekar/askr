@@ -42,11 +42,14 @@ def _section_lines(content: str, header: str) -> list[str]:
     return [l.strip() for l in section.split("\n") if l.strip()]
 
 
-def add_goal(text: str, section: str = "today"):
+def add_goal(text: str, section: str = "today", auto_suggested: bool = False):
     content = _read()
     today_hdr = _today_header()
     ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    new_line = f"- [ ] {text.strip()} <!-- added: {ts} -->"
+    meta = f"added: {ts}"
+    if auto_suggested:
+        meta += ", auto_suggested"
+    new_line = f"- [ ] {text.strip()} <!-- {meta} -->"
 
     if not content:
         _write(
@@ -169,6 +172,26 @@ def discard_goal(text: str) -> bool:
 
     _write(content)
     return True
+
+
+def expire_auto_suggested_goals() -> int:
+    """
+    Discard any open goals tagged auto_suggested. Called at session end.
+    These are single-session hints — if not completed, they shouldn't carry
+    forward and contaminate the next session's context or autonomous prompts.
+    Returns count removed.
+    """
+    content = _read()
+    if not content:
+        return 0
+    to_discard = [
+        _strip_ts(line.strip()[5:])
+        for line in content.split("\n")
+        if line.strip().startswith("- [ ]") and "auto_suggested" in line
+    ]
+    for text in to_discard:
+        discard_goal(text)
+    return len(to_discard)
 
 
 def load_done_today() -> list[str]:
