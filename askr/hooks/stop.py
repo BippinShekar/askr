@@ -124,6 +124,19 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
     except Exception:
         return False
 
+    # If the daemon wrote the flag more than 5 min ago and the session continued
+    # past it, treat the flag as stale — the user finished their work voluntarily.
+    try:
+        import datetime as _dt_check
+        written_at = pending.get("timestamp", "")
+        if written_at:
+            written = _dt_check.datetime.fromisoformat(written_at)
+            age_s = (_dt_check.datetime.now(_dt_check.timezone.utc) - written).total_seconds()
+            if age_s > 300:
+                return False
+    except Exception:
+        pass
+
     try:
         from askr.session.lifecycle import _get_next_goal, _write_launch_mode, _load_allowed_tools
         import datetime as _dt
