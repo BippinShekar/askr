@@ -1,17 +1,18 @@
-Last updated: 2026-06-13 22:32
+Last updated: 2026-06-13 22:57
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across sessions and supporting autonomous continuation. It bridges code editors, LLM providers, and local file systems to enable multi-turn coding workflows where the agent can pick up where it left off.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It orchestrates conversations between users and language models to accomplish coding tasks, maintaining session state across interruptions and enabling autonomous continuation through structured handover documents.
 
 ## What's In Flight
 
-- Root-cause analysis of handover failures: checkpoint_pending.json is created with stale goal content, then read by autonomous sessions at the wrong time. Three critical design failures identified: stop checkpoint handler never executes, goal inference auto-infers from old user messages instead of current session state, and handover creation/read cycle is out of sync.
-- Verification of context checkpoint card display showing correct "turns remaining" calculation in staging environment.
-- Fixes to report_image.py for turns-until-auto-compact calculation pending staging verification and push to main.
+- Stage 3 of stop-hook checkpoint refactor: auto-suggested goals are now tagged at session start and expired at checkpoint end to prevent stale objectives from poisoning autonomous handovers. All three stages complete and pushed to main.
+- Verification of context checkpoint cards displaying correct "turns remaining" in staging environment (report_image.py calculation).
+- Full integration test of goal lifecycle: start session with auto-suggested goals, end session, verify checkpoint creation, start new session and confirm expired goals are absent.
+- Phase 3.11 JSON Handover Schema implementation queued as next roadmap item.
 
 ## Key Decisions Made
 
-- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are the primary handover mechanism, not git diffs alone. Investigation revealed these files control autonomous session continuation.
-- Goal inference must be deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals become stale and out of sync with actual progress.
-- Handover system requires architectural redesign, not incremental fixes. Current behavior
+- Stop hook runs first as authoritative checkpoint before any other checkpoint logic, ensuring handover state is captured before session cleanup.
+- Checkpoint_pending.json and launch_mode.json are primary handover state carriers; git diffs alone are insufficient for proper session continuation.
+- Goal inference is session-aware, not message-aware; auto-inferred goals are tagged at inference time and expire at checkpoint end to prevent stale

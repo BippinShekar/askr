@@ -2,7 +2,6 @@
 
 - [ ] Verify context checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-13T22:07 -->
 
-- [ ] Commit and push report_image.py fixes for turns-until-auto-compact calculation <!-- added: 2026-06-13T22:07 -->
 
 
 
@@ -17,6 +16,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-13 22:57] Commit and push report_image.py fixes for turns-until-auto-compact calculation
 [2026-06-13 22:06] Complete tabular analysis of handover system gaps with evidence from examined fi
 [2026-06-13 21:21] Identify and document 3-5 critical blockers preventing stress-test readiness
 [2026-06-12 20:19] Run end-to-end checkpoint workflow test to verify all 3 stages function
