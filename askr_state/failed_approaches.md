@@ -26,3 +26,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Suggesting a direct 'solution reveal' tweet before launch — User is one week out from public launch; revealing the fix now wastes narrative momentum
 - [2026-06-13] Earnest problem-solution framing ('both problems I posted about? fixed.') — User rejected as weak and inauthentic; doesn't capture full scope of askr's value
 - [2026-06-13] Generic reach advice (reply to threads, find audiences, etc.) — User has no time; needs specific, actionable account list instead
+- [2026-06-13] Positioning askr as solving 'two problems' (quota checkpoints + context limits) — User correctly identified this makes the product look narrow and weak; three problems establish a pattern
+- [2026-06-13] Earnest problem statement opening ('third problem I kept hitting...') — Tone was off; sarcasm opener lands better and signals self-awareness
