@@ -9,6 +9,7 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [22:16] Ran: grep -n "_generate_architecture_from_snapshot\|call_claude\|call_claude_web" /Us
 - [22:13] Ran: grep -rn "def.*init\|askr_init\|cmd_init" /Users/bippin/Desktop/askr/askr --incl
 - [22:13] Ran: cat -n /Users/bippin/Desktop/askr/askr/cli/askr.py | grep -A5 -B5 "init\|cost" |
 - [22:13] Ran: grep -rn "cost" /Users/bippin/Desktop/askr/askr --include="*.py" -l
