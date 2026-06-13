@@ -68,14 +68,25 @@ def _fmt_time(s: int) -> str:
     return f"{h}h {m}m" if m else f"{h}h"
 
 
-def _turns_remaining(history: list[float]) -> Optional[int]:
-    if len(history) < 4:
-        return None
-    recent = history[-min(10, len(history)):]
-    slope  = (recent[-1] - recent[0]) / max(len(recent) - 1, 1)
-    if slope < 0.001:
-        return None
-    return max(1, int((1.0 - history[-1]) / slope))
+def _compact_headroom_pct(context_pct: float, context_window: int) -> int:
+    """Return % of context remaining before Claude Code's auto-compact fires.
+
+    Claude Code's auto-compact threshold (the 'auto' default) is ~82% of the
+    context window, confirmed by observing ctx:80% alongside '2% until
+    auto-compact' in the terminal.  CLAUDE_CODE_AUTO_COMPACT_WINDOW can
+    override this; if set to a token count we use that, otherwise fall back to
+    the 0.82 constant.
+    """
+    raw = os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "").strip()
+    if raw and raw != "auto":
+        try:
+            threshold_pct = int(raw) / context_window
+        except ValueError:
+            threshold_pct = 0.82
+    else:
+        threshold_pct = 0.82
+    headroom = max(0.0, threshold_pct - context_pct)
+    return round(headroom / threshold_pct * 100)
 
 
 # ---------------------------------------------------------------------------
@@ -129,9 +140,10 @@ def session_card(
     elif trigger_type == "context":
         hero_val  = f"{ctx_pct}%"
         hero_top  = "context at checkpoint"
-        trem      = _turns_remaining(context_history) if context_history else None
-        hero_sub  = (f"~{trem} turns until auto-compact — intercepted cleanly"
-                     if trem else "auto-compact intercepted — state saved to git")
+        ctx_window = cost_summary.get("context_window", 200_000)
+        headroom   = _compact_headroom_pct(cost_summary.get("context_pct", 0), ctx_window)
+        hero_sub  = (f"{headroom}% headroom before auto-compact — intercepted cleanly"
+                     if headroom > 0 else "auto-compact intercepted — state saved to git")
         hero_col  = accent
     elif trigger_type == "quota":
         hero_val  = "PAUSED"
