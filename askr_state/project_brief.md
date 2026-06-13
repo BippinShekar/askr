@@ -1,18 +1,17 @@
-Last updated: 2026-06-13 22:57
+Last updated: 2026-06-13 22:58
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It orchestrates conversations between users and language models to accomplish coding tasks, maintaining session state across interruptions and enabling autonomous continuation through structured handover documents.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, managing state persistence, subprocess execution, and multi-client support. It solves the problem of context loss and manual coordination in AI-assisted coding by maintaining session state, tracking API costs, and enabling autonomous handovers between sessions.
 
 ## What's In Flight
 
-- Stage 3 of stop-hook checkpoint refactor: auto-suggested goals are now tagged at session start and expired at checkpoint end to prevent stale objectives from poisoning autonomous handovers. All three stages complete and pushed to main.
-- Verification of context checkpoint cards displaying correct "turns remaining" in staging environment (report_image.py calculation).
-- Full integration test of goal lifecycle: start session with auto-suggested goals, end session, verify checkpoint creation, start new session and confirm expired goals are absent.
-- Phase 3.11 JSON Handover Schema implementation queued as next roadmap item.
+- Cost aggregation and Discord notification system for `askr init` and snapshot generation. Currently API calls are scattered or unlogged; building unified cost tracking that sends notifications to Discord instead of terminal output.
+- Handover system redesign. Root cause identified: stop checkpoint handler is never invoked, causing stale goals and missing handover state. Requires architectural fix, not incremental patching.
+- Context checkpoint card display verification in staging. Need to confirm 'turns remaining' calculation displays correctly before pushing report_image.py fixes to main.
 
 ## Key Decisions Made
 
-- Stop hook runs first as authoritative checkpoint before any other checkpoint logic, ensuring handover state is captured before session cleanup.
-- Checkpoint_pending.json and launch_mode.json are primary handover state carriers; git diffs alone are insufficient for proper session continuation.
-- Goal inference is session-aware, not message-aware; auto-inferred goals are tagged at inference time and expire at checkpoint end to prevent stale
+- Checkpoint system handles both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
+- Delta extraction happens at hook level (post_tool_use.py) rather than checkpoint.py to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence.
+- Goal inference is session-aware and deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals become stale and poison autonomous
