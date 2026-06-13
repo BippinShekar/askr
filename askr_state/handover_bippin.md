@@ -1,27 +1,58 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 21:20
+Last updated: 2026-06-13 21:33
+
+*Source of truth: `handover_bippin.json`*
+
 
 ## Task
-Sharpen and validate phases 3.11-3.15 of the roadmap with corrections for rejection/disagreement tracking and handover reliability.
+Complete phase 3.11: implement post-tool-use hook to extract and persist handover deltas (new/modified content) from Write/Edit operations
 
-## Status
-- roadmap.md: Multiple edits completed to phases 3.11-3.15, final commit pending (git diff shows 5 file modifications staged)
-- implementation_state.md: Updated with timestamps of all modifications (21:18-21:20)
-- Phase 3.12 validation: Confirmed via GitHub issue #37314 that Claude repeatedly fails to apply its own memory/feedback across sessions — same mistakes recur
-- Core issue identified: Rejection and disagreement tracking is missing from handover system, causing inconsistent user experience across session boundaries
-- Last known line tracking: Acknowledged as unreliable — Haiku cannot reliably infer line numbers from transcript text alone
+## Discussion
+Session focused on wiring the handover persistence pipeline: created post_tool_use.py hook to intercept Write/Edit operations and extract delta content, implemented writer.py to serialize handover state to JSON, reader.py to deserialize it, and updated checkpoint.py to integrate the new flow. All four core files were edited and imports verified clean. Roadmap marked 3.11 complete and committed.
 
-## Failed Approaches
-- Using Haiku to infer last_known_line from transcript text — unreliable for line number accuracy
-- Relying on consensus alone for phase 3.12 validation — needed documented evidence (GitHub issue)
+## Progress
+95% complete
 
-## Next Action
-Commit the staged roadmap.md changes with the corrected phases 3.11-3.15, then begin implementation of rejection/disagreement tracking mechanism in the handover system to prevent recurrence of documented failures (GitHub issue #37314).
+## Accomplishments
+- ✅ Created askr/hooks/post_tool_use.py with delta extraction logic for Write/Edit operations
+- ✅ Implemented askr/state/writer.py to serialize handover state to JSON with proper type handling
+- ✅ Implemented askr/state/reader.py to deserialize handover state from JSON
+- ✅ Updated askr/session/checkpoint.py to integrate writer/reader and handle both dict and str goal formats
+- ✅ Verified all imports and syntax with Python import test
+- ✅ Committed phase 3.11 completion to git
 
-## Open Questions
-- What specific fields should rejection/disagreement tracking include in the handover format?
-- How should conflicting feedback from multiple sessions be prioritized or merged?
+## In Progress
+- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py` (line 314): Delta extraction hook — completed and committed
+- `/Users/bippin/Desktop/askr/askr/state/writer.py` (line 167): Handover JSON serialization — completed and committed
+- `/Users/bippin/Desktop/askr/askr/state/reader.py` (line 184): Handover JSON deserialization — completed and committed
+- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py` (line 577): Integration of writer/reader into checkpoint creation — completed and committed
 
-## Completed Goals
-- Identify and document 3-5 critical blockers preventing stress-test readiness: Rejection/disagreement tracking gap confirmed as blocker via GitHub issue #37314
+## Next Actions
+1. Review the tabular analysis of handover system gaps that was listed as an open goal — determine if it was completed this session or if it remains pending
+   *Why: OPEN GOALS section lists 'Complete tabular analysis of handover system gaps with evidence from examined fi' but transcript does not show this work; need to clarify completion status*
+2. Run full integration test: trigger a Write operation, verify post_tool_use hook fires, check that handover.json is created with correct delta content
+   *Why: Phase 3.11 is marked complete but no end-to-end test was run; need to validate the entire pipeline works before moving to 3.12*
+3. Commit any remaining uncommitted files (askr_state/implementation_state.md, askr_state/notifications.log, stress-tests/) or explicitly exclude them from version control
+   *Why: Git status shows uncommitted changes; need clean state before starting phase 3.12*
+4. Begin phase 3.12: implement handover validation and schema enforcement per roadmap
+   *Why: Phase 3.11 is complete; next phase is ready to start*
+
+## Decisions
+- Chose to handle both dict and str goal formats in checkpoint.py rather than enforcing a single type — Provides backward compatibility with existing checkpoints while supporting new JSON-serialized format
+- Implemented delta extraction at the hook level (post_tool_use.py) rather than in checkpoint.py — Separates concerns: hooks capture raw deltas, checkpoint orchestrates persistence
+
+## Files In Play
+- `/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py`
+- `/Users/bippin/Desktop/askr/askr/state/writer.py`
+- `/Users/bippin/Desktop/askr/askr/state/reader.py`
+- `/Users/bippin/Desktop/askr/askr/session/checkpoint.py`
+
+## Relational Files
+- `/Users/bippin/Desktop/askr/roadmap.md` (configures): Defines phase 3.11 scope and success criteria; updated to mark phase complete
+- `/Users/bippin/Desktop/askr/askr_state/implementation_state.md` (imported_by): Tracks session progress and uncommitted changes; needs update before next session
+
+## Uncommitted Files
+- `askr_state/implementation_state.md`
+- `askr_state/notifications.log`
+- `stress-tests/`

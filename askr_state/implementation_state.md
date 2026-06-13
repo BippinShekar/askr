@@ -9,6 +9,25 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:32] Ran: git add roadmap.md && git commit -m "roadmap: mark phase 3.11 complete"
+- [21:32] Ran: sed -i '' 's/| S1 | `post_tool_use.py` — on Write\/Edit, find new content in fil
+- [21:32] Ran: git add askr/hooks/post_tool_use.py askr/state/writer.py askr/state/reader.py as
+- [21:32] Ran: /Users/bippin/Desktop/askr/venv/bin/python -c "
+import json, os, sys
+sys.path.in
+- [21:31] Ran: /Users/bippin/Desktop/askr/venv/bin/python -c "
+from askr.hooks.post_tool_use im
+- [21:31] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:31] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:31] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:30] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:30] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:30] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:29] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
+- [21:29] Modified: /Users/bippin/Desktop/askr/askr/state/reader.py
+- [21:28] Modified: /Users/bippin/Desktop/askr/askr/state/writer.py
+- [21:28] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
+- [21:28] Modified: /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py
 - [21:20] Ran: git add roadmap.md && git commit -m "roadmap: sharpen phases 3.11-3.15 — edit cu
 - [21:20] Modified: /Users/bippin/Desktop/askr/roadmap.md
 - [21:20] Modified: /Users/bippin/Desktop/askr/roadmap.md

@@ -1,18 +1,18 @@
-Last updated: 2026-06-13 21:21
+Last updated: 2026-06-13 21:33
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across invocations and supporting multiple LLM clients. It orchestrates subprocess execution, maintains session context, and integrates with IDEs to provide continuous AI-assisted coding workflows.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with LLM integration, persistent state management, and multi-client support. It bridges code editors, LLM APIs, and subprocess execution to enable AI-assisted development workflows with full session history and handover capabilities.
 
 ## What's In Flight
 
-- Roadmap phases 3.11-3.15 validation and correction for rejection/disagreement tracking in the handover system. Staged changes pending commit to roadmap.md.
-- Implementation of rejection/disagreement tracking mechanism in the handover system to prevent Claude from repeating mistakes across session boundaries (documented failure in GitHub issue #37314).
-- Stress-test readiness assessment: identifying and documenting critical blockers. Rejection/disagreement tracking gap confirmed as blocker.
-- Line number tracking reliability fix: current Haiku-based inference is unreliable; alternative approach needed for accurate last_known_line tracking in transcripts.
+- Phase 3.11 completion: post-tool-use hook for extracting and persisting handover deltas from Write/Edit operations. Core files (post_tool_use.py, writer.py, reader.py, checkpoint.py) implemented and committed. Status: 95% complete pending integration testing.
+- Phase 3.12 readiness: handover validation and schema enforcement queued for next phase.
+- Open: tabular analysis of handover system gaps — unclear if completed this session or remains pending.
 
 ## Key Decisions Made
 
-- Session orchestration centralized in usage_api.py; all subprocess management and platform detection flows through this entry point.
-- Multi-client abstraction layer (clients/) decouples LLM provider logic from session management, enabling support for multiple providers.
-- State persistence uses append-only artifact storage in ./askr_state/ directory; schema changes here cascade to session and
+- Handover state persists to JSON via writer.py/reader.py rather than in-memory only — enables cross-session continuity and debugging.
+- Post-tool-use hook intercepts Write/Edit operations to extract delta content — keeps handover payload minimal and focused on actual changes.
+- Checkpoint.py handles both dict and str goal formats for backward compatibility — avoids breaking existing session state while supporting new JSON-serialized format.
+- Session lifecycle managed through usage_api.py as primary
