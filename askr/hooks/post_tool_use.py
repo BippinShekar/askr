@@ -155,7 +155,62 @@ def _write_session_stats():
 
 _GUARD_BLOCKS_PATH   = os.path.expanduser("~/.config/askr/guard_blocks.json")
 _TURN_COUNTER_PATH   = os.path.expanduser("~/.config/askr/turn_counter.json")
+_EDIT_CURSOR_PATH    = os.path.expanduser("~/.config/askr/edit_cursor.json")
 _REFRESH_EVERY_N     = 10  # inject constraint reminder every N tool uses
+
+
+def _find_edit_line(tool_name: str, tool_input: dict, file_path: str) -> int:
+    """Locate the exact line of the last edit by searching file content."""
+    try:
+        with open(file_path, "r", errors="replace") as f:
+            content = f.read()
+
+        if tool_name == "Write":
+            return len(content.splitlines())
+
+        search_str = ""
+        if tool_name == "Edit":
+            search_str = tool_input.get("new_string", "")
+        elif tool_name == "MultiEdit":
+            edits = tool_input.get("edits", [])
+            if edits:
+                search_str = edits[-1].get("new_string", "")
+
+        if search_str:
+            idx = content.find(search_str[:80])
+            if idx >= 0:
+                return content[:idx].count("\n") + 1
+    except Exception:
+        pass
+    return 0
+
+
+def _update_edit_cursor(tool_name: str, tool_input: dict):
+    """Track file + exact line of every write op — ground truth for handover in_progress."""
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
+        return
+    try:
+        file_path = (tool_input.get("file_path") or tool_input.get("path", "")).strip()
+        if not file_path or not os.path.exists(file_path):
+            return
+
+        line = _find_edit_line(tool_name, tool_input, file_path)
+
+        cursor = {}
+        if os.path.exists(_EDIT_CURSOR_PATH):
+            try:
+                with open(_EDIT_CURSOR_PATH) as f:
+                    cursor = json.load(f)
+            except Exception:
+                cursor = {}
+
+        cursor[file_path] = {"line": line, "ts": datetime.now().strftime("%H:%M"), "tool": tool_name}
+
+        os.makedirs(os.path.dirname(_EDIT_CURSOR_PATH), exist_ok=True)
+        with open(_EDIT_CURSOR_PATH, "w") as f:
+            json.dump(cursor, f, indent=2)
+    except Exception:
+        pass
 
 
 def _maybe_refresh_constraints():
@@ -258,6 +313,7 @@ def main():
 
     file_path = tool_input.get("file_path") or tool_input.get("path", "")
     _check_guard_resolution(tool_name, file_path)
+    _update_edit_cursor(tool_name, tool_input)
 
     activity = _extract_activity(tool_name, tool_input)
 

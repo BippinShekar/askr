@@ -17,7 +17,8 @@ import subprocess
 from datetime import datetime, timezone
 from typing import Optional
 
-_RESULT_PATH = os.path.expanduser("~/.config/askr/checkpoint_result.json")
+_RESULT_PATH        = os.path.expanduser("~/.config/askr/checkpoint_result.json")
+_EDIT_CURSOR_PATH   = os.path.expanduser("~/.config/askr/edit_cursor.json")
 _MAX_TRANSCRIPT_ENTRIES = 60  # enough to capture a substantial work session
 
 
@@ -132,84 +133,171 @@ def _build_transcript_text(entries: list) -> str:
     return "\n".join(lines)
 
 
-def _generate_handover_with_llm(transcript_text: str, open_goals: list = None) -> Optional[str]:
+def _load_edit_cursor() -> dict:
+    """Load file→line tracking written by PostToolUse hook during the session."""
+    try:
+        if os.path.exists(_EDIT_CURSOR_PATH):
+            with open(_EDIT_CURSOR_PATH) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _clear_edit_cursor():
+    """Reset cursor after checkpoint so next session starts clean."""
+    try:
+        if os.path.exists(_EDIT_CURSOR_PATH):
+            os.remove(_EDIT_CURSOR_PATH)
+    except Exception:
+        pass
+
+
+def _get_uncommitted_files() -> list:
+    """Ground-truth list of files with uncommitted changes from git."""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short", "--porcelain"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return [line[3:].strip() for line in result.stdout.splitlines() if len(line) > 3]
+    except Exception:
+        return []
+
+
+def _generate_handover_with_llm(
+    transcript_text: str,
+    trigger_type: str = "stop",
+    open_goals: list = None,
+) -> Optional[dict]:
     """
-    Call Haiku to generate an action-ready handover from the transcript.
-    Also identifies which open goals were completed this session — keeping
-    goals and handover in sync without a separate LLM call.
+    Call Haiku to generate a structured JSON handover from the transcript.
+    Returns a parsed dict on success, None on failure (caller uses mechanical fallback).
     """
     if not transcript_text.strip():
         return None
     try:
         from askr.clients.claude import call_claude
 
+        edit_cursor = _load_edit_cursor()
+        uncommitted_files = _get_uncommitted_files()
+
+        edit_cursor_text = "\n".join(
+            f"  {fp}: line {info.get('line', '?')} (last edit {info.get('ts', '')})"
+            for fp, info in edit_cursor.items()
+        ) or "  (none tracked this session)"
+
         goals_section = ""
         if open_goals:
             goals_list = "\n".join(f"- {g}" for g in open_goals)
-            goals_section = f"""
-OPEN GOALS (set before this session started):
-{goals_list}
+            goals_section = f"\nOPEN GOALS (check which were completed):\n{goals_list}\n"
 
-"""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        uncommitted_json = json.dumps(uncommitted_files)
 
-        prompt = f"""A Claude Code session just ended. You are writing a handover document that the NEXT Claude Code session will read as its first instruction. It has no memory of this session. It needs to know exactly what to do and where — not a summary for a human.
+        prompt = f"""A Claude Code session just ended. Generate a structured JSON handover for the NEXT session to continue from exactly where this one stopped.
 
 SESSION TRANSCRIPT:
 {transcript_text}
+
+TRACKED FILE EDITS — ground truth from PostToolUse hook (exact line numbers, not inferred):
+{edit_cursor_text}
+
+UNCOMMITTED FILES — from git status (do not change this field):
+{chr(10).join(uncommitted_files) if uncommitted_files else "(none)"}
 {goals_section}
-Write the handover in this exact format. No emojis. No markdown decorations. No boilerplate phrases like "continue from where we left off" or "check implementation_state.md". Every line must be concrete and immediately actionable.
+Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 
-Critical rules — read carefully before writing:
-- FINAL STATE ONLY. The transcript may contain suggestions that were later reversed or superseded. Only the final settled conclusion counts. If an approach was raised and then explicitly rejected or decided against later in the same session, put it in Failed Approaches — never in Next Action.
-- ANSWERED QUESTIONS ARE NOT OPEN. If a question was asked AND answered in the transcript, it is resolved. Do not list it in Open Questions. Open Questions are only for things that remain genuinely unresolved at session end.
-- LAST EXCHANGE WINS. When the final exchange in the transcript contradicts or overrides an earlier one, the earlier one is irrelevant. The handover reflects where things ended up, not where they passed through.
+{{
+  "task": "one sentence — what was being worked on",
+  "discussion_summary": "key context, reasoning, and what shaped decisions this session — 2-4 sentences",
+  "accomplishments": [{{"what": "concrete thing completed", "done": true}}],
+  "in_progress": [{{"file": "exact/path.py", "what": "what was being done here", "last_line": 0}}],
+  "next_actions": [
+    {{"order": 1, "action": "specific immediately actionable instruction", "why": "why this is next"}},
+    {{"order": 2, "action": "...", "why": "..."}}
+  ],
+  "decisions": [{{"decision": "a choice that rules something out", "reason": "why"}}],
+  "user_rejected_decisions": [{{"what_was_proposed": "...", "user_signal": "exact or paraphrased rejection", "domain": "file or area it affects", "confidence": 0.9}}],
+  "failed_approaches": [{{"approach": "what was tried", "reason": "why it failed"}}],
+  "files_in_play": ["exact/path.py"],
+  "relational_files": [{{"file": "exact/path.py", "relationship": "imports|imported_by|configures|tested_by", "why": "why relevant to this session"}}],
+  "uncommitted_files": {uncommitted_json},
+  "blockers": ["specific blocker"],
+  "completion_pct": 0,
+  "completed_goals": [],
+  "session_metadata": {{"trigger_type": "{trigger_type}", "timestamp": "{now_iso}"}}
+}}
 
-Sessions vary in type — implementation, testing/debugging, exploration, or discussion. Adapt the Status section accordingly:
-- Implementation session: list file paths and their current state
-- Testing/debugging session: list what was tested, what passed/failed, what system state was confirmed
-- Exploration/discussion session: list decisions made, options ruled out, direction agreed on
+Rules:
+- FINAL STATE ONLY. Reversed or superseded approaches go in failed_approaches, never next_actions.
+- LAST EXCHANGE WINS. Handover reflects where things ended, not what was tried along the way.
+- in_progress.last_line: USE values from TRACKED FILE EDITS — they are exact. Estimate only for files not in that list.
+- uncommitted_files: already set above from git — copy it verbatim, do not change.
+- next_actions: 3-5 ordered actions, each specific enough to start immediately. No generic instructions.
+- user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include. Empty array if uncertain.
+- decisions: choices between alternatives that rule something out — not observations or facts.
+- completed_goals: list exact goal strings from OPEN GOALS that are clearly finished per transcript. Conservative.
+- completion_pct: integer 0-100 based on accomplishments vs remaining work.
+- Empty array [] for sections with nothing to report. Never null."""
 
-## Task
-[One sentence: what was being worked on]
-
-## Status
-[Bullet list: concrete current state. Never write "Unknown" if the transcript contains relevant information.]
-
-## Failed Approaches
-[Bullet list of approaches tried and rejected, with brief reason. Write "None" if none.]
-
-## Next Action
-[The single next thing to do — specific enough that Claude can start immediately. One action only.]
-
-## Open Questions
-[Bullet list of genuinely unresolved questions NOT answered during this session. Write "None" if none.]
-
-## Completed Goals
-[If OPEN GOALS were provided above: list the exact goal strings that were clearly completed this session based on the transcript. Write "None" if none were completed or no goals were provided. Be conservative — only mark done if the transcript shows the work was actually finished.]
-
-If a section truly has no information in the transcript, write "Unknown" — but exhaust the transcript first before concluding that."""
-
-        return call_claude(
-            "You write precise technical handover documents for autonomous AI coding agents. Output only the document — no preamble, no explanation.",
+        raw = call_claude(
+            "You generate precise JSON handover documents for autonomous AI coding agents. Output only valid JSON.",
             prompt,
             mode="checkpoint",
             query_preview="handover generation",
         )
+
+        if not raw:
+            return None
+
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            parts = cleaned.split("```")
+            cleaned = parts[1] if len(parts) > 1 else cleaned
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+
+        return json.loads(cleaned)
+
+    except json.JSONDecodeError:
+        try:
+            match = re.search(r'\{[\s\S]*\}', raw)
+            if match:
+                return json.loads(match.group())
+        except Exception:
+            pass
+        return None
     except Exception:
         return None
 
 
-def _append_failed_approaches(handover_text: str, state_dir: str):
-    """Parse ## Failed Approaches from handover and append new entries to the cumulative file."""
-    if not handover_text:
+def _append_failed_approaches(handover, state_dir: str):
+    """Append new failed approaches from handover (dict or legacy str) to the cumulative file."""
+    if not handover:
         return
     try:
-        import re
-        match = re.search(r'## Failed Approaches\n(.*?)(?=\n## |\Z)', handover_text, re.DOTALL)
-        if not match:
-            return
-        section = match.group(1).strip()
-        if not section or section.lower() in ("none", "none.", "unknown"):
+        if isinstance(handover, dict):
+            raw_entries = [
+                f"{fa.get('approach', '')} — {fa.get('reason', '')}".strip(" —")
+                for fa in handover.get("failed_approaches", [])
+                if fa.get("approach")
+            ]
+        else:
+            match = re.search(r'## Failed Approaches\n(.*?)(?=\n## |\Z)', handover, re.DOTALL)
+            if not match:
+                return
+            section = match.group(1).strip()
+            if not section or section.lower() in ("none", "none.", "unknown"):
+                return
+            raw_entries = [
+                line.strip().lstrip("- ").strip()
+                for line in section.splitlines()
+                if line.strip().lstrip("- ").strip() and len(line.strip().lstrip("- ").strip()) >= 10
+            ]
+
+        if not raw_entries:
             return
 
         path = os.path.join(state_dir, "failed_approaches.md")
@@ -219,19 +307,13 @@ def _append_failed_approaches(handover_text: str, state_dir: str):
                 existing_text = f.read()
 
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        header = ""
-        if not existing_text:
-            header = "# Failed Approaches\n\nCumulative cross-session log. Never overwritten — append only.\n\n"
+        header = "" if existing_text else "# Failed Approaches\n\nCumulative cross-session log. Never overwritten — append only.\n\n"
 
-        new_entries = []
-        for line in section.splitlines():
-            line = line.strip().lstrip("- ").strip()
-            if not line or len(line) < 10:
-                continue
-            # Dedup: skip if this exact line already exists (case-insensitive)
-            if line.lower() in existing_text.lower():
-                continue
-            new_entries.append(f"- [{ts}] {line}")
+        new_entries = [
+            f"- [{ts}] {entry}"
+            for entry in raw_entries
+            if len(entry) >= 10 and entry.lower() not in existing_text.lower()
+        ]
 
         if not new_entries:
             return
@@ -244,29 +326,75 @@ def _append_failed_approaches(handover_text: str, state_dir: str):
         pass
 
 
-def _parse_completed_goals_from_handover(handover_text: str, open_goals: list) -> list:
-    """Extract the Completed Goals section from the handover and match against open goals."""
-    if not handover_text or not open_goals:
+def _write_decisions_from_handover(handover, state_dir: str, developer: str):
+    """Auto-populate decisions.md from JSON handover. No-op for legacy str handovers."""
+    if not isinstance(handover, dict):
+        return
+    try:
+        decisions = handover.get("decisions", [])
+        if not decisions:
+            return
+
+        path = os.path.join(state_dir, "decisions.md")
+        existing_text = ""
+        if os.path.exists(path):
+            with open(path) as f:
+                existing_text = f.read()
+
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        header = "" if existing_text else "# Decisions\n\nAppend-only. One line per decision. Never edit existing lines.\n\nFormat: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.\n\n---\n"
+
+        new_lines = []
+        for d in decisions:
+            text = d.get("decision", "").strip()
+            reason = d.get("reason", "").strip()
+            if not text or len(text) < 10:
+                continue
+            line = f"[{ts}] [{developer}] {text}"
+            if reason:
+                line += f". Reason: {reason}"
+            if text.lower() not in existing_text.lower():
+                new_lines.append(line)
+
+        if not new_lines:
+            return
+
+        with open(path, "a") as f:
+            if header:
+                f.write(header)
+            f.write("\n".join(new_lines) + "\n")
+    except Exception:
+        pass
+
+
+def _parse_completed_goals_from_handover(handover, open_goals: list) -> list:
+    """Extract completed goals from handover (dict or legacy str) and match against open goals."""
+    if not handover or not open_goals:
         return []
     try:
-        import re
-        match = re.search(r'## Completed Goals\n(.*?)(?=\n## |\Z)', handover_text, re.DOTALL)
-        if not match:
-            return []
-        section = match.group(1).strip()
-        if section.lower() in ("none", "none.", ""):
-            return []
-        completed = []
-        for goal in open_goals:
-            # Check if the goal text appears (or a close substring) in the completed section
-            goal_lower = goal.lower()
-            if any(
-                goal_lower in line.lower() or line.lower() in goal_lower
-                for line in section.splitlines()
-                if line.strip().lstrip("- ")
-            ):
-                completed.append(goal)
-        return completed
+        if isinstance(handover, dict):
+            completed_strings = handover.get("completed_goals", [])
+            if not completed_strings:
+                return []
+            return [
+                g for g in open_goals
+                if any(g.lower() in s.lower() or s.lower() in g.lower() for s in completed_strings)
+            ]
+        else:
+            match = re.search(r'## Completed Goals\n(.*?)(?=\n## |\Z)', handover, re.DOTALL)
+            if not match:
+                return []
+            section = match.group(1).strip()
+            if section.lower() in ("none", "none.", ""):
+                return []
+            return [
+                g for g in open_goals
+                if any(
+                    g.lower() in line.lower() or line.lower() in g.lower()
+                    for line in section.splitlines()
+                    if line.strip().lstrip("- ")
+                )
+            ]
     except Exception:
         return []
 
@@ -403,7 +531,7 @@ def create_checkpoint(
         except Exception:
             pass
 
-        llm_summary = _generate_handover_with_llm(transcript_text, open_goals=open_goals)
+        llm_summary = _generate_handover_with_llm(transcript_text, trigger_type=trigger_type, open_goals=open_goals)
         if llm_summary:
             summary = llm_summary
             tool_actions = _extract_tool_actions(entries)
@@ -415,6 +543,7 @@ def create_checkpoint(
 
     _generate_project_brief(state_dir, developer)
     _append_failed_approaches(summary, state_dir)
+    _write_decisions_from_handover(summary, state_dir, developer)
     _regenerate_architecture_md(os.getcwd(), state_dir)
 
     completed_goals = []
@@ -444,6 +573,8 @@ def create_checkpoint(
         "duration_seconds": session_duration,
         "project_path": os.getcwd(),
     }
+
+    _clear_edit_cursor()
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
