@@ -13,3 +13,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Markdown-based handover format — lacks type safety and structured parsing for recovery logic
 - [2026-06-13] Using Haiku to infer last_known_line from transcript text — unreliable for line number accuracy
 - [2026-06-13] Relying on consensus alone for phase 3.12 validation — needed documented evidence (GitHub issue)
+- [2026-06-13] Searching Claude binary (strings) for auto-compact logic and context percentage calculations — Yielded limited actionable results; binary strings are fragmented and lack context. Hook implementation inspection is more direct.
+- [2026-06-13] Grepping for turns_remaining, context_pct, context_remaining patterns across filesystem — No matches found; these patterns may not exist in codebase or use different naming conventions

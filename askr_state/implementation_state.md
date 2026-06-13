@@ -9,6 +9,43 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:53] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py | sed -n '80,170p'
+- [21:53] Ran: cat /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py | head -80
+- [21:53] Ran: # Look at what hook payload data is available - check the PreCompact hook for wh
+- [21:52] Ran: # Look for the JS source around the "% until auto-compact" computation
+# The bin
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '98515,98530
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -n "autoCompac
+- [21:52] Ran: cat ~/.claude/settings.json | python3 -c "import sys,json; d=json.load(sys.stdin
+- [21:52] Ran: python3 -c "
+import json, sys
+entries = []
+with open('/Users/bippin/.claude/proj
+- [21:52] Ran: tail -3 ~/.claude/projects/-Users-bippin-Desktop-askr/fd2808fc-d90d-450b-83f9-17
+- [21:52] Ran: ls ~/.claude/projects/ | head -5 && ls ~/.claude/projects/-Users-bippin-Desktop-
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '221450,2214
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '88520,88540
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -n "CLAUDE_AFT
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '198960,1990
+- [21:52] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '191065,1910
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '146180,1462
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '143825,1438
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -n "CLAUDE_AUT
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -i "CLAUDE_COD
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '221440,2214
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | sed -n '221455,2214
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -c "until auto
+- [21:51] Ran: grep -o '.\{200\}until auto-compact.\{200\}' /Users/bippin/.claude/projects/-Use
+- [21:51] Ran: grep -o 'until auto.compact[^"]*\|[^"]*until auto.compact' /Users/bippin/.claude
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -i "until auto
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -i "until auto
+- [21:51] Ran: strings /Users/bippin/.local/share/claude/versions/2.1.177 | grep -i "auto.compa
+- [21:51] Ran: ls /Users/bippin/.local/share/claude/versions/ && ls -lh /Users/bippin/.local/sh
+- [21:51] Ran: npm root -g 2>/dev/null; ls ~/.npm/lib 2>/dev/null; ls /usr/local/lib/node_modul
+- [21:50] Ran: find /usr/local/lib/node_modules /usr/lib/node_modules ~/.npm ~/.nvm ~/.volta ~/
+- [21:50] Ran: grep -r "turns_until\|turns_remaining\|context_remaining\|ctx_pct\|context_pct\|
+- [21:50] Ran: grep -r "auto.compact\|auto_compact\|turns.*compact\|compact.*turns\|until.*comp
+- [21:33] Ran: find /Users/bippin/Desktop/askr -name "handover*" -o -name "HANDOVER*" 2>/dev/nu
 - [21:32] Ran: git add roadmap.md && git commit -m "roadmap: mark phase 3.11 complete"
 - [21:32] Ran: sed -i '' 's/| S1 | `post_tool_use.py` — on Write\/Edit, find new content in fil
 - [21:32] Ran: git add askr/hooks/post_tool_use.py askr/state/writer.py askr/state/reader.py as

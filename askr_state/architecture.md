@@ -1,6 +1,6 @@
 # Architecture
 
-*Auto-generated at checkpoint — 2026-06-13 16:03 UTC*
+*Auto-generated at checkpoint — 2026-06-13 16:24 UTC*
 
 # Architecture
 
@@ -14,64 +14,55 @@ Askr is a CLI-based AI coding agent that manages interactive development session
 ## Core Modules
 
 **Session Management** (`./askr/session/`)
-- Manages session lifecycle, state transitions, and usage tracking
+- Manages session lifecycle, state initialization, and usage tracking
 - `usage_api.py` coordinates subprocess calls and environment detection
 
 **State Management** (`./askr/state/`)
 - Persists and retrieves session state to `./askr_state/` directory
-- Handles state serialization/deserialization for session recovery
+- Handles state serialization/deserialization for session continuity
 
 **Client Integrations** (`./askr/clients/`)
-- LLM client adapters (likely OpenAI, Anthropic, or similar)
-- Handles API communication and response parsing
+- Abstracts LLM provider communication (likely multiple client implementations)
+- Handles API calls to external AI services
 
 **IDE Integration** (`./askr/ide/`)
-- Editor/IDE interaction layer
-- File operations and code context management
+- Bridges between CLI and IDE environments
+- Manages editor-specific interactions and file operations
 
 **Notifications** (`./askr/notifications/`)
-- User feedback system (alerts, status updates)
-
-**QA/Testing** (`./askr/qa/`)
-- Test execution and validation framework
+- Handles user alerts and status updates across channels
 
 **Hooks** (`./askr/hooks/`)
-- Event handlers for session lifecycle (pre/post execution)
+- Event-driven handlers for session lifecycle events (pre/post execution)
+
+**QA/Testing** (`./askr/qa/`)
+- Test utilities and validation logic
 
 **Utilities** (`./askr/utils/`)
 - Shared helper functions (logging, formatting, validation)
 
 ## Data Stores
-- **`./askr_state/`** — Session state persistence (JSON or similar format)
-- **`./.llm_snapshot/`** — LLM interaction history/snapshots
-- **`./.claude/`** — Claude-specific configuration or cache
-
-## External Integrations
-- **LLM APIs** — Called via `./askr/clients/` (subprocess execution in `usage_api.py` suggests shell command wrapping)
-- **IDE/Editor** — File system operations through `./askr/ide/`
-- **System Shell** — `subprocess` module for command execution
+- **`./askr_state/`** — Local session state persistence (JSON or similar format)
+- **External LLM APIs** — Called via `./askr/clients/` for AI inference
 
 ## Key Relationships
 ```
-usage_api.py (entry)
-  ├→ session/ (state management)
-  ├→ clients/ (LLM communication)
-  ├→ state/ (persistence)
-  ├→ ide/ (file operations)
-  ├→ notifications/ (user feedback)
-  ├→ hooks/ (lifecycle events)
-  └→ utils/ (shared helpers)
-
-cli/ → session/ → state/ + clients/
+CLI (./askr/cli/) 
+  → Session (./askr/session/usage_api.py)
+    → State (./askr/state/) → ./askr_state/
+    → Clients (./askr/clients/) → External LLM APIs
+    → IDE (./askr/ide/)
+    → Hooks (./askr/hooks/)
+    → Notifications (./askr/notifications/)
 ```
 
-## Shared Interfaces (High Impact)
-- **`./askr/state/`** — Any state schema changes affect session recovery and persistence across all modules
-- **`./askr/clients/`** — LLM response format changes propagate to session, hooks, and QA
-- **`./askr/utils/`** — Utility function signatures affect all dependent modules
-- **`./askr/session/usage_api.py`** — Core execution contract; changes affect CLI routing and state transitions
+## Shared Interfaces (High-Impact Changes)
+- **`./askr/state/`** — Any state schema changes affect session persistence and all modules reading state
+- **`./askr/clients/`** — Client interface changes propagate to all LLM-dependent modules
+- **`./askr/session/usage_api.py`** — Core session contract; changes affect CLI routing and all downstream services
+- **`./askr/utils/`** — Shared utilities; breaking changes cascade across all modules
 
-## Build/Environment
-- Python virtual environment in `./venv/`
-- Stress tests in `./stress-tests/` for load validation
-- Git history in `./.git/`
+## External Dependencies
+- Python subprocess module for execution
+- Platform detection (OS-specific behavior)
+- LLM provider APIs (abstracted via clients)
