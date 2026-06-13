@@ -322,13 +322,13 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | `post_tool_use.py` — on Write/Edit, find new content in file, write `{file, line, ts}` to `edit_cursor.json` | 🔲 Todo |
-| S2 | New handover LLM prompt outputs JSON, not markdown | 🔲 Todo |
-| S3 | `checkpoint.py` — merge `edit_cursor.json` into `in_progress[]` before LLM call | 🔲 Todo |
-| S4 | `writer.py` write_handover writes .json (keeps .md as human-readable derived copy) | 🔲 Todo |
-| S5 | `reader.py` load_own_handover reads JSON, formats targeted context string | 🔲 Todo |
-| S6 | Migration: if .json missing, fall back to .md — no existing projects break | 🔲 Todo |
-| S7 | `next_actions` prompt changed from "one action only" to "ordered list of 3–5" | 🔲 Todo |
+| S1 | `post_tool_use.py` — on Write/Edit, find new content in file, write `{file, line, ts}` to `edit_cursor.json` | ✅ Done |
+| S2 | New handover LLM prompt outputs JSON, not markdown | ✅ Done |
+| S3 | `checkpoint.py` — merge `edit_cursor.json` into `in_progress[]` before LLM call | ✅ Done |
+| S4 | `writer.py` write_handover writes .json (keeps .md as human-readable derived copy) | ✅ Done |
+| S5 | `reader.py` load_own_handover reads JSON, formats targeted context string | ✅ Done |
+| S6 | Migration: if .json missing, fall back to .md — no existing projects break | ✅ Done |
+| S7 | `next_actions` prompt changed from "one action only" to "ordered list of 3-5" | ✅ Done |
 
 **Honest risks:**
 - LLM must output valid JSON every time. Malformed JSON = no handover. Need robust fallback: mechanical JSON construction from transcript + edit_cursor.json if LLM fails.
