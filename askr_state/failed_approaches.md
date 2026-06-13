@@ -24,3 +24,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Weak positioning tweet that only references the two problems mentioned in previous tweets — Undersells askr's actual scope and capabilities. User rejected as making product look limited.
 - [2026-06-13] Proposing a narrow two-problem tweet focused only on quota and context limits — User correctly identified this undersells askr's actual scope and makes the product look limited
 - [2026-06-13] Suggesting a direct 'solution reveal' tweet before launch — User is one week out from public launch; revealing the fix now wastes narrative momentum
+- [2026-06-13] Earnest problem-solution framing ('both problems I posted about? fixed.') — User rejected as weak and inauthentic; doesn't capture full scope of askr's value
+- [2026-06-13] Generic reach advice (reply to threads, find audiences, etc.) — User has no time; needs specific, actionable account list instead
