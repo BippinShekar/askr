@@ -101,12 +101,16 @@ def _advance_launch_goal():
         pass
 
 
-def _handle_pending_checkpoint(developer: str, transcript_path: str):
+def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
     """
-    If the daemon (or PreCompact hook) flagged a checkpoint, execute it now
-    that the current exchange is complete.
-    - trigger==context: open new session immediately via IDE notification
-    - trigger==quota:   inform only; daemon will wait for reset and resume
+    If the daemon flagged a pending checkpoint, write the re-launch notification
+    using the already-completed stop checkpoint result.
+
+    The stop checkpoint (create_checkpoint) ALWAYS runs first — this function
+    only decides whether to open a new autonomous session afterward.
+
+    - trigger==context: write IDE notification to open a new session immediately
+    - trigger==quota:   write notification informing quota is high; daemon waits
     """
     _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
     _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
@@ -121,17 +125,10 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         return False
 
     try:
-        from askr.session.checkpoint import create_checkpoint
         from askr.session.lifecycle import _get_next_goal, _write_launch_mode, _load_allowed_tools
         import datetime as _dt
 
         trigger = pending.get("trigger", "context")
-
-        checkpoint_result = create_checkpoint(
-            trigger_type=trigger if trigger in ("context", "quota") else "context",
-            developer=developer,
-            transcript_path=transcript_path,
-        )
 
         next_goal = _get_next_goal()
         _write_launch_mode(next_goal)
@@ -153,7 +150,6 @@ def _handle_pending_checkpoint(developer: str, transcript_path: str):
         else:
             pct     = pending.get("context_pct", 0)
             pct_str = f"{round(pct * 100)}%"
-            handover_path = (checkpoint_result or {}).get("handover_path", "")
             goal_part = f" (High-level goal for context: {next_goal}.)" if next_goal else ""
             stop_prompt = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
             payload = {
@@ -364,11 +360,8 @@ def main():
     _update_allowed_tools(transcript_path)
     _extract_and_save_decisions(transcript_path, get_state_dir())
 
-    # If daemon flagged a context checkpoint, handle it now that the exchange is done
-    if _handle_pending_checkpoint(developer, transcript_path):
-        _advance_launch_goal()
-        return  # skip normal stop checkpoint — context checkpoint already did it
-
+    # Always run the authoritative stop checkpoint first — this is ground truth.
+    # _write_relaunch_notification_if_pending uses its result but never replaces it.
     from askr.session.checkpoint import create_checkpoint
     result = create_checkpoint(
         trigger_type="stop",
@@ -378,6 +371,12 @@ def main():
 
     completed_goals = result.get("completed_goals", [])
     duration_seconds = result.get("duration_seconds", 0)
+
+    # If daemon flagged a pending checkpoint, write the re-launch notification now.
+    # Return early so we don't also send a session-end card — the new session handles continuity.
+    if _write_relaunch_notification_if_pending(result):
+        _advance_launch_goal()
+        return
 
     # Only send a card for meaningful stops — goals completed or session ran >5 min.
     # Suppresses noise from casual conversation turns and quick tests.
