@@ -515,6 +515,13 @@ def cmd_init():
     for f in skipped:
         console.print(f"  [dim]- skipped {f} (already exists)[/dim]")
 
+    # Mark log position before any API calls so we can tally init cost at the end
+    try:
+        from askr.utils.logger import log_line_mark, cost_since_mark
+        _init_log_mark = log_line_mark()
+    except Exception:
+        _init_log_mark = None
+
     # Generate architecture.md and implementation_state.md from codebase snapshot
     if not os.path.exists(SNAPSHOT_PATH):
         console.print()
@@ -597,7 +604,6 @@ def cmd_init():
     console.print("  [dim]state files:[/dim] [bold]askr_state/[/bold]")
     console.print("  [dim]commit askr_state/ to git so your team shares the same ground truth[/dim]")
     console.print()
-    console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
     try:
         from askr.clients.discord import send_message
@@ -625,6 +631,14 @@ def cmd_init():
             console.print("  [green]✓[/green] repo brief posted to Discord")
     except Exception:
         pass
+
+    if _init_log_mark is not None:
+        init_cost = cost_since_mark(_init_log_mark)
+        if init_cost > 0:
+            console.print(f"  [dim]init cost[/dim]  [green]${init_cost:.4f}[/green]")
+
+    console.print()
+    console.print("  [green]done[/green]  - open Claude Code and Askr will track from here\n")
 
 
 def _reset_countdown(reset_at_iso: str) -> str:

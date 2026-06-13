@@ -64,6 +64,38 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
     return cost
 
 
+def log_line_mark() -> int:
+    """Return current line count of the log file as a cost measurement baseline."""
+    if not os.path.exists(LOG_PATH):
+        return 0
+    try:
+        with open(LOG_PATH) as f:
+            return sum(1 for _ in f)
+    except Exception:
+        return 0
+
+
+def cost_since_mark(mark: int) -> float:
+    """Sum cost of all log entries written after line `mark`."""
+    if not os.path.exists(LOG_PATH):
+        return 0.0
+    try:
+        with open(LOG_PATH) as f:
+            lines = f.readlines()
+        total = 0.0
+        for line in lines[mark:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                total += json.loads(line).get("cost_usd", 0.0)
+            except Exception:
+                pass
+        return total
+    except Exception:
+        return 0.0
+
+
 def show_summary():
     from askr.utils.display import console, print_summary
 
