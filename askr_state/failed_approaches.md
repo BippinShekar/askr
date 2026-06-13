@@ -22,3 +22,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Testing with system Python 3.9 (python3 -c import test) — Union type syntax (|) in reader.py requires Python 3.10+; venv has correct version but system Python does not. Pre-existing issue, not caused by this session.
 - [2026-06-13] Generic reach advice (reply to threads, post value) without specific account targets — User asked for concrete list of people to follow. Generic strategy insufficient without actionable targets.
 - [2026-06-13] Weak positioning tweet that only references the two problems mentioned in previous tweets — Undersells askr's actual scope and capabilities. User rejected as making product look limited.
+- [2026-06-13] Proposing a narrow two-problem tweet focused only on quota and context limits — User correctly identified this undersells askr's actual scope and makes the product look limited
+- [2026-06-13] Suggesting a direct 'solution reveal' tweet before launch — User is one week out from public launch; revealing the fix now wastes narrative momentum

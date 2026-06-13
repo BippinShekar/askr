@@ -1,56 +1,54 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 23:11
+Last updated: 2026-06-13 23:14
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Craft Twitter/X strategy for askr launch: determine tweet positioning, identify high-reach accounts to follow, and build authentic engagement path without premature product reveal
+Draft a tweet for askr launch that positions the product authentically without revealing it's unfinished, and identify high-value accounts to follow for organic reach
 
 ## Discussion
-User has tweeted about problems askr solves but not the solution yet. Rejected weak positioning ('been building the fix') as it undersells askr's scope. Clarified askr isn't ready for public launch (1 week out). Needs honest reach strategy: follow relevant builders/influencers, engage authentically on their threads rather than self-promote, and position as knowledgeable voice in the space before product reveal.
+User rejected the proposed 'been building the fix for both. one week out.' tweet as making askr look weak and incomplete. Instead, user wants to lead with the broader pain point (context loss across Claude sessions) and hint at a solution without revealing askr exists yet. User also clarified askr solves more than two problems and wants a list of relevant accounts to follow for natural engagement before public launch. The session ended with user proposing a tweet angle about Claude's friction points across machine switches and session handoffs.
 
 ## Progress
 15% complete
 
 ## In Progress
-- `roadmap.md` (line 291): Removed Phase 4 Public Launch section (deleted lines 294-309) — likely to restructure launch timeline post-session
+- `Twitter/X strategy`: Drafting launch tweet that hints at solution without revealing askr; identifying follow list for reach
 
 ## Next Actions
-1. Curate follow list: identify 15-20 accounts (@lachygroom, @swyx, @levelsio, @marc_louvion style) who build in AI/dev tooling space and already have engaged audiences. Prioritize those posting about Claude, context limits, workflow automation.
-   *Why: Reach comes from authentic engagement in existing communities, not self-promotion. These accounts will naturally align with askr's value prop.*
-2. Draft engagement strategy: for next 1 week until launch, reply to 2-3 threads daily from followed accounts with genuine insights about Claude context management, session persistence, or workflow problems. Never mention askr yet.
-   *Why: Builds credibility and audience before product reveal. User becomes 'the person who knows this stuff' rather than another product launcher.*
-3. Rewrite next tweet to hint at broader askr scope without revealing solution. Example: 'claude context limits aren't the only problem. been building something that fixes the whole workflow.' Keep vague, keep momentum.
-   *Why: Current tweet ('been building the fix') undersells askr. User rejected it because askr does more than just the two problems mentioned. New version maintains arc without overpromising.*
-4. Finalize Phase 4 Public Launch section in roadmap.md with realistic 1-week timeline. Include: GIF/screenshot assets, clean install story, launch thread outline, brew tap setup.
-   *Why: Roadmap was partially deleted this session. Needs reconstruction with actual launch date to unblock final week of development.*
-5. Do NOT post solution-focused tweets until public launch. Keep narrative as 'building something' until GitHub release is live.
-   *Why: User explicitly rejected premature reveal. Maintains scarcity and launch impact.*
+1. Finalize the tweet copy using user's angle: 'Damn building with claude makes my life so much easier. Shifts machine, new session, prompt claude from the start about each and every minute detail...' — complete the thought and make it copy-pastable
+   *Why: User rejected the previous tweet structure and provided a better opening; needs final version ready to post*
+2. Generate a curated list of 15-20 accounts to follow: people building with Claude, AI tooling builders, and indie hackers with existing audiences (e.g., @lachygroom, @swyx, @levelsio, @marc_louvion as reference tier). Prioritize accounts that post about Claude workflows, context management, or AI dev tooling
+   *Why: User has zero time for organic reach strategy; following relevant accounts creates natural engagement surface before askr launch*
+3. Do NOT post the tweet yet — hold until askr is 1-2 days from public launch. This tweet closes the narrative loop on the two previous problem posts
+   *Why: User is one week out from public launch; premature posting wastes the narrative arc*
+4. Once tweet is finalized, create a simple engagement plan: reply to threads from the followed accounts with genuine insights about Claude session friction (without mentioning askr) to establish credibility before launch
+   *Why: User wants reach without time investment; replies to existing threads are lower-effort than original posts and build authority*
 
 ## Decisions
-- Do not post detailed solution tweet yet; keep positioning vague until 1-week launch window — askr not ready for public use. Premature reveal kills launch momentum and credibility.
-- Prioritize authentic engagement over direct promotion for reach building — User has zero time for traditional marketing. Engagement in existing communities is only scalable path.
+- Do not post solution-focused tweets until askr is publicly available — User explicitly stated askr is one week out and not ready; premature reveals kill launch momentum
+- Lead with pain point (context loss across sessions) rather than product features — User's proposed angle is stronger and doesn't require revealing askr exists yet
 
 ## User-Rejected Approaches
-- **Tweet: 'been building the fix for both. one week out.'** — "The tweet you gave makes askr look weak, as that's not the only two things askr is [building]" (domain: Twitter/X messaging strategy)
-- **Post solution details now to close narrative arc** — "I don't want to post a solution, cause askr isn't built yet, I think I am still a week out from public launch" (domain: Launch timing and messaging)
+- **Tweet: 'been building the fix for both. one week out.'** — "That makes askr look weak, as that's not the only two things askr is [solving]" (domain: Twitter/X messaging strategy)
+- **Starting the tweet with 'third problem I kept hitting while building with claude'** — "starting it like that makes it gay as hell" (domain: Twitter/X messaging strategy)
 
 ## Failed Approaches
-- Generic reach advice (reply to threads, post value) without specific account targets — User asked for concrete list of people to follow. Generic strategy insufficient without actionable targets.
-- Weak positioning tweet that only references the two problems mentioned in previous tweets — Undersells askr's actual scope and capabilities. User rejected as making product look limited.
+- Proposing a narrow two-problem tweet focused only on quota and context limits — User correctly identified this undersells askr's actual scope and makes the product look limited
+- Suggesting a direct 'solution reveal' tweet before launch — User is one week out from public launch; revealing the fix now wastes narrative momentum
 
 ## Files In Play
 - `roadmap.md`
 
 ## Relational Files
-- `README.md` (configures): User asked to verify askr's actual capabilities before crafting messaging. README is source of truth for feature scope.
+- `README.md` (configures): User referenced askr's actual capabilities; README is source of truth for what askr solves
 
 ## Uncommitted Files
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- No curated list of target accounts yet — needed to start engagement strategy immediately
-- Exact scope of askr features unclear from session — need to review README/docs to craft positioning that doesn't undersell
+- Tweet copy not yet finalized — user provided direction but full text needs completion
+- Follow list not yet generated — user needs specific account recommendations

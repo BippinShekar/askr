@@ -1,6 +1,6 @@
 # Architecture
 
-*Auto-generated at checkpoint — 2026-06-13 17:41 UTC*
+*Auto-generated at checkpoint — 2026-06-13 17:44 UTC*
 
 # Architecture
 
@@ -8,69 +8,73 @@
 Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support.
 
 ## Entry Points
-- **`./askr/session/usage_api.py`** — Primary execution point; initializes sessions, tracks usage metrics, and orchestrates subprocess execution across platforms (Linux/macOS/Windows).
+- **`./askr/session/usage_api.py`** — Primary execution point; initializes sessions, tracks usage metrics via subprocess calls and platform detection
+- **CLI commands** — `./askr/cli/` directory contains command handlers that trigger session workflows
 
 ## Core Modules
 
 **Session Management** (`./askr/session/`)
 - Manages session lifecycle, state initialization, and usage tracking
-- `usage_api.py` coordinates subprocess calls and platform-specific execution
-
-**CLI Interface** (`./askr/cli/`)
-- Command parsing and user input handling
-- Routes commands to appropriate handlers
+- `usage_api.py` coordinates with OS-level subprocess execution
 
 **State Management** (`./askr/state/`)
-- Persists and retrieves session state
-- Coordinates with `./askr_state/` directory for state storage
+- Persists and retrieves session state to `./askr_state/` directory
+- Maintains conversation history and execution context
 
-**Client Integrations** (`./askr/clients/`)
-- LLM client implementations (API communication, request/response handling)
-- Abstracts different AI provider interfaces
+**Client Handlers** (`./askr/clients/`)
+- Abstracts LLM provider integrations (likely OpenAI, Anthropic, etc.)
+- Handles request/response serialization
 
 **IDE Integration** (`./askr/ide/`)
-- Editor/IDE communication and file operations
-- Handles code context and file modifications
+- Bridges between agent and development environment
+- Manages file operations and code context
 
 **Notifications** (`./askr/notifications/`)
-- User alerts and status updates
-- Integrates with system notification services
+- Delivers async alerts (completion status, errors)
+
+**QA/Validation** (`./askr/qa/`)
+- Tests generated code and validates outputs
 
 **Hooks** (`./askr/hooks/`)
 - Event listeners for session lifecycle (pre/post execution)
-- Extensibility points for custom behaviors
-
-**QA/Testing** (`./askr/qa/`)
-- Test execution and validation
-- Code quality checks
 
 **Utilities** (`./askr/utils/`)
 - Shared helper functions (logging, formatting, validation)
 
 ## Data Stores
-- **`./askr_state/`** — Local session state persistence (JSON/structured data)
-- **Environment variables** — Configuration and credentials (read in `usage_api.py`)
+- **`./askr_state/`** — Local session state persistence (JSON/pickle format)
+- **`./.llm_snapshot/`** — Cached LLM responses or model snapshots
+- **`./.claude/`** — Claude-specific configuration or context
 
 ## External Integrations
-- **LLM APIs** — Accessed via `./askr/clients/` (request/response handling)
-- **System subprocess** — Spawned from `usage_api.py` for code execution
-- **File system** — Read/write via `./askr/ide/`
-- **System notifications** — Via `./askr/notifications/`
+- **LLM APIs** — Clients communicate with remote AI models
+- **OS subprocess** — `usage_api.py` executes system commands via `subprocess` module
+- **File system** — IDE module reads/writes project files
 
 ## Key Relationships
 ```
-usage_api.py (entry)
-  ├→ session/ (lifecycle)
-  ├→ state/ (persistence)
-  ├→ cli/ (input parsing)
-  ├→ clients/ (LLM communication)
-  ├→ ide/ (file operations)
-  ├→ hooks/ (event dispatch)
-  └→ notifications/ (user feedback)
+CLI commands → session/usage_api.py
+    ↓
+state/ (load/save context)
+    ↓
+clients/ (send prompts to LLM)
+    ↓
+ide/ (apply code changes)
+    ↓
+qa/ (validate outputs)
+    ↓
+notifications/ (alert user)
+    ↓
+hooks/ (trigger callbacks)
 ```
 
 ## Shared Interfaces (High-Impact Changes)
-- **`./askr/state/`** — State schema changes affect session persistence and all modules reading state
-- **`./askr/clients/`** — LLM response format changes cascade to CLI, IDE, and QA modules
-- **`./askr/utils/`** — Utility function signatures impact all dependent modules
-- **`./askr/hooks/`** — Hook event contracts affect session lifecycle coordination
+- **`./askr/state/`** — Any schema changes affect all session consumers
+- **`./askr/clients/`** — Response format changes break IDE and QA modules
+- **`./askr/utils/`** — Utility function signatures used across all modules
+- **`./askr/session/usage_api.py`** — Session initialization contract affects CLI and state management
+
+## Build/Environment
+- Python package structure with `__pycache__` directories
+- Virtual environment at `./venv`
+- Stress tests in `./stress-tests/` for load validation

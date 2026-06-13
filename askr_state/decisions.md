@@ -25,3 +25,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-13 23:05] [bippin] Focus on replies to existing high-reach threads instead of standalone posts. Reason: Replies to @lachygroom, @swyx, @levelsio, @marc_louvion threads will reach the exact audience already interested in this problem. Higher ROI than cold posts.
 [2026-06-13 23:11] [bippin] Do not post detailed solution tweet yet; keep positioning vague until 1-week launch window. Reason: askr not ready for public use. Premature reveal kills launch momentum and credibility.
 [2026-06-13 23:11] [bippin] Prioritize authentic engagement over direct promotion for reach building. Reason: User has zero time for traditional marketing. Engagement in existing communities is only scalable path.
+[2026-06-13 23:14] [bippin] Do not post solution-focused tweets until askr is publicly available. Reason: User explicitly stated askr is one week out and not ready; premature reveals kill launch momentum
+[2026-06-13 23:14] [bippin] Lead with pain point (context loss across sessions) rather than product features. Reason: User's proposed angle is stronger and doesn't require revealing askr exists yet
