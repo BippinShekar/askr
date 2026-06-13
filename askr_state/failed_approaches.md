@@ -16,3 +16,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Searching Claude binary (strings) for auto-compact logic and context percentage calculations — Yielded limited actionable results; binary strings are fragmented and lack context. Hook implementation inspection is more direct.
 - [2026-06-13] Grepping for turns_remaining, context_pct, context_remaining patterns across filesystem — No matches found; these patterns may not exist in codebase or use different naming conventions
 - [2026-06-13] Attempting to infer handover state from git diff and implementation_state.md alone — User's question revealed this misses the autonomous session continuation mechanism entirely; checkpoint files are the actual state carriers
+- [2026-06-13] Assuming handover files are written after all session actions complete. — User's analysis revealed handover is persisted mid-session before tool execution hooks finish, causing stale content.
+- [2026-06-13] Auto-inferring session goals from user messages without end-of-session validation. — Goals become stale and misaligned with actual session progress by the time next autonomous session reads them.
