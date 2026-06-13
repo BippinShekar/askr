@@ -1,18 +1,17 @@
-Last updated: 2026-06-13 22:24
+Last updated: 2026-06-13 22:32
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across runs and supporting autonomous continuation. It orchestrates subprocess execution, code analysis, and multi-turn conversations with Claude, allowing developers to hand off work mid-session and resume with full context recovery.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across sessions and supporting autonomous continuation. It bridges code editors, LLM providers, and local file systems to enable multi-turn coding workflows where the agent can pick up where it left off.
 
 ## What's In Flight
 
-- Diagnosing and fixing stale handover file generation: checkpoint writes are occurring before session actions complete, causing autonomous sessions to inherit outdated goals and context. Root cause is premature persistence mid-session rather than after final Claude response and tool execution completion.
-- Verifying context checkpoint cards display correct "turns remaining" calculation in staging environment before pushing fixes to main.
-- Implementing session-end barrier to defer all checkpoint writes until after final Claude response and pending tool executions are fully resolved.
-- Adding validation layer to handover creation to cross-check inferred goals against actual user messages and Claude responses before persistence.
+- Root-cause analysis of handover failures: checkpoint_pending.json is created with stale goal content, then read by autonomous sessions at the wrong time. Three critical design failures identified: stop checkpoint handler never executes, goal inference auto-infers from old user messages instead of current session state, and handover creation/read cycle is out of sync.
+- Verification of context checkpoint card display showing correct "turns remaining" calculation in staging environment.
+- Fixes to report_image.py for turns-until-auto-compact calculation pending staging verification and push to main.
 
 ## Key Decisions Made
 
-- Checkpoint and handover files (checkpoint_pending.json, launch_mode.json) are primary state carriers for autonomous session continuation; git diffs alone are insufficient for proper handover.
-- Delta extraction happens at the hook level (post_tool_use.py) rather than in checkpoint.py to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence.
-- Backward compatibility maintained for
+- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are the primary handover mechanism, not git diffs alone. Investigation revealed these files control autonomous session continuation.
+- Goal inference must be deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals become stale and out of sync with actual progress.
+- Handover system requires architectural redesign, not incremental fixes. Current behavior
