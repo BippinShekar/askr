@@ -9,6 +9,12 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [21:20] Ran: git add roadmap.md && git commit -m "roadmap: sharpen phases 3.11-3.15 — edit cu
+- [21:20] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [21:20] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [21:19] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [21:18] Modified: /Users/bippin/Desktop/askr/roadmap.md
+- [21:18] Modified: /Users/bippin/Desktop/askr/roadmap.md
 - [20:53] Ran: git add roadmap.md && git commit -m "roadmap: add phases 3.11-3.16, 6, 7 — JSON 
 - [20:53] Modified: /Users/bippin/Desktop/askr/roadmap.md
 - [20:48] Ran: sed -n '/## Phase 3.9/,$p' /Users/bippin/Desktop/askr/roadmap.md

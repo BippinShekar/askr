@@ -1,6 +1,5 @@
 ## Today - 2026-06-13
 
-- [ ] Identify and document 3-5 critical blockers preventing stress-test readiness <!-- added: 2026-06-13T03:08 -->
 
 - [ ] Complete tabular analysis of handover system gaps with evidence from examined fi <!-- added: 2026-06-13T03:08 -->
 
@@ -15,6 +14,7 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-13 21:21] Identify and document 3-5 critical blockers preventing stress-test readiness
 [2026-06-12 20:19] Run end-to-end checkpoint workflow test to verify all 3 stages function
 [2026-06-12 20:19] Debug and fix any failures in guard installation, architecture.md regen, or cont
 [2026-06-12 19:52] Review files changed since last session and check decisions.md

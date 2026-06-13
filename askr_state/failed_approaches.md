@@ -11,3 +11,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Reusing standard handover template for emergency checkpoints — loses critical mid-operation context and execution state
 - [2026-06-13] Storing only transcript entries in emergency handover — does not capture execution state of current operation or what was interrupted
 - [2026-06-13] Markdown-based handover format — lacks type safety and structured parsing for recovery logic
+- [2026-06-13] Using Haiku to infer last_known_line from transcript text — unreliable for line number accuracy
+- [2026-06-13] Relying on consensus alone for phase 3.12 validation — needed documented evidence (GitHub issue)
