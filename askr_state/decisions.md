@@ -20,3 +20,4 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-13 22:57] [bippin] Timestamp gate uses 5-minute staleness threshold on checkpoint_pending.json. Reason: Balances avoiding stale checkpoints while allowing legitimate multi-session workflows with brief pauses
 [2026-06-13 22:58] [bippin] Cost notifications will be sent to Discord instead of displayed in terminal. Reason: User explicitly stated this preference; cleaner UX and persistent record in Discord
 [2026-06-13 22:58] [bippin] Cost tracking will be unified across both `cmd_init()` and `.llm_snapshot` generation. Reason: Both use Claude API; single aggregation point reduces duplication and ensures no calls are missed
+[2026-06-13 23:03] [bippin] Focus tweet on solution/outcome, not problem narrative. Reason: User's previous tweets established the pain point; new tweet should show askr as the answer to build credibility and interest

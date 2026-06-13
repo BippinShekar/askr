@@ -1,17 +1,17 @@
-Last updated: 2026-06-13 22:58
+Last updated: 2026-06-13 23:03
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, managing state persistence, subprocess execution, and multi-client support. It solves the problem of context loss and manual coordination in AI-assisted coding by maintaining session state, tracking API costs, and enabling autonomous handovers between sessions.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It solves the problem of context loss and manual handoff friction in long-running AI-assisted coding workflows by maintaining session state, tracking token usage, and enabling autonomous continuation across interruptions.
 
 ## What's In Flight
 
-- Cost aggregation and Discord notification system for `askr init` and snapshot generation. Currently API calls are scattered or unlogged; building unified cost tracking that sends notifications to Discord instead of terminal output.
-- Handover system redesign. Root cause identified: stop checkpoint handler is never invoked, causing stale goals and missing handover state. Requires architectural fix, not incremental patching.
-- Context checkpoint card display verification in staging. Need to confirm 'turns remaining' calculation displays correctly before pushing report_image.py fixes to main.
+- Handover system redesign: Root cause identified (stop checkpoint handler never invoked); requires architectural fix to ensure stale checkpoints don't poison autonomous sessions. Currently blocking reliable session continuation.
+- Goal inference timing: Moving from message-aware auto-inference (which creates stale objectives) to session-aware inference deferred until session-end validation.
+- Checkpoint card display verification: Testing that 'turns remaining' calculation displays correctly in staging before merging report_image.py fixes to main.
+- Twitter/X launch strategy: Drafting solution-focused messaging and audience growth plan to support Phase 4 (Public Launch) milestone. Currently 5% complete; blocked on README context read.
 
 ## Key Decisions Made
 
-- Checkpoint system handles both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
-- Delta extraction happens at hook level (post_tool_use.py) rather than checkpoint.py to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence.
-- Goal inference is session-aware and deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals become stale and poison autonomous
+- Checkpoint format flexibility: Handle both dict and str goal formats in checkpoint.py for backward compatibility with existing checkpoints while supporting new JSON-serialized format.
+- Delta extraction at hook level: Capture raw deltas in post_tool_use.py hooks rather than in checkpoint.py to separate
