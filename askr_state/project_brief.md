@@ -1,17 +1,16 @@
-Last updated: 2026-06-13 23:34
+Last updated: 2026-06-13 23:55
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state between runs and supporting multi-client integration. It solves the problem of maintaining context and continuity across long coding tasks by managing session lifecycle, tracking API costs, and enabling autonomous handovers where the agent can resume work without user intervention.
+Askr is a CLI-based AI coding agent that runs interactive sessions with an LLM, manages code context, generates and validates code, and hands over work to autonomous continuation. It integrates with IDEs, tracks session costs, and persists state across invocations. The core problem: developers need an agent that understands their codebase, generates code incrementally, and can resume work without losing context.
 
 ## What's In Flight
 
-- Cost tracking and Discord notification ordering in cmd_init() — display API costs before Discord message, mark session start before first API call. 85% complete; awaiting git commit finalization and end-to-end testing.
-- Verification that context checkpoint cards display correct 'turns remaining' in staging environment.
-- Handover system architectural redesign — current implementation has timing gaps where stop checkpoint handler is not invoked, causing stale checkpoints. Goal inference must be deferred to session-end validation rather than auto-inferred mid-session.
+- Cost tracking and session metrics display. Added log_line_mark() and cost_since_mark() helpers to logger.py; wired into cmd_init() to show cost after Discord brief resolves. Currently investigating how 'time saved' and 'sessions today' metrics are calculated in askr status command.
+- Handover system redesign. Root cause identified: stop checkpoint handler is never invoked, leaving handovers stale. Goal inference must be deferred to session-end validation and made session-aware, not message-aware, to prevent auto-inferred goals from poisoning autonomous continuation.
+- Context checkpoint card display verification. Need to confirm 'turns remaining' calculation displays correctly in staging before pushing report_image.py fixes to main.
 
 ## Key Decisions Made
 
-- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are primary handover controls, not git diffs alone. Investigation revealed these files determine autonomous session continuation.
-- Goal inference is session-aware, not message-aware. Auto-inferring from old user messages creates stale objectives that poison autonomous handovers.
-- Delta extraction happens at hook level (post_tool_use.py), not in
+- Checkpoint system accepts both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
+- Delta extraction happens at hook level (post

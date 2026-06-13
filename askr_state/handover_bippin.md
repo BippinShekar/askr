@@ -1,49 +1,57 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 23:34
+Last updated: 2026-06-13 23:55
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Add cost tracking and Discord notification ordering to `cmd_init()` — display API costs before Discord message, mark session start before first API call.
+Add cost tracking helpers to logger.py and wire them into cmd_init() to display time saved and session cost metrics
 
 ## Discussion
-Session focused on fixing the initialization flow to properly track and display API costs. The Discord approach was rejected as wrong for this use case. Two helper functions were added to `logger.py` (`mark_session_start()` and `get_session_cost()`) and wired into `cmd_init()` to ensure costs are calculated and displayed before the Discord notification fires, with session marking happening before the first API call to `build_snapshot()`.
+Session completed logging infrastructure for cost tracking. Added `log_line_mark()` and `cost_since_mark()` helpers to snapshot and calculate cost deltas. Wired these into `cmd_init()` to mark before first API call, then display cost after Discord brief resolves. User then pivoted to investigating how 'time saved 36m (5 sessions today)' is calculated in `askr status` and requested session UUID display for enhanced clarity in context tracking.
 
 ## Progress
-85% complete
+65% complete
 
 ## Accomplishments
-- ✅ Added `mark_session_start()` and `get_session_cost()` helper functions to logger.py
-- ✅ Wired cost tracking and session marking into `cmd_init()` with correct ordering: mark → snapshot → cost display → Discord
-- ✅ Restructured end of `cmd_init()` to move 'done' message after Discord notification and add cost line before it
-- ✅ Verified final shape of modified sections via read operations
+- ✅ Added log_line_mark() and cost_since_mark() helpers to logger.py
+- ✅ Wired cost tracking into cmd_init() with mark before first API call and cost display after Discord
+- ✅ Committed and pushed changes (feat(init): disp...)
+
+## In Progress
+- `askr/cli/askr.py`: Investigating time_saved calculation logic and where session metrics are computed for status display
+- `askr/utils/logger.py`: Understanding cost tracking and how session deltas feed into status metrics
 
 ## Next Actions
-1. Complete the git commit that was cut off — run: `git add askr/cli/askr.py askr/utils/logger.py && git commit -m "feat(init): display API costs before Discord notification, mark session start before snapshot"`
-   *Why: Changes are staged but commit message was truncated in transcript; need to finalize the commit*
-2. Verify the push succeeded by checking git log and remote status
-   *Why: Last bash command in transcript was incomplete; confirm changes are on origin/main*
-3. Test `askr init` end-to-end to confirm cost display appears before Discord message and session is marked correctly
-   *Why: Logic changes need validation in actual execution flow*
-4. Check if context checkpoint cards now display correct 'turns remaining' in staging (from open goals)
-   *Why: This was listed as an open goal to verify*
+1. Search codebase for where 'time saved' string and '36m' formatting is generated — likely in status command or session aggregator
+   *Why: User needs to understand the math behind time_saved calculation before deciding on UUID display enhancement*
+2. Locate session state storage and identify how 5 sessions are being tracked/counted for 'sessions today' metric
+   *Why: Required to understand if time_saved is sum of cost_since_mark() across sessions or a different calculation*
+3. Find where Claude session UUID would be available (likely from API response or environment) and determine if it's already captured in logs
+   *Why: User wants UUID displayed alongside context % for session identification clarity*
+4. Propose specific location and format for UUID display in status output (e.g., 'Session: uuid-here | context 28%')
+   *Why: User requested brutally honest thoughts on feasibility and UX impact before implementation*
+5. Verify if time_saved calculation needs adjustment based on findings — may require refactoring if currently incorrect
+   *Why: User's question implies uncertainty about current implementation correctness*
 
 ## Decisions
-- Rejected Discord-first approach for cost tracking — Discord notification should fire after cost calculation and display, not before
-- Session marking happens before first API call (snapshot), not after — Ensures accurate session start time for cost tracking and logging
+- Cost tracking helpers added to logger.py rather than cmd_init() directly — Separation of concerns — logger owns cost aggregation logic, CLI owns orchestration
+- Mark placed before first API call, cost display after Discord brief — Captures only the cost of the init workflow itself, not setup overhead
 
 ## Failed Approaches
-- Discord-first ordering in cmd_init() — User and assistant agreed this was wrong; cost display and session marking needed to happen in specific order relative to Discord notification
+- Grepping for 'time_saved' and 'sessions_today' in codebase — Searches returned no results — indicates feature may not yet be implemented or uses different naming convention
 
 ## Files In Play
 - `askr/cli/askr.py`
 - `askr/utils/logger.py`
+- `askr_state/implementation_state.md`
+- `roadmap.md`
 
 ## Relational Files
-- `askr/session/snapshot.py` (called_by): build_snapshot() is called from cmd_init() after session marking; makes the API calls that cost tracking measures
-- `askr/state/goals.py` (related): Session goals and tracking are affected by session marking timing
+- `askr/cli/askr.py` (imports): cmd_init() calls logger helpers; status command likely lives here too
+- `askr/utils/logger.py` (imported_by): Provides cost_since_mark() and log_line_mark() used by cmd_init()
+- `askr_state/implementation_state.md` (configures): Tracks session progress and uncommitted changes
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
@@ -52,4 +60,5 @@ Session focused on fixing the initialization flow to properly track and display 
 - `stress-tests/`
 
 ## Blockers
-- Git commit message was truncated in transcript — need to verify final commit was successful
+- Cannot locate source of 'time saved 36m (5 sessions today)' calculation — grep searches returned no matches
+- Unclear if session UUID is available from Claude API or must be sourced from environment/config

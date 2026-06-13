@@ -38,3 +38,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-13 23:18] [bippin] Chose reply/engagement strategy over direct posting to build reach. Reason: User has zero time and new account; piggybacking on established voices (lachygroom, swyx, levelsio, marc_louvion) is only viable path to audience
 [2026-06-13 23:34] [bippin] Rejected Discord-first approach for cost tracking. Reason: Discord notification should fire after cost calculation and display, not before
 [2026-06-13 23:34] [bippin] Session marking happens before first API call (snapshot), not after. Reason: Ensures accurate session start time for cost tracking and logging
+[2026-06-13 23:55] [bippin] Cost tracking helpers added to logger.py rather than cmd_init() directly. Reason: Separation of concerns — logger owns cost aggregation logic, CLI owns orchestration
+[2026-06-13 23:55] [bippin] Mark placed before first API call, cost display after Discord brief. Reason: Captures only the cost of the init workflow itself, not setup overhead

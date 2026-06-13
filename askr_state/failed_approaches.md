@@ -32,3 +32,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Two-problem framing in tweet — User correctly identified this makes askr look narrow; three problems establish pattern recognition
 - [2026-06-13] Direct posting without audience building — User has zero time and new account; engagement strategy with established voices is only viable path
 - [2026-06-13] Discord-first ordering in cmd_init() — User and assistant agreed this was wrong; cost display and session marking needed to happen in specific order relative to Discord notification
+- [2026-06-13] Grepping for 'time_saved' and 'sessions_today' in codebase — Searches returned no results — indicates feature may not yet be implemented or uses different naming convention
