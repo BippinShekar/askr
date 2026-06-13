@@ -1,51 +1,62 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 23:16
+Last updated: 2026-06-13 23:18
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Craft a tweet about askr's core problems (context loss across sessions) without revealing the solution, paired with strategic account follows for reach
+Craft Twitter/X launch messaging for askr by identifying pain points, building social reach strategy, and finalizing tweet copy with visual
 
 ## Discussion
-User is one week from public launch of askr and wants to build momentum on X without spoiling the product. Rejected the initial 'both problems fixed' angle as too weak and solution-focused. Landed on a sarcastic opener ('building with claude makes your life so much easier') paired with three concrete pain points: switching machines, re-explaining to co-founders, repeated session setup. This positions askr as solving a real pattern, not just two edge cases. User also needs a curated follow list of accounts in the AI/dev builder space to naturally engage with relevant content.
+User is one week from public launch of askr (a Claude session daemon that handles quota checkpoints and context limits). Session focused on Twitter strategy: moved from posting solution-focused content to building reach by engaging with relevant accounts first. Landed on sarcasm-driven tweet about repetitive Claude session handoffs (switching machines, re-explaining details) paired with Homelander meme image. User rejected generic 'one week out' teaser and weak two-problem framing—insisted on three problems and authentic voice. Final decision: post the sarcasm tweet with Homelander image, spacing TBD.
 
 ## Progress
-100% complete
+75% complete
 
 ## Accomplishments
-- ✅ Finalized tweet copy for X launch (sarcasm-driven, three-problem structure)
-- ✅ Compiled curated follow list of 10 high-signal accounts (@alexalbert__, @simonw, @swyx, @karpathy, @amasad, @emollick, @garrytan, @levelsio, @marc_louvion, @kunal0dha)
-- ✅ Identified honest reach strategy: reply to existing threads rather than cold posts, build authority before product launch
+- ✅ Identified three core pain points askr solves: quota management, context limits, session continuity across machines
+- ✅ Built curated follow list of 10 accounts (alexalbert__, simonw, swyx, karpathy, etc.) for natural reach without direct plugging
+- ✅ Finalized tweet copy with sarcasm opener and Homelander visual that frames problem authentically
+- ✅ Removed Phase 4 Public Launch section from roadmap.md (premature detail, focus on core build)
 
 ## Next Actions
-1. Post the finalized tweet with the image (#4) to X immediately
-   *Why: Tweet is locked in and ready; momentum matters before public launch in one week*
-2. Follow the 10 curated accounts and spend 15 min/day reacting to their posts with genuine takes (no askr mentions yet)
-   *Why: Builds audience and credibility in the AI/dev builder space before product reveal; natural engagement beats cold outreach*
-3. Identify 3-5 active threads from @swyx, @levelsio, @marc_louvion on Claude/context/AI tooling and add a substantive reply
-   *Why: Positions you as knowledgeable in the space; these accounts have the audience you want and threads are already warm*
-4. One week before public launch, prepare a 'here's what I built' thread that connects back to this pain-point tweet
-   *Why: Creates narrative arc: problem → silence → solution reveal; maximizes impact of launch announcement*
+1. Post the tweet with Homelander image to @bippin account. Decide spacing based on visual balance (spaced vs compact)—user showed both options, go with whichever reads cleaner on mobile.
+   *Why: Tweet is finalized and ready; this is the immediate next step to start building reach before launch*
+2. Follow the 10 curated accounts (alexalbert__, simonw, swyx, karpathy, amasad, emollick, garrytan, levelsio, marc_louvion, kunal0dha) to establish presence in relevant circles
+   *Why: Enables natural engagement and reply strategy without cold outreach; builds audience correlation before askr reveal*
+3. Monitor replies to the sarcasm tweet and engage authentically with anyone who resonates—don't pitch askr yet, just be the person who understands this pain
+   *Why: Builds credibility and audience before launch; creates natural thread for eventual solution reveal*
+4. Finalize remaining Phase 3.11 JSON Handover Schema work and stress-tests/ directory before public launch (one week timeline)
+   *Why: Roadmap now reflects focus on core build; these are the last blockers before GitHub release*
+5. Prepare GitHub launch assets: polished README with GIF/screenshot, clean install story, changelog, and release notes
+   *Why: Public launch is one week out; these are table-stakes for credible GitHub debut*
 
 ## Decisions
-- Use sarcasm opener ('building with claude makes your life so much easier') instead of earnest problem statement — Lands better, signals you understand the irony, avoids sounding weak or whiny
-- Expand from two problems to three (machine switching, co-founder handoff, repeated session setup) to show pattern recognition — Two problems make askr look narrow; three establish that this is a systemic issue, not edge cases
-- Do not reveal the solution in this tweet; keep it one week out — User is still building; premature reveal kills momentum and looks unfinished
+- Rejected generic 'one week out' teaser in favor of sarcasm-driven problem statement with Homelander meme — Teaser makes askr look weak and narrow; sarcasm + visual establishes pattern recognition and authentic voice
+- Removed Phase 4 Public Launch section from roadmap.md — Premature detail; focus should stay on Phase 3.11 completion and stress-tests before launch week
+- Chose reply/engagement strategy over direct posting to build reach — User has zero time and new account; piggybacking on established voices (lachygroom, swyx, levelsio, marc_louvion) is only viable path to audience
 
 ## User-Rejected Approaches
-- **Tweet: 'both problems I posted about? fixed. built a daemon that watches your claude session...'** — "I don't want to post a solution, cause askr isn't built yet, I think I am still a week out from public launch" (domain: X/social strategy)
-- **Tweet opening: 'third problem I kept hitting while building with claude...'** — "I think starting it like that makes it gay as hell" (domain: tweet copy)
-- **Initial reach strategy: reply to threads + build authority before launch** — "Also, how do I get reach bro? be honest — implies user wanted a faster/different approach but accepted the honest answer" (domain: growth strategy)
+- **Tweet opening: 'been building the fix for both. one week out.'** — "That makes askr look weak, as that's not the only two things askr is [solving]" (domain: Twitter messaging strategy)
+- **Tweet opening: 'third problem I kept hitting while building with claude:'** — "starting it like that makes it gay as hell" (domain: Twitter messaging strategy)
+- **Generic reach strategy without curated account list** — "give me a list of people I can slap a follow onto, who will actually correlate with I'm building" (domain: Social strategy)
 
 ## Failed Approaches
-- Positioning askr as solving 'two problems' (quota checkpoints + context limits) — User correctly identified this makes the product look narrow and weak; three problems establish a pattern
-- Earnest problem statement opening ('third problem I kept hitting...') — Tone was off; sarcasm opener lands better and signals self-awareness
+- Solution-focused teaser ('both problems I posted about? fixed. built a daemon...') — User rejected because askr isn't launched yet and it reveals too much; strategy should be reach-building first, solution reveal later
+- Two-problem framing in tweet — User correctly identified this makes askr look narrow; three problems establish pattern recognition
+- Direct posting without audience building — User has zero time and new account; engagement strategy with established voices is only viable path
+
+## Files In Play
+- `roadmap.md`
 
 ## Relational Files
-- `roadmap.md` (configures): Phase 4 (Public Launch) was removed from roadmap this session; tweet strategy aligns with pre-launch positioning
+- `README.md` (configures): User checked README to ground tweet in askr's actual functionality; will need polish for GitHub launch
+- `stress-tests/` (tested_by): Uncommitted; part of Phase 3.11 completion before public launch
 
 ## Uncommitted Files
 - `roadmap.md`
 - `stress-tests/`
+
+## Blockers
+- Spacing decision on tweet (spaced vs compact layout with Homelander image)—user showed both options, final call needed before posting

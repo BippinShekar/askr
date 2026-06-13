@@ -28,3 +28,6 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Generic reach advice (reply to threads, find audiences, etc.) — User has no time; needs specific, actionable account list instead
 - [2026-06-13] Positioning askr as solving 'two problems' (quota checkpoints + context limits) — User correctly identified this makes the product look narrow and weak; three problems establish a pattern
 - [2026-06-13] Earnest problem statement opening ('third problem I kept hitting...') — Tone was off; sarcasm opener lands better and signals self-awareness
+- [2026-06-13] Solution-focused teaser ('both problems I posted about? fixed. built a daemon...') — User rejected because askr isn't launched yet and it reveals too much; strategy should be reach-building first, solution reveal later
+- [2026-06-13] Two-problem framing in tweet — User correctly identified this makes askr look narrow; three problems establish pattern recognition
+- [2026-06-13] Direct posting without audience building — User has zero time and new account; engagement strategy with established voices is only viable path
