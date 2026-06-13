@@ -20,3 +20,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Auto-inferring session goals from user messages without end-of-session validation. — Goals become stale and misaligned with actual session progress by the time next autonomous session reads them.
 - [2026-06-13] Assuming the handover was created correctly but read at the wrong time — User correctly rejected this — if handover is stale, the creation itself was the failure, not the read timing
 - [2026-06-13] Testing with system Python 3.9 (python3 -c import test) — Union type syntax (|) in reader.py requires Python 3.10+; venv has correct version but system Python does not. Pre-existing issue, not caused by this session.
+- [2026-06-13] Generic reach advice (reply to threads, post value) without specific account targets — User asked for concrete list of people to follow. Generic strategy insufficient without actionable targets.
+- [2026-06-13] Weak positioning tweet that only references the two problems mentioned in previous tweets — Undersells askr's actual scope and capabilities. User rejected as making product look limited.
