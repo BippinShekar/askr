@@ -1,17 +1,17 @@
-Last updated: 2026-06-13 23:18
+Last updated: 2026-06-13 23:34
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive Claude sessions across machines, handling context limits, token quota checkpoints, and session state persistence. It solves the pain of losing work context when switching machines or hitting Claude's session boundaries—users can now hand off incomplete tasks to autonomous continuations without re-explaining their progress.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state between runs and supporting multi-client integration. It solves the problem of maintaining context and continuity across long coding tasks by managing session lifecycle, tracking API costs, and enabling autonomous handovers where the agent can resume work without user intervention.
 
 ## What's In Flight
 
-- Twitter/X launch messaging: sarcasm-driven tweet about repetitive Claude handoffs paired with Homelander meme image. Ready to post; spacing decision pending (spaced vs compact layout on mobile).
-- Phase 3.11 JSON Handover Schema: finalizing checkpoint card display logic to show correct "turns remaining" before staging verification.
-- Stress-tests/ directory: load and performance testing suite to validate session continuity under quota pressure.
-- GitHub launch assets: README with GIF/screenshot, install story, changelog, and release notes (one week to public launch).
+- Cost tracking and Discord notification ordering in cmd_init() — display API costs before Discord message, mark session start before first API call. 85% complete; awaiting git commit finalization and end-to-end testing.
+- Verification that context checkpoint cards display correct 'turns remaining' in staging environment.
+- Handover system architectural redesign — current implementation has timing gaps where stop checkpoint handler is not invoked, causing stale checkpoints. Goal inference must be deferred to session-end validation rather than auto-inferred mid-session.
 
 ## Key Decisions Made
 
-- Handover system requires architectural redesign, not incremental fixes. Root cause is that stop checkpoint handler was never invoked—stale checkpoints are a logic gap, not a timing race.
-- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals from old messages become stale and poison autonomous handovers
+- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are primary handover controls, not git diffs alone. Investigation revealed these files determine autonomous session continuation.
+- Goal inference is session-aware, not message-aware. Auto-inferring from old user messages creates stale objectives that poison autonomous handovers.
+- Delta extraction happens at hook level (post_tool_use.py), not in

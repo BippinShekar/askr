@@ -36,3 +36,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-13 23:18] [bippin] Rejected generic 'one week out' teaser in favor of sarcasm-driven problem statement with Homelander meme. Reason: Teaser makes askr look weak and narrow; sarcasm + visual establishes pattern recognition and authentic voice
 [2026-06-13 23:18] [bippin] Removed Phase 4 Public Launch section from roadmap.md. Reason: Premature detail; focus should stay on Phase 3.11 completion and stress-tests before launch week
 [2026-06-13 23:18] [bippin] Chose reply/engagement strategy over direct posting to build reach. Reason: User has zero time and new account; piggybacking on established voices (lachygroom, swyx, levelsio, marc_louvion) is only viable path to audience
+[2026-06-13 23:34] [bippin] Rejected Discord-first approach for cost tracking. Reason: Discord notification should fire after cost calculation and display, not before
+[2026-06-13 23:34] [bippin] Session marking happens before first API call (snapshot), not after. Reason: Ensures accurate session start time for cost tracking and logging
