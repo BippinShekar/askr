@@ -1,18 +1,17 @@
-Last updated: 2026-06-14 10:01
+Last updated: 2026-06-14 10:02
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It enables developers to collaborate with AI on code generation and modification through a stateful, resumable session model backed by local filesystem storage and provider APIs.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across checkpoints and supporting autonomous handovers between sessions. It solves the problem of context loss and manual re-briefing when resuming long-running coding tasks—the agent can pick up where it left off with full session history and goal state.
 
 ## What's In Flight
 
-- Phase 3 (auto-suggested goals expiry): Complete. Goals are now tagged at inference time, validated at session end, and expired via checkpoint. All three stages committed to main.
-- Phase 3.12: Pending scope review from roadmap.md before kickoff.
-- Verification task: Confirm context checkpoint cards display correct 'turns remaining' in staging environment.
-- Uncommitted state: askr_state/implementation_state.md, roadmap.md, and stress-tests/ need to be staged before Phase 3.12 begins.
+- Analytics redesign: replacing meaningless 'time saved' metric with goal-based or commit-based completion signals. Currently 25% complete; blocked on defining what 'completion' means (user-declared goals, merged commits, or inferred milestones).
+- Handover schema stabilization: ensuring checkpoint_pending.json and launch_mode.json correctly carry session state for autonomous continuation. Recent discovery that stop checkpoint handler was never invoked—architectural redesign underway, not incremental fix.
+- Context checkpoint card display: verifying 'turns remaining' calculation displays correctly in staging before pushing to main.
+- Goal inference timing: shifting from message-aware (mid-session) to session-aware (end-of-session) inference to prevent stale objectives poisoning autonomous handovers.
 
 ## Key Decisions Made
 
-- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone. These files control autonomous session continuation and are the primary source of truth for resumption.
-- Goal inference is session-aware, not message-aware. Auto-inferred goals are tagged at session_start.py to distinguish them from user-created goals and prevent stale objectives from poisoning autonomous handovers.
-- Goal expiry happens
+- Checkpoint format supports both dict and string goal types for backward compatibility with existing checkpoints while enabling new JSON-serialized format.
+- Delta extraction happens at the

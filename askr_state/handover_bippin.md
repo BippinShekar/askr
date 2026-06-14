@@ -1,56 +1,60 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 10:01
+Last updated: 2026-06-14 10:02
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Verify Phase 3 (auto-suggested goals expiry) is complete and ready to move to Phase 3.12
+Evaluate analytics metrics for askr status display — specifically whether 'time saved' is a meaningful metric or if goals-based metrics should replace it
 
 ## Discussion
-Session completed Stage 3 of the auto-suggested goals feature: tagging goals at creation and expiring them at session end via checkpoint. All three stages (stop hook, stale checkpoint gate, expiry logic) were committed and pushed. User asked about removing handover.md, but analysis showed it's a derived human-readable rendering of handover.json, regenerated automatically—not dead weight. Session ended with user asking readiness for Phase 3.12, triggering a check of roadmap and git status.
+Session focused on understanding how the 'time saved 36m (5 sessions today)' metric is calculated and whether it's useful to users. Discovered the metric is purely wall-clock session duration with no signal about actual work completed, goals achieved, or autonomy level. User challenged the premise: showing time spent on Claude isn't inherently useful, and inferring goals then marking them 'completed' is circular reasoning. No consensus reached on replacement metric — session ended with open question about what signal actually matters.
 
 ## Progress
-85% complete
+25% complete
 
 ## Accomplishments
-- ✅ Stage 3 complete: auto-suggested goals tagged and expired at session end
-- ✅ All three stages (stop hook, stale checkpoint gate, expiry) committed and pushed to main
-- ✅ Clarified handover.md is derived output, not source of truth—kept as human-readable rendering
+- ✅ Identified analytics schema limitation: no goals_completed, commit_count, or autonomy tracking — only duration_seconds and session metadata
+- ✅ Confirmed 'time saved' calculation is wall-clock duration summed across sessions, not a derived productivity metric
+- ✅ Removed Phase 4 (Public Launch) from roadmap.md — deprioritized in favor of Phase 3.11 (JSON Handover Schema)
 
 ## Next Actions
-1. Review Phase 3.12 requirements from roadmap.md to confirm scope and dependencies
-   *Why: User asked if ready to build Phase 3.12; need to verify what it entails before starting*
-2. Commit uncommitted files: askr_state/implementation_state.md, roadmap.md, stress-tests/
-   *Why: Git status shows these as modified; need clean state before starting new phase*
-3. Verify 'context checkpoint cards display correct turns remaining' goal is complete or blocked
-   *Why: This was listed as open goal; need to confirm status before Phase 3.12 kickoff*
-4. Begin Phase 3.12 implementation once roadmap is reviewed and uncommitted changes are staged
-   *Why: User signaled readiness; unblock by resolving outstanding state*
+1. Define what 'completion' actually means for askr: is it commits merged? goals inferred from git history? user-declared milestones? Pick one signal and design analytics schema to capture it.
+   *Why: Current 'time saved' is meaningless without grounding in actual work output. User rejected inferring goals retroactively.*
+2. If keeping session duration metric, rename it to 'session time' or 'claude time' and remove 'saved' framing — it's descriptive, not prescriptive.
+   *Why: Honest labeling avoids false productivity claims.*
+3. Add session UUID to status display for enhanced clarity on which session a metric belongs to — user requested this for debugging.
+   *Why: Improves traceability when reviewing analytics across multiple sessions.*
+4. Verify context checkpoint cards display correct 'turns remaining' in staging (from OPEN GOALS) — this was deferred but still pending.
+   *Why: Unfinished work from earlier session.*
 
 ## Decisions
-- Keep handover.md as derived output rather than removing it — writer.py regenerates it automatically on every checkpoint as human-readable rendering of handover.json; it serves a purpose and is not dead weight
+- Removed Phase 4 (Public Launch) from roadmap — deprioritized GitHub launch, brew tap, Twitter thread in favor of Phase 3.11 (JSON Handover Schema) — Focus shifted to internal tooling maturity (handover schema, analytics clarity) before external launch readiness.
+- Did not implement goals-based completion metric this session — User identified circular logic: inferring goals retroactively and marking them 'completed' is not a real signal.
+
+## User-Rejected Approaches
+- **Display 'time saved' as a productivity metric showing how much time user spent in Claude sessions** — "How would showing the user how much time they spent on claude even be useful?" (domain: analytics.json, status display)
+- **Infer goals from session activity and mark them as completed** — "goals done, being the goals inferred majoritily right? so we are going to infer goals and then call them completed?" (domain: analytics schema, completion tracking)
 
 ## Failed Approaches
-- Attempted to verify imports in reader.py using Python 3.9 syntax check — Pre-existing issue: reader.py uses | union type syntax requiring Python 3.10+; unrelated to this session's changes; venv has correct Python version
+- Grepping codebase for 'time_saved', 'sessions_today', 'completed_goals' to find existing metric definitions — Schema doesn't exist — metrics are ad-hoc calculations in status display, not tracked in analytics.json.
+- Assuming 'time saved' was a derived metric (e.g., time saved vs manual work) — It's just wall-clock duration — no baseline or comparison.
 
 ## Files In Play
-- `askr/state/goals.py`
-- `askr/hooks/session_start.py`
-- `askr/session/checkpoint.py`
-- `askr/session/writer.py`
 - `roadmap.md`
-- `askr_state/implementation_state.md`
+- `askr_state/analytics.json`
+- `logger.py`
+- `cmd_init()`
 
 ## Relational Files
-- `askr/session/writer.py` (configures): Writes both handover.json (source) and handover.md (derived); clarifies relationship between the two formats
-- `roadmap.md` (configures): Contains Phase 3.12 requirements; needed to determine next work scope
+- `logger.py` (configures): Contains log_line_mark() and cost_since_mark() — the cost tracking infrastructure that feeds analytics.
+- `askr_state/analytics.json` (imported_by): Ground truth for session metrics; schema needs redesign to support meaningful completion signals.
+- `status display / morning report` (configures): Consumes analytics.json to show 'time saved' — needs metric redesign before display changes.
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Phase 3.12 scope not yet reviewed from roadmap.md
+- No consensus on what metric should replace 'time saved' — requires product decision on what 'completion' means (commits? user-declared goals? inferred milestones?).

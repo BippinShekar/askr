@@ -1,17 +1,17 @@
 {
-  "task": "Verify Phase 3 (auto-suggested goals expiry) is complete and ready to move to Phase 3.12",
-  "discussion_summary": "Session completed Stage 3 of the auto-suggested goals feature: tagging goals at creation and expiring them at session end via checkpoint. All three stages (stop hook, stale checkpoint gate, expiry logic) were committed and pushed. User asked about removing handover.md, but analysis showed it's a derived human-readable rendering of handover.json, regenerated automatically\u2014not dead weight. Session ended with user asking readiness for Phase 3.12, triggering a check of roadmap and git status.",
+  "task": "Evaluate analytics metrics for askr status display \u2014 specifically whether 'time saved' is a meaningful metric or if goals-based metrics should replace it",
+  "discussion_summary": "Session focused on understanding how the 'time saved 36m (5 sessions today)' metric is calculated and whether it's useful to users. Discovered the metric is purely wall-clock session duration with no signal about actual work completed, goals achieved, or autonomy level. User challenged the premise: showing time spent on Claude isn't inherently useful, and inferring goals then marking them 'completed' is circular reasoning. No consensus reached on replacement metric \u2014 session ended with open question about what signal actually matters.",
   "accomplishments": [
     {
-      "what": "Stage 3 complete: auto-suggested goals tagged and expired at session end",
+      "what": "Identified analytics schema limitation: no goals_completed, commit_count, or autonomy tracking \u2014 only duration_seconds and session metadata",
       "done": true
     },
     {
-      "what": "All three stages (stop hook, stale checkpoint gate, expiry) committed and pushed to main",
+      "what": "Confirmed 'time saved' calculation is wall-clock duration summed across sessions, not a derived productivity metric",
       "done": true
     },
     {
-      "what": "Clarified handover.md is derived output, not source of truth\u2014kept as human-readable rendering",
+      "what": "Removed Phase 4 (Public Launch) from roadmap.md \u2014 deprioritized in favor of Phase 3.11 (JSON Handover Schema)",
       "done": true
     }
   ],
@@ -19,71 +19,94 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Review Phase 3.12 requirements from roadmap.md to confirm scope and dependencies",
-      "why": "User asked if ready to build Phase 3.12; need to verify what it entails before starting"
+      "action": "Define what 'completion' actually means for askr: is it commits merged? goals inferred from git history? user-declared milestones? Pick one signal and design analytics schema to capture it.",
+      "why": "Current 'time saved' is meaningless without grounding in actual work output. User rejected inferring goals retroactively."
     },
     {
       "order": 2,
-      "action": "Commit uncommitted files: askr_state/implementation_state.md, roadmap.md, stress-tests/",
-      "why": "Git status shows these as modified; need clean state before starting new phase"
+      "action": "If keeping session duration metric, rename it to 'session time' or 'claude time' and remove 'saved' framing \u2014 it's descriptive, not prescriptive.",
+      "why": "Honest labeling avoids false productivity claims."
     },
     {
       "order": 3,
-      "action": "Verify 'context checkpoint cards display correct turns remaining' goal is complete or blocked",
-      "why": "This was listed as open goal; need to confirm status before Phase 3.12 kickoff"
+      "action": "Add session UUID to status display for enhanced clarity on which session a metric belongs to \u2014 user requested this for debugging.",
+      "why": "Improves traceability when reviewing analytics across multiple sessions."
     },
     {
       "order": 4,
-      "action": "Begin Phase 3.12 implementation once roadmap is reviewed and uncommitted changes are staged",
-      "why": "User signaled readiness; unblock by resolving outstanding state"
+      "action": "Verify context checkpoint cards display correct 'turns remaining' in staging (from OPEN GOALS) \u2014 this was deferred but still pending.",
+      "why": "Unfinished work from earlier session."
     }
   ],
   "decisions": [
     {
-      "decision": "Keep handover.md as derived output rather than removing it",
-      "reason": "writer.py regenerates it automatically on every checkpoint as human-readable rendering of handover.json; it serves a purpose and is not dead weight"
+      "decision": "Removed Phase 4 (Public Launch) from roadmap \u2014 deprioritized GitHub launch, brew tap, Twitter thread in favor of Phase 3.11 (JSON Handover Schema)",
+      "reason": "Focus shifted to internal tooling maturity (handover schema, analytics clarity) before external launch readiness."
+    },
+    {
+      "decision": "Did not implement goals-based completion metric this session",
+      "reason": "User identified circular logic: inferring goals retroactively and marking them 'completed' is not a real signal."
     }
   ],
-  "user_rejected_decisions": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Display 'time saved' as a productivity metric showing how much time user spent in Claude sessions",
+      "user_signal": "How would showing the user how much time they spent on claude even be useful?",
+      "domain": "analytics.json, status display",
+      "confidence": 0.95
+    },
+    {
+      "what_was_proposed": "Infer goals from session activity and mark them as completed",
+      "user_signal": "goals done, being the goals inferred majoritily right? so we are going to infer goals and then call them completed?",
+      "domain": "analytics schema, completion tracking",
+      "confidence": 0.9
+    }
+  ],
   "failed_approaches": [
     {
-      "approach": "Attempted to verify imports in reader.py using Python 3.9 syntax check",
-      "reason": "Pre-existing issue: reader.py uses | union type syntax requiring Python 3.10+; unrelated to this session's changes; venv has correct Python version"
+      "approach": "Grepping codebase for 'time_saved', 'sessions_today', 'completed_goals' to find existing metric definitions",
+      "reason": "Schema doesn't exist \u2014 metrics are ad-hoc calculations in status display, not tracked in analytics.json."
+    },
+    {
+      "approach": "Assuming 'time saved' was a derived metric (e.g., time saved vs manual work)",
+      "reason": "It's just wall-clock duration \u2014 no baseline or comparison."
     }
   ],
   "files_in_play": [
-    "askr/state/goals.py",
-    "askr/hooks/session_start.py",
-    "askr/session/checkpoint.py",
-    "askr/session/writer.py",
     "roadmap.md",
-    "askr_state/implementation_state.md"
+    "askr_state/analytics.json",
+    "logger.py",
+    "cmd_init()"
   ],
   "relational_files": [
     {
-      "file": "askr/session/writer.py",
+      "file": "logger.py",
       "relationship": "configures",
-      "why": "Writes both handover.json (source) and handover.md (derived); clarifies relationship between the two formats"
+      "why": "Contains log_line_mark() and cost_since_mark() \u2014 the cost tracking infrastructure that feeds analytics."
     },
     {
-      "file": "roadmap.md",
+      "file": "askr_state/analytics.json",
+      "relationship": "imported_by",
+      "why": "Ground truth for session metrics; schema needs redesign to support meaningful completion signals."
+    },
+    {
+      "file": "status display / morning report",
       "relationship": "configures",
-      "why": "Contains Phase 3.12 requirements; needed to determine next work scope"
+      "why": "Consumes analytics.json to show 'time saved' \u2014 needs metric redesign before display changes."
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_state.md",
     "roadmap.md",
     "stress-tests/"
   ],
   "blockers": [
-    "Phase 3.12 scope not yet reviewed from roadmap.md"
+    "No consensus on what metric should replace 'time saved' \u2014 requires product decision on what 'completion' means (commits? user-declared goals? inferred milestones?)."
   ],
-  "completion_pct": 85,
+  "completion_pct": 25,
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T04:30:58.961609+00:00",
+    "timestamp": "2026-06-14T04:32:05.027749+00:00",
     "developer": "bippin"
   }
 }

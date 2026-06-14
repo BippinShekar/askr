@@ -36,3 +36,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-14] Testing changes with system Python (3.9) via direct python3 -c invocation — Union type syntax (|) requires Python 3.10+; venv has correct version but direct invocation does not. Switched to venv/bin/python for verification.
 - [2026-06-14] Grepped for completed_goals, goals_completed, done_today — commands ran but output not captured/parsed — Bash tool calls incomplete; piped Python parsing not executed successfully
 - [2026-06-14] Attempted to verify imports in reader.py using Python 3.9 syntax check — Pre-existing issue: reader.py uses | union type syntax requiring Python 3.10+; unrelated to this session's changes; venv has correct Python version
+- [2026-06-14] Grepping codebase for 'time_saved', 'sessions_today', 'completed_goals' to find existing metric definitions — Schema doesn't exist — metrics are ad-hoc calculations in status display, not tracked in analytics.json.
+- [2026-06-14] Assuming 'time saved' was a derived metric (e.g., time saved vs manual work) — It's just wall-clock duration — no baseline or comparison.
