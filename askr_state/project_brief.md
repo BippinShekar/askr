@@ -1,17 +1,18 @@
-Last updated: 2026-06-14 10:00
+Last updated: 2026-06-14 10:01
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state locally and supporting multi-client execution across platforms. It orchestrates code analysis, test execution, and autonomous task completion through a modular architecture centered on session lifecycle management and LLM integration.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It enables developers to collaborate with AI on code generation and modification through a stateful, resumable session model backed by local filesystem storage and provider APIs.
 
 ## What's In Flight
 
-- Fixing 'time saved' metric in askr status — currently displays wall-clock session duration with no productivity backing. Investigation underway to identify whether outcome tracking (goals completed, context reused, API calls avoided) exists in codebase or needs to be built.
-- Verifying checkpoint card display shows correct 'turns remaining' calculation in staging environment before pushing fixes to main.
-- Architectural redesign of handover system — current checkpoint persistence is stale at session end due to logic gap where stop checkpoint handler is never invoked. Goal inference must be deferred to session-end validation rather than auto-inferred mid-session.
+- Phase 3 (auto-suggested goals expiry): Complete. Goals are now tagged at inference time, validated at session end, and expired via checkpoint. All three stages committed to main.
+- Phase 3.12: Pending scope review from roadmap.md before kickoff.
+- Verification task: Confirm context checkpoint cards display correct 'turns remaining' in staging environment.
+- Uncommitted state: askr_state/implementation_state.md, roadmap.md, and stress-tests/ need to be staged before Phase 3.12 begins.
 
 ## Key Decisions Made
 
-- Checkpoint system handles both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
-- Delta extraction happens at hook level (post_tool_use.py) rather than in checkpoint orchestration — separates concerns cleanly.
-- Checkpoint_pending.json and launch_mode.json are primary handover state carriers; git diffs alone are insufficient for proper
+- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone. These files control autonomous session continuation and are the primary source of truth for resumption.
+- Goal inference is session-aware, not message-aware. Auto-inferred goals are tagged at session_start.py to distinguish them from user-created goals and prevent stale objectives from poisoning autonomous handovers.
+- Goal expiry happens

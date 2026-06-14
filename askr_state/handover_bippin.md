@@ -1,57 +1,51 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 10:00
+Last updated: 2026-06-14 10:01
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Investigate and fix the 'time saved' metric display in askr status — currently shows wall-clock session duration, not actual productivity value
+Verify Phase 3 (auto-suggested goals expiry) is complete and ready to move to Phase 3.12
 
 ## Discussion
-User challenged the validity of the 'time saved 36m (5 sessions today)' metric, correctly noting it's just summed session durations with no actual productivity measurement. Session ended mid-investigation: attempted to locate analytics.json and goals_completed tracking to understand what data exists. User wants either a proper metric (e.g., goals completed, context reused, API calls avoided) or honest alternative display. No resolution reached; investigation incomplete.
+Session completed Stage 3 of the auto-suggested goals feature: tagging goals at creation and expiring them at session end via checkpoint. All three stages (stop hook, stale checkpoint gate, expiry logic) were committed and pushed. User asked about removing handover.md, but analysis showed it's a derived human-readable rendering of handover.json, regenerated automatically—not dead weight. Session ended with user asking readiness for Phase 3.12, triggering a check of roadmap and git status.
 
 ## Progress
-15% complete
+85% complete
 
 ## Accomplishments
-- ✅ Identified root cause: 'time saved' is purely wall-clock duration from session_start.json → analytics.json, not tied to any outcome metric
-- ✅ Confirmed analytics.json exists and contains duration_seconds entries
-
-## In Progress
-- `askr/cli/askr.py`: Investigating today_summary() function to understand current metric calculation and identify where to inject real productivity data
-- `askr_state/analytics.json`: Attempting to read and parse to see what fields are currently tracked (duration_seconds confirmed, goals_completed unknown)
+- ✅ Stage 3 complete: auto-suggested goals tagged and expired at session end
+- ✅ All three stages (stop hook, stale checkpoint gate, expiry) committed and pushed to main
+- ✅ Clarified handover.md is derived output, not source of truth—kept as human-readable rendering
 
 ## Next Actions
-1. Read askr/cli/askr.py and locate today_summary() function — extract exact logic for 'time saved' calculation and identify where metric source comes from
-   *Why: Need to see current implementation before deciding whether to replace metric or add new field*
-2. Check if goals_completed, tasks_done, or similar outcome fields exist anywhere in codebase (grep -rn 'goals_completed\|tasks_done\|completed_count' askr/)
-   *Why: User wants real productivity metric; must know if tracking infrastructure exists or needs to be built*
-3. Propose 3 alternative metrics to user: (A) 'goals completed today', (B) 'context reused (sessions with prior state loaded)', (C) 'API calls avoided via caching' — with honest assessment of which is measurable now
-   *Why: User explicitly rejected vague 'time saved' and wants brutal honesty; need concrete options with feasibility*
-4. If no outcome tracking exists: add minimal goals_completed counter to session_end hook (user marks goal done/skip before exit) and wire to analytics.json
-   *Why: Fastest path to real metric without major refactor*
-5. Update status display to show chosen metric (or revert to 'session duration' if no better data available) and commit with clear reasoning in commit message
-   *Why: Close the loop; user wants clarity, not misleading numbers*
+1. Review Phase 3.12 requirements from roadmap.md to confirm scope and dependencies
+   *Why: User asked if ready to build Phase 3.12; need to verify what it entails before starting*
+2. Commit uncommitted files: askr_state/implementation_state.md, roadmap.md, stress-tests/
+   *Why: Git status shows these as modified; need clean state before starting new phase*
+3. Verify 'context checkpoint cards display correct turns remaining' goal is complete or blocked
+   *Why: This was listed as open goal; need to confirm status before Phase 3.12 kickoff*
+4. Begin Phase 3.12 implementation once roadmap is reviewed and uncommitted changes are staged
+   *Why: User signaled readiness; unblock by resolving outstanding state*
 
 ## Decisions
-- Do not keep 'time saved' as-is without outcome backing — User correctly identified it as meaningless wall-clock duration; continuing would undermine credibility
-- Investigate existing tracking before building new infrastructure — May already have goals_completed or similar; avoid duplicate work
-
-## User-Rejected Approaches
-- **Implied: keep 'time saved 36m' as current metric** — "then we need to either come up with proper metric here, or display something else right" (domain: askr/cli/askr.py (status display))
+- Keep handover.md as derived output rather than removing it — writer.py regenerates it automatically on every checkpoint as human-readable rendering of handover.json; it serves a purpose and is not dead weight
 
 ## Failed Approaches
-- Grepped for completed_goals, goals_completed, done_today — commands ran but output not captured/parsed — Bash tool calls incomplete; piped Python parsing not executed successfully
+- Attempted to verify imports in reader.py using Python 3.9 syntax check — Pre-existing issue: reader.py uses | union type syntax requiring Python 3.10+; unrelated to this session's changes; venv has correct Python version
 
 ## Files In Play
-- `askr/cli/askr.py`
-- `askr_state/analytics.json`
-- `askr/utils/logger.py`
+- `askr/state/goals.py`
+- `askr/hooks/session_start.py`
+- `askr/session/checkpoint.py`
+- `askr/session/writer.py`
+- `roadmap.md`
+- `askr_state/implementation_state.md`
 
 ## Relational Files
-- `askr/utils/logger.py` (imported_by): Contains log_line_mark() and cost_since_mark() added this session; may need extension for outcome tracking
-- `askr_state/implementation_state.md` (configures): Tracks session state; may need to log which metric decision was made
+- `askr/session/writer.py` (configures): Writes both handover.json (source) and handover.md (derived); clarifies relationship between the two formats
+- `roadmap.md` (configures): Contains Phase 3.12 requirements; needed to determine next work scope
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
@@ -59,4 +53,4 @@ User challenged the validity of the 'time saved 36m (5 sessions today)' metric, 
 - `stress-tests/`
 
 ## Blockers
-- Unknown: does goals_completed or outcome tracking already exist in codebase? Must grep/read to proceed
+- Phase 3.12 scope not yet reviewed from roadmap.md

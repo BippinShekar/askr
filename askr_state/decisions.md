@@ -44,3 +44,4 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-14 09:59] [bippin] Expiry logic runs at checkpoint end, after completed goals are processed. Reason: Ensures completed goals are recorded before stale auto-suggested goals are removed; maintains audit trail
 [2026-06-14 10:00] [bippin] Do not keep 'time saved' as-is without outcome backing. Reason: User correctly identified it as meaningless wall-clock duration; continuing would undermine credibility
 [2026-06-14 10:00] [bippin] Investigate existing tracking before building new infrastructure. Reason: May already have goals_completed or similar; avoid duplicate work
+[2026-06-14 10:01] [bippin] Keep handover.md as derived output rather than removing it. Reason: writer.py regenerates it automatically on every checkpoint as human-readable rendering of handover.json; it serves a purpose and is not dead weight
