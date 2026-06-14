@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [14:26] Ran: cat /Users/bippin/Desktop/askr/askr_state/decisions.md 2>/dev/null && echo "---"
+- [14:26] Ran: ls /Users/bippin/Desktop/askr && cat /Users/bippin/Desktop/askr/roadmap.md 2>/de
 - [10:09] Ran: git push origin main
 - [10:09] Ran: git add askr/state/writer.py askr/state/reader.py askr/session/checkpoint.py && 
 - [10:09] Ran: venv/bin/python -c "

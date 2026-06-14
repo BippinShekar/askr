@@ -55,3 +55,4 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-14 10:11] [bippin] Replaced emoji rendering with ASCII [x]/[ ] syntax. Reason: User explicitly stated emojis cause parsing issues and are unwanted in handover.md
 [2026-06-14 10:18] [bippin] Task field must be written in past-tense descriptive form, not imperative. Reason: Autonomous sessions read handover.md and interpret imperative task as work-to-do, creating token-burning repetition of completed work
 [2026-06-14 10:18] [bippin] next_actions generation must be decoupled from task field content. Reason: Task field is for human context; next_actions should derive from accomplishments.done status and git state only
+[2026-06-14 14:27] [bippin] Did not proceed with implementation planning until codebase architecture is understood. Reason: Remote session control is a significant feature with security and auth implications; must understand current session model first

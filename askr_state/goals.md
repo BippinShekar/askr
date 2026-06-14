@@ -1,21 +1,15 @@
-## Today - 2026-06-13
-
-- [ ] Verify context checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-13T22:07 -->
-
-
-
-
-## Today - 2026-06-12
-
-
+## Today - 2026-06-14
 
 
 
 ## Backlog
+- [ ] Verify context checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-13T22:07 -->
 
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-14 14:27] DISCARDED: Locate stop hook next_actions generation logic in checkpoint.py
+[2026-06-14 14:27] DISCARDED: Change task field from imperative to past-tense descriptive language
 [2026-06-13 22:57] Commit and push report_image.py fixes for turns-until-auto-compact calculation
 [2026-06-13 22:06] Complete tabular analysis of handover system gaps with evidence from examined fi
 [2026-06-13 21:21] Identify and document 3-5 critical blockers preventing stress-test readiness

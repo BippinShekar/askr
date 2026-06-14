@@ -1,17 +1,18 @@
-Last updated: 2026-06-14 10:18
+Last updated: 2026-06-14 14:27
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive sessions with an LLM to analyze code, suggest changes, and track progress. It manages session state, integrates with IDEs to read and modify files, and hands off work to autonomous agents via structured checkpoint files. The core problem it solves: enabling developers to delegate coding tasks to AI while maintaining continuity across sessions and preventing repeated work.
+Askr is a CLI-based AI coding agent that manages development sessions, handles user queries, and integrates with IDEs and notification systems. It enables developers to offload coding tasks to an AI assistant while maintaining session state, tracking usage, and providing autonomous handover capabilities for multi-turn work.
 
 ## What's In Flight
 
-- Fixing handover task field semantics: tasks are currently written imperatively ("Remove emojis") causing autonomous sessions to re-read completed work as pending. Need to switch to past-tense descriptive form ("Removed emojis from X").
-- Investigating next_actions generation logic in the stop hook to confirm it derives from accomplishments and git state, not from the task field itself (which would create a repetition loop).
-- Verifying context checkpoint cards display correct "turns remaining" calculation in staging before pushing to main.
-- Decoupling task field content from next_actions generation so autonomous sessions don't burn tokens re-doing completed work.
+- Remote session control and auto-run feature evaluation for team collaboration on 50-person teams. Currently assessing architectural feasibility, auth model constraints, and security implications before implementation planning.
+- Handover system redesign to fix stale checkpoint generation. Root cause identified: stop checkpoint handler is not invoked at session end, causing auto-inferred goals to become out of sync with actual session progress.
+- Goal inference refactoring to defer inference until session-end validation rather than mid-session auto-inference. Goals must be session-aware, not message-aware.
+- Checkpoint card display verification in staging to confirm correct "turns remaining" calculation.
 
 ## Key Decisions Made
 
-- Checkpoint and handover files (checkpoint_pending.json, launch_mode.json, handover.md) are the primary state carriers for session continuation—git diffs alone are insufficient.
-- Goal inference must be session-aware and deferred until session
+- Checkpoint system handles both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
+- Delta extraction happens at hook level (post_tool_use.py) rather than checkpoint.py to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence.
+- Checkpoint_pending.json and launch_mode.json are primary handover state carriers; git
