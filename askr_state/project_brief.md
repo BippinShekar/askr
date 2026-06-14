@@ -1,17 +1,17 @@
-Last updated: 2026-06-14 14:29
+Last updated: 2026-06-14 14:34
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It solves the problem of broken cross-team handover: when one developer hands off work to another (or to an autonomous session), the LLM-generated next_actions are inferred from code diffs and transcripts, not from user intent or team goals, causing autonomous sessions to re-execute completed work and waste tokens.
+Askr is a CLI-based AI coding agent that executes interactive development sessions with LLM integration, state persistence, and multi-client support. It allows users to collaborate with AI on code generation and modification, with the ability to hand off sessions to other users or autonomous continuation. The core problem it solves is enabling seamless, stateful AI-assisted development workflows that persist across sessions and team members.
 
 ## What's In Flight
 
-- Fixing checkpoint prompt to generate task descriptions as past-tense outcomes ("Removed emojis") instead of imperative directives ("Remove emojis"), preventing autonomous re-execution of completed work.
-- Extending checkpoint prompt to inject open_goals.md and team_context.md into next_actions generation, grounding handover in intentional team dependencies rather than local file diffs.
-- Adding validation in create_checkpoint() to reject next_actions that match completed accomplishments (fuzzy match), catching LLM hallucinations.
-- Stress-testing end-to-end: create a handover.md, start an autonomous session, verify it does NOT re-execute the previous session's task.
-- Verifying context checkpoint cards display correct 'turns remaining' in staging before pushing report_image.py fixes.
+- Handover system redesign: fixing stale checkpoint creation that prevents proper session continuation. Root cause identified as missing stop checkpoint handler invocation; requires architectural fix, not incremental patching.
+- Goal inference timing: deferring auto-inferred goals from session-start to session-end validation to prevent stale objectives from poisoning autonomous handovers.
+- Collaboration feature roadmap: disaggregating three bundled requests (remote session control, task injection, auto-run) and determining phase placement with permission-based safety constraints.
+- Approval gate system design: mapping dangerous permissions (skip, file deletion, env modification) to required approval triggers, with explicit focus on preventing permission compounding across sessions.
+- Context checkpoint card verification: staging validation of 'turns remaining' display before pushing report_image.py fixes to main.
 
 ## Key Decisions Made
 
-- Checkpoint
+- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are

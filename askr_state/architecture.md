@@ -1,6 +1,6 @@
 # Architecture
 
-*Auto-generated at checkpoint — 2026-06-14 08:59 UTC*
+*Auto-generated at checkpoint — 2026-06-14 09:05 UTC*
 
 # Architecture
 
@@ -14,64 +14,64 @@ Askr is a CLI-based AI coding agent that manages interactive development session
 ## Core Modules
 
 **Session Management** (`./askr/session/`)
-- Manages session lifecycle, state initialization, and usage tracking
-- `usage_api.py` orchestrates subprocess calls and environment detection
+- Manages session lifecycle, state transitions, and usage tracking
+- `usage_api.py` coordinates subprocess calls and environment detection
 
 **State Management** (`./askr/state/`)
 - Persists and retrieves session state to `./askr_state/` directory
-- Maintains conversation history and execution context
+- Handles state serialization/deserialization for session recovery
 
 **Client Handlers** (`./askr/clients/`)
 - Abstracts LLM provider integrations (likely multiple AI backends)
-- Translates between internal message format and provider APIs
-
-**CLI Interface** (`./askr/cli/`)
-- Command parsing and routing
-- User-facing command definitions
+- Translates between internal message formats and provider APIs
 
 **IDE Integration** (`./askr/ide/`)
-- Editor/IDE communication layer
-- Likely handles code context extraction and file operations
+- Bridges code editor interactions and file system operations
+- Enables in-editor code suggestions and modifications
 
 **Notifications** (`./askr/notifications/`)
-- Event-driven alerts for session state changes
-- Async notification delivery
+- Delivers session events and results to users
+- Likely supports multiple notification channels
 
-**QA Module** (`./askr/qa/`)
-- Test execution and validation
-- Quality assurance for generated code
+**QA/Testing** (`./askr/qa/`)
+- Validation and testing utilities for session outputs
 
 **Hooks** (`./askr/hooks/`)
-- Lifecycle callbacks (pre/post execution, state changes)
-- Extension points for custom behavior
+- Event handlers for session lifecycle (pre/post execution, state changes)
 
 **Utilities** (`./askr/utils/`)
 - Shared helper functions across modules
 
 ## Data Stores
-- **`./askr_state/`** — Persistent session state (JSON/structured format)
-- **`./.llm_snapshot/`** — LLM interaction snapshots/logs
-- **`./.claude/`** — Claude-specific configuration or cache
+- **`./askr_state/`** — Local session state persistence (JSON or similar)
+- **Environment variables** — Configuration via `os.environ` (platform detection, API keys)
 
 ## External Integrations
-- **LLM Providers** — Abstracted via `./askr/clients/`; subprocess execution suggests local model support
-- **IDE/Editors** — Via `./askr/ide/` module
-- **System Shell** — Direct subprocess calls from `usage_api.py`
+- **Subprocess execution** — Runs code/commands via `subprocess` module
+- **LLM providers** — Abstracted through `./askr/clients/`
+- **IDE/Editor** — File system and editor protocol integration via `./askr/ide/`
 
 ## Key Relationships
 ```
-CLI (./askr/cli/) 
-  → Session (./askr/session/usage_api.py)
-    → State (./askr/state/) → ./askr_state/
-    → Clients (./askr/clients/) → LLM providers
-    → IDE (./askr/ide/) → Editor context
-    → QA (./askr/qa/) → Validation
-    → Notifications (./askr/notifications/)
-    → Hooks (./askr/hooks/)
+usage_api.py (entry)
+  ├→ session/ (state management)
+  ├→ clients/ (LLM communication)
+  ├→ state/ (persistence)
+  ├→ hooks/ (event dispatch)
+  ├→ notifications/ (output)
+  └→ ide/ (editor integration)
+
+cli/ (user commands)
+  └→ session/ + clients/ + state/
 ```
 
-## Shared Interfaces (High-Impact Changes)
-- **`./askr/state/`** — State schema changes affect session persistence across all modules
-- **`./askr/clients/`** — LLM message format changes propagate to CLI, session, and QA
-- **`./askr/session/usage_api.py`** — Core execution contract; changes affect all entry points
-- **`./askr/utils/`** — Utility function signatures impact all consumers
+## Shared Interfaces (High Impact)
+- **`./askr/session/`** — Session object contract; changes affect all modules
+- **`./askr/state/`** — State schema; changes break session recovery
+- **`./askr/clients/`** — LLM message format; changes require updates across session + hooks
+- **`./askr/utils/`** — Utility signatures; widely imported
+
+## Configuration
+- Platform detection via `platform` module
+- Subprocess environment inherited from parent process
+- State directory: `./askr_state/`
