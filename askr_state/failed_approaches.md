@@ -38,3 +38,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-14] Attempted to verify imports in reader.py using Python 3.9 syntax check — Pre-existing issue: reader.py uses | union type syntax requiring Python 3.10+; unrelated to this session's changes; venv has correct Python version
 - [2026-06-14] Grepping codebase for 'time_saved', 'sessions_today', 'completed_goals' to find existing metric definitions — Schema doesn't exist — metrics are ad-hoc calculations in status display, not tracked in analytics.json.
 - [2026-06-14] Assuming 'time saved' was a derived metric (e.g., time saved vs manual work) — It's just wall-clock duration — no baseline or comparison.
+- [2026-06-14] Attempted to grep analytics.json for completed_goals or goals_completed fields — Schema has no such field; only duration_seconds, trigger, and session metadata exist. Confirmed that goal tracking was never implemented.

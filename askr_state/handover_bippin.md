@@ -1,60 +1,60 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 10:02
+Last updated: 2026-06-14 10:05
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Evaluate analytics metrics for askr status display — specifically whether 'time saved' is a meaningful metric or if goals-based metrics should replace it
+Remove misleading 'time saved' metric from analytics display and clarify that inferred goals cannot be marked as completed without proper tracking.
 
 ## Discussion
-Session focused on understanding how the 'time saved 36m (5 sessions today)' metric is calculated and whether it's useful to users. Discovered the metric is purely wall-clock session duration with no signal about actual work completed, goals achieved, or autonomy level. User challenged the premise: showing time spent on Claude isn't inherently useful, and inferring goals then marking them 'completed' is circular reasoning. No consensus reached on replacement metric — session ended with open question about what signal actually matters.
+Session focused on auditing the analytics schema and display logic. User identified that 'time saved' (wall-clock session duration) is not a useful metric—it doesn't convey actionable information. Separately, user noted that goals are inferred from checkpoints, making it impossible to claim they're 'completed' without explicit completion tracking. Decision: remove both metrics entirely from the UI for now rather than display misleading data.
 
 ## Progress
-25% complete
+45% complete
 
 ## Accomplishments
-- ✅ Identified analytics schema limitation: no goals_completed, commit_count, or autonomy tracking — only duration_seconds and session metadata
-- ✅ Confirmed 'time saved' calculation is wall-clock duration summed across sessions, not a derived productivity metric
-- ✅ Removed Phase 4 (Public Launch) from roadmap.md — deprioritized in favor of Phase 3.11 (JSON Handover Schema)
+- ✅ Removed 'time saved' metric display from askr.py CLI output
+- ✅ Committed and pushed removal of misleading analytics line
+- ✅ Clarified that goals_completed cannot be inferred without explicit tracking mechanism
 
 ## Next Actions
-1. Define what 'completion' actually means for askr: is it commits merged? goals inferred from git history? user-declared milestones? Pick one signal and design analytics schema to capture it.
-   *Why: Current 'time saved' is meaningless without grounding in actual work output. User rejected inferring goals retroactively.*
-2. If keeping session duration metric, rename it to 'session time' or 'claude time' and remove 'saved' framing — it's descriptive, not prescriptive.
-   *Why: Honest labeling avoids false productivity claims.*
-3. Add session UUID to status display for enhanced clarity on which session a metric belongs to — user requested this for debugging.
-   *Why: Improves traceability when reviewing analytics across multiple sessions.*
-4. Verify context checkpoint cards display correct 'turns remaining' in staging (from OPEN GOALS) — this was deferred but still pending.
-   *Why: Unfinished work from earlier session.*
+1. Audit askr.py display logic to confirm 'time saved' line is fully removed from today_summary() output and no other references remain
+   *Why: Ensure the metric removal is complete and won't resurface in any output path*
+2. Design explicit goal completion tracking schema: decide whether goals are marked complete by user input, checkpoint prompt signal, or git commit detection
+   *Why: Current inference-only approach is unreliable; need a ground-truth mechanism before displaying any completion metrics*
+3. Update roadmap.md Phase 3.11 section to document the JSON handover schema requirements and confirm it aligns with current implementation_state.md tracking
+   *Why: Roadmap was edited this session; ensure it reflects current state and doesn't contradict active tracking*
+4. Verify context checkpoint cards display correct 'turns remaining' in staging environment (from open goals)
+   *Why: This was an open goal at session start; needs validation before next phase*
 
 ## Decisions
-- Removed Phase 4 (Public Launch) from roadmap — deprioritized GitHub launch, brew tap, Twitter thread in favor of Phase 3.11 (JSON Handover Schema) — Focus shifted to internal tooling maturity (handover schema, analytics clarity) before external launch readiness.
-- Did not implement goals-based completion metric this session — User identified circular logic: inferring goals retroactively and marking them 'completed' is not a real signal.
+- Remove 'time saved' metric entirely from CLI output rather than redefine it — Wall-clock session duration is not actionable; no redefinition makes it useful. Better to show nothing than misleading data.
+- Do not display 'goals completed' until explicit completion tracking is implemented — Current goals are inferred from checkpoints only; marking them 'completed' without user or system confirmation is unreliable.
 
 ## User-Rejected Approaches
-- **Display 'time saved' as a productivity metric showing how much time user spent in Claude sessions** — "How would showing the user how much time they spent on claude even be useful?" (domain: analytics.json, status display)
-- **Infer goals from session activity and mark them as completed** — "goals done, being the goals inferred majoritily right? so we are going to infer goals and then call them completed?" (domain: analytics schema, completion tracking)
+- **Keep 'time saved' metric but redefine it to show something more useful** — "How would showing the user how much time they spent on Claude even be useful? ... so for now remove it." (domain: askr/cli/askr.py - today_summary() display logic)
+- **Infer goals from checkpoints and mark them as completed** — "goals done, being the goals inferred majoritily right? so we are going to infer goals and then call them completed? ... so for now remove it." (domain: analytics.json schema and display)
 
 ## Failed Approaches
-- Grepping codebase for 'time_saved', 'sessions_today', 'completed_goals' to find existing metric definitions — Schema doesn't exist — metrics are ad-hoc calculations in status display, not tracked in analytics.json.
-- Assuming 'time saved' was a derived metric (e.g., time saved vs manual work) — It's just wall-clock duration — no baseline or comparison.
+- Attempted to grep analytics.json for completed_goals or goals_completed fields — Schema has no such field; only duration_seconds, trigger, and session metadata exist. Confirmed that goal tracking was never implemented.
 
 ## Files In Play
+- `askr/cli/askr.py`
+- `askr_state/implementation_state.md`
 - `roadmap.md`
-- `askr_state/analytics.json`
-- `logger.py`
-- `cmd_init()`
 
 ## Relational Files
-- `logger.py` (configures): Contains log_line_mark() and cost_since_mark() — the cost tracking infrastructure that feeds analytics.
-- `askr_state/analytics.json` (imported_by): Ground truth for session metrics; schema needs redesign to support meaningful completion signals.
-- `status display / morning report` (configures): Consumes analytics.json to show 'time saved' — needs metric redesign before display changes.
+- `askr_state/analytics.json` (configures): Defines the schema for session metrics; removal of 'time saved' display requires understanding what data is actually available
+- `askr_state/implementation_state.md` (imported_by): Tracks all modifications and tool runs; updated this session to log the git commit
+- `roadmap.md` (configures): Phase 3.11 JSON Handover Schema section is active; Phase 4 was removed this session
 
 ## Uncommitted Files
+- `askr_state/implementation_state.md`
+- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- No consensus on what metric should replace 'time saved' — requires product decision on what 'completion' means (commits? user-declared goals? inferred milestones?).
+- No explicit goal completion tracking mechanism exists; cannot implement goals_completed metric until design is finalized
