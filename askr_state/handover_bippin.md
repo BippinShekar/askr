@@ -1,62 +1,62 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 09:59
+Last updated: 2026-06-14 10:00
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Complete Stage 3 of checkpoint/goal lifecycle (auto-suggested goals expiry) and evaluate handover.md vs handover.json migration
+Investigate and fix the 'time saved' metric display in askr status — currently shows wall-clock session duration, not actual productivity value
 
 ## Discussion
-Stage 3 implementation added expiry logic for auto-suggested goals: tagging them at session_start, expiring them at checkpoint end after completed goals are processed. All three stages (stop hook, stale checkpoint gate, auto-suggested goal expiry) are now complete and committed. User asked whether handover.md can be removed in favor of handover.json — investigation started but incomplete; need to audit reader/writer to confirm no fallback logic or dual-file dependencies exist before recommending deletion.
+User challenged the validity of the 'time saved 36m (5 sessions today)' metric, correctly noting it's just summed session durations with no actual productivity measurement. Session ended mid-investigation: attempted to locate analytics.json and goals_completed tracking to understand what data exists. User wants either a proper metric (e.g., goals completed, context reused, API calls avoided) or honest alternative display. No resolution reached; investigation incomplete.
 
 ## Progress
-85% complete
+15% complete
 
 ## Accomplishments
-- ✅ Implemented expire_auto_suggested_goals() function in goals.py with 24-hour expiry window
-- ✅ Tagged auto-suggested goals at session_start with 'auto_suggested' marker and timestamp
-- ✅ Integrated expiry call into checkpoint.py after completed goals processing
-- ✅ Verified all Stage 3 changes compile cleanly in venv (Python 3.10+)
-- ✅ Committed and pushed Stage 1, 2, 3 to main branch
+- ✅ Identified root cause: 'time saved' is purely wall-clock duration from session_start.json → analytics.json, not tied to any outcome metric
+- ✅ Confirmed analytics.json exists and contains duration_seconds entries
 
 ## In Progress
-- `askr/state/goals.py`: Audit reader/writer to determine if handover.md can be safely deleted or if fallback/dual-file logic exists
+- `askr/cli/askr.py`: Investigating today_summary() function to understand current metric calculation and identify where to inject real productivity data
+- `askr_state/analytics.json`: Attempting to read and parse to see what fields are currently tracked (duration_seconds confirmed, goals_completed unknown)
 
 ## Next Actions
-1. Complete grep audit: search codebase for all references to 'handover.md', 'handover_path', 'write_handover', and fallback logic in reader/writer modules
-   *Why: User asked if handover.md can be deleted; need definitive answer on whether any code still reads/writes it or falls back to it*
-2. If no dual-file logic found, commit rm -rf handover.md and update any documentation that references it
-   *Why: Consolidate to single handover.json format; reduce confusion and maintenance burden*
-3. Verify context checkpoint cards display correct 'turns remaining' in staging (open goal from previous session)
-   *Why: This goal is still open and was not addressed this session*
-4. Run full integration test: session_start → checkpoint → session_end with auto-suggested goals to confirm expiry fires correctly
-   *Why: Stage 3 is complete but untested end-to-end; need confidence before stress-test phase*
+1. Read askr/cli/askr.py and locate today_summary() function — extract exact logic for 'time saved' calculation and identify where metric source comes from
+   *Why: Need to see current implementation before deciding whether to replace metric or add new field*
+2. Check if goals_completed, tasks_done, or similar outcome fields exist anywhere in codebase (grep -rn 'goals_completed\|tasks_done\|completed_count' askr/)
+   *Why: User wants real productivity metric; must know if tracking infrastructure exists or needs to be built*
+3. Propose 3 alternative metrics to user: (A) 'goals completed today', (B) 'context reused (sessions with prior state loaded)', (C) 'API calls avoided via caching' — with honest assessment of which is measurable now
+   *Why: User explicitly rejected vague 'time saved' and wants brutal honesty; need concrete options with feasibility*
+4. If no outcome tracking exists: add minimal goals_completed counter to session_end hook (user marks goal done/skip before exit) and wire to analytics.json
+   *Why: Fastest path to real metric without major refactor*
+5. Update status display to show chosen metric (or revert to 'session duration' if no better data available) and commit with clear reasoning in commit message
+   *Why: Close the loop; user wants clarity, not misleading numbers*
 
 ## Decisions
-- Expiry window set to 24 hours for auto-suggested goals — Aligns with session-end lifecycle; goals suggested at start of one session should not persist into next day
-- Expiry logic runs at checkpoint end, after completed goals are processed — Ensures completed goals are recorded before stale auto-suggested goals are removed; maintains audit trail
+- Do not keep 'time saved' as-is without outcome backing — User correctly identified it as meaningless wall-clock duration; continuing would undermine credibility
+- Investigate existing tracking before building new infrastructure — May already have goals_completed or similar; avoid duplicate work
+
+## User-Rejected Approaches
+- **Implied: keep 'time saved 36m' as current metric** — "then we need to either come up with proper metric here, or display something else right" (domain: askr/cli/askr.py (status display))
 
 ## Failed Approaches
-- Testing changes with system Python (3.9) via direct python3 -c invocation — Union type syntax (|) requires Python 3.10+; venv has correct version but direct invocation does not. Switched to venv/bin/python for verification.
+- Grepped for completed_goals, goals_completed, done_today — commands ran but output not captured/parsed — Bash tool calls incomplete; piped Python parsing not executed successfully
 
 ## Files In Play
-- `askr/state/goals.py`
-- `askr/hooks/session_start.py`
-- `askr/session/checkpoint.py`
-- `askr/hooks/stop.py`
+- `askr/cli/askr.py`
+- `askr_state/analytics.json`
+- `askr/utils/logger.py`
 
 ## Relational Files
-- `askr/hooks/session_start.py` (imports): Calls add_goal() and tags auto-suggested goals with metadata
-- `askr/session/checkpoint.py` (imports): Calls expire_auto_suggested_goals() at checkpoint end to clean stale goals
-- `askr/hooks/stop.py` (configures): Stage 1 of lifecycle; ensures authoritative stop checkpoint runs first
+- `askr/utils/logger.py` (imported_by): Contains log_line_mark() and cost_since_mark() added this session; may need extension for outcome tracking
+- `askr_state/implementation_state.md` (configures): Tracks session state; may need to log which metric decision was made
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Incomplete audit of handover.md vs handover.json reader/writer logic — cannot safely recommend deletion until confirmed no fallback or dual-file dependencies exist
+- Unknown: does goals_completed or outcome tracking already exist in codebase? Must grep/read to proceed

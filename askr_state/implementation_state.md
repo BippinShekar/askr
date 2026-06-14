@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [10:00] Ran: grep -A 20 "3\.12" /Users/bippin/Desktop/askr/roadmap.md
+- [09:59] Ran: cat ~/.config/askr/analytics.json 2>/dev/null | python3 -c "import json,sys; d=j
+- [09:59] Ran: cat /Users/bippin/Desktop/askr/askr_state/analytics.json 2>/dev/null | python3 -
 - [09:59] Ran: grep -n "completed_goals\|duration_seconds" /Users/bippin/Desktop/askr/askr/sess
 - [09:59] Ran: grep -n "completed_goals\|goals_completed\|done_today\|load_done_today" /Users/b
 - [09:58] Ran: grep -n "handover.*\.md\|\.md.*handover\|fallback\|json\|\.md" /Users/bippin/Des

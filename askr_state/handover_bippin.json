@@ -1,111 +1,109 @@
 {
-  "task": "Complete Stage 3 of checkpoint/goal lifecycle (auto-suggested goals expiry) and evaluate handover.md vs handover.json migration",
-  "discussion_summary": "Stage 3 implementation added expiry logic for auto-suggested goals: tagging them at session_start, expiring them at checkpoint end after completed goals are processed. All three stages (stop hook, stale checkpoint gate, auto-suggested goal expiry) are now complete and committed. User asked whether handover.md can be removed in favor of handover.json \u2014 investigation started but incomplete; need to audit reader/writer to confirm no fallback logic or dual-file dependencies exist before recommending deletion.",
+  "task": "Investigate and fix the 'time saved' metric display in askr status \u2014 currently shows wall-clock session duration, not actual productivity value",
+  "discussion_summary": "User challenged the validity of the 'time saved 36m (5 sessions today)' metric, correctly noting it's just summed session durations with no actual productivity measurement. Session ended mid-investigation: attempted to locate analytics.json and goals_completed tracking to understand what data exists. User wants either a proper metric (e.g., goals completed, context reused, API calls avoided) or honest alternative display. No resolution reached; investigation incomplete.",
   "accomplishments": [
     {
-      "what": "Implemented expire_auto_suggested_goals() function in goals.py with 24-hour expiry window",
+      "what": "Identified root cause: 'time saved' is purely wall-clock duration from session_start.json \u2192 analytics.json, not tied to any outcome metric",
       "done": true
     },
     {
-      "what": "Tagged auto-suggested goals at session_start with 'auto_suggested' marker and timestamp",
-      "done": true
-    },
-    {
-      "what": "Integrated expiry call into checkpoint.py after completed goals processing",
-      "done": true
-    },
-    {
-      "what": "Verified all Stage 3 changes compile cleanly in venv (Python 3.10+)",
-      "done": true
-    },
-    {
-      "what": "Committed and pushed Stage 1, 2, 3 to main branch",
+      "what": "Confirmed analytics.json exists and contains duration_seconds entries",
       "done": true
     }
   ],
   "in_progress": [
     {
-      "file": "askr/state/goals.py",
-      "what": "Audit reader/writer to determine if handover.md can be safely deleted or if fallback/dual-file logic exists",
+      "file": "askr/cli/askr.py",
+      "what": "Investigating today_summary() function to understand current metric calculation and identify where to inject real productivity data",
+      "last_line": 0
+    },
+    {
+      "file": "askr_state/analytics.json",
+      "what": "Attempting to read and parse to see what fields are currently tracked (duration_seconds confirmed, goals_completed unknown)",
       "last_line": 0
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Complete grep audit: search codebase for all references to 'handover.md', 'handover_path', 'write_handover', and fallback logic in reader/writer modules",
-      "why": "User asked if handover.md can be deleted; need definitive answer on whether any code still reads/writes it or falls back to it"
+      "action": "Read askr/cli/askr.py and locate today_summary() function \u2014 extract exact logic for 'time saved' calculation and identify where metric source comes from",
+      "why": "Need to see current implementation before deciding whether to replace metric or add new field"
     },
     {
       "order": 2,
-      "action": "If no dual-file logic found, commit rm -rf handover.md and update any documentation that references it",
-      "why": "Consolidate to single handover.json format; reduce confusion and maintenance burden"
+      "action": "Check if goals_completed, tasks_done, or similar outcome fields exist anywhere in codebase (grep -rn 'goals_completed\\|tasks_done\\|completed_count' askr/)",
+      "why": "User wants real productivity metric; must know if tracking infrastructure exists or needs to be built"
     },
     {
       "order": 3,
-      "action": "Verify context checkpoint cards display correct 'turns remaining' in staging (open goal from previous session)",
-      "why": "This goal is still open and was not addressed this session"
+      "action": "Propose 3 alternative metrics to user: (A) 'goals completed today', (B) 'context reused (sessions with prior state loaded)', (C) 'API calls avoided via caching' \u2014 with honest assessment of which is measurable now",
+      "why": "User explicitly rejected vague 'time saved' and wants brutal honesty; need concrete options with feasibility"
     },
     {
       "order": 4,
-      "action": "Run full integration test: session_start \u2192 checkpoint \u2192 session_end with auto-suggested goals to confirm expiry fires correctly",
-      "why": "Stage 3 is complete but untested end-to-end; need confidence before stress-test phase"
+      "action": "If no outcome tracking exists: add minimal goals_completed counter to session_end hook (user marks goal done/skip before exit) and wire to analytics.json",
+      "why": "Fastest path to real metric without major refactor"
+    },
+    {
+      "order": 5,
+      "action": "Update status display to show chosen metric (or revert to 'session duration' if no better data available) and commit with clear reasoning in commit message",
+      "why": "Close the loop; user wants clarity, not misleading numbers"
     }
   ],
   "decisions": [
     {
-      "decision": "Expiry window set to 24 hours for auto-suggested goals",
-      "reason": "Aligns with session-end lifecycle; goals suggested at start of one session should not persist into next day"
+      "decision": "Do not keep 'time saved' as-is without outcome backing",
+      "reason": "User correctly identified it as meaningless wall-clock duration; continuing would undermine credibility"
     },
     {
-      "decision": "Expiry logic runs at checkpoint end, after completed goals are processed",
-      "reason": "Ensures completed goals are recorded before stale auto-suggested goals are removed; maintains audit trail"
+      "decision": "Investigate existing tracking before building new infrastructure",
+      "reason": "May already have goals_completed or similar; avoid duplicate work"
     }
   ],
-  "user_rejected_decisions": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Implied: keep 'time saved 36m' as current metric",
+      "user_signal": "then we need to either come up with proper metric here, or display something else right",
+      "domain": "askr/cli/askr.py (status display)",
+      "confidence": 0.95
+    }
+  ],
   "failed_approaches": [
     {
-      "approach": "Testing changes with system Python (3.9) via direct python3 -c invocation",
-      "reason": "Union type syntax (|) requires Python 3.10+; venv has correct version but direct invocation does not. Switched to venv/bin/python for verification."
+      "approach": "Grepped for completed_goals, goals_completed, done_today \u2014 commands ran but output not captured/parsed",
+      "reason": "Bash tool calls incomplete; piped Python parsing not executed successfully"
     }
   ],
   "files_in_play": [
-    "askr/state/goals.py",
-    "askr/hooks/session_start.py",
-    "askr/session/checkpoint.py",
-    "askr/hooks/stop.py"
+    "askr/cli/askr.py",
+    "askr_state/analytics.json",
+    "askr/utils/logger.py"
   ],
   "relational_files": [
     {
-      "file": "askr/hooks/session_start.py",
-      "relationship": "imports",
-      "why": "Calls add_goal() and tags auto-suggested goals with metadata"
+      "file": "askr/utils/logger.py",
+      "relationship": "imported_by",
+      "why": "Contains log_line_mark() and cost_since_mark() added this session; may need extension for outcome tracking"
     },
     {
-      "file": "askr/session/checkpoint.py",
-      "relationship": "imports",
-      "why": "Calls expire_auto_suggested_goals() at checkpoint end to clean stale goals"
-    },
-    {
-      "file": "askr/hooks/stop.py",
+      "file": "askr_state/implementation_state.md",
       "relationship": "configures",
-      "why": "Stage 1 of lifecycle; ensures authoritative stop checkpoint runs first"
+      "why": "Tracks session state; may need to log which metric decision was made"
     }
   ],
   "uncommitted_files": [
     "askr_state/implementation_state.md",
-    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
   "blockers": [
-    "Incomplete audit of handover.md vs handover.json reader/writer logic \u2014 cannot safely recommend deletion until confirmed no fallback or dual-file dependencies exist"
+    "Unknown: does goals_completed or outcome tracking already exist in codebase? Must grep/read to proceed"
   ],
-  "completion_pct": 85,
+  "completion_pct": 15,
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T04:29:14.205351+00:00",
+    "timestamp": "2026-06-14T04:30:14.050641+00:00",
     "developer": "bippin"
   }
 }

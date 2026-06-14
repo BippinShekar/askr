@@ -34,3 +34,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-13] Discord-first ordering in cmd_init() — User and assistant agreed this was wrong; cost display and session marking needed to happen in specific order relative to Discord notification
 - [2026-06-13] Grepping for 'time_saved' and 'sessions_today' in codebase — Searches returned no results — indicates feature may not yet be implemented or uses different naming convention
 - [2026-06-14] Testing changes with system Python (3.9) via direct python3 -c invocation — Union type syntax (|) requires Python 3.10+; venv has correct version but direct invocation does not. Switched to venv/bin/python for verification.
+- [2026-06-14] Grepped for completed_goals, goals_completed, done_today — commands ran but output not captured/parsed — Bash tool calls incomplete; piped Python parsing not executed successfully
