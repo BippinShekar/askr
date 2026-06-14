@@ -1,53 +1,57 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 10:11
+Last updated: 2026-06-14 10:18
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Remove emojis from handover markdown output and eliminate misleading completion_pct metric that contradicts accomplishments tracking
+Investigate why next_actions list generation in stop hook may create task repetition when handover.md is read by autonomous session, and clarify task field semantics (imperative vs. descriptive).
 
 ## Discussion
-Session completed the removal of emojis (✅/🔲) from writer.py and eliminated the completion_pct field from LLM prompt, reader.py, and checkpoint.py. User raised critical concern: if handover.md still describes this task in present tense after completion, autonomous sessions will re-read it as incomplete work and waste tokens re-verifying/re-implementing. This is a handover document freshness problem — completed work must be marked done or removed from task list before next session reads it.
+Session identified two interconnected issues: (1) handover.md task field is written imperatively ('Remove emojis...') instead of descriptively ('Removed emojis...'), causing autonomous sessions to re-read completed work as pending tasks; (2) next_actions list generation logic in stop hook was not yet examined — user asked what basis it uses to create next actions, implying concern that it may derive from task field rather than accomplishments or git state. Emojis and completion_pct metric were successfully removed in prior work. Session ended mid-investigation into stop hook behavior.
 
 ## Accomplishments
-- [x] Removed hardcoded emoji characters (✅/🔲) from writer.py line 38
-- [x] Removed completion_pct field from LLM schema injection in checkpoint.py
-- [x] Removed completion_pct parsing logic from reader.py
-- [x] Updated accomplishments markdown rendering to use [x]/[ ] instead of emojis
-- [x] Pushed all changes to main branch
+- [x] Removed emoji characters (✅, 🔲, ✓) from handover markdown renderer in writer.py
+- [x] Eliminated completion_pct metric from LLM prompt schema, context injection, and markdown output
+- [x] Identified task field semantics problem: imperative language causes autonomous re-reads to treat completed work as pending
+
+## In Progress
+- `askr/session/checkpoint.py`: Investigating stop hook's next_actions generation logic and its dependency chain (whether it reads task field, accomplishments, or git state)
 
 ## Next Actions
-1. Update handover.md task description from present tense ('Remove emojis...') to past tense ('Removed emojis...') or move it to a completed section before next autonomous session starts
-   *Why: Autonomous agents read handover.md as ground truth for incomplete work. If task remains in present tense after completion, next session will re-verify and re-implement, burning tokens on duplicate work*
-2. Verify that checkpoint.py no longer injects completion_pct into LLM context by running a test handover generation
-   *Why: Confirm the field is fully removed from the LLM's view, not just the schema*
-3. Build Stage 2 of roadmap (S2) — the next phase after S1 completion
-   *Why: Session notes indicate S1 is 'mostly done' and stages 2–5 need building*
-4. Address the open goal: 'Verify context checkpoint cards display correct turns remaining in staging'
-   *Why: Listed as uncompleted in OPEN GOALS; needs verification before moving forward*
+1. Locate and read the stop hook implementation that generates next_actions list — grep for 'next_actions' or 'next_action' in checkpoint.py and session/ directory
+   *Why: User asked what basis next_actions uses; need to verify it doesn't derive from task field (which would create repetition loop)*
+2. Change task field prompt in checkpoint.py from imperative ('Remove X') to past-tense descriptive ('Removed X from Y')
+   *Why: Prevents autonomous sessions from re-reading completed accomplishments as pending work*
+3. Verify next_actions generation uses accomplishments[].done and git diff as sources, NOT task field
+   *Why: Ensures autonomous session won't repeat work already marked done in accomplishments array*
+4. Test: create a handover with completed accomplishment, run autonomous session, verify it does not re-add that work to next_actions
+   *Why: Confirm the repetition fallacy is prevented before moving to 3.12 build*
+5. Commit changes to writer.py, reader.py, checkpoint.py once task field semantics are fixed
+   *Why: Current commit only removed completion_pct; task field fix is still pending*
 
 ## Decisions
-- Removed completion_pct entirely rather than fixing its derivation logic — completion_pct was a holistic LLM estimate independent from accomplishments[].done, creating irreconcilable contradiction. Removing it forces single source of truth: accomplishments tracking
-- Replaced emoji rendering with ASCII [x]/[ ] syntax — User explicitly stated emojis cause parsing issues and are unwanted in handover.md
+- Task field must be written in past-tense descriptive form, not imperative — Autonomous sessions read handover.md and interpret imperative task as work-to-do, creating token-burning repetition of completed work
+- next_actions generation must be decoupled from task field content — Task field is for human context; next_actions should derive from accomplishments.done status and git state only
 
-## User-Rejected Approaches
-- **Keep completion_pct as a separate holistic progress metric alongside accomplishments** — "User pointed out it contradicts accomplishments tracking and causes fallacy when autonomous sessions re-read incomplete task descriptions" (domain: askr/session/checkpoint.py, askr/state/writer.py, askr/state/reader.py)
-- **Use emoji characters (✅/🔲) in handover markdown output** — "User explicitly stated 'i don't like them and they will cause parsing issues, so please drop them'" (domain: askr/state/writer.py)
+## Failed Approaches
+- Writing task field as imperative directive ('Remove emojis from...') — Autonomous sessions misinterpret it as pending work, causing repetition and wasted tokens on verification
 
 ## Files In Play
+- `askr/session/checkpoint.py`
 - `askr/state/writer.py`
 - `askr/state/reader.py`
-- `askr/session/checkpoint.py`
 
 ## Relational Files
-- `roadmap.md` (configures): Contains Phase 4 section that was removed in this session's git diff; tracks overall project stages
-- `handover.md` (generated_by): Output artifact of writer.py; must be kept in sync with task completion status to prevent autonomous session re-work
+- `askr/session/checkpoint.py` (configures): Contains LLM prompt that generates task field and next_actions; stop hook logic resides here
+- `askr/state/writer.py` (imported_by): Renders handover.md from JSON; task field semantics affect how autonomous sessions interpret output
+- `askr/state/reader.py` (imported_by): Parses handover.md back into state; must handle task field correctly to avoid repetition
 
 ## Uncommitted Files
+- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Handover document freshness: next autonomous session will re-read this task as incomplete if handover.md is not updated to reflect completion before session starts
+- Stop hook next_actions generation logic not yet examined — need to confirm it doesn't depend on task field

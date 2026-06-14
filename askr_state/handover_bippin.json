@@ -1,104 +1,105 @@
 {
-  "task": "Remove emojis from handover markdown output and eliminate misleading completion_pct metric that contradicts accomplishments tracking",
-  "discussion_summary": "Session completed the removal of emojis (\u2705/\ud83d\udd32) from writer.py and eliminated the completion_pct field from LLM prompt, reader.py, and checkpoint.py. User raised critical concern: if handover.md still describes this task in present tense after completion, autonomous sessions will re-read it as incomplete work and waste tokens re-verifying/re-implementing. This is a handover document freshness problem \u2014 completed work must be marked done or removed from task list before next session reads it.",
+  "task": "Investigate why next_actions list generation in stop hook may create task repetition when handover.md is read by autonomous session, and clarify task field semantics (imperative vs. descriptive).",
+  "discussion_summary": "Session identified two interconnected issues: (1) handover.md task field is written imperatively ('Remove emojis...') instead of descriptively ('Removed emojis...'), causing autonomous sessions to re-read completed work as pending tasks; (2) next_actions list generation logic in stop hook was not yet examined \u2014 user asked what basis it uses to create next actions, implying concern that it may derive from task field rather than accomplishments or git state. Emojis and completion_pct metric were successfully removed in prior work. Session ended mid-investigation into stop hook behavior.",
   "accomplishments": [
     {
-      "what": "Removed hardcoded emoji characters (\u2705/\ud83d\udd32) from writer.py line 38",
+      "what": "Removed emoji characters (\u2705, \ud83d\udd32, \u2713) from handover markdown renderer in writer.py",
       "done": true
     },
     {
-      "what": "Removed completion_pct field from LLM schema injection in checkpoint.py",
+      "what": "Eliminated completion_pct metric from LLM prompt schema, context injection, and markdown output",
       "done": true
     },
     {
-      "what": "Removed completion_pct parsing logic from reader.py",
-      "done": true
-    },
-    {
-      "what": "Updated accomplishments markdown rendering to use [x]/[ ] instead of emojis",
-      "done": true
-    },
-    {
-      "what": "Pushed all changes to main branch",
+      "what": "Identified task field semantics problem: imperative language causes autonomous re-reads to treat completed work as pending",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": "askr/session/checkpoint.py",
+      "what": "Investigating stop hook's next_actions generation logic and its dependency chain (whether it reads task field, accomplishments, or git state)",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Update handover.md task description from present tense ('Remove emojis...') to past tense ('Removed emojis...') or move it to a completed section before next autonomous session starts",
-      "why": "Autonomous agents read handover.md as ground truth for incomplete work. If task remains in present tense after completion, next session will re-verify and re-implement, burning tokens on duplicate work"
+      "action": "Locate and read the stop hook implementation that generates next_actions list \u2014 grep for 'next_actions' or 'next_action' in checkpoint.py and session/ directory",
+      "why": "User asked what basis next_actions uses; need to verify it doesn't derive from task field (which would create repetition loop)"
     },
     {
       "order": 2,
-      "action": "Verify that checkpoint.py no longer injects completion_pct into LLM context by running a test handover generation",
-      "why": "Confirm the field is fully removed from the LLM's view, not just the schema"
+      "action": "Change task field prompt in checkpoint.py from imperative ('Remove X') to past-tense descriptive ('Removed X from Y')",
+      "why": "Prevents autonomous sessions from re-reading completed accomplishments as pending work"
     },
     {
       "order": 3,
-      "action": "Build Stage 2 of roadmap (S2) \u2014 the next phase after S1 completion",
-      "why": "Session notes indicate S1 is 'mostly done' and stages 2\u20135 need building"
+      "action": "Verify next_actions generation uses accomplishments[].done and git diff as sources, NOT task field",
+      "why": "Ensures autonomous session won't repeat work already marked done in accomplishments array"
     },
     {
       "order": 4,
-      "action": "Address the open goal: 'Verify context checkpoint cards display correct turns remaining in staging'",
-      "why": "Listed as uncompleted in OPEN GOALS; needs verification before moving forward"
+      "action": "Test: create a handover with completed accomplishment, run autonomous session, verify it does not re-add that work to next_actions",
+      "why": "Confirm the repetition fallacy is prevented before moving to 3.12 build"
+    },
+    {
+      "order": 5,
+      "action": "Commit changes to writer.py, reader.py, checkpoint.py once task field semantics are fixed",
+      "why": "Current commit only removed completion_pct; task field fix is still pending"
     }
   ],
   "decisions": [
     {
-      "decision": "Removed completion_pct entirely rather than fixing its derivation logic",
-      "reason": "completion_pct was a holistic LLM estimate independent from accomplishments[].done, creating irreconcilable contradiction. Removing it forces single source of truth: accomplishments tracking"
+      "decision": "Task field must be written in past-tense descriptive form, not imperative",
+      "reason": "Autonomous sessions read handover.md and interpret imperative task as work-to-do, creating token-burning repetition of completed work"
     },
     {
-      "decision": "Replaced emoji rendering with ASCII [x]/[ ] syntax",
-      "reason": "User explicitly stated emojis cause parsing issues and are unwanted in handover.md"
+      "decision": "next_actions generation must be decoupled from task field content",
+      "reason": "Task field is for human context; next_actions should derive from accomplishments.done status and git state only"
     }
   ],
-  "user_rejected_decisions": [
+  "user_rejected_decisions": [],
+  "failed_approaches": [
     {
-      "what_was_proposed": "Keep completion_pct as a separate holistic progress metric alongside accomplishments",
-      "user_signal": "User pointed out it contradicts accomplishments tracking and causes fallacy when autonomous sessions re-read incomplete task descriptions",
-      "domain": "askr/session/checkpoint.py, askr/state/writer.py, askr/state/reader.py",
-      "confidence": 0.95
-    },
-    {
-      "what_was_proposed": "Use emoji characters (\u2705/\ud83d\udd32) in handover markdown output",
-      "user_signal": "User explicitly stated 'i don't like them and they will cause parsing issues, so please drop them'",
-      "domain": "askr/state/writer.py",
-      "confidence": 0.99
+      "approach": "Writing task field as imperative directive ('Remove emojis from...')",
+      "reason": "Autonomous sessions misinterpret it as pending work, causing repetition and wasted tokens on verification"
     }
   ],
-  "failed_approaches": [],
   "files_in_play": [
+    "askr/session/checkpoint.py",
     "askr/state/writer.py",
-    "askr/state/reader.py",
-    "askr/session/checkpoint.py"
+    "askr/state/reader.py"
   ],
   "relational_files": [
     {
-      "file": "roadmap.md",
+      "file": "askr/session/checkpoint.py",
       "relationship": "configures",
-      "why": "Contains Phase 4 section that was removed in this session's git diff; tracks overall project stages"
+      "why": "Contains LLM prompt that generates task field and next_actions; stop hook logic resides here"
     },
     {
-      "file": "handover.md",
-      "relationship": "generated_by",
-      "why": "Output artifact of writer.py; must be kept in sync with task completion status to prevent autonomous session re-work"
+      "file": "askr/state/writer.py",
+      "relationship": "imported_by",
+      "why": "Renders handover.md from JSON; task field semantics affect how autonomous sessions interpret output"
+    },
+    {
+      "file": "askr/state/reader.py",
+      "relationship": "imported_by",
+      "why": "Parses handover.md back into state; must handle task field correctly to avoid repetition"
     }
   ],
   "uncommitted_files": [
+    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
   "blockers": [
-    "Handover document freshness: next autonomous session will re-read this task as incomplete if handover.md is not updated to reflect completion before session starts"
+    "Stop hook next_actions generation logic not yet examined \u2014 need to confirm it doesn't depend on task field"
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T04:41:42.379481+00:00",
+    "timestamp": "2026-06-14T10:13:00.000000+00:00",
     "developer": "bippin"
   }
 }
