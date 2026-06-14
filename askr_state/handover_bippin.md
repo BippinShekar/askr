@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 10:09
+Last updated: 2026-06-14 10:11
 
 *Source of truth: `handover_bippin.json`*
 
@@ -9,29 +9,32 @@ Last updated: 2026-06-14 10:09
 Remove emojis from handover markdown output and eliminate misleading completion_pct metric that contradicts accomplishments tracking
 
 ## Discussion
-User identified two data quality issues: (1) hardcoded emojis in writer.py causing parsing problems, (2) completion_pct field generated independently from accomplishments[].done, creating contradictory signals about task completion. Session focused on removing both the emoji rendering and the completion_pct schema field from writer.py, reader.py, and the LLM prompt in checkpoint.py. Changes were committed and pushed to main.
+Session completed the removal of emojis (✅/🔲) from writer.py and eliminated the completion_pct field from LLM prompt, reader.py, and checkpoint.py. User raised critical concern: if handover.md still describes this task in present tense after completion, autonomous sessions will re-read it as incomplete work and waste tokens re-verifying/re-implementing. This is a handover document freshness problem — completed work must be marked done or removed from task list before next session reads it.
 
 ## Accomplishments
-- [x] Removed hardcoded emoji characters (✅, 🔲) from handover markdown writer
-- [x] Eliminated completion_pct field from handover JSON schema to prevent contradictory completion signals
-- [x] Updated checkpoint.py LLM prompt to remove completion_pct from schema definition and generation rules
-- [x] Committed and pushed all three file changes to main branch
+- [x] Removed hardcoded emoji characters (✅/🔲) from writer.py line 38
+- [x] Removed completion_pct field from LLM schema injection in checkpoint.py
+- [x] Removed completion_pct parsing logic from reader.py
+- [x] Updated accomplishments markdown rendering to use [x]/[ ] instead of emojis
+- [x] Pushed all changes to main branch
 
 ## Next Actions
-1. Verify context checkpoint cards display correct 'turns remaining' in staging environment — this was listed as an open goal and needs validation after the schema changes
-   *Why: Ensures the removal of completion_pct didn't break turn counting or context display logic*
-2. Run full test suite on writer.py and reader.py to confirm handover JSON generation works without emojis and completion_pct
-   *Why: Validate that the schema changes don't break serialization or deserialization*
-3. Begin Phase 3.12 implementation — user confirmed readiness at session start, three 3.11 fixes are pushed, S1 (user_rejected_decisions extraction) is mostly done
-   *Why: Unblocks the next roadmap phase now that data quality issues are resolved*
+1. Update handover.md task description from present tense ('Remove emojis...') to past tense ('Removed emojis...') or move it to a completed section before next autonomous session starts
+   *Why: Autonomous agents read handover.md as ground truth for incomplete work. If task remains in present tense after completion, next session will re-verify and re-implement, burning tokens on duplicate work*
+2. Verify that checkpoint.py no longer injects completion_pct into LLM context by running a test handover generation
+   *Why: Confirm the field is fully removed from the LLM's view, not just the schema*
+3. Build Stage 2 of roadmap (S2) — the next phase after S1 completion
+   *Why: Session notes indicate S1 is 'mostly done' and stages 2–5 need building*
+4. Address the open goal: 'Verify context checkpoint cards display correct turns remaining in staging'
+   *Why: Listed as uncompleted in OPEN GOALS; needs verification before moving forward*
 
 ## Decisions
-- Remove completion_pct entirely rather than reconcile it with accomplishments[].done — The two fields derive from independent sources (holistic LLM estimate vs. explicit task tracking) and routinely contradict; single source of truth is cleaner
-- Strip all emoji characters from markdown output rather than replace with text equivalents — User explicitly stated emojis cause parsing issues and are unwanted; plain text is more robust
+- Removed completion_pct entirely rather than fixing its derivation logic — completion_pct was a holistic LLM estimate independent from accomplishments[].done, creating irreconcilable contradiction. Removing it forces single source of truth: accomplishments tracking
+- Replaced emoji rendering with ASCII [x]/[ ] syntax — User explicitly stated emojis cause parsing issues and are unwanted in handover.md
 
 ## User-Rejected Approaches
-- **Keep completion_pct as a holistic estimate field alongside accomplishments tracking** — "User flagged it as misleading and contradictory; asked to remove it" (domain: askr/state/writer.py, askr/session/checkpoint.py)
-- **Keep emojis in handover markdown for visual clarity** — "User stated 'i don't like them and they will cause parsing issues, so please drop them'" (domain: askr/state/writer.py)
+- **Keep completion_pct as a separate holistic progress metric alongside accomplishments** — "User pointed out it contradicts accomplishments tracking and causes fallacy when autonomous sessions re-read incomplete task descriptions" (domain: askr/session/checkpoint.py, askr/state/writer.py, askr/state/reader.py)
+- **Use emoji characters (✅/🔲) in handover markdown output** — "User explicitly stated 'i don't like them and they will cause parsing issues, so please drop them'" (domain: askr/state/writer.py)
 
 ## Files In Play
 - `askr/state/writer.py`
@@ -39,11 +42,12 @@ User identified two data quality issues: (1) hardcoded emojis in writer.py causi
 - `askr/session/checkpoint.py`
 
 ## Relational Files
-- `askr/cli/askr.py` (imported_by): Calls handover writer; affected by schema changes
-- `roadmap.md` (configures): Phase 3.12 roadmap was referenced at session start; next phase to begin
+- `roadmap.md` (configures): Contains Phase 4 section that was removed in this session's git diff; tracks overall project stages
+- `handover.md` (generated_by): Output artifact of writer.py; must be kept in sync with task completion status to prevent autonomous session re-work
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
+
+## Blockers
+- Handover document freshness: next autonomous session will re-read this task as incomplete if handover.md is not updated to reflect completion before session starts

@@ -1,21 +1,25 @@
 {
   "task": "Remove emojis from handover markdown output and eliminate misleading completion_pct metric that contradicts accomplishments tracking",
-  "discussion_summary": "User identified two data quality issues: (1) hardcoded emojis in writer.py causing parsing problems, (2) completion_pct field generated independently from accomplishments[].done, creating contradictory signals about task completion. Session focused on removing both the emoji rendering and the completion_pct schema field from writer.py, reader.py, and the LLM prompt in checkpoint.py. Changes were committed and pushed to main.",
+  "discussion_summary": "Session completed the removal of emojis (\u2705/\ud83d\udd32) from writer.py and eliminated the completion_pct field from LLM prompt, reader.py, and checkpoint.py. User raised critical concern: if handover.md still describes this task in present tense after completion, autonomous sessions will re-read it as incomplete work and waste tokens re-verifying/re-implementing. This is a handover document freshness problem \u2014 completed work must be marked done or removed from task list before next session reads it.",
   "accomplishments": [
     {
-      "what": "Removed hardcoded emoji characters (\u2705, \ud83d\udd32) from handover markdown writer",
+      "what": "Removed hardcoded emoji characters (\u2705/\ud83d\udd32) from writer.py line 38",
       "done": true
     },
     {
-      "what": "Eliminated completion_pct field from handover JSON schema to prevent contradictory completion signals",
+      "what": "Removed completion_pct field from LLM schema injection in checkpoint.py",
       "done": true
     },
     {
-      "what": "Updated checkpoint.py LLM prompt to remove completion_pct from schema definition and generation rules",
+      "what": "Removed completion_pct parsing logic from reader.py",
       "done": true
     },
     {
-      "what": "Committed and pushed all three file changes to main branch",
+      "what": "Updated accomplishments markdown rendering to use [x]/[ ] instead of emojis",
+      "done": true
+    },
+    {
+      "what": "Pushed all changes to main branch",
       "done": true
     }
   ],
@@ -23,42 +27,47 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Verify context checkpoint cards display correct 'turns remaining' in staging environment \u2014 this was listed as an open goal and needs validation after the schema changes",
-      "why": "Ensures the removal of completion_pct didn't break turn counting or context display logic"
+      "action": "Update handover.md task description from present tense ('Remove emojis...') to past tense ('Removed emojis...') or move it to a completed section before next autonomous session starts",
+      "why": "Autonomous agents read handover.md as ground truth for incomplete work. If task remains in present tense after completion, next session will re-verify and re-implement, burning tokens on duplicate work"
     },
     {
       "order": 2,
-      "action": "Run full test suite on writer.py and reader.py to confirm handover JSON generation works without emojis and completion_pct",
-      "why": "Validate that the schema changes don't break serialization or deserialization"
+      "action": "Verify that checkpoint.py no longer injects completion_pct into LLM context by running a test handover generation",
+      "why": "Confirm the field is fully removed from the LLM's view, not just the schema"
     },
     {
       "order": 3,
-      "action": "Begin Phase 3.12 implementation \u2014 user confirmed readiness at session start, three 3.11 fixes are pushed, S1 (user_rejected_decisions extraction) is mostly done",
-      "why": "Unblocks the next roadmap phase now that data quality issues are resolved"
+      "action": "Build Stage 2 of roadmap (S2) \u2014 the next phase after S1 completion",
+      "why": "Session notes indicate S1 is 'mostly done' and stages 2\u20135 need building"
+    },
+    {
+      "order": 4,
+      "action": "Address the open goal: 'Verify context checkpoint cards display correct turns remaining in staging'",
+      "why": "Listed as uncompleted in OPEN GOALS; needs verification before moving forward"
     }
   ],
   "decisions": [
     {
-      "decision": "Remove completion_pct entirely rather than reconcile it with accomplishments[].done",
-      "reason": "The two fields derive from independent sources (holistic LLM estimate vs. explicit task tracking) and routinely contradict; single source of truth is cleaner"
+      "decision": "Removed completion_pct entirely rather than fixing its derivation logic",
+      "reason": "completion_pct was a holistic LLM estimate independent from accomplishments[].done, creating irreconcilable contradiction. Removing it forces single source of truth: accomplishments tracking"
     },
     {
-      "decision": "Strip all emoji characters from markdown output rather than replace with text equivalents",
-      "reason": "User explicitly stated emojis cause parsing issues and are unwanted; plain text is more robust"
+      "decision": "Replaced emoji rendering with ASCII [x]/[ ] syntax",
+      "reason": "User explicitly stated emojis cause parsing issues and are unwanted in handover.md"
     }
   ],
   "user_rejected_decisions": [
     {
-      "what_was_proposed": "Keep completion_pct as a holistic estimate field alongside accomplishments tracking",
-      "user_signal": "User flagged it as misleading and contradictory; asked to remove it",
-      "domain": "askr/state/writer.py, askr/session/checkpoint.py",
+      "what_was_proposed": "Keep completion_pct as a separate holistic progress metric alongside accomplishments",
+      "user_signal": "User pointed out it contradicts accomplishments tracking and causes fallacy when autonomous sessions re-read incomplete task descriptions",
+      "domain": "askr/session/checkpoint.py, askr/state/writer.py, askr/state/reader.py",
       "confidence": 0.95
     },
     {
-      "what_was_proposed": "Keep emojis in handover markdown for visual clarity",
-      "user_signal": "User stated 'i don't like them and they will cause parsing issues, so please drop them'",
+      "what_was_proposed": "Use emoji characters (\u2705/\ud83d\udd32) in handover markdown output",
+      "user_signal": "User explicitly stated 'i don't like them and they will cause parsing issues, so please drop them'",
       "domain": "askr/state/writer.py",
-      "confidence": 0.98
+      "confidence": 0.99
     }
   ],
   "failed_approaches": [],
@@ -69,27 +78,27 @@
   ],
   "relational_files": [
     {
-      "file": "askr/cli/askr.py",
-      "relationship": "imported_by",
-      "why": "Calls handover writer; affected by schema changes"
-    },
-    {
       "file": "roadmap.md",
       "relationship": "configures",
-      "why": "Phase 3.12 roadmap was referenced at session start; next phase to begin"
+      "why": "Contains Phase 4 section that was removed in this session's git diff; tracks overall project stages"
+    },
+    {
+      "file": "handover.md",
+      "relationship": "generated_by",
+      "why": "Output artifact of writer.py; must be kept in sync with task completion status to prevent autonomous session re-work"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_state.md",
-    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
-  "blockers": [],
+  "blockers": [
+    "Handover document freshness: next autonomous session will re-read this task as incomplete if handover.md is not updated to reflect completion before session starts"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T10:09:00+00:00",
+    "timestamp": "2026-06-14T04:41:42.379481+00:00",
     "developer": "bippin"
   }
 }
