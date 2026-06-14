@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [09:59] Ran: grep -n "completed_goals\|duration_seconds" /Users/bippin/Desktop/askr/askr/sess
+- [09:59] Ran: grep -n "completed_goals\|goals_completed\|done_today\|load_done_today" /Users/b
+- [09:58] Ran: grep -n "handover.*\.md\|\.md.*handover\|fallback\|json\|\.md" /Users/bippin/Des
+- [09:58] Ran: grep -n "handover.*\.md\|\.md.*handover\|handover_path\|write_handover" /Users/b
 - [23:53] Ran: grep -n "total_human\|duration_seconds\|time_saved\|session_card\|savings" /User
 - [23:53] Ran: grep -rn "time_saved\|time saved\|sessions_today\|sessions today" /Users/bippin/
 - [23:53] Ran: grep -n "time saved\|time_saved\|36m\|sessions today" /Users/bippin/Desktop/askr

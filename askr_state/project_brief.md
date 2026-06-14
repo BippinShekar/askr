@@ -1,16 +1,16 @@
-Last updated: 2026-06-13 23:55
+Last updated: 2026-06-14 09:59
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive sessions with an LLM, manages code context, generates and validates code, and hands over work to autonomous continuation. It integrates with IDEs, tracks session costs, and persists state across invocations. The core problem: developers need an agent that understands their codebase, generates code incrementally, and can resume work without losing context.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state locally and supporting autonomous session continuation. It bridges code editors, LLM APIs, and subprocess execution to let users collaborate with AI on coding tasks. The core problem: maintaining coherent session state across interruptions and handoffs so the agent can pick up where it left off without losing context or executing stale goals.
 
 ## What's In Flight
 
-- Cost tracking and session metrics display. Added log_line_mark() and cost_since_mark() helpers to logger.py; wired into cmd_init() to show cost after Discord brief resolves. Currently investigating how 'time saved' and 'sessions today' metrics are calculated in askr status command.
-- Handover system redesign. Root cause identified: stop checkpoint handler is never invoked, leaving handovers stale. Goal inference must be deferred to session-end validation and made session-aware, not message-aware, to prevent auto-inferred goals from poisoning autonomous continuation.
-- Context checkpoint card display verification. Need to confirm 'turns remaining' calculation displays correctly in staging before pushing report_image.py fixes to main.
+- **Stage 3 checkpoint/goal lifecycle completion** — Auto-suggested goals now expire 24 hours after session start (tagged at session_start.py, expired at checkpoint.py). All three stages (stop hook, stale checkpoint gate, goal expiry) are committed to main.
+- **Handover format migration audit** — Investigating whether handover.md can be safely deleted in favor of handover.json; need to confirm no fallback logic or dual-file dependencies exist in reader/writer modules.
+- **Context checkpoint card verification** — Open goal: confirm 'turns remaining' displays correctly in staging before pushing report_image.py fixes.
 
 ## Key Decisions Made
 
-- Checkpoint system accepts both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
-- Delta extraction happens at hook level (post
+- **Checkpoint and launch_mode.json are primary handover carriers** — Git state alone is insufficient; these files control autonomous session continuation and must be treated as the source of truth for handover state.
+- **Goal inference deferred to

@@ -40,3 +40,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-13 23:34] [bippin] Session marking happens before first API call (snapshot), not after. Reason: Ensures accurate session start time for cost tracking and logging
 [2026-06-13 23:55] [bippin] Cost tracking helpers added to logger.py rather than cmd_init() directly. Reason: Separation of concerns — logger owns cost aggregation logic, CLI owns orchestration
 [2026-06-13 23:55] [bippin] Mark placed before first API call, cost display after Discord brief. Reason: Captures only the cost of the init workflow itself, not setup overhead
+[2026-06-14 09:59] [bippin] Expiry window set to 24 hours for auto-suggested goals. Reason: Aligns with session-end lifecycle; goals suggested at start of one session should not persist into next day
+[2026-06-14 09:59] [bippin] Expiry logic runs at checkpoint end, after completed goals are processed. Reason: Ensures completed goals are recorded before stale auto-suggested goals are removed; maintains audit trail

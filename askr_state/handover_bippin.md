@@ -1,57 +1,56 @@
 # Handover: bippin
 
-Last updated: 2026-06-13 23:55
+Last updated: 2026-06-14 09:59
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Add cost tracking helpers to logger.py and wire them into cmd_init() to display time saved and session cost metrics
+Complete Stage 3 of checkpoint/goal lifecycle (auto-suggested goals expiry) and evaluate handover.md vs handover.json migration
 
 ## Discussion
-Session completed logging infrastructure for cost tracking. Added `log_line_mark()` and `cost_since_mark()` helpers to snapshot and calculate cost deltas. Wired these into `cmd_init()` to mark before first API call, then display cost after Discord brief resolves. User then pivoted to investigating how 'time saved 36m (5 sessions today)' is calculated in `askr status` and requested session UUID display for enhanced clarity in context tracking.
+Stage 3 implementation added expiry logic for auto-suggested goals: tagging them at session_start, expiring them at checkpoint end after completed goals are processed. All three stages (stop hook, stale checkpoint gate, auto-suggested goal expiry) are now complete and committed. User asked whether handover.md can be removed in favor of handover.json — investigation started but incomplete; need to audit reader/writer to confirm no fallback logic or dual-file dependencies exist before recommending deletion.
 
 ## Progress
-65% complete
+85% complete
 
 ## Accomplishments
-- ✅ Added log_line_mark() and cost_since_mark() helpers to logger.py
-- ✅ Wired cost tracking into cmd_init() with mark before first API call and cost display after Discord
-- ✅ Committed and pushed changes (feat(init): disp...)
+- ✅ Implemented expire_auto_suggested_goals() function in goals.py with 24-hour expiry window
+- ✅ Tagged auto-suggested goals at session_start with 'auto_suggested' marker and timestamp
+- ✅ Integrated expiry call into checkpoint.py after completed goals processing
+- ✅ Verified all Stage 3 changes compile cleanly in venv (Python 3.10+)
+- ✅ Committed and pushed Stage 1, 2, 3 to main branch
 
 ## In Progress
-- `askr/cli/askr.py`: Investigating time_saved calculation logic and where session metrics are computed for status display
-- `askr/utils/logger.py`: Understanding cost tracking and how session deltas feed into status metrics
+- `askr/state/goals.py`: Audit reader/writer to determine if handover.md can be safely deleted or if fallback/dual-file logic exists
 
 ## Next Actions
-1. Search codebase for where 'time saved' string and '36m' formatting is generated — likely in status command or session aggregator
-   *Why: User needs to understand the math behind time_saved calculation before deciding on UUID display enhancement*
-2. Locate session state storage and identify how 5 sessions are being tracked/counted for 'sessions today' metric
-   *Why: Required to understand if time_saved is sum of cost_since_mark() across sessions or a different calculation*
-3. Find where Claude session UUID would be available (likely from API response or environment) and determine if it's already captured in logs
-   *Why: User wants UUID displayed alongside context % for session identification clarity*
-4. Propose specific location and format for UUID display in status output (e.g., 'Session: uuid-here | context 28%')
-   *Why: User requested brutally honest thoughts on feasibility and UX impact before implementation*
-5. Verify if time_saved calculation needs adjustment based on findings — may require refactoring if currently incorrect
-   *Why: User's question implies uncertainty about current implementation correctness*
+1. Complete grep audit: search codebase for all references to 'handover.md', 'handover_path', 'write_handover', and fallback logic in reader/writer modules
+   *Why: User asked if handover.md can be deleted; need definitive answer on whether any code still reads/writes it or falls back to it*
+2. If no dual-file logic found, commit rm -rf handover.md and update any documentation that references it
+   *Why: Consolidate to single handover.json format; reduce confusion and maintenance burden*
+3. Verify context checkpoint cards display correct 'turns remaining' in staging (open goal from previous session)
+   *Why: This goal is still open and was not addressed this session*
+4. Run full integration test: session_start → checkpoint → session_end with auto-suggested goals to confirm expiry fires correctly
+   *Why: Stage 3 is complete but untested end-to-end; need confidence before stress-test phase*
 
 ## Decisions
-- Cost tracking helpers added to logger.py rather than cmd_init() directly — Separation of concerns — logger owns cost aggregation logic, CLI owns orchestration
-- Mark placed before first API call, cost display after Discord brief — Captures only the cost of the init workflow itself, not setup overhead
+- Expiry window set to 24 hours for auto-suggested goals — Aligns with session-end lifecycle; goals suggested at start of one session should not persist into next day
+- Expiry logic runs at checkpoint end, after completed goals are processed — Ensures completed goals are recorded before stale auto-suggested goals are removed; maintains audit trail
 
 ## Failed Approaches
-- Grepping for 'time_saved' and 'sessions_today' in codebase — Searches returned no results — indicates feature may not yet be implemented or uses different naming convention
+- Testing changes with system Python (3.9) via direct python3 -c invocation — Union type syntax (|) requires Python 3.10+; venv has correct version but direct invocation does not. Switched to venv/bin/python for verification.
 
 ## Files In Play
-- `askr/cli/askr.py`
-- `askr/utils/logger.py`
-- `askr_state/implementation_state.md`
-- `roadmap.md`
+- `askr/state/goals.py`
+- `askr/hooks/session_start.py`
+- `askr/session/checkpoint.py`
+- `askr/hooks/stop.py`
 
 ## Relational Files
-- `askr/cli/askr.py` (imports): cmd_init() calls logger helpers; status command likely lives here too
-- `askr/utils/logger.py` (imported_by): Provides cost_since_mark() and log_line_mark() used by cmd_init()
-- `askr_state/implementation_state.md` (configures): Tracks session progress and uncommitted changes
+- `askr/hooks/session_start.py` (imports): Calls add_goal() and tags auto-suggested goals with metadata
+- `askr/session/checkpoint.py` (imports): Calls expire_auto_suggested_goals() at checkpoint end to clean stale goals
+- `askr/hooks/stop.py` (configures): Stage 1 of lifecycle; ensures authoritative stop checkpoint runs first
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
@@ -60,5 +59,4 @@ Session completed logging infrastructure for cost tracking. Added `log_line_mark
 - `stress-tests/`
 
 ## Blockers
-- Cannot locate source of 'time saved 36m (5 sessions today)' calculation — grep searches returned no matches
-- Unclear if session UUID is available from Claude API or must be sourced from environment/config
+- Incomplete audit of handover.md vs handover.json reader/writer logic — cannot safely recommend deletion until confirmed no fallback or dual-file dependencies exist
