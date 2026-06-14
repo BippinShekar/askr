@@ -1,94 +1,115 @@
 {
-  "task": "Evaluate remote session control and auto-run features for askr to enable non-technical team members to collaborate with technical leads on a 50-person team.",
-  "discussion_summary": "User's friend requested a feature allowing remote control of another person's askr session, with auto-run capabilities for requests, to smooth team collaboration. The user asked for thoughts on feasibility and adoption potential for a 50-person team. Session ended before detailed analysis or implementation planning could occur\u2014assistant was about to examine askr's codebase structure (roadmap, decisions, state files) to understand current architecture and constraints.",
-  "accomplishments": [],
-  "in_progress": [
+  "task": "Diagnose and fix the architectural flaw where next_actions inferred from LLM checkpoints don't align with actual user intent, causing token waste and broken cross-team handover utility.",
+  "discussion_summary": "The session exposed a critical gap: `completion_pct` was removed from the schema, but the real problem is deeper\u2014the LLM generates `next_actions[]` based on transcript + git state, not on user intent or cross-team context. An autonomous session reading handover.md will see imperative task descriptions (\"Remove emojis\") instead of past-tense outcomes, causing it to re-execute completed work. Building 3.12 alone won't fix this; the checkpoint prompt itself needs to ground next_actions in user goals and team dependencies, not just file diffs. Without that, askr remains a session-local tool, not a cross-team handover system.",
+  "accomplishments": [
     {
-      "file": "askr_state/goals.md",
-      "what": "Updated daily goals to reflect new tasks: change task field language and locate stop hook logic",
-      "last_line": 10
+      "what": "Removed `completion_pct` from writer.py, reader.py, and checkpoint.py LLM prompt",
+      "done": true
     },
     {
-      "file": "askr_state/implementation_state.md",
-      "what": "Logged recent bash commands executed to inspect project structure",
-      "last_line": 12
+      "what": "Converted handover markdown emoji rendering from \u2705/\ud83d\udd32 to [x]/[ ]",
+      "done": true
+    },
+    {
+      "what": "Identified root cause: task field is imperative, not descriptive; next_actions are inferred from diffs, not user intent",
+      "done": true
+    },
+    {
+      "what": "Exposed that autonomous sessions will re-execute completed work if handover task descriptions remain directive",
+      "done": true
     }
   ],
+  "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Complete the codebase inspection: read roadmap.md, decisions.md, and checkpoint.py to understand current session architecture, auth model, and state management",
-      "why": "Required to assess feasibility of remote session control feature before giving informed thoughts to user"
+      "action": "Rewrite checkpoint.py prompt to generate task as past-tense outcome (\"Removed emojis from handover.md\") not imperative directive (\"Remove emojis from...\"). Add explicit instruction: 'Describe what was accomplished, not what should be done.'",
+      "why": "Prevents autonomous sessions from re-executing completed work. This is the immediate token-waste blocker."
     },
     {
       "order": 2,
-      "action": "Document architectural constraints and security implications of remote session control (auth, permissions, session isolation, audit trail)",
-      "why": "Critical for evaluating whether this feature is viable at scale for 50-person teams"
+      "action": "Extend checkpoint prompt to inject open_goals.md and team_context.md (if exists) into next_actions generation. Instruct LLM: 'Ground next_actions in unmet user goals and cross-team dependencies, not just file diffs.'",
+      "why": "Transforms next_actions from local-session inference to intentional cross-team handover. Addresses the architectural flaw that makes askr unuseful for multi-developer workflows."
     },
     {
       "order": 3,
-      "action": "Provide user with structured thoughts on: MVP scope, team adoption barriers, implementation complexity, and phased rollout strategy",
-      "why": "User explicitly requested thoughts on feasibility and adoption for their friend's use case"
+      "action": "Add validation in create_checkpoint(): if a next_action matches a completed accomplishment (fuzzy string match), reject it and regenerate that action.",
+      "why": "Safety net to catch LLM hallucinations where it proposes work already done in the same session."
     },
     {
       "order": 4,
-      "action": "Locate and review stop hook next_actions generation logic in checkpoint.py as per open goal",
-      "why": "Open goal from this session; needed to understand how auto-run and request queuing might integrate"
+      "action": "Before building 3.12, run a stress test: create a handover.md, start a new autonomous session, verify it does NOT re-execute the task from the previous session's accomplishments.",
+      "why": "Validates the fix works end-to-end before shipping. Prevents shipping a tool that burns tokens on repeated work."
     },
     {
       "order": 5,
-      "action": "Update task language in goals.md from imperative to past-tense descriptive per open goal",
-      "why": "Consistency improvement for askr's own state management system"
+      "action": "Document in README: 'askr is designed for cross-team handover. Each session reads the previous handover.md and builds on it. Task descriptions are outcomes, not directives. Next actions are grounded in team goals, not just code diffs.'",
+      "why": "Sets user expectations. Clarifies that askr is not a session-local tool; it's a multi-developer coordination system."
     }
   ],
   "decisions": [
     {
-      "decision": "Did not proceed with implementation planning until codebase architecture is understood",
-      "reason": "Remote session control is a significant feature with security and auth implications; must understand current session model first"
+      "decision": "Do NOT build 3.12 until checkpoint prompt is rewritten to ground next_actions in user intent, not file diffs.",
+      "reason": "Building 3.12 without fixing the prompt will ship a tool that causes autonomous sessions to re-execute completed work, wasting tokens and breaking cross-team utility. The architectural flaw is in the prompt, not the schema."
+    },
+    {
+      "decision": "Task field must be past-tense outcome, not imperative directive.",
+      "reason": "Autonomous sessions will treat imperative directives as new work to do, causing repetition. Past-tense signals 'this is done; move on.'"
     }
   ],
-  "user_rejected_decisions": [],
-  "failed_approaches": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Building 3.12 as the next step to improve handover quality.",
+      "user_signal": "how will building the 3.12 help with this problem... if our inferred next steps in handover aren't really in-tune then how would askr ever be useful for the user for the user's cross-team functionality. be brutally honest.",
+      "domain": "roadmap.md / architecture",
+      "confidence": 0.95
+    }
+  ],
+  "failed_approaches": [
+    {
+      "approach": "Removing `completion_pct` from the schema as the primary fix for handover accuracy.",
+      "reason": "It addressed a symptom (contradictory metrics) but not the root cause: next_actions are inferred from git diffs and transcript, not from user intent or team goals. The LLM still generates directives instead of outcomes."
+    },
+    {
+      "approach": "Assuming that once next_actions are generated, an autonomous session will correctly interpret them as 'things to do next' rather than 'things that were already done.'",
+      "reason": "Imperative task descriptions ('Remove emojis') read as new work, not completed work. The handover format itself is ambiguous to downstream sessions."
+    }
+  ],
   "files_in_play": [
-    "roadmap.md",
-    "askr_state/decisions.md",
-    "askr_state/goals.md",
-    "askr_state/implementation_state.md",
-    "askr_state/notifications.log",
-    "session/checkpoint.py"
+    "askr/state/writer.py",
+    "askr/state/reader.py",
+    "askr/session/checkpoint.py",
+    "roadmap.md"
   ],
   "relational_files": [
     {
-      "file": "session/checkpoint.py",
+      "file": "askr/session/checkpoint.py",
       "relationship": "configures",
-      "why": "Contains stop hook logic for next_actions generation; relevant to auto-run feature design"
+      "why": "Contains the LLM prompt that generates next_actions. This is where the architectural flaw lives."
     },
     {
-      "file": "askr_state/decisions.md",
-      "relationship": "configures",
-      "why": "Documents past architectural decisions that constrain or enable remote session control"
+      "file": "goals.md",
+      "relationship": "imported_by",
+      "why": "Should be injected into checkpoint prompt to ground next_actions in user intent, not just diffs."
     },
     {
       "file": "roadmap.md",
       "relationship": "configures",
-      "why": "Shows planned phases and features; needed to understand where remote control fits in product strategy"
+      "why": "Phase 4 was removed this session. Clarifies that 3.12 is pre-launch, not post-launch work."
     }
   ],
   "uncommitted_files": [
-    "askr_state/goals.md",
-    "askr_state/implementation_state.md",
-    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
   "blockers": [
-    "Codebase inspection incomplete\u2014need to read roadmap.md and decisions.md to understand session architecture before providing informed feasibility analysis"
+    "Checkpoint prompt generates imperative task descriptions instead of past-tense outcomes, causing autonomous sessions to re-execute completed work.",
+    "Next_actions are inferred from git diffs and transcript, not grounded in user goals or team context. This breaks cross-team handover utility."
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T14:26:00Z",
-    "context": "User asked for thoughts on remote session control feature for 50-person team; assistant began codebase inspection but session ended before analysis could be completed",
+    "timestamp": "2026-06-14T08:58:43.057809+00:00",
     "developer": "bippin"
   }
 }

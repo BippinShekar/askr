@@ -1,18 +1,17 @@
-Last updated: 2026-06-14 14:27
+Last updated: 2026-06-14 14:29
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages development sessions, handles user queries, and integrates with IDEs and notification systems. It enables developers to offload coding tasks to an AI assistant while maintaining session state, tracking usage, and providing autonomous handover capabilities for multi-turn work.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It solves the problem of broken cross-team handover: when one developer hands off work to another (or to an autonomous session), the LLM-generated next_actions are inferred from code diffs and transcripts, not from user intent or team goals, causing autonomous sessions to re-execute completed work and waste tokens.
 
 ## What's In Flight
 
-- Remote session control and auto-run feature evaluation for team collaboration on 50-person teams. Currently assessing architectural feasibility, auth model constraints, and security implications before implementation planning.
-- Handover system redesign to fix stale checkpoint generation. Root cause identified: stop checkpoint handler is not invoked at session end, causing auto-inferred goals to become out of sync with actual session progress.
-- Goal inference refactoring to defer inference until session-end validation rather than mid-session auto-inference. Goals must be session-aware, not message-aware.
-- Checkpoint card display verification in staging to confirm correct "turns remaining" calculation.
+- Fixing checkpoint prompt to generate task descriptions as past-tense outcomes ("Removed emojis") instead of imperative directives ("Remove emojis"), preventing autonomous re-execution of completed work.
+- Extending checkpoint prompt to inject open_goals.md and team_context.md into next_actions generation, grounding handover in intentional team dependencies rather than local file diffs.
+- Adding validation in create_checkpoint() to reject next_actions that match completed accomplishments (fuzzy match), catching LLM hallucinations.
+- Stress-testing end-to-end: create a handover.md, start an autonomous session, verify it does NOT re-execute the previous session's task.
+- Verifying context checkpoint cards display correct 'turns remaining' in staging before pushing report_image.py fixes.
 
 ## Key Decisions Made
 
-- Checkpoint system handles both dict and str goal formats for backward compatibility while supporting new JSON-serialized format.
-- Delta extraction happens at hook level (post_tool_use.py) rather than checkpoint.py to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence.
-- Checkpoint_pending.json and launch_mode.json are primary handover state carriers; git
+- Checkpoint
