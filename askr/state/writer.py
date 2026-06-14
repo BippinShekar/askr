@@ -32,10 +32,8 @@ def _handover_json_to_md(data: dict, developer: str = "") -> str:
         lines.append(f"## Task\n{data['task']}")
     if data.get("discussion_summary"):
         lines.append(f"## Discussion\n{data['discussion_summary']}")
-    if data.get("completion_pct") is not None:
-        lines.append(f"## Progress\n{data['completion_pct']}% complete")
     if data.get("accomplishments"):
-        items = [f"- {'✅' if a.get('done') else '🔲'} {a['what']}" for a in data["accomplishments"]]
+        items = [f"- {'[x]' if a.get('done') else '[ ]'} {a['what']}" for a in data["accomplishments"]]
         lines.append("## Accomplishments\n" + "\n".join(items))
     if data.get("in_progress"):
         items = [

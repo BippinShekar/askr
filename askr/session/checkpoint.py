@@ -224,7 +224,6 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
   "relational_files": [{{"file": "exact/path.py", "relationship": "imports|imported_by|configures|tested_by", "why": "why relevant to this session"}}],
   "uncommitted_files": {uncommitted_json},
   "blockers": ["specific blocker"],
-  "completion_pct": 0,
   "completed_goals": [],
   "session_metadata": {{"trigger_type": "{trigger_type}", "timestamp": "{now_iso}"}}
 }}
@@ -238,7 +237,6 @@ Rules:
 - user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include. Empty array if uncertain.
 - decisions: choices between alternatives that rule something out — not observations or facts.
 - completed_goals: list exact goal strings from OPEN GOALS that are clearly finished per transcript. Conservative.
-- completion_pct: integer 0-100 based on accomplishments vs remaining work.
 - Empty array [] for sections with nothing to report. Never null."""
 
         raw = call_claude(

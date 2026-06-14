@@ -19,8 +19,6 @@ def _format_handover_for_context(data: dict) -> str:
         parts.append(f"## Task\n{data['task']}")
     if data.get("discussion_summary"):
         parts.append(f"## What Was Discussed\n{data['discussion_summary']}")
-    if data.get("completion_pct") is not None:
-        parts.append(f"## Progress\n{data['completion_pct']}% complete")
     if data.get("in_progress"):
         items = [
             f"- {ip['file']}" + (f" (line {ip['last_line']})" if ip.get("last_line") else "") + f": {ip['what']}"
