@@ -1,16 +1,17 @@
-Last updated: 2026-06-14 14:38
+Last updated: 2026-06-14 14:44
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that executes interactive development sessions with LLM integration, state persistence, and multi-client support. It solves the problem of context loss and manual handoff between development sessions by persisting session state, tracking token usage, and enabling autonomous continuation across interruptions.
+Askr is a CLI-based AI coding agent that executes interactive development sessions with an LLM, managing code changes, test validation, and state persistence across multiple client sessions. It solves the problem of context loss and manual handoff overhead when developers need to pause, resume, or hand off coding tasks to teammates or autonomous agents.
 
 ## What's In Flight
 
-- Phase 5 (Hardening): Integrating approval gate for queued tasks. Gate triggers when dangerous permissions are enabled (--dangerously-skip-permissions, unrestricted Bash, file deletion), blocking execution until confirmed.
-- Phase 7 (Team Scale): Restructuring flat file state layout to support 50+ concurrent developers. Stage P7-0 defines new team-scoped directory structure (teams/<team>/members/<dev>/) with migration path. Stage P7-1 (task queuing) was cut off mid-draft and needs completion.
-- Staging verification: Checkpoint card display for 'turns remaining' needs validation before main branch push.
+- Completing Phase 4 (Team Scale) roadmap section: finishing P4-2 (askr team CLI) feature table and adding completion criteria
+- Committing three roadmap.md changes that restructure phases: moving approval gate to Phase 5, renaming Phase 4 from Public Launch to Team Scale, pushing public launch to Phase 7, and removing premature migration overhead
+- Verifying context checkpoint cards display correct 'turns remaining' calculation in staging environment before pushing report_image.py fixes to main
+- Reviewing Phase 5 (Hardening) to confirm approval gate placement doesn't conflict with other hardening features and lands before Phase 7 task queuing
 
 ## Key Decisions Made
 
-- Handover system requires architectural redesign, not incremental fixes. Root cause is that stop checkpoint handler is never invoked, creating stale handovers—not a race condition.
-- Goal inference must be session-aware and deferred until session-end validation. Auto-inferring from old messages creates stale objectives that
+- Handover system requires architectural redesign, not incremental fixes—stale checkpoints are a fundamental timing issue where the stop checkpoint handler is never invoked, not a data formatting problem
+- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred mid
