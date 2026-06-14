@@ -1,111 +1,106 @@
 {
-  "task": "Design approval gates and roadmap placement for collaborative session injection features in askr, with permission-based safety constraints",
-  "discussion_summary": "User's friend requested three bundled features: remote session control, task injection into others' sessions, and auto-run capabilities for team collaboration (50+ person team). Session focused on disaggregating these asks and determining feasibility. User then pivoted to asking where the remaining 3 features should be added to the roadmap, with critical constraint: approval gates must activate when users have dangerous permissions enabled (skip permissions, file deletion) because session-agnostic permissions compound risk. Roadmap was partially edited (Phase 4 removed, Phase 3.11 added) but discussion on placement and safety architecture was incomplete when session ended.",
+  "task": "Integrate approval gate for queued tasks into Phase 5 roadmap and restructure Phase 7 for team-scale concurrent session management.",
+  "discussion_summary": "User's friend requested remote control + task injection features for 50-person team collaboration. After analysis, three distinct asks were identified: task injection (80% feasible), session control (complex), and permission-aware queuing (critical safety). User decided to focus on approval gate placement and roadmap restructuring. Approval gate must trigger when dangerous permissions (`--dangerously-skip-permissions`, unrestricted Bash, file deletion) are enabled, blocking queued task execution until confirmed. Phase 7 was restructured to address team-scale state management: flat file layout breaks at 50 devs, so new team-scoped directory structure with migration path was added as prerequisite stage P7-0.",
   "accomplishments": [
     {
-      "what": "Disaggregated three bundled collaboration requests into distinct feasibility profiles",
+      "what": "Moved approval gate feature into Phase 5 (Hardening) with full specification: trigger conditions, behavior, and implementation tasks",
       "done": true
     },
     {
-      "what": "Identified that task injection is 80% feasible; remote control and auto-run have different risk/complexity profiles",
+      "what": "Removed duplicate Phase 3.9 entry from roadmap",
       "done": true
     },
     {
-      "what": "Began roadmap restructuring (removed Phase 4, added Phase 3.11 JSON Handover Schema placeholder)",
+      "what": "Restructured Phase 7 to add Stage P7-0 (team directory structure + migration) as prerequisite for concurrent session management",
+      "done": true
+    },
+    {
+      "what": "Defined new team-scoped directory layout with `teams/<team>/members/<dev>/` structure to handle 50+ developer concurrent writes",
       "done": true
     }
   ],
   "in_progress": [
     {
-      "file": "roadmap.md",
-      "what": "Determining which phase (3.x vs 4) to place: (1) task injection into others' sessions, (2) approval gate system for dangerous permissions, (3) session-agnostic permission model. Phase 4 was deleted but not replaced with new structure.",
-      "last_line": 291
-    },
-    {
-      "file": "askr_state/decisions.md",
-      "what": "Safety architecture for approval gates: when to trigger, what permissions trigger them, how to prevent permission compounding across sessions",
-      "last_line": null
+      "file": "/Users/bippin/Desktop/askr/roadmap.md",
+      "what": "Phase 7 Stage P7-1 (task queuing) was being drafted but cut off mid-section. Needs completion after P7-0 definition.",
+      "last_line": 523
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Read full roadmap.md and decisions.md to understand current phase structure, then map the three collaboration features to appropriate phases with explicit safety gates",
-      "why": "User asked for phase placement but session ended before this analysis. Need full context to avoid conflicts with existing phase goals."
+      "action": "Complete Phase 7 Stage P7-1 specification: task queue storage format, task injection API, conflict resolution for concurrent queue writes, and implementation checklist",
+      "why": "P7-0 structure is defined but P7-1 (actual task queuing) was truncated. This is the core feature the user's friend wants to use tomorrow."
     },
     {
       "order": 2,
-      "action": "Design approval gate trigger matrix: create a table mapping (permission type) \u00d7 (action type) \u2192 (requires approval: yes/no). Include: skip permissions, file deletion, directory deletion, env var modification, network access.",
-      "why": "User explicitly flagged that dangerous permissions + session-agnostic model = compounding risk. This is a hard constraint for any collaboration feature."
+      "action": "Add Phase 7 Stage P7-2: session handoff + approval confirmation flow (IDE popup for Cursor, Discord notification for headless, task list + permission state display)",
+      "why": "Approval gate logic is in Phase 5, but the UX for confirming queued tasks needs explicit stage in Phase 7 to avoid scope creep."
     },
     {
       "order": 3,
-      "action": "Propose Phase 3.12 or Phase 4 structure: (a) task injection with approval gates (Phase 3.12?), (b) session-agnostic permission model with safety constraints (Phase 3.13?), (c) remote control as Phase 4 stretch goal. Get user confirmation on phase numbering.",
-      "why": "Roadmap was partially edited but lacks clear phase boundaries. User needs to approve placement before implementation planning."
+      "action": "Commit roadmap.md changes with message: 'Phase 5: add approval gate for queued tasks; Phase 7: restructure for team-scale with P7-0 directory migration'",
+      "why": "Three files modified but not committed. Checkpoint before next session to avoid merge conflicts."
     },
     {
       "order": 4,
-      "action": "Document the permission compounding problem: show concrete scenario (e.g., User A has skip=true, User B injects task into A's session, task runs with A's permissions, deletes files). Propose isolation strategy.",
-      "why": "This is the core safety blocker for collaborative features at 50-person scale. Must be solved before feature design."
+      "action": "Create `askr migrate` implementation task in Phase 7 P7-0 checklist: script to move existing flat `handover_<dev>.md` files into new `teams/<team>/members/<dev>/` layout without data loss",
+      "why": "User has existing project state; migration path is critical for adoption at 50-person scale."
     },
     {
       "order": 5,
-      "action": "Commit roadmap.md and decisions.md changes with message: 'WIP: Roadmap restructure for collaboration features + approval gate design'",
-      "why": "Changes are uncommitted; need to preserve state for next session."
+      "action": "Verify Phase 5 approval gate does not conflict with Phase 3.8 (permission grants). Document that Phase 3.8 grants are session-scoped, not task-scoped, so approval gate is necessary even if user already granted permissions.",
+      "why": "User flagged this concern explicitly: permissions granted for user's own work should not auto-authorize someone else's queued task."
     }
   ],
   "decisions": [
     {
-      "decision": "Disaggregate 'remote control' from 'task injection' and 'auto-run' \u2014 treat as three separate features with different risk profiles",
-      "reason": "Remote control is highest risk (real-time session hijacking); task injection is medium risk (async, auditable); auto-run is lowest risk (deterministic). Bundling them masks distinct tradeoffs."
+      "decision": "Approval gate belongs in Phase 5 (Hardening), not Phase 7 (Team Collaboration)",
+      "reason": "Gate must be in place before task queuing ships; Phase 5's theme is 'zero misfires, trust is the product.' Approval gate is a trust mechanism."
     },
     {
-      "decision": "Approval gates must be permission-aware, not just action-aware",
-      "reason": "User flagged that session-agnostic permissions cause compounding risk. A task injected into a session with skip=true is fundamentally different from one with skip=false."
+      "decision": "Approval gate is askr-level check, not delegated to Claude Code permission prompts",
+      "reason": "`--dangerously-skip-permissions` bypasses Claude Code's own safety prompts entirely, so askr must enforce the gate independently."
+    },
+    {
+      "decision": "Team-scoped directory structure (P7-0) is prerequisite for Phase 7, not optional",
+      "reason": "Flat file layout (`handover_<dev>.md` \u00d7 50 in one dir) is unnavigable and causes concurrent write conflicts. Cannot ship team features without this."
+    },
+    {
+      "decision": "Approval gate triggers on any one of three conditions: dangerous permissions flag, unrestricted Bash tool, or file deletion patterns",
+      "reason": "Any single condition is sufficient to require confirmation; using OR logic ensures no dangerous state slips through."
     }
   ],
   "user_rejected_decisions": [],
-  "failed_approaches": [
-    {
-      "approach": "Treating 'remote control' as a single feature request",
-      "reason": "User's friend actually asked for three distinct things; conflating them prevented clear feasibility analysis and roadmap placement."
-    }
-  ],
+  "failed_approaches": [],
   "files_in_play": [
-    "roadmap.md",
-    "askr_state/decisions.md",
-    "askr_state/notifications.log"
+    "/Users/bippin/Desktop/askr/roadmap.md"
   ],
   "relational_files": [
     {
-      "file": "askr_state/permissions.md",
+      "file": "/Users/bippin/Desktop/askr/askr_state/decisions.md",
       "relationship": "configures",
-      "why": "Approval gate design depends on understanding current permission model and how it's enforced across sessions."
+      "why": "Approval gate decision should be logged here for future reference and team alignment."
     },
     {
-      "file": "askr_state/session_schema.md",
-      "relationship": "configures",
-      "why": "Task injection and session control features require understanding session state structure and isolation boundaries."
-    },
-    {
-      "file": "stress-tests/",
-      "relationship": "tested_by",
-      "why": "Collaboration features at 50-person scale will need stress testing; current stress-tests/ directory should be reviewed for multi-session scenarios."
+      "file": "/Users/bippin/Desktop/askr/askr_state/implementation_state.md",
+      "relationship": "imported_by",
+      "why": "Tracks in-progress edits; already has entries for roadmap.md modifications this session."
     }
   ],
   "uncommitted_files": [
+    "askr_state/implementation_state.md",
     "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
   "blockers": [
-    "Unclear phase structure after Phase 4 deletion \u2014 need to confirm whether collaboration features go in Phase 3.x (pre-launch) or Phase 4 (post-launch)",
-    "Permission compounding risk not yet formally modeled \u2014 approval gate design cannot proceed without concrete threat scenarios"
+    "Phase 7 Stage P7-1 specification incomplete (cut off mid-draft). Cannot finalize Phase 7 structure until task queuing API is defined."
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T14:30:00.000000+00:00",
+    "timestamp": "2026-06-14T14:37:00+00:00",
     "developer": "bippin"
   }
 }

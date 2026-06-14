@@ -1,17 +1,16 @@
-Last updated: 2026-06-14 14:34
+Last updated: 2026-06-14 14:38
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that executes interactive development sessions with LLM integration, state persistence, and multi-client support. It allows users to collaborate with AI on code generation and modification, with the ability to hand off sessions to other users or autonomous continuation. The core problem it solves is enabling seamless, stateful AI-assisted development workflows that persist across sessions and team members.
+Askr is a CLI-based AI coding agent that executes interactive development sessions with LLM integration, state persistence, and multi-client support. It solves the problem of context loss and manual handoff between development sessions by persisting session state, tracking token usage, and enabling autonomous continuation across interruptions.
 
 ## What's In Flight
 
-- Handover system redesign: fixing stale checkpoint creation that prevents proper session continuation. Root cause identified as missing stop checkpoint handler invocation; requires architectural fix, not incremental patching.
-- Goal inference timing: deferring auto-inferred goals from session-start to session-end validation to prevent stale objectives from poisoning autonomous handovers.
-- Collaboration feature roadmap: disaggregating three bundled requests (remote session control, task injection, auto-run) and determining phase placement with permission-based safety constraints.
-- Approval gate system design: mapping dangerous permissions (skip, file deletion, env modification) to required approval triggers, with explicit focus on preventing permission compounding across sessions.
-- Context checkpoint card verification: staging validation of 'turns remaining' display before pushing report_image.py fixes to main.
+- Phase 5 (Hardening): Integrating approval gate for queued tasks. Gate triggers when dangerous permissions are enabled (--dangerously-skip-permissions, unrestricted Bash, file deletion), blocking execution until confirmed.
+- Phase 7 (Team Scale): Restructuring flat file state layout to support 50+ concurrent developers. Stage P7-0 defines new team-scoped directory structure (teams/<team>/members/<dev>/) with migration path. Stage P7-1 (task queuing) was cut off mid-draft and needs completion.
+- Staging verification: Checkpoint card display for 'turns remaining' needs validation before main branch push.
 
 ## Key Decisions Made
 
-- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are
+- Handover system requires architectural redesign, not incremental fixes. Root cause is that stop checkpoint handler is never invoked, creating stale handovers—not a race condition.
+- Goal inference must be session-aware and deferred until session-end validation. Auto-inferring from old messages creates stale objectives that
