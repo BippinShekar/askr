@@ -69,3 +69,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-14 14:44] [bippin] Removed migration overhead from Phase 4 planning. Reason: User clarified askr is only used by them currently, so multi-user migration is not an immediate concern; can be added later if team adoption happens
 [2026-06-15 12:38] [bippin] Gate success message on send_message() return value, not just brief existence. Reason: Prevents false positives when webhook is misconfigured or unreachable
 [2026-06-15 12:38] [bippin] Add explicit warning message on send failure pointing to env var. Reason: Gives user actionable debugging path instead of silent failure
+[2026-06-15 12:51] [bippin] Gate the success checkmark on BOTH `sent AND brief` rather than just `brief`. Reason: Ensures the ✓ message only fires when the Discord send actually succeeded, not just when a brief exists
+[2026-06-15 12:51] [bippin] Add explicit warning message when send fails, pointing user to check ASKR_DISCORD_WEBHOOK env var. Reason: Provides actionable feedback instead of silent failure
