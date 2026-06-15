@@ -565,31 +565,64 @@ def _infer_direction(project_path: str = "") -> dict:
     except Exception:
         pass
 
-    # Signal 3: handover next_actions[0] — the previous session already planned this
+    # Signal 3: next_actions from the most recent CODING session's handover.
+    # Walk handover commit history. For each pair of consecutive handover commits,
+    # check whether any non-askr_state files changed between them. The first pair
+    # where code changed is a coding session — use its handover's next_actions.
+    # This survives arbitrarily many back-to-back conversational sessions: they all
+    # touch only askr_state/ so they get skipped until we reach real code work.
     try:
-        import json as _json, time as _time
+        import json as _json
         from askr.state.config import load_developer, state_path
         dev = load_developer()
-        handover_path = state_path(f"handover_{dev}.json")
-        if os.path.exists(handover_path):
-            age_hours = (time.time() - os.path.getmtime(handover_path)) / 3600
-            if age_hours < 48:  # stale handovers older than 48h are unreliable
-                with open(handover_path) as f:
-                    handover = _json.load(f)
-                actions = handover.get("next_actions", [])
-                if actions:
-                    first = actions[0]
-                    action_text = (
-                        first.get("action") or first
-                        if isinstance(first, (dict, str)) else str(first)
-                    )
-                    if isinstance(action_text, str) and len(action_text) > 10:
-                        return {
-                            "direction": action_text[:200],
-                            "confidence": 0.85,
-                            "signal_source": "handover_next_actions",
-                            "details": {"age_hours": round(age_hours, 1), "developer": dev},
-                        }
+        handover_rel = f"askr_state/handover_{dev}.json"
+
+        log_result = subprocess.run(
+            ["git", "log", "--format=%H", "-10", "--", handover_rel],
+            capture_output=True, text=True, timeout=10, cwd=cwd,
+        )
+        hashes = log_result.stdout.strip().splitlines()
+
+        for i in range(len(hashes) - 1):
+            curr_hash, prev_hash = hashes[i], hashes[i + 1]
+
+            diff_result = subprocess.run(
+                ["git", "diff", "--name-only", prev_hash, curr_hash],
+                capture_output=True, text=True, timeout=10, cwd=cwd,
+            )
+            code_files = [
+                l.strip() for l in diff_result.stdout.splitlines()
+                if l.strip() and not l.startswith("askr_state/")
+            ]
+            if not code_files:
+                continue  # conversational session — skip, try the one before it
+
+            # This was a coding session. Read its handover from git.
+            show_result = subprocess.run(
+                ["git", "show", f"{curr_hash}:{handover_rel}"],
+                capture_output=True, text=True, timeout=10, cwd=cwd,
+            )
+            if show_result.returncode != 0:
+                continue
+            handover = _json.loads(show_result.stdout)
+            actions = handover.get("next_actions", [])
+            if not actions:
+                continue
+            first = actions[0]
+            action_text = first.get("action") if isinstance(first, dict) else str(first)
+            if not action_text or len(action_text) < 10:
+                continue
+            note = f" ({i} talk-only session(s) since)" if i else ""
+            return {
+                "direction": action_text[:200],
+                "confidence": 0.85,
+                "signal_source": "handover_next_actions",
+                "details": {
+                    "commit": curr_hash[:7],
+                    "talk_only_sessions_skipped": i,
+                    "developer": dev,
+                },
+            }
     except Exception:
         pass
 
