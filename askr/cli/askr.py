@@ -605,6 +605,13 @@ def cmd_init():
     console.print("  [dim]commit askr_state/ to git so your team shares the same ground truth[/dim]")
     console.print()
 
+    # Load .env from the askr repo dir directly — env.load() may not have found it
+    # if the user ran `askr init` from a different directory.
+    from dotenv import load_dotenv as _load_dotenv
+    _askr_dot_env = os.path.join(ASKR_DIR, ".env")
+    if os.path.exists(_askr_dot_env):
+        _load_dotenv(dotenv_path=_askr_dot_env, override=False)
+
     if not os.getenv("ASKR_DISCORD_WEBHOOK"):
         import getpass as _gp
         console.print("  [dim]Discord webhook not configured[/dim]")
@@ -648,8 +655,8 @@ def cmd_init():
                 console.print("  [green]✓[/green] repo brief posted to Discord")
             elif not sent:
                 console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"  [yellow]⚠ Discord error:[/yellow] {e}")
 
     if _init_log_mark is not None:
         init_cost = cost_since_mark(_init_log_mark)
