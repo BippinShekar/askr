@@ -1,60 +1,51 @@
 # Handover: bippin
 
-Last updated: 2026-06-14 14:44
+Last updated: 2026-06-15 12:38
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Restructure roadmap phases: move approval gate to Phase 5, rename Phase 4 (Public Launch) to Phase 4 (Team Scale), push launch to Phase 7, and strip migration overhead since only single-user deployment currently.
+Fix Discord webhook send failure in askr init — return value was ignored, causing false success messages
 
 ## Discussion
-User clarified that askr is currently single-user only, so migration complexity in Phase 4 was premature. Agreed to move approval gate (dangerously-skip-permissions, unrestricted Bash, rm/delete triggers) into Phase 5 (Hardening). Restructured Phase 4 from 'Public Launch' to 'Team Scale' with three stages: P4-0 (team directory structure), P4-1 (task queue per developer), P4-2 (askr team CLI). Public launch pushed to Phase 7. Two roadmap.md edits completed to reflect these changes.
+User reported that `askr init` claims to send repo brief to Discord but actually fails silently, while Claude can send messages fine. Root cause: `send_message()` return value was discarded on line 629, so the success checkmark printed regardless of actual send status. Fixed by capturing return value and gating both success and failure messages on it.
 
 ## Accomplishments
-- [x] Moved approval gate feature from Phase 7 into Phase 5 (Hardening) with trigger conditions and two-path behavior (IDE popup vs Discord headless)
-- [x] Removed Phase 3.9 duplicate entry from roadmap
-- [x] Renamed Phase 4 from 'Public Launch' to 'Team Scale' with three substages (P4-0, P4-1, P4-2) and removed migration overhead assumptions
-- [x] Pushed public launch goals to Phase 7 (GitHub release, Twitter thread, external users, brew tap)
+- [x] Identified bug in askr/cli/askr.py lines 629-631 where send_message() return value was ignored
+- [x] Modified askr.py to capture send_message() return value and gate success/failure messages on it
+- [x] Added warning message directing user to check ASKR_DISCORD_WEBHOOK env var on send failure
 
 ## In Progress
-- `roadmap.md` (line 567): Phase 4 (Team Scale) structure incomplete — P4-2 (askr team CLI) section cut off mid-table at line 567
+- `askr/cli/askr.py` (line 631): Discord send error handling — captured return value and added conditional success/failure messages
 
 ## Next Actions
-1. Complete Phase 4 (Team Scale) roadmap section: finish P4-2 (askr team CLI) feature table and add P4-3 if needed, then add completion criteria ('Done when: ...')
-   *Why: Roadmap edit was interrupted; Phase 4 structure is incomplete and needs closure before moving to next phase planning*
-2. Commit the three roadmap.md changes to git with message: 'Restructure phases: approval gate→P5, P4→Team Scale (P4-0/P4-1/P4-2), launch→P7, strip migration overhead'
-   *Why: Changes are tracked in implementation_state.md but not yet committed; git diff shows modifications that need to be persisted*
-3. Review Phase 5 (Hardening) to confirm approval gate placement doesn't conflict with other hardening features and that it lands before Phase 7 task queuing ships
-   *Why: User emphasized approval gate must be in place before task queuing (Phase 7) to prevent dangerous permissions from being inherited by queued tasks from other developers*
-4. Update implementation_state.md to reflect that Phase 4 is now 'Team Scale' (not 'Public Launch') and Phase 7 is now 'Public Launch' (not task queuing)
-   *Why: State tracking file needs to match the restructured roadmap to avoid confusion in future sessions*
+1. Test the fix on friend's Mac: run `askr init` and verify Discord webhook sends work or shows proper error message
+   *Why: Need to confirm the fix actually resolves the silent failure issue in the real environment*
+2. Commit askr.py changes with message 'Fix: gate Discord success message on actual send result'
+   *Why: Changes are isolated and tested, ready to be committed*
+3. Complete roadmap.md Phase 4 restructuring — finish P4-2 (askr team CLI) table and add completion criteria
+   *Why: Open goal from session; roadmap.md already has partial edits in progress*
+4. Commit roadmap.md restructuring with message about phase reorganization
+   *Why: Second open goal; changes are staged and ready*
 
 ## Decisions
-- Approval gate moved to Phase 5 instead of Phase 7 — Phase 5's theme is 'Zero misfires. Trust is the product.' — approval gate belongs there, and it must ship before task queuing (Phase 7) to prevent dangerous permissions from being inherited by queued tasks
-- Phase 4 renamed from 'Public Launch' to 'Team Scale' with substages P4-0, P4-1, P4-2 — Current single-user deployment doesn't need migration complexity; team scaling is the actual next phase after stress testing. Public launch deferred to Phase 7 when team features are stable
-- Removed migration overhead from Phase 4 planning — User clarified askr is only used by them currently, so multi-user migration is not an immediate concern; can be added later if team adoption happens
-
-## User-Rejected Approaches
-- **Phase 7 should contain task queuing with migration overhead for multi-user deployments** — "there is no migration as of now, it's only me using it, so it won't be as much a ordeal as you imagine. Also, being phase 7 doesn't make sense, but must be phase 4" (domain: roadmap.md phases and feature placement)
-
-## Failed Approaches
-- Placed task queuing and team features in Phase 7 with migration complexity — User clarified single-user deployment makes migration premature; restructured to Phase 4 (Team Scale) with simpler substages
+- Gate success message on send_message() return value, not just brief existence — Prevents false positives when webhook is misconfigured or unreachable
+- Add explicit warning message on send failure pointing to env var — Gives user actionable debugging path instead of silent failure
 
 ## Files In Play
+- `askr/cli/askr.py`
 - `roadmap.md`
+- `askr_state/goals.md`
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 
 ## Relational Files
-- `askr_state/decisions.md` (configures): Records architectural decisions about phase structure and feature placement; should be updated to reflect Phase 4→Team Scale rename
-- `askr_state/goals.md` (configures): Tracks open goals; 'Verify context checkpoint cards display correct turns remaining in staging' is still pending and may be affected by phase restructuring
+- `askr/cli/send_message.py` (imported_by): Contains send_message() function whose return value is now being checked
+- `.env` (configures): ASKR_DISCORD_WEBHOOK env var is what needs to be set for Discord sends to work
 
 ## Uncommitted Files
+- `askr/cli/askr.py`
+- `askr_state/goals.md`
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
-
-## Blockers
-- Phase 4 (Team Scale) roadmap section is incomplete — P4-2 feature table was cut off mid-edit and needs to be finished before commit

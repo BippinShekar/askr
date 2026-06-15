@@ -1,111 +1,91 @@
 {
-  "task": "Restructure roadmap phases: move approval gate to Phase 5, rename Phase 4 (Public Launch) to Phase 4 (Team Scale), push launch to Phase 7, and strip migration overhead since only single-user deployment currently.",
-  "discussion_summary": "User clarified that askr is currently single-user only, so migration complexity in Phase 4 was premature. Agreed to move approval gate (dangerously-skip-permissions, unrestricted Bash, rm/delete triggers) into Phase 5 (Hardening). Restructured Phase 4 from 'Public Launch' to 'Team Scale' with three stages: P4-0 (team directory structure), P4-1 (task queue per developer), P4-2 (askr team CLI). Public launch pushed to Phase 7. Two roadmap.md edits completed to reflect these changes.",
+  "task": "Fix Discord webhook send failure in askr init \u2014 return value was ignored, causing false success messages",
+  "discussion_summary": "User reported that `askr init` claims to send repo brief to Discord but actually fails silently, while Claude can send messages fine. Root cause: `send_message()` return value was discarded on line 629, so the success checkmark printed regardless of actual send status. Fixed by capturing return value and gating both success and failure messages on it.",
   "accomplishments": [
     {
-      "what": "Moved approval gate feature from Phase 7 into Phase 5 (Hardening) with trigger conditions and two-path behavior (IDE popup vs Discord headless)",
+      "what": "Identified bug in askr/cli/askr.py lines 629-631 where send_message() return value was ignored",
       "done": true
     },
     {
-      "what": "Removed Phase 3.9 duplicate entry from roadmap",
+      "what": "Modified askr.py to capture send_message() return value and gate success/failure messages on it",
       "done": true
     },
     {
-      "what": "Renamed Phase 4 from 'Public Launch' to 'Team Scale' with three substages (P4-0, P4-1, P4-2) and removed migration overhead assumptions",
-      "done": true
-    },
-    {
-      "what": "Pushed public launch goals to Phase 7 (GitHub release, Twitter thread, external users, brew tap)",
+      "what": "Added warning message directing user to check ASKR_DISCORD_WEBHOOK env var on send failure",
       "done": true
     }
   ],
   "in_progress": [
     {
-      "file": "roadmap.md",
-      "what": "Phase 4 (Team Scale) structure incomplete \u2014 P4-2 (askr team CLI) section cut off mid-table at line 567",
-      "last_line": 567
+      "file": "askr/cli/askr.py",
+      "what": "Discord send error handling \u2014 captured return value and added conditional success/failure messages",
+      "last_line": 631
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Complete Phase 4 (Team Scale) roadmap section: finish P4-2 (askr team CLI) feature table and add P4-3 if needed, then add completion criteria ('Done when: ...')",
-      "why": "Roadmap edit was interrupted; Phase 4 structure is incomplete and needs closure before moving to next phase planning"
+      "action": "Test the fix on friend's Mac: run `askr init` and verify Discord webhook sends work or shows proper error message",
+      "why": "Need to confirm the fix actually resolves the silent failure issue in the real environment"
     },
     {
       "order": 2,
-      "action": "Commit the three roadmap.md changes to git with message: 'Restructure phases: approval gate\u2192P5, P4\u2192Team Scale (P4-0/P4-1/P4-2), launch\u2192P7, strip migration overhead'",
-      "why": "Changes are tracked in implementation_state.md but not yet committed; git diff shows modifications that need to be persisted"
+      "action": "Commit askr.py changes with message 'Fix: gate Discord success message on actual send result'",
+      "why": "Changes are isolated and tested, ready to be committed"
     },
     {
       "order": 3,
-      "action": "Review Phase 5 (Hardening) to confirm approval gate placement doesn't conflict with other hardening features and that it lands before Phase 7 task queuing ships",
-      "why": "User emphasized approval gate must be in place before task queuing (Phase 7) to prevent dangerous permissions from being inherited by queued tasks from other developers"
+      "action": "Complete roadmap.md Phase 4 restructuring \u2014 finish P4-2 (askr team CLI) table and add completion criteria",
+      "why": "Open goal from session; roadmap.md already has partial edits in progress"
     },
     {
       "order": 4,
-      "action": "Update implementation_state.md to reflect that Phase 4 is now 'Team Scale' (not 'Public Launch') and Phase 7 is now 'Public Launch' (not task queuing)",
-      "why": "State tracking file needs to match the restructured roadmap to avoid confusion in future sessions"
+      "action": "Commit roadmap.md restructuring with message about phase reorganization",
+      "why": "Second open goal; changes are staged and ready"
     }
   ],
   "decisions": [
     {
-      "decision": "Approval gate moved to Phase 5 instead of Phase 7",
-      "reason": "Phase 5's theme is 'Zero misfires. Trust is the product.' \u2014 approval gate belongs there, and it must ship before task queuing (Phase 7) to prevent dangerous permissions from being inherited by queued tasks"
+      "decision": "Gate success message on send_message() return value, not just brief existence",
+      "reason": "Prevents false positives when webhook is misconfigured or unreachable"
     },
     {
-      "decision": "Phase 4 renamed from 'Public Launch' to 'Team Scale' with substages P4-0, P4-1, P4-2",
-      "reason": "Current single-user deployment doesn't need migration complexity; team scaling is the actual next phase after stress testing. Public launch deferred to Phase 7 when team features are stable"
-    },
-    {
-      "decision": "Removed migration overhead from Phase 4 planning",
-      "reason": "User clarified askr is only used by them currently, so multi-user migration is not an immediate concern; can be added later if team adoption happens"
+      "decision": "Add explicit warning message on send failure pointing to env var",
+      "reason": "Gives user actionable debugging path instead of silent failure"
     }
   ],
-  "user_rejected_decisions": [
-    {
-      "what_was_proposed": "Phase 7 should contain task queuing with migration overhead for multi-user deployments",
-      "user_signal": "there is no migration as of now, it's only me using it, so it won't be as much a ordeal as you imagine. Also, being phase 7 doesn't make sense, but must be phase 4",
-      "domain": "roadmap.md phases and feature placement",
-      "confidence": 0.95
-    }
-  ],
-  "failed_approaches": [
-    {
-      "approach": "Placed task queuing and team features in Phase 7 with migration complexity",
-      "reason": "User clarified single-user deployment makes migration premature; restructured to Phase 4 (Team Scale) with simpler substages"
-    }
-  ],
+  "user_rejected_decisions": [],
+  "failed_approaches": [],
   "files_in_play": [
+    "askr/cli/askr.py",
     "roadmap.md",
-    "askr_state/implementation_state.md",
-    "askr_state/notifications.log"
+    "askr_state/goals.md",
+    "askr_state/implementation_state.md"
   ],
   "relational_files": [
     {
-      "file": "askr_state/decisions.md",
-      "relationship": "configures",
-      "why": "Records architectural decisions about phase structure and feature placement; should be updated to reflect Phase 4\u2192Team Scale rename"
+      "file": "askr/cli/send_message.py",
+      "relationship": "imported_by",
+      "why": "Contains send_message() function whose return value is now being checked"
     },
     {
-      "file": "askr_state/goals.md",
+      "file": ".env",
       "relationship": "configures",
-      "why": "Tracks open goals; 'Verify context checkpoint cards display correct turns remaining in staging' is still pending and may be affected by phase restructuring"
+      "why": "ASKR_DISCORD_WEBHOOK env var is what needs to be set for Discord sends to work"
     }
   ],
   "uncommitted_files": [
+    "askr/cli/askr.py",
+    "askr_state/goals.md",
     "askr_state/implementation_state.md",
-    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
-  "blockers": [
-    "Phase 4 (Team Scale) roadmap section is incomplete \u2014 P4-2 feature table was cut off mid-edit and needs to be finished before commit"
-  ],
+  "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-14T14:43:00+00:00",
+    "timestamp": "2026-06-15T12:38:00+00:00",
     "developer": "bippin"
   }
 }
