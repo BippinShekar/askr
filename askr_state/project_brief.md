@@ -1,17 +1,17 @@
-Last updated: 2026-06-15 16:55
+Last updated: 2026-06-15 17:42
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with context awareness and usage tracking. It orchestrates LLM interactions, maintains session state across interruptions, and provides autonomous handover capabilities so work can resume without manual context re-entry.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, persistent state, and multi-client support. It bridges developer intent with autonomous code execution by maintaining session context across CLI invocations, inferring work direction from git history and dirty files, and handing off to autonomous agents when appropriate.
 
 ## What's In Flight
 
-- **Handover system redesign**: Current checkpoint creation is failing to capture session state at termination. Root cause identified as missing stop-checkpoint handler invocation. Requires architectural fix, not incremental patching.
-- **Goal inference timing**: Auto-inferred goals are becoming stale mid-session because inference happens at message level rather than session-end validation. Must defer inference until session termination to keep objectives synchronized with actual progress.
-- **Direction inference (Signal 3)**: Commit-frequency heuristic (counting touches to askr/ folder) is architecturally blind. Redesign required to use semantic file-change analysis—map changed files to work domains (session_lifecycle, reporting, inference, testing) instead of folder name patterns.
-- **Session card display**: Checkpoint card rendering in report_image.py needs staging verification before main branch push.
+- Direction inference engine: Replaced root-folder momentum (Signal 3) with semantic commit-scope analysis to eliminate false-positive gate clearances. All three signals (dirty files, handover next_actions, commit scopes) validated in isolation; full chain integration pending.
+- End-to-end direction inference test: Verify three-signal chain produces correct direction without HITL gate in fresh session start.
+- Edge case stress testing: Empty git log, no conventional commits, multi-scope dirty files, and other robustness scenarios.
+- Handover prompt documentation: Update _generate_handover_prompt() to explain three-signal model and confidence thresholds (0.95 dirty, 0.85 handover, 0.65 semantic scope).
+- HITL gate validation: Confirm direction_confirm triggers only when max(signal_confidences) < 0.70 and surfaces competing signals correctly.
 
 ## Key Decisions Made
 
-- Checkpoint and launch_mode.json are primary handover state carriers; git diffs alone are insufficient for proper session resumption.
-- Goal inference must be session-aware, not message-aware
+- Handover system requires architectural redesign, not

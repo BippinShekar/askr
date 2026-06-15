@@ -1,46 +1,46 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 16:55
+Last updated: 2026-06-15 17:42
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Rejected directional inference approach based on git momentum; identified fundamental architectural flaw in Signal 3 (commit frequency heuristic).
+Redesigned _infer_direction() to use semantic commit-scope analysis instead of root-folder momentum, eliminating false-positive signals that cleared the gate at low confidence
 
 ## Discussion
-Phase 3.12 implementation of _infer_direction() was functionally correct but strategically flawed. The user identified that routing based on 'last 10 commits touch askr/ 7 times' is useless — it conflates project structure with actual work intent. Direction inference must understand architecture and semantic file changes, not raw commit frequency to a root folder. This session ended with user rejection of the entire Signal 3 approach and implicit direction of work toward redesigning the inference strategy.
+Identified that Signal 3 (top-level directory frequency) was a design flaw — every commit in any repo touches some top-level folder, making it noise at 0.72 confidence that incorrectly passed the gate. Replaced it with semantic file-change analysis using conventional commit scopes (feat(scope), fix(scope)) parsed from git log. Tested all three signals in isolation: Signal 1 (dirty files) fires at 0.95, Signal 3 (handover next_actions) at 0.85, and the new semantic scope signal correctly identifies lifecycle as the active domain with 0.65 confidence from recent commit history.
 
 ## Accomplishments
-- [x] Fixed Signal 2 (blockers.md) false-positive by excluding metadata lines
-- [x] Fixed Signal 1 (git momentum) hex-digit bug in commit-line detection
-- [x] Identified and articulated fundamental flaw in Signal 3 design
+- [x] Rewrote _infer_direction() Signal 3 to parse conventional commit scopes instead of root-folder frequency
+- [x] Fixed scope regex to correctly extract scope from commit message (removed incorrect ^ anchor)
+- [x] Validated all three direction signals in isolation with test harness
+- [x] Committed lifecycle.py changes to main branch
 
 ## Next Actions
-1. Redesign _infer_direction() Signal 3 to use semantic file-change analysis instead of commit frequency. Parse changed files for architectural intent (e.g., 'changes to askr/session/* + askr/report/* = session lifecycle work', not 'askr/ folder touched 7 times').
-   *Why: User rejected commit-frequency heuristic as architecturally blind. Must ground direction in what changed and why, not folder name patterns.*
-2. Define semantic file groups (e.g., session_lifecycle, reporting, inference, testing) and map them to work domains. Update Signal 3 to match changed files against these groups.
-   *Why: Enables direction inference to distinguish between 'fixing session lifecycle bugs' vs 'refactoring report generation' vs 'tuning inference confidence' — all in askr/ but different directions.*
-3. Re-test _infer_direction() with the last 10 commits using new Signal 3 logic. Verify it correctly identifies the actual work done (bug fixes in lifecycle.py, not generic 'askr/ work').
-   *Why: Validate that redesigned approach produces meaningful, architecture-aware direction inference.*
-4. Update phase 3.12 roadmap entry to reflect 'design flaw identified, Signal 3 redesign required' rather than marking complete.
-   *Why: Honest tracking of what was learned. Phase 3.12 exposed the problem; next phase is the fix.*
+1. Run full end-to-end test of _infer_direction() with a fresh session start to verify the three-signal chain produces correct direction inference without HITL gate
+   *Why: Signals are individually validated but full chain integration needs confirmation before rolling out to production sessions*
+2. Stress-test _infer_direction() against edge cases: empty git log, no conventional commits, all commits in same scope, dirty files in multiple domains
+   *Why: Robustness required before autonomous sessions rely on this for direction inference*
+3. Update handover prompt in _generate_handover_prompt() to document the three-signal model and confidence thresholds (0.95 for dirty, 0.85 for handover, 0.65 for semantic scope)
+   *Why: Next session needs to understand how direction was inferred and why confidence levels matter*
+4. Verify HITL gate behavior: confirm that direction_confirm is triggered only when max(signal_confidences) < 0.70, and that it correctly surfaces the three competing signals to the user
+   *Why: Gate is the safety mechanism preventing low-confidence direction from silently steering the session*
 
 ## Decisions
-- Rejected commit-frequency-based direction inference (Signal 3 as currently implemented). — User identified it as architecturally blind — routing to a root folder based on commit count is useless without semantic understanding of what changed.
-
-## User-Rejected Approaches
-- **Signal 3: infer direction from 'last 10 commits touch askr/ 7 times' → route to askr/ work** — "how would this ever be any sort of viable direction? ... it must understand from architecture and what files have been changed to understand direction not look at folder name" (domain: askr/session/lifecycle.py — _infer_direction() Signal 3)
+- Replaced top-level directory frequency (Signal 3) with semantic commit-scope analysis — Directory frequency is noise in any repo — every commit touches some top-level folder. Conventional commit scopes (feat(scope), fix(scope)) provide semantic signal about which domain was active in recent work
+- Kept Signal 1 (dirty files) and Signal 2 (handover next_actions) unchanged — Both are high-fidelity: dirty files are immediate context, and handover next_actions are explicit developer intent from the previous session
 
 ## Failed Approaches
-- Signal 3 (git momentum): count commits touching a root folder to infer work direction. — Conflates project structure with intent. Two commits to askr/ could be session lifecycle fixes or reporting refactors — the heuristic cannot distinguish. User rejected as fundamentally unviable.
+- Using regex with ^ anchor to match commit scope in git log output — ^ anchors to start of line, but commit message comes after the hash. Removed anchor to match scope anywhere in the message
 
 ## Files In Play
 - `askr/session/lifecycle.py`
 
 ## Relational Files
-- `askr/session/report_image.py` (imported_by): Tested in session to verify checkpoint card rendering post-fix; part of inference validation chain.
-- `roadmap.md` (configures): Phase 3.12 status and next phase planning depend on this session's findings.
+- `askr_state/handover_bippin.json` (imported_by): Signal 2 reads next_actions[0] from this file to infer direction from explicit developer intent
+- `askr/session/stop.py` (imports): _infer_direction() is called by stop.py to populate the direction_confirm gate
 
-## Blockers
-- Signal 3 design is architecturally unsound — cannot proceed with phase 3.12 completion until semantic file-change analysis replaces commit-frequency heuristic.
+## Uncommitted Files
+- `askr_state/implementation_state.md`
+- `askr_state/notifications.log`

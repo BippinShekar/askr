@@ -1,17 +1,21 @@
 {
-  "task": "Rejected directional inference approach based on git momentum; identified fundamental architectural flaw in Signal 3 (commit frequency heuristic).",
-  "discussion_summary": "Phase 3.12 implementation of _infer_direction() was functionally correct but strategically flawed. The user identified that routing based on 'last 10 commits touch askr/ 7 times' is useless \u2014 it conflates project structure with actual work intent. Direction inference must understand architecture and semantic file changes, not raw commit frequency to a root folder. This session ended with user rejection of the entire Signal 3 approach and implicit direction of work toward redesigning the inference strategy.",
+  "task": "Redesigned _infer_direction() to use semantic commit-scope analysis instead of root-folder momentum, eliminating false-positive signals that cleared the gate at low confidence",
+  "discussion_summary": "Identified that Signal 3 (top-level directory frequency) was a design flaw \u2014 every commit in any repo touches some top-level folder, making it noise at 0.72 confidence that incorrectly passed the gate. Replaced it with semantic file-change analysis using conventional commit scopes (feat(scope), fix(scope)) parsed from git log. Tested all three signals in isolation: Signal 1 (dirty files) fires at 0.95, Signal 3 (handover next_actions) at 0.85, and the new semantic scope signal correctly identifies lifecycle as the active domain with 0.65 confidence from recent commit history.",
   "accomplishments": [
     {
-      "what": "Fixed Signal 2 (blockers.md) false-positive by excluding metadata lines",
+      "what": "Rewrote _infer_direction() Signal 3 to parse conventional commit scopes instead of root-folder frequency",
       "done": true
     },
     {
-      "what": "Fixed Signal 1 (git momentum) hex-digit bug in commit-line detection",
+      "what": "Fixed scope regex to correctly extract scope from commit message (removed incorrect ^ anchor)",
       "done": true
     },
     {
-      "what": "Identified and articulated fundamental flaw in Signal 3 design",
+      "what": "Validated all three direction signals in isolation with test harness",
+      "done": true
+    },
+    {
+      "what": "Committed lifecycle.py changes to main branch",
       "done": true
     }
   ],
@@ -19,43 +23,40 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Redesign _infer_direction() Signal 3 to use semantic file-change analysis instead of commit frequency. Parse changed files for architectural intent (e.g., 'changes to askr/session/* + askr/report/* = session lifecycle work', not 'askr/ folder touched 7 times').",
-      "why": "User rejected commit-frequency heuristic as architecturally blind. Must ground direction in what changed and why, not folder name patterns."
+      "action": "Run full end-to-end test of _infer_direction() with a fresh session start to verify the three-signal chain produces correct direction inference without HITL gate",
+      "why": "Signals are individually validated but full chain integration needs confirmation before rolling out to production sessions"
     },
     {
       "order": 2,
-      "action": "Define semantic file groups (e.g., session_lifecycle, reporting, inference, testing) and map them to work domains. Update Signal 3 to match changed files against these groups.",
-      "why": "Enables direction inference to distinguish between 'fixing session lifecycle bugs' vs 'refactoring report generation' vs 'tuning inference confidence' \u2014 all in askr/ but different directions."
+      "action": "Stress-test _infer_direction() against edge cases: empty git log, no conventional commits, all commits in same scope, dirty files in multiple domains",
+      "why": "Robustness required before autonomous sessions rely on this for direction inference"
     },
     {
       "order": 3,
-      "action": "Re-test _infer_direction() with the last 10 commits using new Signal 3 logic. Verify it correctly identifies the actual work done (bug fixes in lifecycle.py, not generic 'askr/ work').",
-      "why": "Validate that redesigned approach produces meaningful, architecture-aware direction inference."
+      "action": "Update handover prompt in _generate_handover_prompt() to document the three-signal model and confidence thresholds (0.95 for dirty, 0.85 for handover, 0.65 for semantic scope)",
+      "why": "Next session needs to understand how direction was inferred and why confidence levels matter"
     },
     {
       "order": 4,
-      "action": "Update phase 3.12 roadmap entry to reflect 'design flaw identified, Signal 3 redesign required' rather than marking complete.",
-      "why": "Honest tracking of what was learned. Phase 3.12 exposed the problem; next phase is the fix."
+      "action": "Verify HITL gate behavior: confirm that direction_confirm is triggered only when max(signal_confidences) < 0.70, and that it correctly surfaces the three competing signals to the user",
+      "why": "Gate is the safety mechanism preventing low-confidence direction from silently steering the session"
     }
   ],
   "decisions": [
     {
-      "decision": "Rejected commit-frequency-based direction inference (Signal 3 as currently implemented).",
-      "reason": "User identified it as architecturally blind \u2014 routing to a root folder based on commit count is useless without semantic understanding of what changed."
-    }
-  ],
-  "user_rejected_decisions": [
+      "decision": "Replaced top-level directory frequency (Signal 3) with semantic commit-scope analysis",
+      "reason": "Directory frequency is noise in any repo \u2014 every commit touches some top-level folder. Conventional commit scopes (feat(scope), fix(scope)) provide semantic signal about which domain was active in recent work"
+    },
     {
-      "what_was_proposed": "Signal 3: infer direction from 'last 10 commits touch askr/ 7 times' \u2192 route to askr/ work",
-      "user_signal": "how would this ever be any sort of viable direction? ... it must understand from architecture and what files have been changed to understand direction not look at folder name",
-      "domain": "askr/session/lifecycle.py \u2014 _infer_direction() Signal 3",
-      "confidence": 0.95
+      "decision": "Kept Signal 1 (dirty files) and Signal 2 (handover next_actions) unchanged",
+      "reason": "Both are high-fidelity: dirty files are immediate context, and handover next_actions are explicit developer intent from the previous session"
     }
   ],
+  "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Signal 3 (git momentum): count commits touching a root folder to infer work direction.",
-      "reason": "Conflates project structure with intent. Two commits to askr/ could be session lifecycle fixes or reporting refactors \u2014 the heuristic cannot distinguish. User rejected as fundamentally unviable."
+      "approach": "Using regex with ^ anchor to match commit scope in git log output",
+      "reason": "^ anchors to start of line, but commit message comes after the hash. Removed anchor to match scope anywhere in the message"
     }
   ],
   "files_in_play": [
@@ -63,24 +64,25 @@
   ],
   "relational_files": [
     {
-      "file": "askr/session/report_image.py",
+      "file": "askr_state/handover_bippin.json",
       "relationship": "imported_by",
-      "why": "Tested in session to verify checkpoint card rendering post-fix; part of inference validation chain."
+      "why": "Signal 2 reads next_actions[0] from this file to infer direction from explicit developer intent"
     },
     {
-      "file": "roadmap.md",
-      "relationship": "configures",
-      "why": "Phase 3.12 status and next phase planning depend on this session's findings."
+      "file": "askr/session/stop.py",
+      "relationship": "imports",
+      "why": "_infer_direction() is called by stop.py to populate the direction_confirm gate"
     }
   ],
-  "uncommitted_files": [],
-  "blockers": [
-    "Signal 3 design is architecturally unsound \u2014 cannot proceed with phase 3.12 completion until semantic file-change analysis replaces commit-frequency heuristic."
+  "uncommitted_files": [
+    "askr_state/implementation_state.md",
+    "askr_state/notifications.log"
   ],
+  "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T16:42:00+00:00",
+    "timestamp": "2026-06-15T16:57:00.000000+00:00",
     "developer": "bippin"
   }
 }
