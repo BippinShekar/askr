@@ -545,9 +545,15 @@ def _infer_direction(project_path: str = "") -> dict:
         blockers_path = os.path.join(get_state_dir(), "blockers.md")
         if os.path.exists(blockers_path):
             content = open(blockers_path).read().strip()
-            # Strip header lines — look for actual blocker entries
-            entries = [l.strip() for l in content.splitlines()
-                       if l.strip() and not l.startswith("#") and l.strip() != "None noted"]
+            # Strip header/metadata lines — look for actual blocker entries
+            _skip = {"none noted", "[none]", "none"}
+            entries = [
+                l.strip() for l in content.splitlines()
+                if l.strip()
+                and not l.startswith("#")
+                and not l.lower().startswith("last updated")
+                and l.strip().lower() not in _skip
+            ]
             if entries:
                 return {
                     "direction": f"resolve blocker: {entries[0][:120]}",
