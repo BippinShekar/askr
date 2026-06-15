@@ -1,17 +1,17 @@
-Last updated: 2026-06-15 15:35
+Last updated: 2026-06-15 16:33
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, persistent state, and multi-client support. It orchestrates subprocess execution, maintains conversation history, and bridges agent decisions to actual code modifications through IDE integration.
+Askr is a CLI-based AI coding agent that manages interactive development sessions, tracks token usage, and integrates with IDEs to enable autonomous code work with human oversight. It solves the problem of context loss and manual handoff between AI-assisted coding sessions by persisting session state, inferring next actions from git history, and gating autonomous decisions through human-in-the-loop checkpoints.
 
 ## What's In Flight
 
-- Roadmap restructuring: Phase 3.12 (Ground-Truth Inference) inserted before Smart Context Injection; all downstream phases renumbered and cross-references fixed. Committed to main.
-- Handover system architectural redesign: Current checkpoint timing causes stale goals in autonomous session continuation. Root cause identified as missing stop checkpoint handler invocation.
-- Goal inference timing fix: Moving inference from mid-session (message-aware) to session-end validation (session-aware) to prevent objectives from drifting out of sync with actual progress.
-- Staging verification pending: Context checkpoint cards must display correct 'turns remaining' before report_image.py fixes are pushed to main.
+- Phase 3.12 complete: autonomous session direction inference with HITL confidence gate. Direction is inferred from git log and session arc; when confidence < 0.70, a direction_confirm notification surfaces for human approval before autonomous continuation.
+- Verification of context checkpoint cards displaying correct 'turns remaining' in staging environment. Critical for user-facing UX before Phase 3.13.
+- End-to-end testing of autonomous handover: trigger session stop, verify direction_confirm notification appears, confirm IDE extension surfaces decision for approval.
+- Phase 3.13 planning and dependency assessment once Phase 3.12 verification is complete.
 
 ## Key Decisions Made
 
-- Handover state carriers (checkpoint_pending.json, launch_mode.json) are primary sources of truth for autonomous continuation, not git diffs alone. Investigation revealed these files control session resumption; git state is insufficient.
-- Goal inference must be deferred until session-end validation, not auto-inferred mid-session. Auto-inferred goals become stale and
+- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone. These files control autonomous session continuation; git state is insufficient for proper handover.
+- Goal inference is deferred until session-end validation, not auto-

@@ -1,46 +1,53 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 15:35
+Last updated: 2026-06-15 16:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Insert Phase 3.12 (Ground-Truth Inference) into roadmap, renumber downstream phases +1, fix cross-references, and commit changes.
+Completed Phase 3.12: built autonomous session direction inference with HITL confidence gate, six independent commits across lifecycle, checkpoint, and stop hook modules.
 
 ## Discussion
-Session focused on implementing the architectural decision to add a new phase on ground-truth-based inference before the existing Smart Context Injection phase. User confirmed that collapsing session history into hierarchical structure via git log of handover_bippin.json is the right approach—no new infrastructure needed. All phase numbers from 3.12 onward were shifted +1 to maintain consistency, and internal cross-references were corrected. Changes were committed and pushed to main.
+Phase 3.12 implements ground-truth direction inference to enable autonomous AI agents to determine next session focus without human input. Core work: _infer_direction() reads git log to extract session arc (commits, diffs, file edits), _read_session_arc() parses commit history deterministically, and stop.py embeds inference result in handover prompt. Added HITL gate: when confidence < 0.7, writes direction_confirm notification so extension can surface decision for human approval. All six stages (S1–S6) completed and pushed; roadmap marked complete.
 
 ## Accomplishments
-- [x] Inserted Phase 3.12 (Ground-Truth Inference) into roadmap.md
-- [x] Renumbered all downstream phases (3.13→3.14, 3.14→3.15, 3.15→3.16) for consistency
-- [x] Fixed duplicate 3.14 header and corrected internal cross-references in Phase 3.15 (Smart Context Injection)
-- [x] Verified phase sequence is clean and committed to git
+- [x] Built _infer_direction() in lifecycle.py — deterministic direction inference from git log, session arc, and file edit patterns
+- [x] Built _read_session_arc() in lifecycle.py — parses git log to extract commits, diffs, and file edit metadata for inference grounding
+- [x] Injected git log into handover checkpoint prompt to ground next_actions in actual committed work
+- [x] Replaced static handover prompt in stop.py with dynamic _infer_direction() result
+- [x] Added HITL direction_confirm gate: writes distinct notification when inference confidence < 0.70
+- [x] Updated roadmap.md to mark Phase 3.12 complete and shift subsequent phases 3.13–3.17
 
 ## Next Actions
-1. Verify git push to origin main completed successfully by checking remote branch state
-   *Why: Last bash command (git push) was initiated but completion status unclear from transcript*
-2. Update implementation_state.md to reflect completed roadmap restructuring and clear the in-progress log entries
-   *Why: File shows uncommitted changes; needs to document session completion and reset state for next session*
-3. Review Phase 3.12 (Ground-Truth Inference) specification to ensure it aligns with the inference architecture discussion from earlier in session
-   *Why: Phase was inserted but content details should be validated against the reasoning about transcript-based vs. ground-truth-based inference*
-4. Check stress-tests/ directory (uncommitted) to determine if it contains test cases for the new phase or is unrelated work
-   *Why: Uncommitted directory may need to be committed, ignored, or cleaned up before next session*
+1. Verify context checkpoint cards display correct 'turns remaining' in staging environment — test against live checkpoint creation flow
+   *Why: Open goal from session; critical for user-facing checkpoint UX before Phase 3.13*
+2. Test autonomous session handover end-to-end: trigger stop, verify direction_confirm notification appears when confidence < 0.70, confirm extension surfaces decision for approval
+   *Why: HITL gate is new; must validate notification delivery and extension integration before autonomous agents rely on it*
+3. Review Phase 3.13 scope (next phase in roadmap) and assess dependencies on Phase 3.12 completion
+   *Why: Phase 3.12 is now complete; unblock Phase 3.13 planning and execution*
+4. Commit askr_state/implementation_state.md and stress-tests/ if they contain meaningful changes; otherwise clean up uncommitted state
+   *Why: Two files remain uncommitted; clean state required before next session handover*
 
 ## Decisions
-- Use git log of handover_bippin.json as the session history source of truth instead of building new infrastructure — Simpler implementation, already available, provides chronological state snapshots without additional overhead
-- Insert Phase 3.12 (Ground-Truth Inference) before Smart Context Injection (now 3.15) in the roadmap — Inference must be ground-truth-based, not transcript-based, to avoid building 'an expensive coin flip with a notification on top'
+- Use git show <hash>:path to retrieve full JSON at each commit instead of parsing interleaved diff +/- lines — Diff parsing failed due to interleaved +/- chunks; git show provides clean, complete file state at each commit
+- Embed _infer_direction() result directly in stop.py handover prompt rather than as separate module call — Ensures direction inference is always executed and grounded in current session state when checkpoint is created
+- Implement HITL gate as distinct notification type (direction_confirm) rather than blocking handover creation — Allows handover to be generated and stored while extension surfaces decision for human approval asynchronously
+
+## Failed Approaches
+- Parsing git diff output to extract JSON changes across commits — Diff interleaves +/- lines; cannot reliably collect clean chunks. Switched to git show <hash>:path for full file state.
 
 ## Files In Play
-- `/Users/bippin/Desktop/askr/roadmap.md`
+- `askr/session/lifecycle.py`
+- `askr/session/checkpoint.py`
+- `askr/hooks/stop.py`
+- `roadmap.md`
 
 ## Relational Files
-- `askr_state/implementation_state.md` (configures): Tracks session progress and uncommitted changes; needs update to reflect roadmap work completion
-- `handover_bippin.json` (imported_by): Git log of this file serves as session history source; critical for understanding prior context
+- `askr/session/checkpoint.py` (imported_by): create_checkpoint() calls _infer_direction() to populate handover prompt; injected git log into checkpoint creation
+- `askr/hooks/stop.py` (imports): stop hook calls _infer_direction() and implements HITL direction_confirm gate; core consumer of lifecycle inference
+- `roadmap.md` (configures): Phase 3.12 completion marked; subsequent phases 3.13–3.17 now unblocked
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
 - `stress-tests/`
-
-## Blockers
-- Unclear if git push origin main completed successfully—no confirmation in transcript
