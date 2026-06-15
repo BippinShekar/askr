@@ -1,18 +1,20 @@
-Last updated: 2026-06-16 03:38
+Last updated: 2026-06-16 03:48
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions with an LLM, persisting conversation state and enabling multi-client support. It solves the problem of context loss during long coding sessions by maintaining session history, tracking token usage, and enabling autonomous handovers between sessions.
+Askr is a CLI-based AI coding agent that manages interactive sessions with an LLM, handles code analysis and generation, and integrates with IDEs and QA tools. It solves the problem of context loss and manual handoff friction when developers need to pause, resume, or hand off coding tasks to teammates or autonomous agents.
 
 ## What's In Flight
 
-- Multi-project daemon monitoring: Verified working with independent per-project cooldown timers for askr and leaps projects. Refactored to remove dead single-project code.
-- Handover system assessment: Currently reviewing daemon stability and roadmap phases to determine whether to proceed to next phase or address edge cases in current implementation.
-- Session-aware goal inference: Recently shifted from message-level to session-level goal inference to prevent stale objectives in autonomous handovers.
-- Checkpoint persistence: Fixed goal format handling to support both dict and string formats for backward compatibility.
+- Multi-project daemon monitoring with independent per-project cooldowns (validated working; no changes needed)
+- Adoption blocker investigation: multi-user shared file conflicts and race conditions between askr and leaps (co-founder startup)
+- Conflict resolution strategy design for concurrent writes to shared state files
+- Determination of adoption priority: which system (askr or leaps) should be primary for co-founder sync
 
 ## Key Decisions Made
 
-- Handover system requires architectural redesign, not incremental fixes. Root cause is that stop checkpoint handler was never invoked, making stale checkpoints a logic gap, not a timing issue.
-- Goal inference deferred to session-end validation rather than auto-inferred mid-session. Auto-inferred goals become stale and out of sync with actual progress.
-- Delta extraction happens at hook level (post_tool_use.py) rather
+- Checkpoint and handover state are primary carriers of session continuation; git diffs alone are insufficient
+- Goal inference must be session-aware and deferred to session-end validation, not auto-inferred mid-session from old messages
+- Auto-suggested goals are tagged at inference time (session_start.py) to distinguish system-inferred from user-created goals
+- Delta extraction happens at the hook level (post_tool_use.py) to separate concerns: hooks capture raw deltas, checkpoint orchestrates persistence
+- Backward compatibility maintained by handling both dict and str goal
