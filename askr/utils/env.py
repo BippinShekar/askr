@@ -17,5 +17,4 @@ def load():
     global_env = os.path.expanduser("~/.config/askr/.env")
     if os.path.exists(global_env):
         load_dotenv(dotenv_path=global_env, override=True)
-    else:
-        load_dotenv(override=True)
+    load_dotenv(override=False)  # local .env fills in any missing vars

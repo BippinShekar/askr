@@ -626,9 +626,11 @@ def cmd_init():
         welcome = f"**[askr] {developer} is online** — `{repo_name}`"
         if brief:
             welcome += f"\n\n**Repo brief:**\n{brief.strip()}"
-        send_message(welcome)
-        if brief:
+        sent = send_message(welcome)
+        if sent and brief:
             console.print("  [green]✓[/green] repo brief posted to Discord")
+        elif not sent:
+            console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
     except Exception:
         pass
 
