@@ -318,7 +318,7 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 ---
 
-## Phase 3.12 — Ground-Truth Direction Inference
+## Phase 3.12 — Ground-Truth Direction Inference ✅
 *Target: pre-stress-test*
 
 **Goal:** Autonomous sessions know what to work on from deterministic signals — not from transcript speculation. The handover's `next_actions[]` is cross-checked against git state before an autonomous session acts on it. A HITL confirmation gate fires only when inference confidence is low, preserving autonomy while eliminating token burn on wrong work.
@@ -346,12 +346,12 @@ The confirmation notification fires only when the top signal is weak (no uncommi
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | `checkpoint.py` handover prompt: change `task` field instruction to past-tense outcome ("what was accomplished") — eliminates "Remove X" vs "[x] Removed X" contradiction | 🔲 Todo |
-| S2 | `checkpoint.py` — cross-check `next_actions[]` against `git log` before writing: drop any action whose target file+message match a recent commit | 🔲 Todo |
-| S3 | `lifecycle.py` — `_infer_direction()`: reads uncommitted files → blockers.md → git log momentum, returns `{direction, confidence, signal_source}` | 🔲 Todo |
-| S4 | `lifecycle.py` — `_read_session_arc()`: reads last 5 handover states from git log, extracts task+files_in_play per session, synthesises arc in one Haiku call | 🔲 Todo |
-| S5 | `stop.py` — when writing re-launch notification, call `_infer_direction()` and embed result in the autonomous session prompt instead of raw next_action text | 🔲 Todo |
-| S6 | HITL gate: when `_infer_direction()` confidence < 0.7, write `direction_confirm` notification — "Based on [signal], I plan to work on X. Confirm or redirect." 5-min timeout, then proceed | 🔲 Todo |
+| S1 | `checkpoint.py` handover prompt: change `task` field instruction to past-tense outcome ("what was accomplished") — eliminates "Remove X" vs "[x] Removed X" contradiction | ✅ Done |
+| S2 | `checkpoint.py` — cross-check `next_actions[]` against `git log` before writing: drop any action whose target file+message match a recent commit | ✅ Done |
+| S3 | `lifecycle.py` — `_infer_direction()`: reads uncommitted files → blockers.md → git log momentum, returns `{direction, confidence, signal_source}` | ✅ Done |
+| S4 | `lifecycle.py` — `_read_session_arc()`: reads last 5 handover states from git log, extracts task+files_in_play per session, synthesises arc in one Haiku call | ✅ Done |
+| S5 | `stop.py` — when writing re-launch notification, call `_infer_direction()` and embed result in the autonomous session prompt instead of raw next_action text | ✅ Done |
+| S6 | HITL gate: when `_infer_direction()` confidence < 0.7, write `direction_confirm` notification — "Based on [signal], I plan to work on X. Confirm or redirect." 5-min timeout, then proceed | ✅ Done |
 
 **Honest risks:**
 - Session arc quality compounds handover quality. If handovers are speculative, 5 stacked summaries are worse than 1. S4 should be built last, after S1–S3 demonstrate that handover quality is reliable enough to stack.
