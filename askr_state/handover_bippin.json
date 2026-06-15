@@ -1,85 +1,94 @@
 {
-  "task": "Implemented Signal 3 direction inference by walking handover commit history to detect last coding session, enabling autonomous session routing without timestamp-based false positives.",
-  "discussion_summary": "Identified critical flaw in timestamp-based handover staleness detection: stop hook commits the handover itself, making any timestamp comparison useless. Pivoted to semantic approach: Signal 3 now diffs consecutive handover commits in git history, looking for non-askr_state file changes to identify the last actual coding session. This breaks the false-positive loop where conversational sessions would incorrectly trigger autonomous routing. User confirmed the approach during implementation.",
+  "task": "Implemented direction_proposal flow to surface talk-only sessions for user approval before autonomous execution, replacing hard binary skip logic with three-way routing (approve/reject/edit).",
+  "discussion_summary": "User identified a critical gap: research sessions ending with implementation decisions were being skipped by Signal 3 logic, causing autonomous runs to use stale direction from older coding sessions. Solution: talk-only sessions now return `proposed=True` instead of being discarded, triggering a notification with three buttons (Approve Direction / Reject / Edit Direction) in VS Code. This preserves user intent while maintaining safety \u2014 autonomous execution only proceeds if user explicitly approves.",
   "accomplishments": [
     {
-      "what": "Implemented _infer_direction() in lifecycle.py with Signal 3 logic that walks git history to find last coding commit pair",
+      "what": "Modified lifecycle.py Signal 3 to return proposed=True for talk-only sessions instead of skipping them",
       "done": true
     },
     {
-      "what": "Tested Signal 3 with real commit history; verified it correctly identifies coding vs. talk-only session pairs",
+      "what": "Updated stop.py to route direction_proposal notifications with three-button UI when proposed=True",
       "done": true
     },
     {
-      "what": "Committed lifecycle.py changes to main branch",
+      "what": "Added direction_proposal handler to extension.js with Approve/Reject/Edit buttons and user intent preservation",
       "done": true
     }
   ],
-  "in_progress": [
-    {
-      "file": "askr_state/implementation_state.md",
-      "what": "Session log accumulating tool runs and edits; needs final commit before next session",
-      "last_line": 21
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Commit askr_state/implementation_state.md with final session log",
-      "why": "Uncommitted state file must be clean before next session handover; stop hook will regenerate it"
+      "action": "Commit the three modified files (lifecycle.py, stop.py, extension.js) with message 'feat(lifecycle/stop/extension): direction_proposal \u2014 talk-only sessions surface for approval'",
+      "why": "Changes are staged but not yet committed; git push will fail without this"
     },
     {
       "order": 2,
-      "action": "Test direction_confirm flow end-to-end: trigger Signal 3 in a fresh session, verify input box appears, confirm direction selection opens autonomous session",
-      "why": "Last git log entry indicates this is the next immediate test; validates the full routing pipeline"
+      "action": "End-to-end test: run a research conversation, reach a conclusion like 'let's implement X', trigger stop hook, verify direction_proposal notification appears in VS Code with three buttons",
+      "why": "Validates the full flow from talk-only session detection through user approval UI"
     },
     {
       "order": 3,
-      "action": "If direction_confirm works, stress-test with rapid session cycles (talk \u2192 code \u2192 talk \u2192 code) to ensure Signal 3 correctly disambiguates each transition",
-      "why": "Real-world usage will have mixed session types; need confidence the signal is robust"
+      "action": "Test all three button paths: (1) Approve Direction \u2192 verify autonomous session starts with proposed direction, (2) Reject \u2192 verify no session starts, (3) Edit Direction \u2192 verify input box appears and custom direction is saved",
+      "why": "Ensures user has full control over autonomous execution intent"
     },
     {
       "order": 4,
-      "action": "Document Signal 3 logic in ARCHITECTURE.md or lifecycle docstring with examples of commit pairs it detects",
-      "why": "Future maintainers need to understand why this approach was chosen over timestamp-based detection"
+      "action": "Verify Signal 3 correctly skips older talk-only sessions and finds the most recent coding session as fallback if user rejects the proposal",
+      "why": "Maintains safety: if user rejects a research conclusion, autonomous run should still have valid direction from last confirmed coding session"
+    },
+    {
+      "order": 5,
+      "action": "Update implementation_state.md with completion status and commit",
+      "why": "Keeps handover state synchronized with actual progress"
     }
   ],
   "decisions": [
     {
-      "decision": "Signal 3 uses git diff between consecutive handover commits, not file timestamps or session duration",
-      "reason": "Timestamp comparison fails because stop hook commits the handover itself; semantic diff on askr_state/ vs. code files is reliable and self-correcting"
+      "decision": "Talk-only sessions return proposed=True instead of being silently skipped",
+      "reason": "Preserves user intent from research conclusions while maintaining explicit approval gate for autonomous execution"
     },
     {
-      "decision": "Signal 3 only fires if last coding commit pair exists and is recent enough (within momentum window)",
-      "reason": "Prevents stale handovers from triggering autonomous routing; conversational sessions leave no code changes, so Signal 3 naturally stays silent"
+      "decision": "Three-button UI (Approve/Reject/Edit) instead of auto-executing on proposal",
+      "reason": "User retains full control; prevents autonomous runs from misinterpreting research discussions as implementation directives"
+    },
+    {
+      "decision": "Signal 3 still walks history to find fallback coding session if proposal is rejected",
+      "reason": "Safety: ensures autonomous execution always has valid direction, even if user rejects the most recent talk-only session"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Timestamp-based staleness check: compare handover creation time to latest commit time",
-      "reason": "Stop hook commits the handover immediately after creation, so any commit after handover timestamp is guaranteed \u2014 check always passes, defeating the purpose"
+      "approach": "Hard binary skip of talk-only sessions in Signal 3",
+      "reason": "User identified that research sessions ending with implementation decisions were being discarded, causing autonomous runs to use stale direction from older coding sessions"
     }
   ],
   "files_in_play": [
     "askr/session/lifecycle.py",
-    "askr_state/implementation_state.md"
+    "askr/hooks/stop.py",
+    "askr/ide/vscode-extension/extension.js"
   ],
   "relational_files": [
     {
-      "file": "askr/hooks/stop.py",
+      "file": "askr/session/lifecycle.py",
       "relationship": "imports",
-      "why": "Stop hook calls _infer_direction() to determine session type before creating handover"
+      "why": "Signal 3 logic is the core of direction inference; modified to return proposed=True for talk-only sessions"
+    },
+    {
+      "file": "askr/hooks/stop.py",
+      "relationship": "configures",
+      "why": "Stop hook routes the direction_proposal notification; updated to handle three-way user response"
     },
     {
       "file": "askr/ide/vscode-extension/extension.js",
-      "relationship": "configures",
-      "why": "Extension's direction_confirm handler receives direction signal from lifecycle inference"
+      "relationship": "imported_by",
+      "why": "VS Code extension displays the direction_proposal UI and handles user button clicks"
     },
     {
-      "file": "askr_state/handover.json",
-      "relationship": "tested_by",
-      "why": "Signal 3 walks git history of handover commits to infer direction; output feeds into next session routing"
+      "file": "askr_state/implementation_state.md",
+      "relationship": "configures",
+      "why": "Tracks session progress and uncommitted changes"
     }
   ],
   "uncommitted_files": [
@@ -89,7 +98,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T18:24:00.000000+00:00",
+    "timestamp": "2026-06-15T18:27:00.000000+00:00",
     "developer": "bippin"
   }
 }
