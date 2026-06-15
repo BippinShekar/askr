@@ -209,7 +209,7 @@ UNCOMMITTED FILES — from git status (do not change this field):
 Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 
 {{
-  "task": "one sentence — what was being worked on",
+  "task": "one sentence PAST-TENSE OUTCOME — what was accomplished this session (e.g. 'Fixed X', 'Built Y', 'Refactored Z to do W')",
   "discussion_summary": "key context, reasoning, and what shaped decisions this session — 2-4 sentences",
   "accomplishments": [{{"what": "concrete thing completed", "done": true}}],
   "in_progress": [{{"file": "exact/path.py", "what": "what was being done here", "last_line": 0}}],
@@ -229,11 +229,12 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 }}
 
 Rules:
+- task: PAST TENSE OUTCOME. "Fixed X" not "Fix X". Describes what was accomplished, not what needs doing. An autonomous session reading this must know the work is done.
 - FINAL STATE ONLY. Reversed or superseded approaches go in failed_approaches, never next_actions.
 - LAST EXCHANGE WINS. Handover reflects where things ended, not what was tried along the way.
 - in_progress.last_line: USE values from TRACKED FILE EDITS — they are exact. Estimate only for files not in that list.
 - uncommitted_files: already set above from git — copy it verbatim, do not change.
-- next_actions: 3-5 ordered actions, each specific enough to start immediately. No generic instructions.
+- next_actions: 3-5 ordered actions for work NOT YET DONE. Never list operations already visible in RECENT GIT LOG above. If git shows a commit was made, that work is done — do not list it again.
 - user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include. Empty array if uncertain.
 - decisions: choices between alternatives that rule something out — not observations or facts.
 - completed_goals: list exact goal strings from OPEN GOALS that are clearly finished per transcript. Conservative.
