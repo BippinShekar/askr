@@ -11,3 +11,7 @@ __pycache__/
 
 # askr
 .askr_history
+
+# generated per-session — regenerated locally, never synced via git to avoid conflicts
+askr_state/architecture.md
+askr_state/project_brief.md
