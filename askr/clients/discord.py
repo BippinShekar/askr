@@ -1,8 +1,10 @@
 import os
+import ssl
 import uuid
 import urllib.request
 import urllib.error
 import json
+import certifi
 
 from askr.utils import env
 
@@ -31,8 +33,9 @@ def send_message(text: str) -> tuple[bool, str]:
         },
         method="POST",
     )
+    ctx = ssl.create_default_context(cafile=certifi.where())
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             return resp.status in (200, 204), ""
     except urllib.error.HTTPError as e:
         return False, f"HTTP {e.code}: {e.reason}"
@@ -82,8 +85,9 @@ def send_file(file_path: str, caption: str = "") -> bool:
         },
         method="POST",
     )
+    ctx = ssl.create_default_context(cafile=certifi.where())
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             return resp.status in (200, 204)
     except (urllib.error.URLError, OSError):
         return False
