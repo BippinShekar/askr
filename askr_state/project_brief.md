@@ -1,18 +1,16 @@
-Last updated: 2026-06-15 17:56
+Last updated: 2026-06-15 18:18
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persists session state across restarts, and integrates with VSCode via a handover system. It solves the problem of context loss in long-running AI-assisted coding tasks by maintaining checkpoint state, tracking token usage, and enabling human-in-the-loop gates when the AI's confidence in next steps is low.
+Askr is a CLI-based AI coding agent that runs interactive development sessions in VSCode, analyzing code and maintaining persistent state across handovers. It solves the problem of context loss and token wastage when autonomous sessions need to resume or hand off to humans—by capturing session state, inferring direction, and gating continuation on human confirmation when confidence is low.
 
 ## What's In Flight
 
-- Direction confirmation gate: implemented handler in stop.py and extension.js to prompt users via VSCode input box when inference confidence drops below 0.70, preventing token wastage on ambiguous autonomous sessions
-- End-to-end testing of direction_confirm flow: verify VSCode UI integration, input capture, and handover.json persistence
-- Signal chain validation: confirm that user input from direction_confirm flows into the next autonomous session as Signal 1
-- Timeout and fallback behavior for direction_confirm: define what happens if user doesn't respond within 5 minutes
+- Direction confirmation gate (Signal 4 path): Implemented handler in stop.py and extension.js to block autonomous session resumption when handover inference confidence falls below 0.70; requires human input via VSCode input box instead of auto-opening session.
+- Testing direction_confirm UX in VSCode: Verify that stale/empty handover triggers input prompt and blocks auto-session correctly.
+- Adoption strategy inference: User signaled readiness to explore product direction around virality and downloads; next autonomous session should populate handover.next_actions with 3-5 adoption-focused actions.
+- Documentation gap: Signal paths (Signal 3 normal flow, Signal 4 edge case, Signal 5 zero-direction) and token implications not yet documented; lifecycle.md or README needs clarity.
 
 ## Key Decisions Made
 
-- Handover state lives in checkpoint_pending.json and launch_mode.json, not git diffs alone; these files control autonomous session continuation
-- Goal inference is session-aware, not message-aware; auto-inferred goals are tagged at session_start.py to prevent stale objectives from poisoning handovers
-- Direction
+- Handover.json always exists in normal operation, so Signal 3 (fresh handover) is the default path and Signal 4 
