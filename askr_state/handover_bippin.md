@@ -1,53 +1,50 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:53
+Last updated: 2026-06-15 13:55
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook prompt not appearing on fresh clone when no .env file exists
+Fix `.env` loading in askr init so Discord webhook URL is auto-loaded from the repo's .env file instead of requiring manual re-entry on fresh clones
 
 ## Discussion
-User's friend cloned the repo fresh, ran `askr init`, entered their name, but the Discord webhook URL prompt never appeared despite no .env file being present. Root cause identified: an `except Exception: pass` block was swallowing an import error that occurred before the prompt code could execute. The prompt logic was inside the try block, so any early exception prevented it from running. Fix: move the Discord webhook prompt outside the try-except so it always runs after the name prompt, regardless of import errors.
+Friend cloned askr, ran `askr init`, entered name, then nothing happened — no Discord webhook prompt appeared. Root cause: `load_dotenv()` was searching from the working directory (where init was run) instead of from the askr repo directory itself. The fix moves the `.env` load to happen from the askr package's own directory, ensuring fresh clones automatically pick up the bundled `.env` without manual intervention.
 
 ## Accomplishments
-- [x] Identified root cause: except Exception: pass swallowing errors before prompt execution
-- [x] Moved Discord webhook prompt outside try-except block in askr.py
-- [x] Committed fix: 'fix: move Discord webhook prompt outside try-except'
+- [x] Identified that `load_dotenv()` searches from cwd, not from askr repo directory
+- [x] Modified `/Users/bippin/Desktop/askr/askr/utils/env.py` to load .env from askr repo root
+- [x] Committed fix: 'fix: always load .env from askr repo'
 
 ## In Progress
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py` (line 608): Discord webhook prompt logic moved outside exception handler to guarantee execution on fresh installs
+- `/Users/bippin/Desktop/askr/askr/utils/env.py` (line 1): Ensure load_dotenv() resolves to askr package directory, not cwd
 
 ## Next Actions
-1. Have friend pull latest changes and run `askr init` again to verify webhook prompt now appears after name entry
-   *Why: Confirm the fix works on a fresh clone with no .env file*
-2. Verify that if friend presses enter to skip webhook prompt, no Discord send error occurs (should bail early gracefully)
-   *Why: Earlier fix added early exit if no webhook configured, but needs validation*
-3. Regenerate Discord webhook URL on Discord server and document in README that exposed URLs must be rotated
-   *Why: Original webhook URL was exposed in chat and is now invalid*
-4. Test clean install flow end-to-end: fresh clone → askr init → name prompt → webhook prompt → successful init
-   *Why: Ensure the complete onboarding path works without hidden errors*
+1. Test fresh clone: `git clone askr`, `cd askr`, `askr init` — verify Discord webhook prompt appears and auto-loads from .env without manual entry
+   *Why: Confirm the fix works end-to-end for the reported scenario*
+2. Have friend `git pull` in their clone and re-run `askr init` to verify the prompt now appears
+   *Why: Unblock the immediate user-facing issue*
+3. Verify that `env.py` correctly resolves the askr package root using `__file__` or `importlib.resources`
+   *Why: Ensure the path resolution is robust across different installation methods (pip, git clone, editable install)*
+4. Commit any remaining changes to `askr_state/implementation_state.md` and `roadmap.md`
+   *Why: Clean up uncommitted state tracking files*
 
 ## Decisions
-- Move prompt logic outside try-except rather than add nested try-except inside — Cleaner, more maintainable, and ensures prompts always execute regardless of import errors
-- Keep early exit in send_message if no webhook configured rather than force prompt retry — User can skip webhook setup; system should gracefully degrade rather than fail
+- Move Discord webhook prompt outside the try-except block so it cannot be swallowed by exception handling — Ensures the prompt always runs, even if an import or other error occurs earlier in init
+- Load .env from askr repo directory, not from cwd — Fresh clones should auto-configure without requiring users to manually copy .env or re-enter values
 
 ## Failed Approaches
-- Assuming getpass() was the issue (hiding input visibly) — Distraction; real issue was exception handler swallowing errors before prompt code ran
-- Checking if env.load() was picking up stale .env from parent directories — User confirmed fresh clone with no .env file present; issue was earlier in execution flow
+- Assumed the `.env` in the repo was being loaded but the webhook URL was stale — User clarified that no `.env` file existed in the friend's clone directory — the real issue was `load_dotenv()` searching the wrong directory
 
 ## Files In Play
+- `/Users/bippin/Desktop/askr/askr/utils/env.py`
 - `/Users/bippin/Desktop/askr/askr/cli/askr.py`
 
 ## Relational Files
-- `/Users/bippin/Desktop/askr/.env` (configures): Discord webhook URL loaded from .env; stale URL was blocking fresh installs
-- `/Users/bippin/Desktop/askr/askr_state/implementation_state.md` (documents): Tracks session progress and modifications
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py` (imports): Calls `env.load()` during `askr init` — depends on correct .env resolution
+- `/Users/bippin/Desktop/askr/.env` (configures): Contains the Discord webhook URL that should be auto-loaded on fresh clones
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
 - `roadmap.md`
 - `stress-tests/`
-
-## Blockers
-- Discord webhook URL was exposed in chat and regenerated; friend needs new URL in .env to test Discord notifications

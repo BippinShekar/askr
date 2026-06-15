@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [13:55] Ran: git add askr/utils/env.py && git commit -m "fix: always load .env from askr repo
+- [13:55] Modified: /Users/bippin/Desktop/askr/askr/utils/env.py
 - [13:53] Ran: git add askr/cli/askr.py && git commit -m "fix: move Discord webhook prompt outs
 - [13:53] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [13:48] Ran: git add askr/cli/askr.py && git commit -m "fix: skip Discord send entirely if no

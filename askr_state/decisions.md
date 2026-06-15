@@ -91,3 +91,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 13:50] [bippin] Skip Discord send entirely if `ASKR_DISCORD_WEBHOOK` is not configured, rather than failing with an error. Reason: Allows `askr init` to complete successfully even if Discord integration is not set up, reducing friction for new users
 [2026-06-15 13:53] [bippin] Move prompt logic outside try-except rather than add nested try-except inside. Reason: Cleaner, more maintainable, and ensures prompts always execute regardless of import errors
 [2026-06-15 13:53] [bippin] Keep early exit in send_message if no webhook configured rather than force prompt retry. Reason: User can skip webhook setup; system should gracefully degrade rather than fail
+[2026-06-15 13:55] [bippin] Move Discord webhook prompt outside the try-except block so it cannot be swallowed by exception handling. Reason: Ensures the prompt always runs, even if an import or other error occurs earlier in init
+[2026-06-15 13:55] [bippin] Load .env from askr repo directory, not from cwd. Reason: Fresh clones should auto-configure without requiring users to manually copy .env or re-enter values
