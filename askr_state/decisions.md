@@ -106,3 +106,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 14:25] [bippin] Use certifi library for SSL certificate verification instead of disabling SSL verification or using system certificates directly. Reason: certifi is the standard Python approach for cross-platform certificate handling; safer than disabling verification, more reliable than system certs on macOS
 [2026-06-15 14:30] [bippin] Use certifi library for SSL context instead of disabling certificate verification. Reason: Secure approach that respects certificate validation while providing macOS Python with proper certificate bundle
 [2026-06-15 14:30] [bippin] Apply certifi fix to both send_message and send_file methods in discord.py. Reason: Both methods use urllib and both can encounter SSL verification failures
+[2026-06-15 14:31] [bippin] Global keys in ~/.config/askr/.env are shared across all repos on a machine. Reason: Simplest initial design; setup happens once, not per-project
+[2026-06-15 14:31] [bippin] setup_keys() only runs when ~/.config/askr/.env doesn't exist. Reason: Avoid re-prompting on every askr init; keys are machine-level, not project-level

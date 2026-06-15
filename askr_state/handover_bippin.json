@@ -1,9 +1,13 @@
 {
-  "task": "Fix macOS SSL certificate verification error in Discord webhook client and ensure multi-project setup with separate tracking",
-  "discussion_summary": "Friend encountered SSL certificate verification failure on macOS when Discord webhook tried to send notifications. Root cause: Python on macOS doesn't use system certificates by default. Solution implemented: added `certifi` library to provide proper SSL context for both `send_message` and `send_file` methods in discord.py. User confirmed that `askr init` in a new repo will prompt for Anthropic key and webhook URL again, enabling separate tracking for private vs official projects as required.",
+  "task": "Fix macOS SSL certificate verification error in Discord webhook client and establish per-repo webhook configuration strategy",
+  "discussion_summary": "Friend encountered SSL certificate verification failure on macOS when Discord webhook tried to send. Root cause: Python on macOS doesn't use system certificates by default. Applied `certifi` library fix to both `send_message` and `send_file` methods in discord.py. User then raised critical architectural question: how should askr differentiate between repos and support different webhooks per repo, since current design stores keys globally in `~/.config/askr/.env`. This exposed a gap between the single-key-per-machine model and the user's need for private vs. official project separation.",
   "accomplishments": [
     {
-      "what": "Fixed SSL certificate verification in discord.py by adding certifi SSL context to urllib requests",
+      "what": "Added certifi SSL context to discord.py send_message method",
+      "done": true
+    },
+    {
+      "what": "Added certifi SSL context to discord.py send_file method",
       "done": true
     },
     {
@@ -11,11 +15,7 @@
       "done": true
     },
     {
-      "what": "Committed changes to discord.py and requirements.txt with git",
-      "done": true
-    },
-    {
-      "what": "Verified that askr init prompts for credentials per-repo, enabling multi-project separation",
+      "what": "Committed SSL fix and verified install.sh will auto-install certifi",
       "done": true
     }
   ],
@@ -23,68 +23,86 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Friend runs `git pull` to fetch the certifi fix and updated requirements.txt",
-      "why": "Pulls the SSL certificate fix into their local repo"
+      "action": "Design per-repo webhook configuration system: decide between (a) repo-level .env override in askr_state/, (b) team/project scoping in Phase 4 structure, or (c) environment variable per-repo pattern",
+      "why": "User explicitly needs different webhooks for private vs official projects; current global-only design blocks this use case"
     },
     {
       "order": 2,
-      "action": "Friend runs `install.sh` to reinstall dependencies and pick up certifi into the venv",
-      "why": "install.sh runs pip install -r requirements.txt which will install certifi automatically"
+      "action": "Update askr init to optionally prompt for repo-specific webhook URL if not found in global config",
+      "why": "Enables per-repo differentiation without breaking existing single-key workflows"
     },
     {
       "order": 3,
-      "action": "Friend runs `askr init` in the new repo to set up Anthropic key and Discord webhook URL separately",
-      "why": "Enables separate tracking for private projects vs official projects with distinct credentials"
+      "action": "Document in CLAUDE.md or README how to set repo-specific Discord webhooks for team/project separation",
+      "why": "User needs clear guidance on the intended workflow for managing multiple projects"
     },
     {
       "order": 4,
-      "action": "Test Discord notification by triggering a session to verify SSL error is resolved",
-      "why": "Confirms the certifi fix resolves the [SSL: CERTIFICATE_VERIFY_FAILED] error"
+      "action": "Verify friend's SSL fix works: git pull, re-run install.sh, askr init, test Discord send",
+      "why": "Unblock immediate blocker before architectural changes"
     }
   ],
   "decisions": [
     {
-      "decision": "Use certifi library for SSL context instead of disabling certificate verification",
-      "reason": "Secure approach that respects certificate validation while providing macOS Python with proper certificate bundle"
+      "decision": "Global keys in ~/.config/askr/.env are shared across all repos on a machine",
+      "reason": "Simplest initial design; setup happens once, not per-project"
     },
     {
-      "decision": "Apply certifi fix to both send_message and send_file methods in discord.py",
-      "reason": "Both methods use urllib and both can encounter SSL verification failures"
+      "decision": "setup_keys() only runs when ~/.config/askr/.env doesn't exist",
+      "reason": "Avoid re-prompting on every askr init; keys are machine-level, not project-level"
     }
   ],
-  "user_rejected_decisions": [],
-  "failed_approaches": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Global keys are sufficient for all use cases; askr init just sets up state files and hooks",
+      "user_signal": "then how will askr differentiate between repo's? also, what if I want to have different webhooks for differnt repo's?",
+      "domain": "webhook configuration, project isolation",
+      "confidence": 0.95
+    }
+  ],
+  "failed_approaches": [
+    {
+      "approach": "Assuming single global webhook URL works for all repos",
+      "reason": "User has legitimate need to separate private and official projects with different Discord webhooks"
+    }
+  ],
   "files_in_play": [
     "askr/clients/discord.py",
     "requirements.txt"
   ],
   "relational_files": [
     {
-      "file": "askr/cli/askr.py",
-      "relationship": "imported_by",
-      "why": "Calls discord client for notifications"
+      "file": "askr/hooks/notification.py",
+      "relationship": "calls",
+      "why": "Calls discord.py send methods; error messages now propagate SSL details"
     },
     {
-      "file": "askr/hooks/notification.py",
+      "file": "askr/cli/askr.py",
       "relationship": "imported_by",
-      "why": "Uses discord client to send notifications"
+      "why": "Contains setup_keys() and askr init logic; needs update for per-repo webhook support"
     },
     {
       "file": "install.sh",
       "relationship": "configures",
-      "why": "Runs pip install -r requirements.txt to install certifi"
+      "why": "Runs pip install -r requirements.txt; will auto-install certifi after this session's commit"
+    },
+    {
+      "file": "roadmap.md",
+      "relationship": "documents",
+      "why": "Phase 4 team scoping may address per-repo/per-team webhook differentiation"
     }
   ],
   "uncommitted_files": [
-    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
-  "blockers": [],
+  "blockers": [
+    "Architectural decision needed: how to support per-repo webhook URLs without breaking global key model"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T14:27:00+00:00",
+    "timestamp": "2026-06-15T09:01:33.981912+00:00",
     "developer": "bippin"
   }
 }
