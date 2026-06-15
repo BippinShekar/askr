@@ -49,3 +49,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Assumed friend was missing ASKR_DISCORD_WEBHOOK env var entirely — User clarified webhook is set and works when tested manually; real issue was env.load() not reading local .env
 - [2026-06-15] Checking setup_keys() early return as root cause — Distracted from the actual issue; setup_keys() behavior is correct, the problem is env loading order
 - [2026-06-15] Assumed the issue was with override=True on local load — Actually override=False was correct; the real bug was the early return in cmd_init preventing setup_keys() from being called
+- [2026-06-15] Relying on setup_keys() to prompt for webhook during init — setup_keys() returns early if ~/.config/askr/.env exists, so it never asks for webhook — breaks the init flow for users with global config
