@@ -138,7 +138,11 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         pass
 
     try:
-        from askr.session.lifecycle import _get_next_goal, _write_launch_mode, _load_allowed_tools
+        from askr.session.lifecycle import (
+            _get_next_goal, _write_launch_mode, _load_allowed_tools,
+            _infer_direction, _read_session_arc,
+        )
+        from askr.state.config import load_developer
         import datetime as _dt
 
         trigger = pending.get("trigger", "context")
@@ -161,10 +165,34 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 "timestamp": now,
             }
         else:
-            pct     = pending.get("context_pct", 0)
-            pct_str = f"{round(pct * 100)}%"
-            goal_part = f" (High-level goal for context: {next_goal}.)" if next_goal else ""
-            stop_prompt = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
+            pct       = pending.get("context_pct", 0)
+            pct_str   = f"{round(pct * 100)}%"
+            developer = load_developer()
+
+            # Build direction from ground-truth signals, not from handover speculation
+            direction = _infer_direction(project_path)
+            confidence = direction["confidence"]
+
+            if confidence >= 0.70:
+                # High-confidence: session prompt leads with the inferred direction.
+                # The handover provides context; direction provides the directive.
+                arc = _read_session_arc(developer) if direction["signal_source"] == "git_momentum" else ""
+                arc_part = f" Context from recent sessions: {arc}" if arc else ""
+                stop_prompt = (
+                    f"Continue work on: {direction['direction']}. "
+                    f"Read the handover file for context on where the last session left off.{arc_part} "
+                    f"Work autonomously."
+                )
+            else:
+                # Low-confidence: session arc as supplementary context, but gate fires in S6
+                arc = _read_session_arc(developer)
+                arc_part = f" Recent session arc: {arc}." if arc else ""
+                stop_prompt = (
+                    f"Read the handover file.{arc_part} "
+                    f"Before starting any work, summarise what you plan to do and wait "
+                    f"for confirmation from the user."
+                )
+
             payload = {
                 "type": "context",
                 "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
@@ -172,6 +200,8 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
                 "prompt": stop_prompt,
+                "direction_confidence": confidence,
+                "direction_signal": direction["signal_source"],
                 "shown": False,
                 "timestamp": now,
             }
