@@ -506,17 +506,19 @@ def _infer_direction(project_path: str = "") -> dict:
     Infer what the next autonomous session should work on from deterministic signals.
 
     Signal priority (highest confidence first):
-      1. Uncommitted files  — work was interrupted here (confidence 0.95)
-      2. blockers.md        — something is explicitly stuck (confidence 0.90)
-      3. git log momentum   — most-touched module in last 10 commits (confidence 0.72)
-      4. Nothing            — no signal found (confidence 0.35)
+      1. Uncommitted files       — work was interrupted mid-session (confidence 0.95)
+      2. blockers.md             — something is explicitly stuck (confidence 0.90)
+      3. Handover next_actions   — previous session already planned the next step (confidence 0.85)
+      4. Conventional commit scope — most active subsystem in last 10 commits (confidence 0.56-0.72)
+      5. Nothing                 — no signal found (confidence 0.35)
 
     Returns {direction, confidence, signal_source, details}
     Never raises — all errors produce the low-confidence fallback.
     """
+    import re as _re
     cwd = project_path or os.getcwd()
 
-    # Signal 1: uncommitted files
+    # Signal 1: uncommitted files — work was cut mid-sentence
     try:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
@@ -539,13 +541,12 @@ def _infer_direction(project_path: str = "") -> dict:
     except Exception:
         pass
 
-    # Signal 2: blockers.md non-empty
+    # Signal 2: blockers.md non-empty — something is explicitly stuck
     try:
         from askr.state.config import get_state_dir
         blockers_path = os.path.join(get_state_dir(), "blockers.md")
         if os.path.exists(blockers_path):
             content = open(blockers_path).read().strip()
-            # Strip header/metadata lines — look for actual blocker entries
             _skip = {"none noted", "[none]", "none"}
             entries = [
                 l.strip() for l in content.splitlines()
@@ -564,32 +565,79 @@ def _infer_direction(project_path: str = "") -> dict:
     except Exception:
         pass
 
-    # Signal 3: git log momentum — most-touched top-level module in last 10 commits
+    # Signal 3: handover next_actions[0] — the previous session already planned this
+    try:
+        import json as _json, time as _time
+        from askr.state.config import load_developer, state_path
+        dev = load_developer()
+        handover_path = state_path(f"handover_{dev}.json")
+        if os.path.exists(handover_path):
+            age_hours = (time.time() - os.path.getmtime(handover_path)) / 3600
+            if age_hours < 48:  # stale handovers older than 48h are unreliable
+                with open(handover_path) as f:
+                    handover = _json.load(f)
+                actions = handover.get("next_actions", [])
+                if actions:
+                    first = actions[0]
+                    action_text = (
+                        first.get("action") or first
+                        if isinstance(first, (dict, str)) else str(first)
+                    )
+                    if isinstance(action_text, str) and len(action_text) > 10:
+                        return {
+                            "direction": action_text[:200],
+                            "confidence": 0.85,
+                            "signal_source": "handover_next_actions",
+                            "details": {"age_hours": round(age_hours, 1), "developer": dev},
+                        }
+    except Exception:
+        pass
+
+    # Signal 4: conventional commit scopes — tells you the subsystem, not the repo root
+    # Falls back to second-level path grouping if no conventional commits found.
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "--name-only", "-10"],
             capture_output=True, text=True, timeout=10, cwd=cwd,
         )
-        import re as _re
-        _commit_re = _re.compile(r'^[0-9a-f]{7,} ')  # short hash + space = commit line
+        _commit_re = _re.compile(r'^[0-9a-f]{7,} ')
+        _scope_re  = _re.compile(r'\b\w+\(([^)]+)\):')  # feat(scope): / fix(scope):
         from collections import Counter
-        modules: Counter = Counter()
+        scopes: Counter = Counter()
+        paths:  Counter = Counter()
         for line in result.stdout.splitlines():
             line = line.strip()
-            if not line or _commit_re.match(line) or line.startswith("askr_state"):
+            if not line or line.startswith("askr_state"):
                 continue
-            # Top-level module = first path component
-            module = line.split("/")[0]
-            if module:
-                modules[module] += 1
-        if modules:
-            top_module, count = modules.most_common(1)[0]
-            confidence = min(0.72, 0.50 + count * 0.04)  # scales with commit density
+            if _commit_re.match(line):
+                # Commit message line — extract conventional scope
+                m = _scope_re.search(line)
+                if m:
+                    scopes[m.group(1)] += 1
+            else:
+                # File path line — track second-level component as fallback
+                parts = line.split("/")
+                key = "/".join(parts[:2]) if len(parts) >= 2 else parts[0]
+                paths[key] += 1
+
+        if scopes:
+            top_scope, count = scopes.most_common(1)[0]
+            confidence = min(0.72, 0.50 + count * 0.075)  # 1 hit=0.58, 3 hits=0.72
             return {
-                "direction": f"continue work in {top_module}/ ({count} of last 10 commits)",
+                "direction": f"continue work on {top_scope} ({count} of last 10 commits)",
                 "confidence": round(confidence, 2),
-                "signal_source": "git_momentum",
-                "details": dict(modules.most_common(5)),
+                "signal_source": "commit_scope",
+                "details": dict(scopes.most_common(5)),
+            }
+
+        if paths:
+            top_path, count = paths.most_common(1)[0]
+            confidence = min(0.60, 0.42 + count * 0.04)
+            return {
+                "direction": f"continue work in {top_path}/ ({count} recent changes)",
+                "confidence": round(confidence, 2),
+                "signal_source": "file_path_cluster",
+                "details": dict(paths.most_common(5)),
             }
     except Exception:
         pass
