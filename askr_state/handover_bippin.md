@@ -1,44 +1,46 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 17:51
+Last updated: 2026-06-15 17:56
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Validated direction inference signal chain and confirmed autonomous session gate logic for preventing token waste on low-confidence or empty-context sessions
+Implemented direction_confirm handler in stop.py and extension.js to gate autonomous sessions when inference confidence < 0.70, preventing token wastage on ambiguous handovers
 
 ## Discussion
-Session focused on understanding when askr should NOT start an autonomous session to avoid wasting tokens. User asked what qualifies as 'nothing' (zero direction inference) and how to ensure the system doesn't spin up a session without actionable context. This led to validation of the three-signal direction inference system (dirty files, blockers.md, handover next_actions) and confirmation that the direction_confirm HITL gate at confidence < 0.70 is the correct mechanism to prevent empty-context autonomous sessions.
+Session resolved a critical insight: handover.json always exists in normal operation, making the 'nothing' signal (confidence 0.35) unreachable. This means direction_confirm (confidence < 0.70) is the only practical gate to prevent autonomous sessions from spinning up without clear direction. User challenged token wastage on direction validation, so the handler now prompts for human input via VSCode input box when confidence is low, rather than auto-starting a session or silently confirming.
 
 ## Accomplishments
-- [x] Validated Signal 1 (uncommitted files) correctly fires and produces high-confidence direction
-- [x] Validated Signal 3 (handover next_actions) correctly reads and prioritizes previous session's planned work
-- [x] Confirmed direction_confirm HITL gate prevents autonomous session start when confidence < 0.70
-- [x] Tested full direction inference chain end-to-end with real git log and file state
+- [x] Built direction_confirm handler in stop.py with human-in-the-loop input box prompt
+- [x] Updated extension.js to route direction_confirm notifications to VSCode input box UI
+- [x] Committed both files to main branch
 
 ## Next Actions
-1. Commit uncommitted state files (implementation_state.md, notifications.log) with message 'askr: validate direction inference gate prevents empty-context sessions'
-   *Why: Session work is complete; state must be persisted before next session can read it*
-2. Document the 'nothing' threshold in lifecycle.py docstring: direction inference returns None or confidence < 0.70 when all three signals are empty/stale, triggering direction_confirm HITL gate
-   *Why: User question about 'nothing' needs explicit definition in code for future maintainers and autonomous agents*
-3. Add unit test for _infer_direction() with empty state (no dirty files, no blockers, no handover) to verify it returns confidence < 0.70
-   *Why: Validates the gate logic prevents token waste on truly empty sessions*
+1. Test direction_confirm flow end-to-end: trigger a low-confidence scenario (e.g., empty blockers.md, no recent commits), verify VSCode input box appears, and confirm user input is captured and written to handover.json
+   *Why: Handler is committed but untested in live VSCode environment; need to verify UI integration and input capture work correctly*
+2. Verify that when user provides direction via input box, next autonomous session reads it from handover.json and starts with that direction as Signal 1
+   *Why: Closes the loop: HITL input must flow into next session's signal chain, otherwise direction_confirm is just a blocker with no recovery path*
+3. Add timeout and fallback behavior to direction_confirm: if user does not respond within 5 minutes, either auto-reject (no session) or escalate to log file for manual review
+   *Why: Prevents indefinite hangs if user is away; clarifies what happens when HITL gate is triggered but unattended*
+4. Update implementation_state.md to mark Phase 3.13 (direction_confirm HITL gate) as complete, and document the signal chain confidence thresholds in roadmap
+   *Why: Maintains state tracking and makes the decision to gate at 0.70 confidence explicit for future sessions*
 
 ## Decisions
-- Direction inference uses three independent signals (dirty files, blockers.md, handover) rather than single source — Provides redundancy and prevents false negatives when one signal is stale or missing
-- Confidence < 0.70 triggers HITL direction_confirm gate, not autonomous session start — Prevents wasting tokens on sessions with insufficient context or direction
+- direction_confirm uses VSCode input box (user-provided text) rather than auto-confirming or auto-rejecting — User challenged token wastage on validation; HITL input box is the only way to recover direction when confidence is low without wasting tokens on guessing
+- direction_confirm is the only practical gate; 'nothing' signal (confidence 0.35) is unreachable because handover.json always exists in normal operation — User's logic: if handover exists, Signal 3 fires at 0.85; if it doesn't, we're in a fresh repo edge case. Either way, direction_confirm at < 0.70 is the real blocker
+
+## Failed Approaches
+- Treating 'nothing' signal (confidence 0.35) as the primary gate to prevent token wastage — User correctly identified that handover.json always exists in normal operation, making this signal unreachable; direction_confirm (< 0.70) is the actual gate
 
 ## Files In Play
-- `askr/session/lifecycle.py`
-- `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
+- `askr/hooks/stop.py`
+- `askr/ide/vscode-extension/extension.js`
 
 ## Relational Files
-- `askr/session/stop.py` (imports): Calls _infer_direction() to populate handover before session ends
-- `askr_state/blockers.md` (configures): Signal 2 source for direction inference
-- `handover_bippin.json` (configures): Signal 3 source; next_actions field drives autonomous session direction
+- `askr/session/lifecycle.py` (imported_by): stop.py calls _infer_direction() from lifecycle.py; direction_confirm handler depends on confidence scores from that module
+- `askr_state/handover.json` (configures): direction_confirm writes user input to handover.json; next session reads it as Signal 1
+- `askr_state/blockers.md` (configures): blockers.md is a signal source in lifecycle.py; affects confidence calculation that triggers direction_confirm
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
