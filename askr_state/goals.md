@@ -4,6 +4,8 @@
 
 
 
+
+
 ## Today - 2026-06-14
 
 
@@ -13,6 +15,8 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-15 22:19] DISCARDED: Test context-cut scenario end-to-end: trigger 75% limit and verify autonomous ta
+[2026-06-15 22:19] DISCARDED: Verify pre_compact.py hook fires before compaction and blocks auto-compaction wh
 [2026-06-15 16:38] Verify checkpoint cards display correct 'turns remaining' in staging
 [2026-06-15 16:38] Test direction_confirm notification triggers when confidence < 0.70
 [2026-06-15 16:33] Verify context checkpoint cards display correct 'turns remaining' in staging

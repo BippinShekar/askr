@@ -82,3 +82,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Timestamp-based staleness check: compare handover creation time to latest commit time — Stop hook commits the handover immediately after creation, so any commit after handover timestamp is guaranteed — check always passes, defeating the purpose
 - [2026-06-15] Hard binary skip of talk-only sessions in Signal 3 — User identified that research sessions ending with implementation decisions were being discarded, causing autonomous runs to use stale direction from older coding sessions
 - [2026-06-15] Assumed direction_proposal was only for talk-only sessions without next_actions — Transcript showed direction_proposal was also gating context-cut research sessions, which should auto-launch
+- [2026-06-15] Patching paths as local variables inside the function using mock.patch context managers — Local variables cannot be patched; they exist only at runtime inside the function scope
+- [2026-06-15] Using real filesystem paths with save/restore in tests — Fragile and slow; module-level constants with patching is cleaner
