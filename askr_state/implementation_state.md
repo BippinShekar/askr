@@ -9,6 +9,7 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [13:57] Ran: cat /Users/bippin/Desktop/askr/.gitignore | grep -i env && git -C /Users/bippin/
 - [13:55] Ran: git add askr/utils/env.py && git commit -m "fix: always load .env from askr repo
 - [13:55] Modified: /Users/bippin/Desktop/askr/askr/utils/env.py
 - [13:53] Ran: git add askr/cli/askr.py && git commit -m "fix: move Discord webhook prompt outs

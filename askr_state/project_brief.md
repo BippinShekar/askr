@@ -1,16 +1,16 @@
-Last updated: 2026-06-15 13:55
+Last updated: 2026-06-15 13:58
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across runs and supporting autonomous handovers to other agents or developers. It manages subprocess execution, maintains conversation history, and integrates with IDEs to provide code context. The core problem it solves: enabling AI agents to pick up mid-session work without losing context or requiring manual state reconstruction.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with LLM integration, state persistence, and multi-client support. It orchestrates subprocess execution, maintains session state across invocations, and bridges code editors with AI backends to enable autonomous and interactive coding workflows.
 
 ## What's In Flight
 
-- Fix `.env` loading in askr init so Discord webhook URL auto-loads from repo directory on fresh clones instead of requiring manual re-entry. Currently `load_dotenv()` searches from working directory, not askr package root.
-- Verify context checkpoint cards display correct 'turns remaining' calculation in staging environment before pushing report_image.py fixes to main.
-- Architectural redesign of handover system to address stale checkpoint issue: goal inference must be deferred to session-end validation rather than auto-inferred mid-session, and stop checkpoint handler invocation must be guaranteed.
+- Fixing handover system for autonomous session continuation: checkpoint cards were displaying stale goals and turns remaining due to goal inference timing and missing stop checkpoint handler invocation. Architectural redesign underway to defer goal inference until session-end validation and ensure checkpoint creation always executes.
+- Verifying context checkpoint cards display correct turns remaining in staging environment before pushing fixes to main.
+- Debugging askr init Discord webhook prompt: moved prompt outside try-except block and fixed .env loading to search from repo root instead of current working directory. Awaiting end-to-end validation from user.
 
 ## Key Decisions Made
 
-- Checkpoint system treats `checkpoint_pending.json` and `launch_mode.json` as primary handover state carriers, not git diffs alone. Investigation revealed these files control autonomous session continuation.
-- Goal inference is session-aware, not message-aware. Auto-inferring from old user messages creates stale objectives that
+- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone. These files control autonomous session continuation and are the primary source of truth for session resumption.
+- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred mid-session from old user messages. Auto-inferred goals are tagged at inference time in session_start.py to distinguish them from user-created
