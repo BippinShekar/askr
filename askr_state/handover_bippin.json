@@ -1,89 +1,110 @@
 {
-  "task": "Fix `.env` loading in `askr init` so friend's Discord webhook URL is properly registered after cloning repo and running setup",
-  "discussion_summary": "User's friend cloned the repo, copied `.env.example`, added his own keys, ran `askr init`, but the webhook URL wasn't being registered. Root cause: `env.load()` was hitting `~/.config/askr/.env` (created on first run with just API key) and returning early, never reading the repo's `.env`. Fix: modified `cmd_init` in `askr.py` to load `.env` directly from `ASKR_DIR` using `os.path.abspath`, bypassing the indirection through `env.py`. Also surfaced hidden exceptions by replacing `except Exception: pass` with proper error logging.",
+  "task": "Fix Discord webhook error reporting by exposing HTTP errors in send_message return value",
+  "discussion_summary": "User reported that Discord notifications were failing silently with only a generic warning message. The root cause was that send_message() was catching exceptions and returning False without exposing the actual HTTP error. Session refactored send_message() to return a tuple (success: bool, error_message: str) and updated all callers in askr.py and notification.py to unpack and handle the error details. This enables proper debugging of webhook configuration issues.",
   "accomplishments": [
     {
-      "what": "Identified root cause: ~/.config/askr/.env was being loaded first, blocking repo .env from being read",
+      "what": "Modified discord.py send_message() to return tuple (bool, str) with actual HTTP error details instead of swallowing exceptions",
       "done": true
     },
     {
-      "what": "Modified askr.py cmd_init to load .env directly from ASKR_DIR instead of relying on env.py indirection",
+      "what": "Updated askr.py callers of send_message() to unpack tuple and log error messages",
       "done": true
     },
     {
-      "what": "Added exception handling to surface actual errors instead of silently passing",
+      "what": "Updated notification.py hook to unpack send_message() tuple return value",
       "done": true
     },
     {
-      "what": "Committed fix with message 'fix: load .env from ASKR_DIR directly'",
+      "what": "Verified all other callers of send_message() are safe with tuple return (Python doesn't enforce bool type checking)",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": "askr/clients/discord.py",
+      "what": "Return tuple (success, error_message) from send_message() to expose HTTP errors",
+      "last_line": 14
+    },
+    {
+      "file": "askr/cli/askr.py",
+      "what": "Unpack send_message() tuple return and log error details in init and session handlers",
+      "last_line": 1165
+    },
+    {
+      "file": "askr/hooks/notification.py",
+      "what": "Unpack send_message() tuple return in notification hook",
+      "last_line": 38
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Friend runs `git pull` to get the latest fix from this session",
-      "why": "The fix was just committed and needs to be pulled into the friend's clone"
+      "action": "Complete the git commit that was started (git add ... && git commit -m 'fix: expose Discord webhook HTTP errors in send_message return tuple')",
+      "why": "Changes are staged but commit was interrupted; need to finalize before testing"
     },
     {
       "order": 2,
-      "action": "Friend runs `askr init` again in the repo directory with the updated code",
-      "why": "With the fix in place, cmd_init will now correctly load .env from ASKR_DIR and prompt for any missing required keys including ASKR_DISCORD_WEBHOOK"
+      "action": "Run askr init again and verify the Discord webhook error message now shows the actual HTTP error (e.g., 401 Unauthorized, 404 Not Found, etc.) instead of generic warning",
+      "why": "Confirms that error details are now visible for debugging webhook configuration issues"
     },
     {
       "order": 3,
-      "action": "Verify that the webhook URL is now properly registered by checking ~/.config/askr/.env after init completes",
-      "why": "Confirms the fix works end-to-end and the webhook is stored in the expected location"
+      "action": "Test with invalid ASKR_DISCORD_WEBHOOK value to verify error message is informative",
+      "why": "Validates that the tuple unpacking and error logging works end-to-end"
     },
     {
       "order": 4,
-      "action": "Test the Discord webhook integration to ensure notifications are actually being sent",
-      "why": "Validates that registration wasn't just successful but functional"
+      "action": "Check if ASKR_DISCORD_WEBHOOK is actually set in ~/.config/askr/.env or if it's empty/missing",
+      "why": "User's error suggests webhook may not be configured at all; need to verify setup_keys() is saving it correctly"
     }
   ],
   "decisions": [
     {
-      "decision": "Load .env directly in cmd_init using ASKR_DIR instead of relying on env.py's load() function",
-      "reason": "Eliminates the indirection that was causing ~/.config/askr/.env to be loaded first and block the repo's .env from being read"
+      "decision": "Return tuple (bool, str) from send_message() instead of just bool",
+      "reason": "Allows callers to access actual HTTP error details for debugging; swallowing exceptions was preventing diagnosis of webhook issues"
     },
     {
-      "decision": "Surface exceptions instead of silently catching them with `except Exception: pass`",
-      "reason": "Hidden errors were making debugging impossible; explicit error messages help users understand what's failing"
+      "decision": "Keep all callers that ignore return value unchanged (Python doesn't enforce type checking)",
+      "reason": "Simpler than refactoring every caller; only the two that check the return value needed updates"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Assuming the issue was that .env.example didn't exist in the repo",
-      "reason": "User clarified that friend had copied .env.example and added keys; the real issue was the load order problem with ~/.config/askr/.env"
+      "approach": "Checking if send_message() return value was being used as a bool in all callers before making changes",
+      "reason": "Unnecessary caution; Python allows tuple to be used in boolean context without error, so all existing callers remain safe"
     }
   ],
   "files_in_play": [
-    "askr/cli/askr.py"
+    "askr/clients/discord.py",
+    "askr/cli/askr.py",
+    "askr/hooks/notification.py"
   ],
   "relational_files": [
     {
-      "file": "askr/env.py",
-      "relationship": "imported_by",
-      "why": "Contains env.load() which was being called and causing the load order issue; fix bypasses it in cmd_init"
+      "file": "askr/state/config.py",
+      "relationship": "configures",
+      "why": "Manages ASKR_DISCORD_WEBHOOK configuration; relevant to understanding why webhook might be missing/invalid"
     },
     {
-      "file": ".env.example",
-      "relationship": "configures",
-      "why": "Template that friend copied to create .env with his own keys; now properly loaded by the fix"
+      "file": "askr/hooks/stop.py",
+      "relationship": "imported_by",
+      "why": "Uses send_message() in notification hook; was checked to ensure tuple return doesn't break it"
     }
   ],
   "uncommitted_files": [
+    "askr_state/implementation_state.md",
     "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
-  "blockers": [],
+  "blockers": [
+    "Git commit was started but not completed (git add ... && g was cut off); need to finish commit before next session can verify changes"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T14:09:00+00:00",
+    "timestamp": "2026-06-15T14:18:00+00:00",
     "developer": "bippin"
   }
 }

@@ -9,6 +9,14 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [14:18] Ran: git add askr/clients/discord.py askr/cli/askr.py askr/hooks/notification.py && g
+- [14:18] Modified: /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- [14:18] Modified: /Users/bippin/Desktop/askr/askr/hooks/notification.py
+- [14:18] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:17] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:17] Ran: grep -n "send_message" /Users/bippin/Desktop/askr/askr/hooks/notification.py /Us
+- [14:17] Ran: grep -n "send_message" /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:17] Modified: /Users/bippin/Desktop/askr/askr/clients/discord.py
 - [14:07] Ran: git add askr/cli/askr.py && git commit -m "fix: load .env from ASKR_DIR directly
 - [14:07] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [14:06] Ran: head -10 /Users/bippin/Desktop/askr/askr/state/config.py && head -10 /Users/bipp
