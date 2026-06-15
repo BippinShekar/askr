@@ -71,3 +71,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 12:38] [bippin] Add explicit warning message on send failure pointing to env var. Reason: Gives user actionable debugging path instead of silent failure
 [2026-06-15 12:51] [bippin] Gate the success checkmark on BOTH `sent AND brief` rather than just `brief`. Reason: Ensures the ✓ message only fires when the Discord send actually succeeded, not just when a brief exists
 [2026-06-15 12:51] [bippin] Add explicit warning message when send fails, pointing user to check ASKR_DISCORD_WEBHOOK env var. Reason: Provides actionable feedback instead of silent failure
+[2026-06-15 13:03] [bippin] Use override=False in second load_dotenv() call instead of override=True. Reason: Allows local .env to fill in missing variables without overwriting intentional global config values
+[2026-06-15 13:03] [bippin] Check send_message() return value before printing success message. Reason: Prevents false success messages when webhook send actually fails
