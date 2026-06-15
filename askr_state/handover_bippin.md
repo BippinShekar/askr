@@ -1,43 +1,49 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 18:18
+Last updated: 2026-06-15 18:25
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Implemented direction_confirm handler in stop.py and extension.js to prevent token wastage on stale/empty handovers by requiring human input when inference confidence < 0.70
+Implemented Signal 3 direction inference by walking handover commit history to detect last coding session, enabling autonomous session routing without timestamp-based false positives.
 
 ## Discussion
-Session focused on resolving a critical insight: handover.json always exists in normal operation, so the edge-case Signal 4 (direction_confirm) path is the only real gate against autonomous token wastage. Built the handler to prompt user for direction via VSCode input box rather than auto-opening a session. User then pivoted to asking what inferred direction would emerge from a purely conversational session about askr adoption and virality—indicating readiness to test the system or explore product strategy angles.
+Identified critical flaw in timestamp-based handover staleness detection: stop hook commits the handover itself, making any timestamp comparison useless. Pivoted to semantic approach: Signal 3 now diffs consecutive handover commits in git history, looking for non-askr_state file changes to identify the last actual coding session. This breaks the false-positive loop where conversational sessions would incorrectly trigger autonomous routing. User confirmed the approach during implementation.
 
 ## Accomplishments
-- [x] Implemented direction_confirm handler in stop.py with user input prompt fallback
-- [x] Updated extension.js to replace catch-all else branch with explicit direction_confirm case
-- [x] Committed both files to main branch
+- [x] Implemented _infer_direction() in lifecycle.py with Signal 3 logic that walks git history to find last coding commit pair
+- [x] Tested Signal 3 with real commit history; verified it correctly identifies coding vs. talk-only session pairs
+- [x] Committed lifecycle.py changes to main branch
+
+## In Progress
+- `askr_state/implementation_state.md` (line 21): Session log accumulating tool runs and edits; needs final commit before next session
 
 ## Next Actions
-1. Infer direction from user's last statement ('askr and impl and adoption and virality driven downloads') and populate handover.next_actions with 3-5 product/adoption-focused actions
-   *Why: User is signaling readiness to explore adoption strategy; autonomous session should have clear direction to build toward (marketing, viral mechanics, download funnel, etc.)*
-2. Test direction_confirm gate in VSCode: trigger a stop with stale/empty handover and verify input box appears and blocks auto-session
-   *Why: Handler is committed but untested; need to confirm UX and gate logic work as designed*
-3. Document the three signal paths (Signal 3 normal flow, Signal 4 edge case, Signal 5 zero-direction) in lifecycle.md or README with confidence thresholds and token implications
-   *Why: User's line of questioning shows conceptual clarity but system behavior is not yet documented; clarity prevents future confusion*
-4. If user confirms adoption/virality direction, create adoption.md roadmap with phases (viral mechanics, download funnel, retention loops, etc.)
-   *Why: User is pivoting from lifecycle/signal engineering to product strategy; new domain requires its own roadmap*
+1. Commit askr_state/implementation_state.md with final session log
+   *Why: Uncommitted state file must be clean before next session handover; stop hook will regenerate it*
+2. Test direction_confirm flow end-to-end: trigger Signal 3 in a fresh session, verify input box appears, confirm direction selection opens autonomous session
+   *Why: Last git log entry indicates this is the next immediate test; validates the full routing pipeline*
+3. If direction_confirm works, stress-test with rapid session cycles (talk → code → talk → code) to ensure Signal 3 correctly disambiguates each transition
+   *Why: Real-world usage will have mixed session types; need confidence the signal is robust*
+4. Document Signal 3 logic in ARCHITECTURE.md or lifecycle docstring with examples of commit pairs it detects
+   *Why: Future maintainers need to understand why this approach was chosen over timestamp-based detection*
 
 ## Decisions
-- direction_confirm handler uses VSCode input box (HITL) rather than auto-opening autonomous session — Prevents token wastage on stale handovers; forces human to articulate direction rather than guessing
-- Signal 3 (fresh handover) is the normal path; Signal 4 (stale/empty) is the edge case requiring HITL — User's insight that handover always exists in normal operation makes Signal 3 the default, not exception
+- Signal 3 uses git diff between consecutive handover commits, not file timestamps or session duration — Timestamp comparison fails because stop hook commits the handover itself; semantic diff on askr_state/ vs. code files is reliable and self-correcting
+- Signal 3 only fires if last coding commit pair exists and is recent enough (within momentum window) — Prevents stale handovers from triggering autonomous routing; conversational sessions leave no code changes, so Signal 3 naturally stays silent
+
+## Failed Approaches
+- Timestamp-based staleness check: compare handover creation time to latest commit time — Stop hook commits the handover immediately after creation, so any commit after handover timestamp is guaranteed — check always passes, defeating the purpose
 
 ## Files In Play
-- `askr/hooks/stop.py`
-- `askr/ide/vscode-extension/extension.js`
+- `askr/session/lifecycle.py`
+- `askr_state/implementation_state.md`
 
 ## Relational Files
-- `askr_state/handover.json` (configures): Stop handler reads handover to determine signal confidence; direction_confirm gate depends on handover freshness
-- `askr_state/blockers.md` (configures): Signal 5 (nothing) checks blockers.md emptiness; part of direction inference logic
-- `askr/lifecycle/signals.py` (imported_by): stop.py calls _infer_direction() from signals module; core to gate logic
+- `askr/hooks/stop.py` (imports): Stop hook calls _infer_direction() to determine session type before creating handover
+- `askr/ide/vscode-extension/extension.js` (configures): Extension's direction_confirm handler receives direction signal from lifecycle inference
+- `askr_state/handover.json` (tested_by): Signal 3 walks git history of handover commits to infer direction; output feeds into next session routing
 
 ## Uncommitted Files
-- `askr_state/notifications.log`
+- `askr_state/implementation_state.md`
