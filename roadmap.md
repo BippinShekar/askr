@@ -291,28 +291,10 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 ---
 
-## Phase 4 - Public Launch
-
-**Goal:** GitHub launch. Build-in-public presence. First external users.
-
-| Feature | Status |
-|---|---|
-| README polished with GIF/screenshot of morning report | 🔲 Todo |
-| GIF of StatusLine during session transition | 🔲 Todo |
-| Clean install story (`ask init` + `askr init` from scratch in < 3 min) | 🔲 Todo |
-| GitHub release with changelog | 🔲 Todo |
-| Twitter/X launch thread | 🔲 Todo |
-| First external user onboarded | 🔲 Todo |
-| `brew tap` / `brew install askr` | 🔲 Todo |
-
-**Done when:** 50 GitHub stars. One external developer using it on their own project.
-
----
-
 ## Phase 3.11 — JSON Handover Schema
 *Target: pre-stress-test*
 
-**Goal:** Replace the .md handover with a structured JSON file. Every field typed, queryable, and programmatically mergeable across sessions. Foundation for everything in 3.12–3.16.
+**Goal:** Replace the .md handover with a structured JSON file. Every field typed, queryable, and programmatically mergeable across sessions. Foundation for everything in 3.12–3.17.
 
 **Problem it solves:** The .md handover is a blob. Reader.py dumps it raw into context. Downstream code can't query "which files were in play last session" without grepping markdown. JSON gives typed fields that smart injection and the guard can use directly.
 
@@ -336,7 +318,49 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 ---
 
-## Phase 3.12 — User-Rejection Tracking
+## Phase 3.12 — Ground-Truth Direction Inference
+*Target: pre-stress-test*
+
+**Goal:** Autonomous sessions know what to work on from deterministic signals — not from transcript speculation. The handover's `next_actions[]` is cross-checked against git state before an autonomous session acts on it. A HITL confirmation gate fires only when inference confidence is low, preserving autonomy while eliminating token burn on wrong work.
+
+**Problem it solves:** The current handover `next_actions[]` are LLM-inferred from conversational momentum — speculative by design. An autonomous session may inherit a stale directive (work already committed), a misread directive (discussion, not decision), or no directive at all (goals empty, roadmap not consulted). Result: sessions burn tokens verifying completed work or stall with no direction.
+
+**Why explicit task queues are the wrong answer:** They break the autonomy story — the core adoption differentiator. If the user has to plan every session, askr is a fancy hand-off template. The direction must be inferred, not requested.
+
+**Signal priority stack (deterministic before speculative):**
+
+| Priority | Signal | Source | Reliability |
+|---|---|---|---|
+| 1 | Uncommitted files at session start | `git status` | Ground truth — work was interrupted here |
+| 2 | Active blockers | `blockers.md` non-empty | Ground truth — this is what's stuck |
+| 3 | Git log momentum | Last 10 commits, which files/areas | High — reveals where the codebase is moving |
+| 4 | next_actions cross-checked against git | Drop any action whose artifact is already committed | High after cross-check, low before |
+| 5 | Session arc from handover history | Last 5 `handover_<dev>.json` states via git log | Medium — quality depends on handover accuracy |
+| 6 | Roadmap first `🔲 Todo` stage | `roadmap.md` parsed for next open stage | Low-medium — only works if roadmap is maintained |
+
+**Session arc — free from existing git history:**
+`handover_bippin.json` is committed after every session. `git log --follow -p askr_state/handover_bippin.json` gives every session's distilled state in chronological order — no new infrastructure. Reading the last 5 gives a project arc: what has been worked on across sessions, what direction momentum points toward. The arc is only as good as handover quality — this is why foundational handover fixes (3.11 + stop hook fixes) must precede this phase.
+
+**HITL gate — only when inference is uncertain:**
+The confirmation notification fires only when the top signal is weak (no uncommitted files, no blockers, git log is ambiguous). When the top signal is strong (uncommitted files exist, or blockers.md is non-empty), the autonomous session proceeds without a gate. The goal is that the gate fires <20% of the time — it is a safety net, not a workflow step.
+
+| Stage | Change | Status |
+|---|---|---|
+| S1 | `checkpoint.py` handover prompt: change `task` field instruction to past-tense outcome ("what was accomplished") — eliminates "Remove X" vs "[x] Removed X" contradiction | 🔲 Todo |
+| S2 | `checkpoint.py` — cross-check `next_actions[]` against `git log` before writing: drop any action whose target file+message match a recent commit | 🔲 Todo |
+| S3 | `lifecycle.py` — `_infer_direction()`: reads uncommitted files → blockers.md → git log momentum, returns `{direction, confidence, signal_source}` | 🔲 Todo |
+| S4 | `lifecycle.py` — `_read_session_arc()`: reads last 5 handover states from git log, extracts task+files_in_play per session, synthesises arc in one Haiku call | 🔲 Todo |
+| S5 | `stop.py` — when writing re-launch notification, call `_infer_direction()` and embed result in the autonomous session prompt instead of raw next_action text | 🔲 Todo |
+| S6 | HITL gate: when `_infer_direction()` confidence < 0.7, write `direction_confirm` notification — "Based on [signal], I plan to work on X. Confirm or redirect." 5-min timeout, then proceed | 🔲 Todo |
+
+**Honest risks:**
+- Session arc quality compounds handover quality. If handovers are speculative, 5 stacked summaries are worse than 1. S4 should be built last, after S1–S3 demonstrate that handover quality is reliable enough to stack.
+- Git log momentum can mislead on recently-pivoted projects. If the last 10 commits are all on feature A but the developer just decided to pivot to feature B, momentum points backward. Blockers.md and uncommitted files take priority for this reason.
+- HITL gate timeout (5 min, then proceed) means a sleeping developer wakes up to find the session started on the inferred direction. Wrong inference + unattended execution = real damage. Mitigation: gate should only proceed autonomously when confidence ≥ 0.85, stall otherwise.
+
+---
+
+## Phase 3.13 — User-Rejection Tracking
 *Target: pre-stress-test*
 
 **Goal:** Track decisions Claude proposed that the user rejected. Separate from failed_approaches (technical dead ends) and decisions (settled choices). Feeds the implementation guard so it can catch re-suggestion of vetoed approaches across sessions.
@@ -361,7 +385,7 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 ---
 
-## Phase 3.13 — Incremental Snapshot as Architecture Source
+## Phase 3.14 — Incremental Snapshot as Architecture Source
 *Target: pre-stress-test*
 
 **Goal:** The `.llm_snapshot/summary.json` becomes the live, always-current architecture record. After every session, changed files are re-scanned, the reverse dependency graph is updated, and `architecture.md` becomes a derived view generated on demand — not a maintained file.
@@ -391,14 +415,14 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 3.14 — Smart Context Injection
+## Phase 3.15 — Smart Context Injection
 *Target: pre-stress-test*
 
 **Goal:** Session start injection is precise and complete — not a dump, not a surgical cut. Pulls the exact context the current session's work requires: the in-play files, their relational context (what they depend on and what depends on them), and the decisions/rejections that are semantically relevant to the upcoming work. Nothing more, nothing less.
 
 **Problem it solves:** Current `build_context_injection()` dumps everything regardless of relevance. By session 4 of a long project this burns 6–8% of the context window before Claude does anything. But naive filtering by file path alone is equally wrong — a session touching `api/auth.ts` needs context about `middleware/jwt.ts` even if it's not explicitly in files_in_play.
 
-**Relational context is first-class:** The JSON handover (Phase 3.11) stores not just `files_in_play[]` but `relational_files[{file, relationship, why}]` — files that are architecturally connected to the session's work. This is populated by the handover LLM from the transcript (it knows which other modules were discussed, imported, or affected) and from the reverse dependency index (3.13). Context injection uses both sets.
+**Relational context is first-class:** The JSON handover (Phase 3.11) stores not just `files_in_play[]` but `relational_files[{file, relationship, why}]` — files that are architecturally connected to the session's work. This is populated by the handover LLM from the transcript (it knows which other modules were discussed, imported, or affected) and from the reverse dependency index (3.14). Context injection uses both sets.
 
 **Relevance, not just recency:** Decisions and rejections are filtered by semantic match to the current session's task and files — not just "last N entries." A TF-IDF or lightweight embedding match against the handover's `task` field selects the most relevant prior decisions, regardless of when they were made.
 
@@ -413,13 +437,13 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 | S7 | Fallback: if `files_in_play` empty and no relational context, revert to full-dump (current behaviour) | 🔲 Todo |
 
 **Honest risks:**
-- Dependent on Phase 3.11 (JSON handover with relational_files) and Phase 3.13 (snapshot + rdep index). Build those first — this phase doesn't function without them.
+- Dependent on Phase 3.11 (JSON handover with relational_files) and Phase 3.14 (snapshot + rdep index). Build those first — this phase doesn't function without them.
 - TF-IDF relevance matching is lightweight but imprecise for short decision strings. Acceptable for v1 — upgrade to embedding-based retrieval in Phase 6 if needed.
 - The 15% context cap in S6 is a hard ceiling. If a session genuinely requires more context than that to continue safely, the cap will silently drop relevant information. Mitigation: order by priority (rejections > decisions > architecture > failed approaches) so most critical context survives a truncation event.
 
 ---
 
-## Phase 3.15 — Emergency Handover Fix
+## Phase 3.16 — Emergency Handover Fix
 *Target: pre-stress-test*
 
 **Goal:** PreCompact generates a real, LLM-quality handover — not boilerplate. All trigger types go through the same handover path. SIGTERM fires only after the handover is complete — no fixed timeout, dynamic wait.
@@ -441,7 +465,7 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 3.16 — Auto-Populate decisions.md
+## Phase 3.17 — Auto-Populate decisions.md
 *Target: pre-stress-test*
 
 **Goal:** decisions.md is never empty. Every checkpoint extracts settled decisions from the same LLM pass that generates the handover and writes them automatically.
@@ -457,23 +481,67 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 4 - Public Launch
-*Target: post-stress-test*
+## Phase 4 - Team Scale
+*Target: pre-launch*
 
-**Goal:** GitHub launch. Build-in-public presence. First external users.
+**Goal:** Multiple developers, shared state, concurrent sessions without conflicts. The state model was designed for teams — this phase makes it actually work under concurrent load.
+
+**Stage P4-0: Team directory structure** *(prerequisite for everything below)*
+
+The current flat layout (`handover_<dev>.md` × N in one directory, shared `decisions.md` / `goals.md`) breaks at team scale: unnavigable at 50 devs, constant concurrent write conflicts on shared files.
+
+Target layout:
+```
+askr_state/
+  teams/<team>/
+    members/<dev>/
+      handover.json
+      current_task.md
+      tasks/queue.md
+    decisions.md        <- scoped to team
+    goals.md
+  shared/
+    decisions.md        <- org-wide only
+    architecture.md
+```
 
 | Feature | Status |
 |---|---|
-| Stress test passes end-to-end (overnight Tetris build) | 🔲 Todo |
-| Demo video: Claude building complex project across 5 autonomous sessions | 🔲 Todo |
-| README polished — GIF of session transition, morning report | 🔲 Todo |
-| Clean install story (`install.sh` from scratch in < 3 min) | 🔲 Todo |
-| GitHub release with changelog | 🔲 Todo |
-| Twitter/X launch thread with demo video | 🔲 Todo |
-| First external user onboarded | 🔲 Todo |
-| `brew tap askr` | 🔲 Todo |
+| New directory structure with team scoping | 🔲 Todo |
+| `askr init` updated to write into team-scoped paths | 🔲 Todo |
+| Reader/writer updated to resolve paths via team config | 🔲 Todo |
 
-**Done when:** 50 GitHub stars. One external developer using it on their own project without help.
+**Stage P4-1: Task queue per developer**
+
+Anyone on the team can append a task to another developer's queue. `session_start` drains the queue in order before the session begins. Git-native: no new infrastructure, no server, no real-time connection required.
+
+Queue file: `askr_state/teams/<team>/members/<dev>/tasks/queue.md` — append-only, one task per line with author + timestamp. Drained (moved to a `queue_done.md` archive) at session start, not deleted, so there's an audit trail.
+
+Requires the approval gate (Phase 5) to be in place before this ships — queued tasks from another developer must not silently inherit the session owner's dangerous permissions.
+
+| Feature | Status |
+|---|---|
+| `askr task queue <dev> "..."` — append task to another developer's queue with author + timestamp | 🔲 Todo |
+| `session_start.py` — drain queue, inject tasks into session context before first prompt | 🔲 Todo |
+| Drained tasks archived to `queue_done.md` with completion timestamp | 🔲 Todo |
+| `askr task list [<dev>]` — show pending queue for a developer | 🔲 Todo |
+| Usable at 2–5 devs without P4-0; P4-0 required for 50-person use | 🔲 Todo |
+
+**Stage P4-2: `askr team` CLI**
+
+| Feature | Status |
+|---|---|
+| `askr team` — show all developer handovers, sessions, goals in one view | 🔲 Todo |
+
+**Stage P4-3: Concurrency and role awareness**
+
+| Feature | Status |
+|---|---|
+| Live team dashboard: who's working on what, current session context %, blockers | 🔲 Todo |
+| Conflict detection: alert when two developers' files_in_play overlap | 🔲 Todo |
+| Shared decision arbitration: when decisions conflict across developers, surface for resolution | 🔲 Todo |
+| Role-based context injection: frontend dev doesn't get backend architecture context by default | 🔲 Todo |
+| VS Code extension UI (not just status bar) — full panel showing session state, goals, handover | 🔲 Todo |
 
 ---
 
@@ -491,7 +559,25 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 | Windows/WSL support | 🔲 Todo |
 | Test suite for all hook scripts | 🔲 Todo |
 | `askr doctor` — diagnose common setup issues (venv missing, hooks not firing, JSONL not found) | 🔲 Todo |
-| Phase 3.9: Behavioral preference persistence | 🔲 Todo |
+
+**Approval Gate for Queued Tasks**
+
+When another developer queues a task into your session (Phase 7), that task runs with whatever permissions your session already has — including permissions granted by Phase 3.8. Those were granted by you for your own work; they do not constitute authorization for someone else's task. `--dangerously-skip-permissions` bypasses Claude Code's own prompts entirely, so the gate must be an askr-level check, not a Claude Code permission check.
+
+Trigger (any one condition is sufficient):
+- `--dangerously-skip-permissions` present in session launch args
+- `Bash(*)` or unrestricted Bash in `allowedTools`
+- Any `rm` / delete pattern in `permissions.allow`
+
+Behavior when triggered + queued tasks exist: surface confirmation before any queued task executes. IDE popup if Cursor is open; Discord notification if headless. Tasks are blocked, not silently dropped.
+
+| Feature | Status |
+|---|---|
+| `session_start.py` — detect dangerous permission state from launch args + settings | 🔲 Todo |
+| Block queued task execution when dangerous permissions + unconfirmed queue | 🔲 Todo |
+| IDE `behavior_confirm` popup listing queued tasks + current permission state | 🔲 Todo |
+| Headless path: Discord notification with task list + "approve / discard" instructions | 🔲 Todo |
+| Non-dangerous sessions: queued tasks auto-run without gate (by design) | 🔲 Todo |
 
 ---
 
@@ -520,19 +606,23 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 7 - Team Scale
-*Target: 5–6 months post-launch*
+## Phase 7 - Public Launch
+*Target: post-stress-test*
 
-**Goal:** Multiple developers, shared state, concurrent sessions without conflicts. The state model was designed for teams — this phase makes it actually work under concurrent load.
+**Goal:** GitHub launch. Build-in-public presence. First external users.
 
 | Feature | Status |
 |---|---|
-| Live team dashboard: who's working on what, current session context %, blockers | 🔲 Todo |
-| Conflict detection: alert when two developers' files_in_play overlap | 🔲 Todo |
-| Shared decision arbitration: when decisions conflict across developers, surface for resolution | 🔲 Todo |
-| Role-based context injection: frontend dev doesn't get backend architecture context by default | 🔲 Todo |
-| `askr team` CLI — show all developer handovers, sessions, goals in one view | 🔲 Todo |
-| VS Code extension UI (not just status bar) — full panel showing session state, goals, handover | 🔲 Todo |
+| Stress test passes end-to-end (overnight Tetris build) | 🔲 Todo |
+| Demo video: Claude building complex project across 5 autonomous sessions | 🔲 Todo |
+| README polished — GIF of session transition, morning report | 🔲 Todo |
+| Clean install story (`install.sh` from scratch in < 3 min) | 🔲 Todo |
+| GitHub release with changelog | 🔲 Todo |
+| Twitter/X launch thread with demo video | 🔲 Todo |
+| First external user onboarded | 🔲 Todo |
+| `brew tap askr` | 🔲 Todo |
+
+**Done when:** 50 GitHub stars. One external developer using it on their own project without help.
 
 ---
 
