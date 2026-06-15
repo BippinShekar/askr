@@ -570,11 +570,13 @@ def _infer_direction(project_path: str = "") -> dict:
             ["git", "log", "--oneline", "--name-only", "-10"],
             capture_output=True, text=True, timeout=10, cwd=cwd,
         )
+        import re as _re
+        _commit_re = _re.compile(r'^[0-9a-f]{7,} ')  # short hash + space = commit line
         from collections import Counter
         modules: Counter = Counter()
         for line in result.stdout.splitlines():
             line = line.strip()
-            if not line or line[0] in "0123456789abcdef" or line.startswith("askr_state"):
+            if not line or _commit_re.match(line) or line.startswith("askr_state"):
                 continue
             # Top-level module = first path component
             module = line.split("/")[0]
