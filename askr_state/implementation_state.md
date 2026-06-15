@@ -9,6 +9,8 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [13:48] Ran: git add askr/cli/askr.py && git commit -m "fix: skip Discord send entirely if no
+- [13:47] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [13:10] Ran: git add askr/cli/askr.py && git commit -m "fix: prompt for Discord webhook durin
 - [13:10] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [13:04] Ran: git push
