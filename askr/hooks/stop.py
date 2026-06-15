@@ -15,6 +15,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
 
+_CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
+_NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
+
 
 def _update_allowed_tools(transcript_path: str):
     """Extract tool names from session JSONL and persist to allowedTools + permissions.allow."""
@@ -112,9 +115,6 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
     - trigger==context: write IDE notification to open a new session immediately
     - trigger==quota:   write notification informing quota is high; daemon waits
     """
-    _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
-    _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
-
     try:
         if not os.path.exists(_CHECKPOINT_PENDING):
             return False
