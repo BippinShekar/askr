@@ -349,6 +349,15 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
                 f.write(content)
             created.append(target)
 
+    # Per-developer task queue — created fresh for each developer
+    tasks_dir = state_path("tasks")
+    os.makedirs(tasks_dir, exist_ok=True)
+    queue_path = os.path.join(tasks_dir, f"queue_{developer}.md")
+    if not os.path.exists(queue_path):
+        with open(queue_path, "w") as f:
+            f.write(f"# Task queue: {developer}\n\n")
+        created.append(f"tasks/queue_{developer}.md")
+
     return created, skipped
 
 
@@ -468,14 +477,45 @@ def _create_fallback_generated_files(developer: str):
 
 def _update_gitignore():
     gitignore = ".gitignore"
-    entries = [".llm_snapshot/", ".askr_log"]
+    entries = [
+        ".llm_snapshot/",
+        ".askr_log",
+        "askr_state/architecture.md",
+        "askr_state/project_brief.md",
+    ]
+    existing = ""
     if os.path.exists(gitignore):
         with open(gitignore) as f:
             existing = f.read()
-        additions = [e for e in entries if e not in existing]
-        if additions:
-            with open(gitignore, "a") as f:
-                f.write("\n# askr\n" + "\n".join(additions) + "\n")
+    additions = [e for e in entries if e not in existing]
+    if additions:
+        with open(gitignore, "a") as f:
+            f.write("\n# askr\n" + "\n".join(additions) + "\n")
+
+
+def _install_gitattributes():
+    """Write union-merge rules for append-only shared state files."""
+    rules = [
+        "askr_state/decisions.md       merge=union",
+        "askr_state/goals.md           merge=union",
+        "askr_state/failed_approaches.md merge=union",
+        "askr_state/notifications.log  merge=union",
+        "askr_state/tasks/queue_*.md   merge=union",
+    ]
+    ga_path = ".gitattributes"
+    existing = ""
+    if os.path.exists(ga_path):
+        with open(ga_path) as f:
+            existing = f.read()
+    additions = [r for r in rules if r.split()[0] not in existing]
+    if additions:
+        with open(ga_path, "a") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write("# askr — append-only files use union merge to prevent concurrent-push conflicts\n")
+            f.write("\n".join(additions) + "\n")
+        return True
+    return False
 
 
 def cmd_init():
@@ -600,6 +640,10 @@ def cmd_init():
 
     console.print()
     _update_gitignore()
+    if _install_gitattributes():
+        console.print("  [green]✓[/green] .gitattributes [dim](union merge on shared state files)[/dim]")
+    else:
+        console.print("  [dim]- .gitattributes already configured[/dim]")
 
     console.print("  [dim]state files:[/dim] [bold]askr_state/[/bold]")
     console.print("  [dim]commit askr_state/ to git so your team shares the same ground truth[/dim]")
