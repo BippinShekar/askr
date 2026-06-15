@@ -224,19 +224,8 @@ def _session_is_active() -> bool:
         return False
 
 
-def _read_stats() -> dict:
-    """Return stats from the most recently modified per-project stats file."""
-    results = _read_all_stats()
-    if not results:
-        return {}
-    return max(results, key=lambda d: d.get("updated_at", ""))
-
-
 def _read_all_stats() -> list:
-    """
-    Return stats for ALL active projects with a recent stats file.
-    Replaces the single-winner _read_stats() for multi-session monitoring.
-    """
+    """Return stats for ALL active projects with a recent stats file."""
     try:
         if not os.path.isdir(_STATS_DIR):
             return []
