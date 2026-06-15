@@ -95,3 +95,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 13:55] [bippin] Load .env from askr repo directory, not from cwd. Reason: Fresh clones should auto-configure without requiring users to manually copy .env or re-enter values
 [2026-06-15 13:58] [bippin] Moved the webhook prompt outside the try-except block rather than making the except block more specific. Reason: The prompt is critical setup logic that should never be swallowed by error handling; moving it ensures it always runs
 [2026-06-15 13:58] [bippin] Computed repo root from env.py's __file__ path rather than searching upward from cwd. Reason: More reliable and deterministic — works regardless of where askr init is invoked from
+[2026-06-15 14:02] [bippin] Move webhook prompt outside try-except instead of keeping it inside. Reason: Ensures the prompt always runs and cannot be swallowed by exception handling
+[2026-06-15 14:02] [bippin] Compute repo root from env.py's __file__ path rather than relying on working directory. Reason: Makes load_dotenv() work regardless of where `askr init` is invoked from

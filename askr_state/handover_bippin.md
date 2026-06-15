@@ -1,53 +1,57 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:58
+Last updated: 2026-06-15 14:02
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Debug why `askr init` doesn't prompt for Discord webhook URL when .env exists in the cloned askr folder
+Debug why `askr init` is not auto-loading Discord webhook URL from .env file when friend runs it in the cloned askr folder with a manually created .env
 
 ## Discussion
-The user's friend cloned the askr repo and ran `askr init` from inside the clone directory, but was not prompted for the Discord webhook URL despite a .env file being present. Investigation revealed two issues: (1) an `except Exception: pass` block was swallowing errors before the webhook prompt could execute, and (2) `load_dotenv()` was searching from the current working directory rather than the askr repo root, so it couldn't reliably find the .env file. Both were fixed: the prompt was moved outside the try block, and `env.py` was updated to compute the repo root from its own `__file__` path to always locate .env correctly.
+Friend cloned the repo, copied example.env, added his own Discord webhook key, ran `askr init` in the askr folder, but the webhook prompt still appeared instead of auto-loading the value. Root cause: `load_dotenv()` in env.py was not being called with the correct path to find the .env in the askr repo root. Two fixes were attempted: (1) moving the webhook prompt outside the try-except to ensure it runs, (2) updating env.py to compute the repo root from __file__ and always load .env from there. User clarified the friend DID create a .env file manually with keys and ran init in the correct folder, so the issue is purely about load_dotenv() not finding or loading that file.
 
 ## Accomplishments
-- [x] Moved Discord webhook prompt outside try-except block in askr/cli/askr.py so it always executes
-- [x] Updated askr/utils/env.py to load .env from repo root (computed from __file__) instead of current working directory
+- [x] Identified that except Exception: pass was swallowing import errors before webhook prompt
+- [x] Moved Discord webhook prompt outside try-except block in askr.py
+- [x] Updated env.py to compute repo root from __file__ path and always load .env from there
 - [x] Committed both fixes to git
 
 ## In Progress
-- `askr/utils/env.py`: Verifying that load_dotenv() now correctly finds .env from repo root regardless of where askr init is invoked
+- `askr/utils/env.py`: Verify load_dotenv() is correctly resolving to the .env in the askr repo root and actually loading ASKR_DISCORD_WEBHOOK
 
 ## Next Actions
-1. Verify .env is NOT gitignored — run `cat .gitignore | grep -i env` and `git ls-files | grep .env` to confirm whether .env should be in the repo or if it's meant to be user-created
-   *Why: The root cause may be that .env is gitignored and the friend never had it in their clone — if so, the prompt fix alone solves the problem*
-2. If .env is gitignored, document in README that `askr init` will prompt for Discord webhook on first run and create .env locally
-   *Why: Sets correct user expectations for fresh clones*
-3. Have the friend run `git pull` and `askr init` again to confirm the webhook prompt now appears
-   *Why: Validates both fixes work end-to-end in the actual scenario*
-4. If prompt still doesn't appear, check whether there's a stale .env with a valid webhook URL that's preventing the prompt from running
-   *Why: The original issue mentioned the URL was exposed in chat and regenerated — if a stale URL exists, `send_message` fails silently and the prompt never runs*
+1. Have friend run `git pull` to get the latest fixes, then delete any cached .env state and run `askr init` again from inside the askr folder
+   *Why: The fixes are committed; need to verify they actually work end-to-end with a fresh clone*
+2. If webhook prompt still appears, add debug logging to env.py to print the computed repo root path and whether load_dotenv() found the .env file
+   *Why: Need visibility into whether load_dotenv() is even finding the file or if there's a path resolution issue*
+3. Check if the .env file in the askr folder is actually being read by Python (file permissions, encoding, format of the ASKR_DISCORD_WEBHOOK line)
+   *Why: File might exist but be unreadable or malformed*
+4. Verify that os.getenv('ASKR_DISCORD_WEBHOOK') is being called AFTER load_dotenv() in the init flow
+   *Why: If getenv is called before load_dotenv completes, the env var won't be populated*
 
 ## Decisions
-- Moved the webhook prompt outside the try-except block rather than making the except block more specific — The prompt is critical setup logic that should never be swallowed by error handling; moving it ensures it always runs
-- Computed repo root from env.py's __file__ path rather than searching upward from cwd — More reliable and deterministic — works regardless of where askr init is invoked from
+- Move webhook prompt outside try-except instead of keeping it inside — Ensures the prompt always runs and cannot be swallowed by exception handling
+- Compute repo root from env.py's __file__ path rather than relying on working directory — Makes load_dotenv() work regardless of where `askr init` is invoked from
+
+## User-Rejected Approaches
+- **The .env file is gitignored and doesn't exist in the clone** — "bro, don't act like some 4th grader, my friend cloned the repo, copied the example .env file, and added his own keys" (domain: askr/utils/env.py, askr/cli/askr.py)
 
 ## Failed Approaches
-- Assumed the .env file was present in the friend's clone and the prompt was being skipped because the webhook URL was already configured — User clarified the friend was running askr init in the clone directory with no .env file present — the real issue was the prompt was never reached due to exception swallowing
+- Assumed .env was not in the repo at all and needed to be created — User clarified friend already created .env manually from example.env with his own keys
 
 ## Files In Play
 - `askr/cli/askr.py`
 - `askr/utils/env.py`
 
 ## Relational Files
-- `.env` (configures): Contains Discord webhook URL that askr init prompts for; whether it's gitignored determines the expected user flow
-- `.gitignore` (configures): Determines whether .env is committed to repo or user-created; critical to understanding the init flow
+- `example.env` (configures): Friend copied this to create his .env with Discord webhook key
+- `.gitignore` (configures): Determines whether .env is tracked in git (it is not)
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
+- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Unclear whether .env is gitignored or committed — need to verify before confirming the fix works end-to-end
+- Cannot verify the fixes work until friend runs `git pull` and tests `askr init` again with the updated code
