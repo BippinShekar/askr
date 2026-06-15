@@ -72,3 +72,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Relying on users to maintain explicit task queues per session — Adds friction, requires discipline, kills adoption. Only works for power users.
 - [2026-06-15] Roadmap-driven inference as the primary continuity mechanism — Assumes roadmaps are actively maintained. Most teams don't; the system becomes useless when roadmap goes stale.
 - [2026-06-15] Parsing git diff output to extract JSON changes across commits — Diff interleaves +/- lines; cannot reliably collect clean chunks. Switched to git show <hash>:path for full file state.
+- [2026-06-15] Using `line[0] in '0123456789abcdef'` to skip commit hash lines in git log — Also skipped all file paths starting with 'a' (askr/), making momentum signal blind to primary codebase changes
+- [2026-06-15] Filtering blockers.md lines containing 'Last' or '[None]' substrings — Removed valid blocker content that happened to mention those words

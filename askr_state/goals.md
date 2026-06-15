@@ -1,8 +1,6 @@
 ## Today - 2026-06-15
 
-- [ ] Test direction_confirm notification triggers when confidence < 0.70 <!-- added: 2026-06-15T16:33, auto_suggested -->
 
-- [ ] Verify checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-15T16:33, auto_suggested -->
 
 
 
@@ -15,6 +13,8 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-15 16:38] Verify checkpoint cards display correct 'turns remaining' in staging
+[2026-06-15 16:38] Test direction_confirm notification triggers when confidence < 0.70
 [2026-06-15 16:33] Verify context checkpoint cards display correct 'turns remaining' in staging
 [2026-06-15 12:38] DISCARDED: Complete P4-2 (askr team CLI) table and add Phase 4 completion criteria
 [2026-06-15 12:38] DISCARDED: Commit roadmap.md restructuring changes with phase reorganization message

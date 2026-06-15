@@ -1,17 +1,16 @@
-Last updated: 2026-06-15 16:33
+Last updated: 2026-06-15 16:38
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that manages interactive development sessions, tracks token usage, and integrates with IDEs to enable autonomous code work with human oversight. It solves the problem of context loss and manual handoff between AI-assisted coding sessions by persisting session state, inferring next actions from git history, and gating autonomous decisions through human-in-the-loop checkpoints.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across invocations and supporting autonomous session continuation. It bridges user intent, LLM reasoning, and local code changes through a session lifecycle that tracks direction (what the user is trying to accomplish), validates progress, and hands off work to autonomous agents when the user steps away.
 
 ## What's In Flight
 
-- Phase 3.12 complete: autonomous session direction inference with HITL confidence gate. Direction is inferred from git log and session arc; when confidence < 0.70, a direction_confirm notification surfaces for human approval before autonomous continuation.
-- Verification of context checkpoint cards displaying correct 'turns remaining' in staging environment. Critical for user-facing UX before Phase 3.13.
-- End-to-end testing of autonomous handover: trigger session stop, verify direction_confirm notification appears, confirm IDE extension surfaces decision for approval.
-- Phase 3.13 planning and dependency assessment once Phase 3.12 verification is complete.
+- Direction inference system (Phase 3.13): Three-signal detection (blockers.md, git momentum, checkpoint card) to infer session goals automatically. Recently fixed signal parsing bugs; now stress-testing under high-volume scenarios before HITL validation gate.
+- Checkpoint handover mechanism: Captures session state at end-of-session for autonomous continuation. Currently validating that checkpoint cards display correct metadata (turns remaining, inferred goals) in staging.
+- Notification system: direction_confirm gate fires when inference confidence drops below 0.70, prompting user validation before autonomous handoff.
 
 ## Key Decisions Made
 
-- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone. These files control autonomous session continuation; git state is insufficient for proper handover.
-- Goal inference is deferred until session-end validation, not auto-
+- Goal inference is session-aware, not message-aware. Auto-inferred goals are tagged at session start (session_start.py) to distinguish system suggestions from user-created goals; prevents stale objectives from poisoning autonomous handovers.
+- Checkpoint and launch_mode.json are primary handover state carriers. Git diffs alone
