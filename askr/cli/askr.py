@@ -610,6 +610,22 @@ def cmd_init():
         from askr.clients.claude import call_claude
         from askr.qa.context_loader import load_inventory
 
+        if not os.getenv("ASKR_DISCORD_WEBHOOK"):
+            import getpass as _gp
+            console.print("  [dim]Discord webhook not configured[/dim]")
+            try:
+                hook = _gp.getpass("  ASKR_DISCORD_WEBHOOK (enter to skip): ").strip()
+            except (KeyboardInterrupt, EOFError):
+                hook = ""
+            if hook:
+                config_dir = os.path.expanduser("~/.config/askr")
+                env_file = os.path.join(config_dir, ".env")
+                os.makedirs(config_dir, exist_ok=True)
+                with open(env_file, "a") as _f:
+                    _f.write(f"\nASKR_DISCORD_WEBHOOK={hook}\n")
+                os.environ["ASKR_DISCORD_WEBHOOK"] = hook
+                console.print("  [green]✓[/green] webhook saved to ~/.config/askr/.env")
+
         repo_name = os.path.basename(os.getcwd())
         brief = ""
         if os.path.exists(SNAPSHOT_PATH):
