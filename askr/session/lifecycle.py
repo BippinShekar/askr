@@ -594,6 +594,79 @@ def _infer_direction(project_path: str = "") -> dict:
     }
 
 
+def _read_session_arc(developer: str, n: int = 5) -> str:
+    """
+    Read the last n sessions from git history of handover_<dev>.json.
+    Uses 'git show <hash>:path' to get the full JSON at each commit — avoids
+    the diff-interleaving problem of trying to parse +/- lines from git log -p.
+
+    Synthesises a one-sentence arc via Haiku as a secondary direction signal.
+    Returns empty string on any failure — never blocks session start.
+
+    Quality note: arc accuracy depends on handover quality. Only called when
+    primary signals (uncommitted files, blockers) are absent.
+    """
+    try:
+        import json as _json
+        from askr.state.config import get_state_dir
+        state_dir = get_state_dir()
+        rel_path = os.path.relpath(
+            os.path.join(state_dir, f"handover_{developer}.json"),
+            os.getcwd(),
+        )
+
+        # Get commit hashes that touched the handover file
+        log_result = subprocess.run(
+            ["git", "log", "--format=%H", "-" + str(n), "--", rel_path],
+            capture_output=True, text=True, timeout=10, cwd=os.getcwd(),
+        )
+        hashes = [h.strip() for h in log_result.stdout.splitlines() if h.strip()]
+        if not hashes:
+            return ""
+
+        sessions = []
+        for h in hashes:
+            show_result = subprocess.run(
+                ["git", "show", f"{h}:{rel_path}"],
+                capture_output=True, text=True, timeout=10, cwd=os.getcwd(),
+            )
+            if show_result.returncode != 0:
+                continue
+            try:
+                data = _json.loads(show_result.stdout)
+                task = data.get("task", "").strip()
+                files = data.get("files_in_play", [])
+                if task:
+                    sessions.append({"task": task, "files": files[:5]})
+            except Exception:
+                pass
+
+        if not sessions:
+            return ""
+        if len(sessions) == 1:
+            return f"Last session: {sessions[0]['task']}"
+
+        # Synthesise arc — oldest first so Haiku sees chronological progression
+        history = "\n".join(
+            f"Session {i+1}: {s['task']}" +
+            (f" (files: {', '.join(s['files'])})" if s["files"] else "")
+            for i, s in enumerate(reversed(sessions))
+        )
+        from askr.clients.claude import call_claude
+        arc = call_claude(
+            "You summarise developer session history in one sentence.",
+            f"Recent sessions (oldest first):\n{history}\n\n"
+            "In ONE sentence, describe what this developer has been building toward "
+            "and where their momentum points. Be specific about the codebase area. "
+            "No preamble.",
+            mode="default",
+            query_preview="session arc synthesis",
+        )
+        return arc.strip() if arc else ""
+    except Exception:
+        return ""
+
+
 def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = "", handover_path: str = ""):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
