@@ -111,6 +111,42 @@ def _maybe_suggest_goals(developer: str) -> list[str]:
         return []
 
 
+def _drain_task_queue(developer: str) -> list[str]:
+    """
+    Read pending tasks from askr_state/tasks/queue_<developer>.md.
+    Move them to the done archive, clear the queue, return task strings.
+    Never blocks session start — all errors are swallowed.
+    """
+    try:
+        from askr.state.config import get_state_dir
+        tasks_dir  = os.path.join(get_state_dir(), "tasks")
+        queue_path = os.path.join(tasks_dir, f"queue_{developer}.md")
+        done_path  = os.path.join(tasks_dir, f"done_{developer}.md")
+
+        if not os.path.exists(queue_path):
+            return []
+
+        with open(queue_path) as f:
+            lines = f.readlines()
+
+        tasks = [l.rstrip() for l in lines if l.strip() and not l.startswith("#")]
+        if not tasks:
+            return []
+
+        drain_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        with open(done_path, "a") as f:
+            for t in tasks:
+                f.write(f"[DONE {drain_ts}] {t}\n")
+
+        # Clear queue (keep header only)
+        with open(queue_path, "w") as f:
+            f.write(f"# Task queue: {developer}\n\n")
+
+        return tasks
+    except Exception:
+        return []
+
+
 def _reset_stats_for_project():
     """
     Write a blank stats entry for the current project immediately on session start.
@@ -170,6 +206,7 @@ def main():
         pass
 
     developer = load_developer()
+    queued_tasks = _drain_task_queue(developer)
     _archive_stale_goals()
     _notify_stale_goals()
     suggested_goals = _maybe_suggest_goals(developer)
@@ -191,6 +228,15 @@ def main():
             f"No goals were set for today. Askr inferred these from your last session's handover "
             f"and added them automatically:\n\n{goal_list}\n\n"
             f"Run `askr goals` to review or `askr goal add \"...\"` to add more."
+        )
+
+    if queued_tasks:
+        task_list = "\n".join(f"- {t}" for t in queued_tasks)
+        parts.append(
+            f"## Tasks Queued by Your Team\n\n"
+            f"Your teammates queued {len(queued_tasks)} task(s) for this session. "
+            f"Work through them after completing any in-progress work from the handover above:\n\n"
+            f"{task_list}"
         )
 
     if launch_mode.get("goal"):
