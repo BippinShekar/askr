@@ -66,3 +66,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Wrapping `env.load()` call in bare `except Exception: pass` — Silenced errors and made debugging impossible; actual failures were hidden from the user
 - [2026-06-15] Assuming the issue was that .env.example didn't exist in the repo — User clarified that friend had copied .env.example and added keys; the real issue was the load order problem with ~/.config/askr/.env
 - [2026-06-15] Checking if send_message() return value was being used as a bool in all callers before making changes — Unnecessary caution; Python allows tuple to be used in boolean context without error, so all existing callers remain safe
+- [2026-06-15] Checking if return value being a tuple breaks callers that use it as a bool — Determined to be a non-issue — Python doesn't care about unused return values, and the two callers that check the return value were already updated in previous edits

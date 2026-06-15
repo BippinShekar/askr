@@ -1,58 +1,53 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 14:19
+Last updated: 2026-06-15 14:25
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook error reporting by exposing HTTP errors in send_message return value
+Fix macOS SSL certificate verification error in Discord webhook client by integrating certifi library
 
 ## Discussion
-User reported that Discord notifications were failing silently with only a generic warning message. The root cause was that send_message() was catching exceptions and returning False without exposing the actual HTTP error. Session refactored send_message() to return a tuple (success: bool, error_message: str) and updated all callers in askr.py and notification.py to unpack and handle the error details. This enables proper debugging of webhook configuration issues.
+User reported SSL certificate verification failure when Discord notifications attempted to send. Root cause identified as macOS Python not using system certificates by default. Solution: use certifi library to provide proper SSL context for both `send_message` and `send_file` methods in discord.py. Changes staged but final commit message was incomplete in transcript.
 
 ## Accomplishments
-- [x] Modified discord.py send_message() to return tuple (bool, str) with actual HTTP error details instead of swallowing exceptions
-- [x] Updated askr.py callers of send_message() to unpack tuple and log error messages
-- [x] Updated notification.py hook to unpack send_message() tuple return value
-- [x] Verified all other callers of send_message() are safe with tuple return (Python doesn't enforce bool type checking)
+- [x] Added certifi SSL context to discord.py send_message method
+- [x] Added certifi SSL context to discord.py send_file method
+- [x] Added certifi to requirements.txt
 
 ## In Progress
-- `askr/clients/discord.py` (line 14): Return tuple (success, error_message) from send_message() to expose HTTP errors
-- `askr/cli/askr.py` (line 1165): Unpack send_message() tuple return and log error details in init and session handlers
-- `askr/hooks/notification.py` (line 38): Unpack send_message() tuple return in notification hook
+- `/Users/bippin/Desktop/askr/askr/clients/discord.py` (line 36): SSL context integration for webhook requests — both send_message and send_file methods updated to use certifi.where() for certificate verification
+- `/Users/bippin/Desktop/askr/requirements.txt` (line 1): Added certifi dependency
 
 ## Next Actions
-1. Complete the git commit that was started (git add ... && git commit -m 'fix: expose Discord webhook HTTP errors in send_message return tuple')
-   *Why: Changes are staged but commit was interrupted; need to finalize before testing*
-2. Run askr init again and verify the Discord webhook error message now shows the actual HTTP error (e.g., 401 Unauthorized, 404 Not Found, etc.) instead of generic warning
-   *Why: Confirms that error details are now visible for debugging webhook configuration issues*
-3. Test with invalid ASKR_DISCORD_WEBHOOK value to verify error message is informative
-   *Why: Validates that the tuple unpacking and error logging works end-to-end*
-4. Check if ASKR_DISCORD_WEBHOOK is actually set in ~/.config/askr/.env or if it's empty/missing
-   *Why: User's error suggests webhook may not be configured at all; need to verify setup_keys() is saving it correctly*
+1. Complete the git commit with full message: git commit -m 'fix: use certifi for macOS SSL certificate verification in Discord client'
+   *Why: Commit was started but message was truncated in transcript; changes are staged and ready*
+2. Have user run `pip install -r requirements.txt` to install certifi in their environment
+   *Why: New dependency must be installed before Discord notifications will work*
+3. Test Discord notification flow end-to-end to verify SSL error is resolved
+   *Why: Confirm the fix resolves the [SSL: CERTIFICATE_VERIFY_FAILED] error in production*
+4. Review implementation_state.md and roadmap.md for uncommitted changes and decide whether to commit or discard
+   *Why: These files were modified during session but are state tracking files; need explicit decision on whether changes should persist*
 
 ## Decisions
-- Return tuple (bool, str) from send_message() instead of just bool — Allows callers to access actual HTTP error details for debugging; swallowing exceptions was preventing diagnosis of webhook issues
-- Keep all callers that ignore return value unchanged (Python doesn't enforce type checking) — Simpler than refactoring every caller; only the two that check the return value needed updates
+- Use certifi library for SSL certificate verification instead of disabling SSL verification or using system certificates directly — certifi is the standard Python approach for cross-platform certificate handling; safer than disabling verification, more reliable than system certs on macOS
 
 ## Failed Approaches
-- Checking if send_message() return value was being used as a bool in all callers before making changes — Unnecessary caution; Python allows tuple to be used in boolean context without error, so all existing callers remain safe
+- Checking if return value being a tuple breaks callers that use it as a bool — Determined to be a non-issue — Python doesn't care about unused return values, and the two callers that check the return value were already updated in previous edits
 
 ## Files In Play
-- `askr/clients/discord.py`
-- `askr/cli/askr.py`
-- `askr/hooks/notification.py`
+- `/Users/bippin/Desktop/askr/askr/clients/discord.py`
+- `/Users/bippin/Desktop/askr/requirements.txt`
 
 ## Relational Files
-- `askr/state/config.py` (configures): Manages ASKR_DISCORD_WEBHOOK configuration; relevant to understanding why webhook might be missing/invalid
-- `askr/hooks/stop.py` (imported_by): Uses send_message() in notification hook; was checked to ensure tuple return doesn't break it
+- `/Users/bippin/Desktop/askr/askr/hooks/notification.py` (imported_by): Calls discord.py send methods; return value handling was verified to be compatible with tuple return
+- `/Users/bippin/Desktop/askr/askr/cli/askr.py` (configures): CLI entry point that triggers notifications; error messages now show actual HTTP/SSL errors instead of generic 'Discord send failed'
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Git commit was started but not completed (git add ... && g was cut off); need to finish commit before next session can verify changes
+- Git commit message was incomplete in transcript — needs to be finished with proper message text

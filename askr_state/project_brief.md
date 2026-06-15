@@ -1,16 +1,18 @@
-Last updated: 2026-06-15 14:19
+Last updated: 2026-06-15 14:25
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across runs and supporting multi-client integration. It bridges user intent to code execution by managing conversation history, file operations, and subprocess output while maintaining session continuity through JSON-backed state storage.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across interruptions and supporting autonomous continuation. It manages subprocess execution, multi-client LLM integration, and handover state to allow sessions to resume without losing context or objectives.
 
 ## What's In Flight
 
-- Discord webhook error reporting: refactored send_message() to return (success: bool, error_message: str) tuple instead of swallowing HTTP errors; callers in askr.py and notification.py updated to unpack and log details. Awaiting git commit finalization and end-to-end testing with invalid webhook configuration.
-- Context checkpoint card display: verifying that 'turns remaining' calculation displays correctly in staging before pushing report_image.py fixes to main.
-- Handover system architectural redesign: current checkpoint timing creates stale goals in autonomous session continuation; requires rethinking when goal inference happens (session-end validation, not mid-session auto-inference) and ensuring stop checkpoint handler is always invoked.
+- macOS SSL certificate verification fix in Discord webhook client — certifi integration staged and ready for final commit
+- Context checkpoint card display validation in staging — verifying 'turns remaining' calculation displays correctly before pushing to main
+- Handover system architectural redesign — current implementation has fundamental timing issues where stale checkpoints are created; requires rethinking when goal inference happens and how stop handlers are invoked
+- Goal inference timing fix — shifting from message-aware auto-inference (which becomes stale) to session-aware inference deferred until session-end validation
 
 ## Key Decisions Made
 
-- Checkpoint state carriers (checkpoint_pending.json, launch_mode.json) are primary handover truth, not git diffs alone. Investigation showed these files control autonomous continuation; git state is insufficient.
-- Goal inference deferred to session-end validation rather than auto-inferred
+- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone — these files control autonomous continuation and are the primary source of truth for session recovery
+- Goal inference must be session-aware and deferred to session-end, not auto-inferred from old user messages mid-session — prevents stale objectives from poisoning autonomous handovers
+- Root cause of stale checkpoints is a logic gap where the stop checkpoint handler is never invoked
