@@ -193,9 +193,26 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                     f"for confirmation from the user."
                 )
 
+            if confidence >= 0.70:
+                # High-confidence: open autonomous session immediately
+                notification_type = "context"
+                message = f"Context at {pct_str} — state saved to git. Opening new chat."
+            else:
+                # Low-confidence: surface direction_confirm gate before launching session.
+                # The extension should show this as a blocking confirmation UI.
+                # If the extension doesn't handle the type, the session still opens —
+                # but stop_prompt already instructs Claude to pause and confirm first.
+                notification_type = "direction_confirm"
+                signal_label = direction["signal_source"].replace("_", " ")
+                message = (
+                    f"Context at {pct_str} — state saved. "
+                    f"Direction unclear (signal: {signal_label}, confidence: {round(confidence * 100)}%). "
+                    f"Session will ask for confirmation before starting."
+                )
+
             payload = {
-                "type": "context",
-                "message": f"Context at {pct_str} — state saved to git. Opening new chat.",
+                "type": notification_type,
+                "message": message,
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
