@@ -1158,6 +1158,176 @@ def cmd_uninstall():
     console.print("  [green]done[/green] — askr fully removed\n")
 
 
+def cmd_task(args: list):
+    """
+    askr task queue <dev> "description"  — add a task to a developer's queue
+    askr task list [<dev>]               — show pending tasks for a developer
+    """
+    import subprocess as _sp
+
+    sub = args[0] if args else ""
+
+    if sub == "queue":
+        if len(args) < 3:
+            console.print("\n  usage: [bold]askr task queue <developer> \"task description\"[/bold]\n")
+            return
+        target_dev  = args[1]
+        description = " ".join(args[2:])
+        developer   = load_developer()
+        state_dir   = get_state_dir()
+        tasks_dir   = os.path.join(state_dir, "tasks")
+        os.makedirs(tasks_dir, exist_ok=True)
+        queue_path  = os.path.join(tasks_dir, f"queue_{target_dev}.md")
+
+        ts   = datetime.now().strftime("%Y-%m-%d %H:%M")
+        line = f"[{ts}] [{developer}] {description}\n"
+
+        # Create queue file with header if new
+        if not os.path.exists(queue_path):
+            with open(queue_path, "w") as f:
+                f.write(f"# Task queue: {target_dev}\n\n")
+
+        with open(queue_path, "a") as f:
+            f.write(line)
+
+        # Commit + push immediately so target dev gets it on next git pull
+        try:
+            _sp.run(["git", "add", queue_path], capture_output=True, cwd=os.getcwd())
+            _sp.run(
+                ["git", "commit", "-m", f"askr: task queued for {target_dev} [{developer}] {ts}"],
+                capture_output=True, cwd=os.getcwd(),
+            )
+            push = _sp.run(["git", "push", "--quiet"], capture_output=True, timeout=30, cwd=os.getcwd())
+            if push.returncode == 0:
+                console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
+                console.print(f"  [dim]pushed — {target_dev} will receive it at next session start[/dim]\n")
+            else:
+                console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
+                console.print(f"  [yellow]⚠ push failed — run git push manually[/yellow]\n")
+        except Exception as e:
+            console.print(f"\n  [yellow]⚠ commit/push failed: {e}[/yellow]")
+            console.print(f"  [dim]task written locally — commit and push askr_state/tasks/ manually[/dim]\n")
+
+    elif sub == "list":
+        target_dev = args[1] if len(args) > 1 else load_developer()
+        state_dir  = get_state_dir()
+        queue_path = os.path.join(state_dir, "tasks", f"queue_{target_dev}.md")
+
+        if not os.path.exists(queue_path):
+            console.print(f"\n  [dim]no queue for {target_dev}[/dim]\n")
+            return
+
+        with open(queue_path) as f:
+            lines = [l.rstrip() for l in f if l.strip() and not l.startswith("#")]
+
+        if not lines:
+            console.print(f"\n  [dim]{target_dev}: no pending tasks[/dim]\n")
+            return
+
+        console.print(f"\n  [bold]{target_dev}[/bold] — {len(lines)} pending task(s):\n")
+        for line in lines:
+            console.print(f"  • {line}")
+        console.print()
+
+    else:
+        console.print("\n  usage:")
+        console.print("    [bold]askr task queue <dev> \"description\"[/bold]  — queue a task for a developer")
+        console.print("    [bold]askr task list [<dev>][/bold]               — show pending tasks\n")
+
+
+def cmd_team():
+    """Show all developers' current state from their handover JSONs."""
+    state_dir = get_state_dir()
+    if not os.path.isdir(state_dir):
+        console.print("\n  [yellow]no askr_state/ found — run askr init first[/yellow]\n")
+        return
+
+    import glob as _glob
+
+    handover_files = _glob.glob(os.path.join(state_dir, "handover_*.json"))
+    if not handover_files:
+        console.print("\n  [dim]no developer handovers found[/dim]\n")
+        return
+
+    # Load stats for live context %
+    stats_by_project: dict = {}
+    try:
+        from askr.session.lifecycle import _read_all_stats
+        for s in _read_all_stats():
+            pp = s.get("project_path", "")
+            if pp:
+                stats_by_project[pp] = s
+    except Exception:
+        pass
+
+    try:
+        from askr.session.monitor import find_project_root
+        current_project = find_project_root()
+    except Exception:
+        current_project = os.getcwd()
+
+    from datetime import timezone as _tz, timedelta as _td
+
+    console.print()
+    console.print("  [bold]team[/bold]\n")
+
+    for hf in sorted(handover_files):
+        dev = os.path.basename(hf).replace("handover_", "").replace(".json", "")
+        try:
+            with open(hf) as f:
+                h = json.load(f)
+        except Exception:
+            continue
+
+        task        = h.get("task", "—")[:60]
+        blockers    = h.get("blockers", [])
+        ts_str      = h.get("session_metadata", {}).get("timestamp", "")
+        next_acts   = h.get("next_actions", [])
+        next_action = next_acts[0].get("action", "")[:55] if next_acts else "—"
+
+        # Time since last session
+        last_seen = "unknown"
+        if ts_str:
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                delta = datetime.now(_tz.utc) - ts
+                secs = delta.total_seconds()
+                if secs < 0:
+                    last_seen = "active now"
+                elif secs < 3600:
+                    last_seen = f"{int(secs // 60)}m ago"
+                elif secs < 86400:
+                    last_seen = f"{int(secs // 3600)}h ago"
+                else:
+                    last_seen = f"{delta.days}d ago"
+            except Exception:
+                pass
+
+        # Live context % — match stats to this dev's last known project
+        dev_project = h.get("session_metadata", {}).get("project_path", current_project)
+        stats = stats_by_project.get(dev_project) or stats_by_project.get(current_project, {})
+        ctx_pct = stats.get("context_pct")
+        ctx_str = f"ctx:{ctx_pct:.0%}" if ctx_pct else "idle"
+
+        blocker_str = f"  [red]⚠ {blockers[0][:50]}[/red]" if blockers else ""
+
+        console.print(f"  [bold]{dev:<12}[/bold] [dim]{ctx_str:<10}[/dim] last: {last_seen}")
+        console.print(f"  [dim]  task:[/dim] {task}")
+        console.print(f"  [dim]  next:[/dim] {next_action}")
+        if blocker_str:
+            console.print(blocker_str)
+
+        # Pending tasks in queue
+        queue_path = os.path.join(state_dir, "tasks", f"queue_{dev}.md")
+        if os.path.exists(queue_path):
+            with open(queue_path) as f:
+                pending = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+            if pending:
+                console.print(f"  [yellow]  {len(pending)} queued task(s)[/yellow]")
+
+        console.print()
+
+
 def cmd_report():
     """Send a morning/daily report to Discord as a PNG card, print summary to stdout."""
     from askr.state.analytics import today_summary, _load_all
@@ -1269,6 +1439,10 @@ def main():
         cmd_uninstall()
     elif cmd == "report":
         cmd_report()
+    elif cmd == "task":
+        cmd_task(rest)
+    elif cmd == "team":
+        cmd_team()
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
