@@ -1,13 +1,21 @@
 {
-  "task": "Designed three-way decision tree for autonomous continuation after research-only sessions, distinguishing between research with implementation intent vs. research without actionable direction.",
-  "discussion_summary": "The previous session's logic treated all talk-only sessions as skip-worthy, losing valid research conclusions that end with 'let's implement X'. User raised the inverse case: research sessions that conclude without implementation intent. Session clarified the decision tree: coding sessions auto-continue with context; research+intent sessions surface a direction_proposal notification for user approval; research-only sessions (no implementation signal) should infer direction from the most recent prior coding session or surface a 'no direction' state. This requires a fourth signal type or refinement to Signal 3 logic to detect intent markers in session transcripts.",
+  "task": "Diagnosed context-cut handover failures and fixed stop.py to auto-launch talk-only sessions without approval gate when context limit triggers mid-research",
+  "discussion_summary": "User reported two critical bugs: (1) research sessions cut at 75% context were not generating proper handovers or autonomous continuations, and (2) a singular session that hit 75% context never triggered pre-compact hook or autonomous session with required instructions. Investigation revealed stop.py was firing correctly but direction_proposal was gating autonomous launch behind user approval. Fixed by removing approval gate for context-cut talk-only sessions, allowing immediate autonomous continuation with inferred direction.",
   "accomplishments": [
     {
-      "what": "Identified gap in direction inference: research-only sessions need intent detection to decide between proposing direction vs. falling back to prior coding context",
+      "what": "Diagnosed root cause: direction_proposal notification was blocking auto-launch of context-cut research sessions",
       "done": true
     },
     {
-      "what": "Clarified three-way notification routing: context (auto-continue), direction_proposal (user approval), and no-direction fallback (needs implementation)",
+      "what": "Modified stop.py line 196 to auto-launch talk-only sessions without approval when context trigger fires",
+      "done": true
+    },
+    {
+      "what": "Verified stop.py imports and syntax with Python test",
+      "done": true
+    },
+    {
+      "what": "Committed fix to main branch (4ccb736)",
       "done": true
     }
   ],
@@ -15,69 +23,76 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Add intent detection to `_infer_direction()` in lifecycle.py: scan session transcript for markers like 'let's implement', 'build', 'code', 'start', 'next step is' to classify research sessions as intent-bearing vs. intent-free.",
-      "why": "Research-only sessions without implementation intent should not trigger direction_proposal; instead they should fall back to the most recent coding session's direction or surface a 'no actionable direction' state."
+      "action": "Test context-cut scenario end-to-end: trigger 75% context limit in a research session and verify autonomous talk-only session launches immediately with inferred direction in next_actions",
+      "why": "Fix was deployed but not yet validated against the original failure case"
     },
     {
       "order": 2,
-      "action": "Extend Signal 3 return value to include `intent_detected: bool` alongside `proposed: bool`, allowing lifecycle to route research-only + no-intent to fallback logic instead of notification.",
-      "why": "Distinguishes between 'research concluded with next steps' (propose) and 'research concluded, no implementation signal' (fallback or idle)."
+      "action": "Verify pre_compact.py hook fires BEFORE context compaction and that it prevents auto-compaction when direction_proposal is pending",
+      "why": "User reported pre-compact hook never fired in the failing session; need to confirm hook registration and timing"
     },
     {
       "order": 3,
-      "action": "Update stop.py notification routing: if `proposed=True` and `intent_detected=False`, emit `no_direction` notification instead of `direction_proposal`, with message like 'Research session concluded. No implementation direction detected. Waiting for your input.'",
-      "why": "Prevents false-positive autonomous proposals when user is still in exploratory mode."
+      "action": "Add integration test to askr test suite covering: research session \u2192 75% context trigger \u2192 autonomous continuation with direction inference",
+      "why": "This scenario was not caught by existing tests; prevents regression"
     },
     {
       "order": 4,
-      "action": "Test end-to-end: create three test scenarios in test_lifecycle.py \u2014 (1) research + 'let's implement', (2) research + no intent, (3) research + fallback to prior coding \u2014 verify correct notification type and direction inference.",
-      "why": "Validates the three-way decision tree before autonomous sessions rely on it."
-    },
-    {
-      "order": 5,
-      "action": "Commit changes with message 'feat(lifecycle): intent detection for research-only sessions \u2014 distinguish propose vs. fallback'.",
-      "why": "Completes the direction inference logic and unblocks autonomous continuation for all session types."
+      "action": "Review daemon.log rotation and retention to ensure future context-cut events are fully logged for debugging",
+      "why": "Daemon log was truncated; need visibility into all lifecycle events for troubleshooting"
     }
   ],
   "decisions": [
     {
-      "decision": "Research-only sessions without implementation intent should NOT auto-propose direction; they should fall back to prior coding session or idle.",
-      "reason": "User may be in exploratory/research mode and not ready to commit to implementation. Auto-proposing wastes context and creates false-positive notifications."
+      "decision": "Auto-launch talk-only sessions on context-cut without user approval gate",
+      "reason": "Context limit is a hard constraint; delaying autonomous continuation with approval prompt defeats the purpose of seamless handover"
     },
     {
-      "decision": "Intent detection should be transcript-based (keyword scanning) rather than user-provided metadata.",
-      "reason": "Avoids requiring explicit user tagging; intent markers are naturally present in session conclusions."
+      "decision": "Keep direction_proposal notification for user visibility but decouple it from launch gate",
+      "reason": "User should see what direction was inferred, but should not block autonomous session start"
     }
   ],
   "user_rejected_decisions": [],
-  "failed_approaches": [],
+  "failed_approaches": [
+    {
+      "approach": "Assumed direction_proposal was only for talk-only sessions without next_actions",
+      "reason": "Transcript showed direction_proposal was also gating context-cut research sessions, which should auto-launch"
+    }
+  ],
   "files_in_play": [
-    "askr/session/lifecycle.py",
     "askr/hooks/stop.py",
-    "askr/ide/vscode-extension/extension.js"
+    "askr/hooks/pre_compact.py",
+    "askr_state/implementation_state.md",
+    "askr_state/notifications.log"
   ],
   "relational_files": [
     {
-      "file": "askr/session/handover.py",
-      "relationship": "imported_by",
-      "why": "Handover history is walked by _infer_direction() to find prior coding sessions for fallback logic."
+      "file": "askr/session/lifecycle.py",
+      "relationship": "imports",
+      "why": "Lifecycle orchestrates stop hook and context trigger logic"
     },
     {
-      "file": "tests/test_lifecycle.py",
-      "relationship": "tested_by",
-      "why": "Intent detection and three-way routing logic must be validated with test scenarios."
+      "file": "askr/hooks/pre_compact.py",
+      "relationship": "sibling_hook",
+      "why": "Pre-compact hook should fire before context compaction; needs verification it prevents auto-compaction"
+    },
+    {
+      "file": "askr/ide/vscode-extension/extension.ts",
+      "relationship": "configures",
+      "why": "Extension handles direction_confirm and direction_proposal notifications"
     }
   ],
   "uncommitted_files": [
+    "askr_state/implementation_state.md",
     "askr_state/notifications.log"
   ],
   "blockers": [
-    "Intent detection keywords not yet defined \u2014 need to finalize list of markers that signal implementation intent vs. exploratory research."
+    "Need to reproduce context-cut scenario to validate fix works end-to-end"
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T18:29:00.000000+00:00",
+    "timestamp": "2026-06-15T22:12:00+00:00",
     "developer": "bippin"
   }
 }
