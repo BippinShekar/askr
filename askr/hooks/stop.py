@@ -217,6 +217,7 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
                 "prompt": stop_prompt,
+                "direction": direction.get("direction", ""),
                 "direction_confidence": confidence,
                 "direction_signal": direction["signal_source"],
                 "shown": False,

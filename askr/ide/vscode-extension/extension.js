@@ -223,6 +223,31 @@ function checkNotification() {
           vscode.commands.executeCommand('workbench.action.reloadWindow');
         }
       });
+    } else if (n.type === 'direction_confirm' || n.type === 'direction_needed') {
+      // Low-confidence or no direction signal — do NOT open a session automatically.
+      // Ask the user what to work on; only open Claude once they provide a direction.
+      const title = n.type === 'direction_needed'
+        ? 'Askr: No direction found'
+        : 'Askr: Direction unclear';
+      vscode.window.showInputBox({
+        title,
+        prompt: n.message,
+        value: n.direction || '',
+        placeHolder: 'What should the next session work on?',
+        ignoreFocusOut: true,
+      }).then(input => {
+        if (!input) return;  // user cancelled — no session, no tokens burned
+        const termOpts = { name: 'askr — new session' };
+        if (n.project_path) termOpts.cwd = n.project_path;
+        const terminal = vscode.window.createTerminal(termOpts);
+        terminal.show();
+        const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+          ? ` --allowedTools ${n.allowed_tools.join(',')}`
+          : '';
+        const safeInput = input.replace(/"/g, '').replace(/`/g, '');
+        terminal.sendText(`claude${toolsFlag}`);
+        setTimeout(() => { terminal.sendText(safeInput, false); terminal.sendText('\r', false); }, 4000);
+      });
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
