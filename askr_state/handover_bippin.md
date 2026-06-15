@@ -1,46 +1,42 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:04
+Last updated: 2026-06-15 13:05
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook initialization bug where local .env keys were being ignored due to early return in env.load()
+Fix Discord webhook not being picked up from local .env in askr clone; commit and push the fix.
 
 ## Discussion
-User reported that Discord webhook wasn't being picked up despite existing in local .env. Root cause identified: env.load() returns early after loading global ~/.config/askr/.env, preventing local .env from being read. Two fixes applied: (1) env.py — changed override=False on local load to allow local keys to supplement global config, (2) askr.py — removed early return in cmd_init so setup_keys() always runs and prompts for webhook. Changes committed and pushed to git.
+User's friend cloned askr but Discord webhook from local .env wasn't being used. Root cause: `env.load()` returns early after loading global `~/.config/askr/.env`, preventing local .env keys from being read. Fixed by adding `override=False` to the local `load_dotenv()` call in `env.py`, and fixed a separate bug in `askr.py` where `setup_keys()` exits early if .env exists, never prompting for webhook. Both changes committed and pushed.
 
 ## Accomplishments
-- [x] Identified root cause: env.load() early return preventing local .env from being read
-- [x] Fixed env.py to use override=False on local dotenv load, allowing local keys to supplement global config
-- [x] Fixed askr.py cmd_init to remove early return and always call setup_keys()
-- [x] Committed and pushed both changes to git
+- [x] Identified root cause: env.load() returns after global .env load, blocking local .env
+- [x] Fixed env.py: added override=False to local load_dotenv() to allow local keys to merge
+- [x] Fixed askr.py: removed early return in setup_keys() so webhook prompt always fires
+- [x] Committed both fixes with message 'fix: Discord send...' and pushed to remote
 
 ## Next Actions
-1. User should regenerate Discord webhook URL in Discord server settings (Server Settings → Integrations → Webhooks) since it was exposed in chat
-   *Why: Security: exposed webhook URL in chat transcript is a vulnerability*
-2. User should pull the latest changes and run `askr init` again to re-prompt for webhook setup
-   *Why: The fix ensures setup_keys() now runs and captures the webhook properly*
-3. Verify that local .env ASKR_DISCORD_WEBHOOK is now being picked up by running `askr` and checking that Discord integration works
-   *Why: Confirm the fix resolves the original issue*
+1. Tell friend to run `git pull` to get the two fixes (env.py and askr.py)
+   *Why: Changes are now on remote; friend's local clone needs them*
+2. Confirm with friend whether to run `askr init` again after pull, or if just running `askr` is enough
+   *Why: User asked this question at end of session; `env.load()` fires on any `askr` command, so init may not be strictly necessary, but init is safer to ensure webhook is properly configured*
+3. Verify friend's local .env has ASKR_DISCORD_WEBHOOK key and that it's now being picked up
+   *Why: Confirm the fix actually resolves the original issue*
 
 ## Decisions
-- Use override=False on local dotenv load instead of override=True — Allows local .env keys to supplement (not override) global ~/.config/askr/.env, which is the correct precedence for per-project config
-- Remove early return in cmd_init after checking ANTHROPIC_API_KEY — Ensures setup_keys() always runs and prompts for webhook, even if API key already exists
-
-## Failed Approaches
-- Assumed the issue was with override=True on local load — Actually override=False was correct; the real bug was the early return in cmd_init preventing setup_keys() from being called
+- Use override=False on local load_dotenv() instead of override=True — Allows global keys to be overridden by local .env, which is the correct precedence for per-project configuration
+- Remove early return in setup_keys() when .env exists — Webhook prompt must always fire during init, even if other keys are already saved
 
 ## Files In Play
 - `askr/utils/env.py`
 - `askr/cli/askr.py`
 
 ## Relational Files
-- `.env` (configures): Local .env file that should be read by env.load()
-- `~/.config/askr/.env` (configures): Global config file that takes precedence but should not block local .env
+- `.env` (configures): Local .env contains ASKR_DISCORD_WEBHOOK and other keys that need to be loaded
+- `~/.config/askr/.env` (configures): Global env file that was blocking local .env from being read
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
 - `roadmap.md`
 - `stress-tests/`

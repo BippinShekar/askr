@@ -2,16 +2,15 @@ Last updated: 2026-06-15 13:05
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across invocations and supporting multi-client execution. It bridges IDE/editor communication, manages subprocess execution, and maintains session history for autonomous handovers between runs.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across runs and supporting multi-client handovers. It lets developers delegate coding tasks to Claude, track progress across sessions, and resume work from checkpoints. The core problem it solves: managing long-running AI-assisted development workflows without losing context or progress.
 
 ## What's In Flight
 
-- Fixing checkpoint handover system: stale goals and missing session-end validation are causing autonomous continuations to fail. Root cause identified as logic gap where stop checkpoint handler is never invoked; goal inference must be deferred to session-end, not auto-inferred mid-session.
-- Verifying context checkpoint cards display correct "turns remaining" in staging before pushing report_image.py fixes to main.
-- Discord webhook initialization bug fixed (env.py and askr.py); awaiting user verification that local .env is now picked up correctly.
+- Fixing Discord webhook configuration in local .env files. Root cause identified: env.load() was returning early after loading global config, blocking local .env from being read. Fix committed and pushed (env.py and askr.py).
+- Verifying context checkpoint cards display correct "turns remaining" in staging environment before pushing report_image.py fixes to main.
+- Architectural redesign of the handover system. Current behavior is failing catastrophically: checkpoints become stale because goal inference happens mid-session and the stop checkpoint handler is never invoked. Goal inference must be deferred to session-end validation and made session-aware, not message-aware.
 
 ## Key Decisions Made
 
-- Checkpoint system treats checkpoint_pending.json and launch_mode.json as primary handover state carriers, not git diffs alone. Investigation revealed these files control autonomous session continuation.
-- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred from old user messages mid-session. Auto-inferred goals become stale and poison autonomous handovers.
-- Handle both dict and str goal formats in checkpoint.py for backward compatibility with existing checkpoints while
+- Treat checkpoint_pending.json and launch_mode.json as primary handover state carriers, not git diffs alone. Investigation showed these files control autonomous session continuation.
+- Handle both dict and str goal formats in checkpoint.py for backward compatibility with existing checkpoints while supporting new JSON-serial

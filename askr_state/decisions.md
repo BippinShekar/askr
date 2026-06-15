@@ -77,3 +77,5 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 13:04] [bippin] Gate Discord success message on both sent AND brief, not just brief. Reason: Prevents false positives when send fails; user now gets accurate feedback
 [2026-06-15 13:05] [bippin] Use override=False on local dotenv load instead of override=True. Reason: Allows local .env keys to supplement (not override) global ~/.config/askr/.env, which is the correct precedence for per-project config
 [2026-06-15 13:05] [bippin] Remove early return in cmd_init after checking ANTHROPIC_API_KEY. Reason: Ensures setup_keys() always runs and prompts for webhook, even if API key already exists
+[2026-06-15 13:05] [bippin] Use override=False on local load_dotenv() instead of override=True. Reason: Allows global keys to be overridden by local .env, which is the correct precedence for per-project configuration
+[2026-06-15 13:05] [bippin] Remove early return in setup_keys() when .env exists. Reason: Webhook prompt must always fire during init, even if other keys are already saved
