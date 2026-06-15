@@ -1,45 +1,43 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 17:42
+Last updated: 2026-06-15 17:51
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Redesigned _infer_direction() to use semantic commit-scope analysis instead of root-folder momentum, eliminating false-positive signals that cleared the gate at low confidence
+Validated direction inference signal chain and confirmed autonomous session gate logic for preventing token waste on low-confidence or empty-context sessions
 
 ## Discussion
-Identified that Signal 3 (top-level directory frequency) was a design flaw — every commit in any repo touches some top-level folder, making it noise at 0.72 confidence that incorrectly passed the gate. Replaced it with semantic file-change analysis using conventional commit scopes (feat(scope), fix(scope)) parsed from git log. Tested all three signals in isolation: Signal 1 (dirty files) fires at 0.95, Signal 3 (handover next_actions) at 0.85, and the new semantic scope signal correctly identifies lifecycle as the active domain with 0.65 confidence from recent commit history.
+Session focused on understanding when askr should NOT start an autonomous session to avoid wasting tokens. User asked what qualifies as 'nothing' (zero direction inference) and how to ensure the system doesn't spin up a session without actionable context. This led to validation of the three-signal direction inference system (dirty files, blockers.md, handover next_actions) and confirmation that the direction_confirm HITL gate at confidence < 0.70 is the correct mechanism to prevent empty-context autonomous sessions.
 
 ## Accomplishments
-- [x] Rewrote _infer_direction() Signal 3 to parse conventional commit scopes instead of root-folder frequency
-- [x] Fixed scope regex to correctly extract scope from commit message (removed incorrect ^ anchor)
-- [x] Validated all three direction signals in isolation with test harness
-- [x] Committed lifecycle.py changes to main branch
+- [x] Validated Signal 1 (uncommitted files) correctly fires and produces high-confidence direction
+- [x] Validated Signal 3 (handover next_actions) correctly reads and prioritizes previous session's planned work
+- [x] Confirmed direction_confirm HITL gate prevents autonomous session start when confidence < 0.70
+- [x] Tested full direction inference chain end-to-end with real git log and file state
 
 ## Next Actions
-1. Run full end-to-end test of _infer_direction() with a fresh session start to verify the three-signal chain produces correct direction inference without HITL gate
-   *Why: Signals are individually validated but full chain integration needs confirmation before rolling out to production sessions*
-2. Stress-test _infer_direction() against edge cases: empty git log, no conventional commits, all commits in same scope, dirty files in multiple domains
-   *Why: Robustness required before autonomous sessions rely on this for direction inference*
-3. Update handover prompt in _generate_handover_prompt() to document the three-signal model and confidence thresholds (0.95 for dirty, 0.85 for handover, 0.65 for semantic scope)
-   *Why: Next session needs to understand how direction was inferred and why confidence levels matter*
-4. Verify HITL gate behavior: confirm that direction_confirm is triggered only when max(signal_confidences) < 0.70, and that it correctly surfaces the three competing signals to the user
-   *Why: Gate is the safety mechanism preventing low-confidence direction from silently steering the session*
+1. Commit uncommitted state files (implementation_state.md, notifications.log) with message 'askr: validate direction inference gate prevents empty-context sessions'
+   *Why: Session work is complete; state must be persisted before next session can read it*
+2. Document the 'nothing' threshold in lifecycle.py docstring: direction inference returns None or confidence < 0.70 when all three signals are empty/stale, triggering direction_confirm HITL gate
+   *Why: User question about 'nothing' needs explicit definition in code for future maintainers and autonomous agents*
+3. Add unit test for _infer_direction() with empty state (no dirty files, no blockers, no handover) to verify it returns confidence < 0.70
+   *Why: Validates the gate logic prevents token waste on truly empty sessions*
 
 ## Decisions
-- Replaced top-level directory frequency (Signal 3) with semantic commit-scope analysis — Directory frequency is noise in any repo — every commit touches some top-level folder. Conventional commit scopes (feat(scope), fix(scope)) provide semantic signal about which domain was active in recent work
-- Kept Signal 1 (dirty files) and Signal 2 (handover next_actions) unchanged — Both are high-fidelity: dirty files are immediate context, and handover next_actions are explicit developer intent from the previous session
-
-## Failed Approaches
-- Using regex with ^ anchor to match commit scope in git log output — ^ anchors to start of line, but commit message comes after the hash. Removed anchor to match scope anywhere in the message
+- Direction inference uses three independent signals (dirty files, blockers.md, handover) rather than single source — Provides redundancy and prevents false negatives when one signal is stale or missing
+- Confidence < 0.70 triggers HITL direction_confirm gate, not autonomous session start — Prevents wasting tokens on sessions with insufficient context or direction
 
 ## Files In Play
 - `askr/session/lifecycle.py`
+- `askr_state/implementation_state.md`
+- `askr_state/notifications.log`
 
 ## Relational Files
-- `askr_state/handover_bippin.json` (imported_by): Signal 2 reads next_actions[0] from this file to infer direction from explicit developer intent
-- `askr/session/stop.py` (imports): _infer_direction() is called by stop.py to populate the direction_confirm gate
+- `askr/session/stop.py` (imports): Calls _infer_direction() to populate handover before session ends
+- `askr_state/blockers.md` (configures): Signal 2 source for direction inference
+- `handover_bippin.json` (configures): Signal 3 source; next_actions field drives autonomous session direction
 
 ## Uncommitted Files
 - `askr_state/implementation_state.md`

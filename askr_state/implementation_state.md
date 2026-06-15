@@ -9,6 +9,7 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [17:50] Ran: grep -n "direction_confirm\|notification.*type\|type.*context\|type.*quota\|open
 - [17:42] Ran: git push origin main
 - [17:42] Ran: git add askr/session/lifecycle.py && git commit -m "feat(lifecycle): replace roo
 - [17:42] Ran: venv/bin/python -c "
