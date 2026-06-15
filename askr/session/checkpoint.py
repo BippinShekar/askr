@@ -522,6 +522,18 @@ def create_checkpoint(
         except Exception:
             pass
 
+        # Inject recent git log so the LLM never lists already-committed work in next_actions.
+        try:
+            log_result = subprocess.run(
+                ["git", "log", "--oneline", "-15"],
+                capture_output=True, text=True, timeout=10,
+            )
+            git_log = log_result.stdout.strip()
+            if git_log:
+                transcript_text += f"\n\nRECENT GIT LOG (commits already done — do NOT list these in next_actions):\n{git_log}"
+        except Exception:
+            pass
+
         # Load open goals so the handover can identify which were completed this session
         open_goals = []
         try:
