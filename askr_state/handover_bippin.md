@@ -1,54 +1,54 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:48
+Last updated: 2026-06-15 13:50
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook prompt and initialization flow so friend can successfully run `askr init` and post project brief to Discord
+Debug why Discord webhook prompt doesn't appear during `askr init` after pulling the fix
 
 ## Discussion
-The friend ran `askr init` but Discord send failed because the webhook wasn't configured. Root cause: `setup_keys()` bails early if `~/.config/askr/.env` exists, never prompting for the webhook. The repo's `.env` isn't loaded during `askr init` because it runs from the project folder, not the clone. Fixed by adding a prompt in `cmd_init` to detect missing `ASKR_DISCORD_WEBHOOK` and ask the user to paste it. Then discovered `getpass` hides input (meant for passwords), so the prompt text shows but typed URL is invisible — user thinks nothing happened. Second fix: skip Discord send entirely if no webhook is configured, and use `input()` instead of `getpass()` so the URL is visible during entry.
+The friend ran `askr init` but only saw a name prompt, not the Discord webhook URL prompt. Root cause: the fix to `cmd_init` in `env.py` was supposed to detect missing `ASKR_DISCORD_WEBHOOK` and prompt for it, but the prompt never appeared. The session identified that `getpass()` hides input (designed for passwords), making it invisible to the user. Additionally, if the user presses enter to skip, the code should bail out before attempting to send to Discord rather than failing silently. Two commits were made to address the early-return logic and skip Discord send if no webhook is configured.
 
 ## Accomplishments
-- [x] Added webhook prompt to cmd_init that detects missing ASKR_DISCORD_WEBHOOK and asks user to paste URL
-- [x] Fixed Discord send to bail out early if no webhook is configured instead of printing 'send failed'
-- [x] Identified that getpass() hides input — need to switch to input() for visible URL entry
+- [x] Identified root cause: `getpass()` hides typed input, making webhook prompt invisible to user
+- [x] Fixed `cmd_init` to skip Discord send entirely if no webhook is configured after prompt
+- [x] Committed fix to prevent 'Discord send failed' error when webhook is missing
 
 ## In Progress
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py` (line 613): Webhook prompt and Discord send logic in cmd_init — last edit at line 613 (13:47). Commit message incomplete: 'fix: skip Discord send entirely if no' — needs completion and push
+- `askr/cli/askr.py`: Webhook prompt logic in `cmd_init` — needs verification that prompt actually appears and accepts input visibly
 
 ## Next Actions
-1. Complete and push the uncommitted git commit for askr.py (message was cut off: 'fix: skip Discord send entirely if no webhook configured')
-   *Why: Changes are staged but commit message incomplete and not pushed; friend can't pull the fix yet*
-2. Replace getpass() with input() in the webhook prompt so the pasted URL is visible to the user
-   *Why: User sees no feedback when pasting URL with getpass, thinks the prompt didn't work — input() shows typed text*
-3. Have friend pull latest, then run `askr init` in project directory — should now prompt for webhook, accept it, save to ~/.config/askr/.env, and successfully post brief to Discord
-   *Why: This is the end-to-end test of the fix; if webhook prompt appears and Discord send succeeds, the issue is resolved*
-4. If Discord still fails after friend enters webhook, check that load_dotenv() is loading ~/.config/askr/.env before send_message() runs
-   *Why: Webhook might be saved but not loaded into environment if dotenv call happens at wrong time*
+1. Friend regenerates Discord webhook URL (old one was exposed in chat) and updates it in the repo's `.env` file
+   *Why: Security: exposed webhook must be rotated. Functional: new URL needed for testing the prompt*
+2. Friend pulls latest code and runs `askr init` again, watching for the webhook prompt to appear
+   *Why: Verify the fix actually prompts visibly and accepts input. If prompt still doesn't appear, investigate whether `getpass()` is being called at all*
+3. If prompt appears but input is hidden, replace `getpass()` with `input()` in the webhook prompt to make typed URL visible
+   *Why: Webhook URL is not a password — it should be visible as typed. `getpass()` is inappropriate here*
+4. Test the skip-Discord-send path: run `askr init`, press enter at webhook prompt without entering URL, verify no 'Discord send failed' error
+   *Why: Confirm the early-return fix prevents spurious errors when webhook is intentionally skipped*
+5. Once webhook prompt works, commit the `getpass()` → `input()` change if needed
+   *Why: Complete the fix for user experience*
 
 ## Decisions
-- Skip Discord send entirely if ASKR_DISCORD_WEBHOOK is not in environment, rather than printing 'send failed' — Cleaner UX — no confusing error message if user skips the prompt; silent skip is acceptable for optional feature
-- Prompt for webhook in cmd_init (during `askr init`) rather than during daemon startup or first command — Webhook is project-specific and should be configured once at init time; asking during every command would be annoying
+- Skip Discord send entirely if `ASKR_DISCORD_WEBHOOK` is not configured, rather than failing with an error — Allows `askr init` to complete successfully even if Discord integration is not set up, reducing friction for new users
 
 ## Failed Approaches
-- Using getpass() to prompt for webhook URL — getpass() hides input (designed for passwords), so user sees prompt but no visible feedback when typing/pasting URL — appears broken
-- Relying on repo's .env to be loaded during `askr init` without explicit prompt — setup_keys() returns early if ~/.config/askr/.env exists, never reading repo .env; user has no way to configure webhook if global file exists
+- Assumed the webhook prompt was appearing but the friend missed it — Further investigation revealed `getpass()` hides input, making the prompt invisible even if it runs
+- Relying on `setup_keys()` to prompt for webhook on every `askr init` run — Early return when `~/.config/askr/.env` exists prevented the prompt from ever being asked
 
 ## Files In Play
-- `/Users/bippin/Desktop/askr/askr/cli/askr.py`
+- `askr/cli/askr.py`
 
 ## Relational Files
-- `/Users/bippin/Desktop/askr/askr/env.py` (imported_by): Contains load_dotenv() and setup_keys() logic that cmd_init calls; webhook prompt fix depends on understanding when env is loaded
-- `/Users/bippin/Desktop/askr/askr/discord.py` (imported_by): Contains send_message() that cmd_init calls; needs to handle missing webhook gracefully
+- `askr/cli/env.py` (imported_by): Contains `load_dotenv()` and webhook loading logic that `cmd_init` depends on
+- `.env` (configures): Repo-level `.env` file that should contain `ASKR_DISCORD_WEBHOOK` for `askr init` to read
+- `~/.config/askr/.env` (configures): Global user config that takes precedence; must be regenerated with new webhook URL
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`
 
 ## Blockers
-- Git commit message for askr.py fix is incomplete ('fix: skip Discord send entirely if no') — needs to be completed and pushed before friend can pull
+- Cannot verify webhook prompt fix without friend regenerating the exposed Discord webhook URL and testing locally

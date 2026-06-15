@@ -1,19 +1,18 @@
-Last updated: 2026-06-15 13:48
+Last updated: 2026-06-15 13:50
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state locally and supporting multi-client handovers. It bridges your editor, manages conversation history, and can autonomously continue work across sessions when handed over to another user or instance.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persists state across runs, and integrates with IDEs and external services like Discord. It orchestrates subprocess execution, manages session lifecycle, and provides handover capabilities so users can pause and resume work across multiple invocations.
 
 ## What's In Flight
 
-- Discord webhook initialization flow: fixing `askr init` to prompt for webhook URL, accept it visibly (not hidden), save to `~/.config/askr/.env`, and post project brief to Discord on completion
-- Checkpoint card display: verifying that context cards show correct "turns remaining" calculation in staging before pushing to main
-- Handover system redesign: addressing root cause of stale checkpoints in autonomous session continuation (goal inference timing and stop checkpoint handler invocation)
+- Discord webhook prompt visibility during `askr init` — currently using `getpass()` which hides input; needs verification in staging and possible switch to `input()` for better UX
+- Checkpoint card display validation — verifying that 'turns remaining' calculation displays correctly in staging before merging report_image.py fixes
+- Handover system architectural redesign — current checkpoint timing creates stale goals; requires rework of when goal inference happens (session-end validation, not mid-session auto-inference)
+- Goal inference refactoring — shifting from message-aware to session-aware inference to prevent autonomous sessions from inheriting outdated objectives
 
 ## Key Decisions Made
 
-- Treat `checkpoint_pending.json` and `launch_mode.json` as primary handover state carriers; git diffs alone are insufficient for proper session continuation
-- Defer goal inference until session-end validation rather than auto-inferring mid-session; prevents stale objectives from poisoning autonomous handovers
-- Handle both dict and str goal formats in checkpoint.py for backward compatibility with existing checkpoints
-- Extract deltas at the hook level (post_tool_use.py) rather than in checkpoint.py to separate concerns
-- Skip Discord
+- Treat `checkpoint_pending.json` and `launch_mode.json` as primary handover state carriers, not git diffs alone — investigation showed these files control autonomous continuation
+- Handle both dict and str goal formats in checkpoint.py for backward compatibility while supporting new JSON-serialized format
+- Defer goal inference until session-end validation rather than auto

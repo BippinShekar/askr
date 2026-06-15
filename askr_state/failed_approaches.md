@@ -55,3 +55,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Only reading repo `.env` during init without checking global config first — Doesn't allow personal webhook overrides and forces webhook to be committed to git
 - [2026-06-15] Using getpass() to prompt for webhook URL — getpass() hides input (designed for passwords), so user sees prompt but no visible feedback when typing/pasting URL — appears broken
 - [2026-06-15] Relying on repo's .env to be loaded during `askr init` without explicit prompt — setup_keys() returns early if ~/.config/askr/.env exists, never reading repo .env; user has no way to configure webhook if global file exists
+- [2026-06-15] Assumed the webhook prompt was appearing but the friend missed it — Further investigation revealed `getpass()` hides input, making the prompt invisible even if it runs
+- [2026-06-15] Relying on `setup_keys()` to prompt for webhook on every `askr init` run — Early return when `~/.config/askr/.env` exists prevented the prompt from ever being asked
