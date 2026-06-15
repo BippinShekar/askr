@@ -76,3 +76,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Filtering blockers.md lines containing 'Last' or '[None]' substrings — Removed valid blocker content that happened to mention those words
 - [2026-06-15] Using `line[0] in '0123456789abcdef'` to detect commit hash lines in git log — Incorrectly matched file paths starting with 'a' (e.g., askr/), making git momentum signal invisible to askr/ work
 - [2026-06-15] Counting all lines in blockers.md as blockers without filtering metadata — False positives from 'Last updated:' and '[None]' lines inflated blocker signal and skewed direction inference
+- [2026-06-15] Signal 3 (git momentum): count commits touching a root folder to infer work direction. — Conflates project structure with intent. Two commits to askr/ could be session lifecycle fixes or reporting refactors — the heuristic cannot distinguish. User rejected as fundamentally unviable.

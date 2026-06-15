@@ -1,17 +1,17 @@
-Last updated: 2026-06-15 16:42
+Last updated: 2026-06-15 16:55
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across restarts and supporting autonomous continuation. It bridges code editors, subprocess execution, and language models to enable hands-off coding workflows where the AI can pick up where a human left off.
+Askr is a CLI-based AI coding agent that manages interactive development sessions with context awareness and usage tracking. It orchestrates LLM interactions, maintains session state across interruptions, and provides autonomous handover capabilities so work can resume without manual context re-entry.
 
 ## What's In Flight
 
-- Phase 3.12 directional inference: Fixed two critical bugs in lifecycle.py that were preventing proper signal weighting (blockers.md metadata filtering, git momentum regex). System now correctly infers session direction from three signals: blocker count, file recency, and git momentum. Validated end-to-end.
-- Integration of directional inference into stop-hook handover generation: Currently inference runs standalone; next step is to feed its output into checkpoint creation so autonomous sessions use dynamic direction instead of static prompts.
-- Confidence threshold validation: 0.70 threshold needs real multi-session testing before full autonomous deployment.
-- Multi-file context extension: Current inference assumes single active file; real sessions juggle multiple files.
+- **Handover system redesign**: Current checkpoint creation is failing to capture session state at termination. Root cause identified as missing stop-checkpoint handler invocation. Requires architectural fix, not incremental patching.
+- **Goal inference timing**: Auto-inferred goals are becoming stale mid-session because inference happens at message level rather than session-end validation. Must defer inference until session termination to keep objectives synchronized with actual progress.
+- **Direction inference (Signal 3)**: Commit-frequency heuristic (counting touches to askr/ folder) is architecturally blind. Redesign required to use semantic file-change analysis—map changed files to work domains (session_lifecycle, reporting, inference, testing) instead of folder name patterns.
+- **Session card display**: Checkpoint card rendering in report_image.py needs staging verification before main branch push.
 
 ## Key Decisions Made
 
-- Handover system requires architectural redesign, not incremental fixes. Root cause was logic gap where stop checkpoint handler was never invoked, not timing issues.
-- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred mid-session. Auto-
+- Checkpoint and launch_mode.json are primary handover state carriers; git diffs alone are insufficient for proper session resumption.
+- Goal inference must be session-aware, not message-aware

@@ -1,21 +1,17 @@
 {
-  "task": "Fixed directional inference bugs in lifecycle.py: corrected blockers.md signal to exclude metadata lines, and fixed git momentum signal regex to properly detect commit hashes instead of skipping askr/ paths.",
-  "discussion_summary": "Phase 3.12 directional inference implementation is functionally complete and working as intended. Two critical bugs were discovered and fixed in _infer_direction(): Signal 2 was matching metadata lines in blockers.md, and Signal 3's commit-line detection was incorrectly filtering askr/ file paths because 'a' is a hex digit. Both fixes have been validated end-to-end and committed. The inference system now correctly weights all three signals (blocker count, file recency, git momentum) to determine autonomous session direction.",
+  "task": "Rejected directional inference approach based on git momentum; identified fundamental architectural flaw in Signal 3 (commit frequency heuristic).",
+  "discussion_summary": "Phase 3.12 implementation of _infer_direction() was functionally correct but strategically flawed. The user identified that routing based on 'last 10 commits touch askr/ 7 times' is useless \u2014 it conflates project structure with actual work intent. Direction inference must understand architecture and semantic file changes, not raw commit frequency to a root folder. This session ended with user rejection of the entire Signal 3 approach and implicit direction of work toward redesigning the inference strategy.",
   "accomplishments": [
     {
-      "what": "Fixed Signal 2 (blockers.md) to exclude 'Last updated:' and '[None]' metadata lines from blocker count",
+      "what": "Fixed Signal 2 (blockers.md) false-positive by excluding metadata lines",
       "done": true
     },
     {
-      "what": "Fixed Signal 3 (git momentum) to use regex pattern for commit-line detection instead of character-based check",
+      "what": "Fixed Signal 1 (git momentum) hex-digit bug in commit-line detection",
       "done": true
     },
     {
-      "what": "Validated full _infer_direction() inference chain end-to-end with clean state",
-      "done": true
-    },
-    {
-      "what": "Verified session_card checkpoint rendering without errors",
+      "what": "Identified and articulated fundamental flaw in Signal 3 design",
       "done": true
     }
   ],
@@ -23,44 +19,43 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Integrate _infer_direction() output into the stop hook's handover generation to replace static prompts with dynamic direction inference",
-      "why": "Directional inference is now reliable; next phase is to make it the default behavior for autonomous session continuity"
+      "action": "Redesign _infer_direction() Signal 3 to use semantic file-change analysis instead of commit frequency. Parse changed files for architectural intent (e.g., 'changes to askr/session/* + askr/report/* = session lifecycle work', not 'askr/ folder touched 7 times').",
+      "why": "User rejected commit-frequency heuristic as architecturally blind. Must ground direction in what changed and why, not folder name patterns."
     },
     {
       "order": 2,
-      "action": "Test _infer_direction() confidence threshold (currently 0.70) against real multi-session workflows to validate HITL gate triggers",
-      "why": "Confidence thresholds need validation in production scenarios before full autonomous deployment"
+      "action": "Define semantic file groups (e.g., session_lifecycle, reporting, inference, testing) and map them to work domains. Update Signal 3 to match changed files against these groups.",
+      "why": "Enables direction inference to distinguish between 'fixing session lifecycle bugs' vs 'refactoring report generation' vs 'tuning inference confidence' \u2014 all in askr/ but different directions."
     },
     {
       "order": 3,
-      "action": "Document the three signals (blockers, recency, momentum) and their weighting in askr/docs/inference.md for future maintainers",
-      "why": "Phase 3.12 is complete but undocumented; clarity prevents regression"
+      "action": "Re-test _infer_direction() with the last 10 commits using new Signal 3 logic. Verify it correctly identifies the actual work done (bug fixes in lifecycle.py, not generic 'askr/ work').",
+      "why": "Validate that redesigned approach produces meaningful, architecture-aware direction inference."
     },
     {
       "order": 4,
-      "action": "Begin Phase 3.13: extend _infer_direction() to handle multi-file contexts (currently single-file focused)",
-      "why": "Current implementation assumes single active file; real sessions often juggle multiple files"
+      "action": "Update phase 3.12 roadmap entry to reflect 'design flaw identified, Signal 3 redesign required' rather than marking complete.",
+      "why": "Honest tracking of what was learned. Phase 3.12 exposed the problem; next phase is the fix."
     }
   ],
   "decisions": [
     {
-      "decision": "Use regex pattern `^[0-9a-f]{7}` for commit-line detection instead of character-based filtering",
-      "reason": "Character-based check was too broad and filtered legitimate file paths; regex is precise and maintainable"
-    },
-    {
-      "decision": "Exclude metadata lines from blockers.md signal count rather than pre-filter the file",
-      "reason": "Keeps blockers.md format flexible and avoids side effects on other consumers of that file"
+      "decision": "Rejected commit-frequency-based direction inference (Signal 3 as currently implemented).",
+      "reason": "User identified it as architecturally blind \u2014 routing to a root folder based on commit count is useless without semantic understanding of what changed."
     }
   ],
-  "user_rejected_decisions": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Signal 3: infer direction from 'last 10 commits touch askr/ 7 times' \u2192 route to askr/ work",
+      "user_signal": "how would this ever be any sort of viable direction? ... it must understand from architecture and what files have been changed to understand direction not look at folder name",
+      "domain": "askr/session/lifecycle.py \u2014 _infer_direction() Signal 3",
+      "confidence": 0.95
+    }
+  ],
   "failed_approaches": [
     {
-      "approach": "Using `line[0] in '0123456789abcdef'` to detect commit hash lines in git log",
-      "reason": "Incorrectly matched file paths starting with 'a' (e.g., askr/), making git momentum signal invisible to askr/ work"
-    },
-    {
-      "approach": "Counting all lines in blockers.md as blockers without filtering metadata",
-      "reason": "False positives from 'Last updated:' and '[None]' lines inflated blocker signal and skewed direction inference"
+      "approach": "Signal 3 (git momentum): count commits touching a root folder to infer work direction.",
+      "reason": "Conflates project structure with intent. Two commits to askr/ could be session lifecycle fixes or reporting refactors \u2014 the heuristic cannot distinguish. User rejected as fundamentally unviable."
     }
   ],
   "files_in_play": [
@@ -70,29 +65,22 @@
     {
       "file": "askr/session/report_image.py",
       "relationship": "imported_by",
-      "why": "session_card() uses _infer_direction() output for checkpoint rendering"
+      "why": "Tested in session to verify checkpoint card rendering post-fix; part of inference validation chain."
     },
     {
-      "file": "askr/session/stop.py",
-      "relationship": "imported_by",
-      "why": "stop hook will integrate _infer_direction() for autonomous handover generation"
-    },
-    {
-      "file": "blockers.md",
+      "file": "roadmap.md",
       "relationship": "configures",
-      "why": "Signal 2 source; format and content directly affect inference accuracy"
+      "why": "Phase 3.12 status and next phase planning depend on this session's findings."
     }
   ],
   "uncommitted_files": [],
-  "blockers": [],
-  "completed_goals": [
-    "Phase 3.12: ground-truth direction inference with deterministic signal weighting"
+  "blockers": [
+    "Signal 3 design is architecturally unsound \u2014 cannot proceed with phase 3.12 completion until semantic file-change analysis replaces commit-frequency heuristic."
   ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-15T16:38:00.000000+00:00",
-    "direction_inference_confidence": 0.92,
-    "inferred_next_direction": "extend_inference_to_multi_file_contexts",
+    "timestamp": "2026-06-15T16:42:00+00:00",
     "developer": "bippin"
   }
 }
