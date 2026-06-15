@@ -1,5 +1,9 @@
 ## Today - 2026-06-15
 
+- [ ] Test direction_confirm notification triggers when confidence < 0.70 <!-- added: 2026-06-15T16:33, auto_suggested -->
+
+- [ ] Verify checkpoint cards display correct 'turns remaining' in staging <!-- added: 2026-06-15T16:33, auto_suggested -->
+
 
 
 ## Today - 2026-06-14
