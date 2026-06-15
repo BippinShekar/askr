@@ -626,27 +626,30 @@ def cmd_init():
                 os.environ["ASKR_DISCORD_WEBHOOK"] = hook
                 console.print("  [green]✓[/green] webhook saved to ~/.config/askr/.env")
 
-        repo_name = os.path.basename(os.getcwd())
-        brief = ""
-        if os.path.exists(SNAPSHOT_PATH):
-            inventory = load_inventory()
-            with console.status("  generating repo brief for Discord...", spinner="dots"):
-                brief = call_claude(
-                    "You write concise technical onboarding briefs.",
-                    f"In 5 bullet points, describe what this codebase is, what's built, "
-                    f"and what looks in-progress. Be factual and specific. No fluff.\n\nFILES:\n{inventory}",
-                    mode="default",
-                    query_preview="onboarding brief"
-                )
+        if not os.getenv("ASKR_DISCORD_WEBHOOK"):
+            console.print("  [dim]skipping Discord — no webhook configured[/dim]")
+        else:
+            repo_name = os.path.basename(os.getcwd())
+            brief = ""
+            if os.path.exists(SNAPSHOT_PATH):
+                inventory = load_inventory()
+                with console.status("  generating repo brief for Discord...", spinner="dots"):
+                    brief = call_claude(
+                        "You write concise technical onboarding briefs.",
+                        f"In 5 bullet points, describe what this codebase is, what's built, "
+                        f"and what looks in-progress. Be factual and specific. No fluff.\n\nFILES:\n{inventory}",
+                        mode="default",
+                        query_preview="onboarding brief"
+                    )
 
-        welcome = f"**[askr] {developer} is online** — `{repo_name}`"
-        if brief:
-            welcome += f"\n\n**Repo brief:**\n{brief.strip()}"
-        sent = send_message(welcome)
-        if sent and brief:
-            console.print("  [green]✓[/green] repo brief posted to Discord")
-        elif not sent:
-            console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
+            welcome = f"**[askr] {developer} is online** — `{repo_name}`"
+            if brief:
+                welcome += f"\n\n**Repo brief:**\n{brief.strip()}"
+            sent = send_message(welcome)
+            if sent and brief:
+                console.print("  [green]✓[/green] repo brief posted to Discord")
+            elif not sent:
+                console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
     except Exception:
         pass
 
