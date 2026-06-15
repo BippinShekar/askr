@@ -605,30 +605,28 @@ def cmd_init():
     console.print("  [dim]commit askr_state/ to git so your team shares the same ground truth[/dim]")
     console.print()
 
-    try:
-        from askr.clients.discord import send_message
-        from askr.clients.claude import call_claude
-        from askr.qa.context_loader import load_inventory
+    if not os.getenv("ASKR_DISCORD_WEBHOOK"):
+        import getpass as _gp
+        console.print("  [dim]Discord webhook not configured[/dim]")
+        try:
+            hook = _gp.getpass("  ASKR_DISCORD_WEBHOOK (enter to skip): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            hook = ""
+        if hook:
+            config_dir = os.path.expanduser("~/.config/askr")
+            env_file = os.path.join(config_dir, ".env")
+            os.makedirs(config_dir, exist_ok=True)
+            with open(env_file, "a") as _f:
+                _f.write(f"\nASKR_DISCORD_WEBHOOK={hook}\n")
+            os.environ["ASKR_DISCORD_WEBHOOK"] = hook
+            console.print("  [green]✓[/green] webhook saved to ~/.config/askr/.env")
 
-        if not os.getenv("ASKR_DISCORD_WEBHOOK"):
-            import getpass as _gp
-            console.print("  [dim]Discord webhook not configured[/dim]")
-            try:
-                hook = _gp.getpass("  ASKR_DISCORD_WEBHOOK (enter to skip): ").strip()
-            except (KeyboardInterrupt, EOFError):
-                hook = ""
-            if hook:
-                config_dir = os.path.expanduser("~/.config/askr")
-                env_file = os.path.join(config_dir, ".env")
-                os.makedirs(config_dir, exist_ok=True)
-                with open(env_file, "a") as _f:
-                    _f.write(f"\nASKR_DISCORD_WEBHOOK={hook}\n")
-                os.environ["ASKR_DISCORD_WEBHOOK"] = hook
-                console.print("  [green]✓[/green] webhook saved to ~/.config/askr/.env")
+    if os.getenv("ASKR_DISCORD_WEBHOOK"):
+        try:
+            from askr.clients.discord import send_message
+            from askr.clients.claude import call_claude
+            from askr.qa.context_loader import load_inventory
 
-        if not os.getenv("ASKR_DISCORD_WEBHOOK"):
-            console.print("  [dim]skipping Discord — no webhook configured[/dim]")
-        else:
             repo_name = os.path.basename(os.getcwd())
             brief = ""
             if os.path.exists(SNAPSHOT_PATH):
@@ -650,8 +648,8 @@ def cmd_init():
                 console.print("  [green]✓[/green] repo brief posted to Discord")
             elif not sent:
                 console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     if _init_log_mark is not None:
         init_cost = cost_since_mark(_init_log_mark)
