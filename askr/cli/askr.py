@@ -612,23 +612,41 @@ def cmd_init():
     if os.path.exists(_askr_dot_env):
         _load_dotenv(dotenv_path=_askr_dot_env, override=False)
 
-    if not os.getenv("ASKR_DISCORD_WEBHOOK"):
-        import getpass as _gp
-        console.print("  [dim]Discord webhook not configured[/dim]")
+    import getpass as _gp
+    from askr.state.config import load_project_config, save_project_config
+
+    # Per-project webhook (overrides global) — committed to askr_state/config.json
+    existing_project_hook = load_project_config().get("discord_webhook", "")
+    console.print()
+    console.print(f"  [dim]project Discord webhook (current: {'set' if existing_project_hook else 'none'})[/dim]")
+    try:
+        project_hook = _gp.getpass("  project webhook (enter to keep/skip): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        project_hook = ""
+    if project_hook:
+        save_project_config({"discord_webhook": project_hook})
+        console.print("  [green]✓[/green] project webhook saved to askr_state/config.json")
+    elif existing_project_hook:
+        console.print("  [dim]- project webhook unchanged[/dim]")
+
+    # Global fallback webhook — stored in ~/.config/askr/.env
+    if not existing_project_hook and not project_hook and not os.getenv("ASKR_DISCORD_WEBHOOK"):
+        console.print("  [dim]no global webhook set — enter one as fallback (enter to skip)[/dim]")
         try:
-            hook = _gp.getpass("  ASKR_DISCORD_WEBHOOK (enter to skip): ").strip()
+            global_hook = _gp.getpass("  global webhook: ").strip()
         except (KeyboardInterrupt, EOFError):
-            hook = ""
-        if hook:
+            global_hook = ""
+        if global_hook:
             config_dir = os.path.expanduser("~/.config/askr")
             env_file = os.path.join(config_dir, ".env")
             os.makedirs(config_dir, exist_ok=True)
             with open(env_file, "a") as _f:
-                _f.write(f"\nASKR_DISCORD_WEBHOOK={hook}\n")
-            os.environ["ASKR_DISCORD_WEBHOOK"] = hook
-            console.print("  [green]✓[/green] webhook saved to ~/.config/askr/.env")
+                _f.write(f"\nASKR_DISCORD_WEBHOOK={global_hook}\n")
+            os.environ["ASKR_DISCORD_WEBHOOK"] = global_hook
+            console.print("  [green]✓[/green] global webhook saved to ~/.config/askr/.env")
 
-    if os.getenv("ASKR_DISCORD_WEBHOOK"):
+    from askr.clients.discord import _get_webhook_url
+    if _get_webhook_url():
         try:
             from askr.clients.discord import send_message
             from askr.clients.claude import call_claude

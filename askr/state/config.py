@@ -57,3 +57,28 @@ def state_path(filename: str) -> str:
 
 def ensure_state_dir():
     os.makedirs(get_state_dir(), exist_ok=True)
+
+
+def _project_config_path(project_path: str = None) -> str:
+    base = project_path or os.getcwd()
+    return os.path.join(base, _STATE_DIR_NAME, "config.json")
+
+
+def load_project_config(project_path: str = None) -> dict:
+    path = _project_config_path(project_path)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_project_config(data: dict, project_path: str = None):
+    path = _project_config_path(project_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    existing = load_project_config(project_path)
+    existing.update(data)
+    with open(path, "w") as f:
+        json.dump(existing, f, indent=2)

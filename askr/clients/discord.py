@@ -13,13 +13,25 @@ env.load()
 _WEBHOOK_ENV = "ASKR_DISCORD_WEBHOOK"
 
 
+def _get_webhook_url() -> str:
+    """Project config overrides global env var."""
+    try:
+        from askr.state.config import load_project_config
+        url = load_project_config().get("discord_webhook", "").strip()
+        if url:
+            return url
+    except Exception:
+        pass
+    return os.getenv(_WEBHOOK_ENV, "").strip()
+
+
 def send_message(text: str) -> tuple[bool, str]:
     """
     Post text to the configured Discord webhook.
     Returns (True, "") on success, (False, reason) on failure.
     Truncates to Discord's 2000-char message limit.
     """
-    url = os.getenv(_WEBHOOK_ENV, "").strip()
+    url = _get_webhook_url()
     if not url:
         return False, "ASKR_DISCORD_WEBHOOK not set"
 
@@ -50,7 +62,7 @@ def send_file(file_path: str, caption: str = "") -> bool:
     Upload a file (e.g. PNG) to Discord via multipart/form-data.
     Returns True on success. Caller is responsible for deleting the file.
     """
-    url = os.getenv(_WEBHOOK_ENV, "").strip()
+    url = _get_webhook_url()
     if not url or not os.path.exists(file_path):
         return False
 
