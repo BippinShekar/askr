@@ -1,50 +1,56 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 03:48
+Last updated: 2026-06-16 03:56
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Validated multi-project daemon monitoring works correctly with independent per-project cooldowns; confirmed leaps correctly dropped off after stale file restore; identified adoption blockers around multi-user file conflicts and race conditions.
+Evaluated architecture and conflict-resolution strategy for multi-user adoption; decided to generate product_brief.md dynamically on git pull rather than committing it to avoid divergence conflicts.
 
 ## Discussion
-Session confirmed the daemon implementation is solid—two projects monitored simultaneously with independent cooldown timers, no tweaks needed. User shifted focus from technical validation to adoption strategy: co-founder sync between askr and leaps (the startup), and critical blocker identified: shared files written by multiple users create divergence, conflicts, and race conditions that compound. User is asking which system should be prioritized for adoption and how to solve the multi-user conflict problem.
+Session focused on adoption readiness and file conflict patterns. User identified that shared files (decisions.md, goals.md, etc.) create race conditions when multiple co-founders push simultaneously. Discussed whether product_brief.md should be committed or generated dynamically. User rejected static committed brief in favor of in-memory generation on pull to eliminate conflicts. Also clarified that architecture.md should become the comprehensive tracking document, replacing product_brief.md's role in the roadmap.
 
 ## Accomplishments
-- [x] Verified multi-project daemon monitoring with independent per-project cooldowns working correctly
-- [x] Confirmed leaps correctly dropped off after stale file restore; daemon now logs only askr
-- [x] Identified adoption blocker: multi-user shared file conflicts and race conditions
+- [x] Identified root cause of multi-user conflicts: shared mutable state files (decisions.md, goals.md, notifications.log) with sequential push assumptions
+- [x] Validated daemon multi-project monitoring is working correctly with independent per-project cooldowns
+- [x] Confirmed no tweaks needed to current daemon implementation
 
 ## Next Actions
-1. Map shared files between askr and leaps that multiple users write to; document conflict patterns and race condition scenarios
-   *Why: User identified this as the critical blocker to adoption—must understand scope before designing solution*
-2. Design conflict resolution strategy for multi-user writes (e.g., operational transformation, CRDT, lock-free merge, or project isolation)
-   *Why: Race conditions compound and prevent co-founder sync; need architecture decision before building*
-3. Determine adoption priority: should askr or leaps be the primary system for co-founder sync, or should they remain independent?
-   *Why: User asked which has highest preference in build relation; affects which system gets conflict-resolution investment first*
-4. Commit uncommitted notifications.log and create new handover for next session
-   *Why: Clean state for next session; notifications.log has one new entry from 03:39*
+1. Design product_brief.md generation logic: create a script that runs on `git pull` to synthesize current state from architecture.md, goals.md, and decisions.md into a fresh brief without committing it
+   *Why: User explicitly rejected static committed brief; dynamic generation eliminates merge conflicts and keeps brief in memory only*
+2. Audit architecture.md for comprehensiveness: ensure it can serve as the single source of truth for roadmap phases and project structure, replacing product_brief.md's tracking role
+   *Why: User indicated architecture.md should become the comprehensive tracking document; need to verify it has sufficient detail for all phases*
+3. Design conflict-resolution strategy for shared mutable files: implement file-level locking or last-write-wins with conflict markers for decisions.md and goals.md when co-founders push within minutes
+   *Why: User identified race conditions and compounding conflicts as blocker to adoption; current sequential assumption breaks under real multi-user load*
+4. Map adoption priority: determine whether askr or leaps should be built first for co-founder sync, based on which project has higher dependency on shared state
+   *Why: User asked which project should be prioritized for adoption; answer depends on conflict resolution strategy and shared file dependencies*
 
 ## Decisions
-- No tweaks needed to current daemon implementation — Multi-project monitoring, independent cooldowns, and project drop-off all validated working correctly
+- product_brief.md will be generated dynamically on git pull, not committed to git — Eliminates merge conflicts and keeps brief in memory; faster and easier to understand without divergence
+- architecture.md will become the comprehensive tracking document for roadmap phases — User indicated this should replace product_brief.md's role; reduces file fragmentation
 
 ## User-Rejected Approaches
-- **Move directly to next phase of development** — "User redirected: 'we need to build in terms of adoption' and raised multi-user conflict blocker instead" (domain: roadmap and architecture)
+- **Commit product_brief.md to git as a static tracked file** — "I agree with the generate project brief.md on git pull, as that makes more sense, faster and easier to understand, not commited to git, so stays in memory and updates without conflicts" (domain: product_brief.md, git workflow)
+
+## Failed Approaches
+- Assumed minimal conflicts on shared files with sequential push model — User observed actual race conditions and compounding conflicts when co-founders push within minutes; sequential assumption does not hold under real adoption
 
 ## Files In Play
 - `askr_state/notifications.log`
 - `askr_state/goals.md`
-- `askr_state/handover_bippin.json`
-- `~/.config/askr/daemon.log`
+- `askr_state/decisions.md`
+- `askr_state/architecture.md`
+- `askr_state/product_brief.md`
 
 ## Relational Files
-- `askr_state/goals.md` (configures): Roadmap checked to assess whether to build next phase or refine current implementation
-- `~/.config/askr/daemon.log` (tested_by): Daemon logs verified to confirm multi-project monitoring and leaps drop-off behavior
+- `askr_state/architecture.md` (configures): Will become source of truth for roadmap phases and project structure; product_brief.md will be generated from it
+- `askr_state/goals.md` (imported_by): Shared mutable state; source of conflicts when multiple users edit simultaneously
+- `askr_state/decisions.md` (imported_by): Shared mutable state; source of conflicts when multiple users edit simultaneously
+- `~/.config/askr/daemon.log` (tested_by): Validated multi-project monitoring and per-project cooldowns are working correctly
 
 ## Uncommitted Files
 - `askr_state/notifications.log`
 
 ## Blockers
-- Multi-user shared file conflicts and race conditions prevent safe co-founder sync between askr and leaps
-- Unclear adoption priority: which system (askr or leaps) should be primary for co-founder collaboration
+- Multi-user conflict resolution strategy needed for shared mutable files (decisions.md, goals.md) before adoption with co-founder can proceed safely
