@@ -6,46 +6,41 @@ Last updated: 2026-06-15 13:04
 
 
 ## Task
-Fix Discord webhook initialization bug where success message fires even when send fails, and env.load() doesn't properly merge global + local .env files
+Fix Discord webhook initialization bug where local .env keys were being ignored due to early return in env.load()
 
 ## Discussion
-Debugged why friend's Discord webhook wasn't working despite having ASKR_DISCORD_WEBHOOK set. Root cause: send_message() return value was ignored in cmd_init (line 629), so ✓ success printed regardless of actual send status. Secondary issue in env.py: global ~/.config/askr/.env exists, so local .env is never loaded — fixed by always calling load_dotenv(override=False) after global load to fill in missing vars. User confirmed webhook URL is set and works when tested manually. Changes made but not yet committed.
+User reported that Discord webhook wasn't being picked up despite existing in local .env. Root cause identified: env.load() returns early after loading global ~/.config/askr/.env, preventing local .env from being read. Two fixes applied: (1) env.py — changed override=False on local load to allow local keys to supplement global config, (2) askr.py — removed early return in cmd_init so setup_keys() always runs and prompts for webhook. Changes committed and pushed to git.
 
 ## Accomplishments
-- [x] Fixed Discord send failure detection in askr/cli/askr.py — now captures send_message() return value and only prints ✓ if sent=True
-- [x] Fixed env.py load order — now always loads local .env with override=False after global .env, so local-only vars (like ASKR_DISCORD_WEBHOOK) are picked up
-- [x] Added warning message when Discord send fails, directing user to check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env
-- [x] Identified that friend's issue was env loading, not webhook validity (webhook works when tested manually)
+- [x] Identified root cause: env.load() early return preventing local .env from being read
+- [x] Fixed env.py to use override=False on local dotenv load, allowing local keys to supplement global config
+- [x] Fixed askr.py cmd_init to remove early return and always call setup_keys()
+- [x] Committed and pushed both changes to git
 
 ## Next Actions
-1. Commit changes: `git add askr/cli/askr.py askr/utils/env.py roadmap.md && git commit -m 'Fix Discord webhook send detection and env.load() merge order'`
-   *Why: Changes are complete and tested; friend needs to pull them to resolve the issue*
-2. Push to remote and have friend pull + run `askr init` again (or just `askr` to trigger env.load())
-   *Why: env.load() fires on every run, so local .env will now be properly merged and ASKR_DISCORD_WEBHOOK will be picked up*
-3. Verify friend's Discord message posts successfully on next `askr init` run
-   *Why: Confirms both the env loading fix and the send_message() return value capture are working*
-4. Review roadmap.md changes — Phase 4 was restructured to Phase 4 (Team Scale) with new P4-0 and P4-1 stages; ensure this aligns with project direction
-   *Why: Roadmap was edited this session; needs review before commit to confirm it reflects intended scope*
+1. User should regenerate Discord webhook URL in Discord server settings (Server Settings → Integrations → Webhooks) since it was exposed in chat
+   *Why: Security: exposed webhook URL in chat transcript is a vulnerability*
+2. User should pull the latest changes and run `askr init` again to re-prompt for webhook setup
+   *Why: The fix ensures setup_keys() now runs and captures the webhook properly*
+3. Verify that local .env ASKR_DISCORD_WEBHOOK is now being picked up by running `askr` and checking that Discord integration works
+   *Why: Confirm the fix resolves the original issue*
 
 ## Decisions
-- Use override=False on local load_dotenv() instead of conditional else block — Allows both global and local .env to coexist; global takes precedence for conflicts, but local-only vars are still loaded
-- Gate Discord success message on both sent AND brief, not just brief — Prevents false positives when send fails; user now gets accurate feedback
+- Use override=False on local dotenv load instead of override=True — Allows local .env keys to supplement (not override) global ~/.config/askr/.env, which is the correct precedence for per-project config
+- Remove early return in cmd_init after checking ANTHROPIC_API_KEY — Ensures setup_keys() always runs and prompts for webhook, even if API key already exists
 
 ## Failed Approaches
-- Assumed friend was missing ASKR_DISCORD_WEBHOOK env var entirely — User clarified webhook is set and works when tested manually; real issue was env.load() not reading local .env
-- Checking setup_keys() early return as root cause — Distracted from the actual issue; setup_keys() behavior is correct, the problem is env loading order
+- Assumed the issue was with override=True on local load — Actually override=False was correct; the real bug was the early return in cmd_init preventing setup_keys() from being called
 
 ## Files In Play
-- `askr/cli/askr.py`
 - `askr/utils/env.py`
-- `roadmap.md`
+- `askr/cli/askr.py`
 
 ## Relational Files
-- `askr/utils/env.py` (imported_by): Called by cmd_init and session startup; controls which .env is loaded and in what order
-- `askr/cli/askr.py` (configures): cmd_init calls send_message() and env.load(); the send failure detection fix is here
+- `.env` (configures): Local .env file that should be read by env.load()
+- `~/.config/askr/.env` (configures): Global config file that takes precedence but should not block local .env
 
 ## Uncommitted Files
-- `askr/cli/askr.py`
-- `askr/utils/env.py`
+- `askr_state/implementation_state.md`
 - `roadmap.md`
 - `stress-tests/`
