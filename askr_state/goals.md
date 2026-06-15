@@ -1,3 +1,7 @@
+## Today - 2026-06-16
+
+
+
 ## Today - 2026-06-15
 
 
@@ -15,6 +19,8 @@
 [Add multi-day goals with: askr goal add "..." --backlog]
 
 ## Done
+[2026-06-16 03:09] Test daemon with concurrent Claude sessions in askr + leaps repos
+[2026-06-16 03:09] Verify lifecycle.py per-project dict initialization and iteration logic
 [2026-06-15 22:19] DISCARDED: Test context-cut scenario end-to-end: trigger 75% limit and verify autonomous ta
 [2026-06-15 22:19] DISCARDED: Verify pre_compact.py hook fires before compaction and blocks auto-compaction wh
 [2026-06-15 16:38] Verify checkpoint cards display correct 'turns remaining' in staging

@@ -1,16 +1,16 @@
-Last updated: 2026-06-16 03:03
+Last updated: 2026-06-16 03:09
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persists state across invocations, and integrates with IDEs and notification systems. It solves the problem of managing long-running, autonomous code generation tasks where the AI needs to maintain context, apply changes to a workspace, validate results, and hand off work across session boundaries.
+Askr is a CLI-based AI coding agent that runs interactive sessions with Claude, analyzing code and generating solutions. It manages session state, integrates with LLM APIs, and handles autonomous handovers between sessions so work can resume without context loss. The core problem: keeping multi-session coding workflows coherent when Claude instances run concurrently across different projects.
 
 ## What's In Flight
 
-- Multi-project daemon monitoring: refactored daemon loop to track all active projects simultaneously instead of abandoning earlier sessions when new ones start. Root cause was single `last_trigger_at` float; now using per-project dict. Awaiting multi-session test validation.
-- Handover system redesign: current checkpoint/goal inference creates stale state when sessions end. Architecture requires rework to defer goal inference until session-end validation and ensure stop checkpoint handler is always invoked.
-- Hook payload inspection for delta extraction: moved delta capture to post_tool_use.py hooks rather than checkpoint.py to separate concerns between raw capture and persistence orchestration.
+- Multi-session daemon refactor: verified per-project cooldown tracking works in live testing (both /askr and /leaps logged independently in same 30s poll cycle). Dead single-project _read_stats() function removed and pushed.
+- Handover system redesign: root cause identified as logic gap where stop checkpoint handler never invokes. Goal inference must be deferred to session-end validation, not auto-inferred mid-session, to prevent stale objectives poisoning autonomous handovers.
+- Hook payload inspection for delta extraction: implemented at post_tool_use.py level to separate concerns between raw delta capture and checkpoint persistence.
 
 ## Key Decisions Made
 
-- Checkpoint format supports both dict and str goal formats for backward compatibility with existing state files while enabling new JSON-serialized format.
-- Handover state is carried by checkpoint_pending.json and launch_mode.json, not git diffs alone; these files control autonomous session continuation.
+- Per-project last_trigger_at dict in lifecycle.py instead of single float: enables independent cooldown state for each active project, fixing concurrent session abandonment.
+- Checkpoint and launch_mode.json are primary handover state carriers, not git diffs alone: investigation revealed these files control autonomous continuation; git state

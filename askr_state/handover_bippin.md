@@ -1,49 +1,45 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 03:03
+Last updated: 2026-06-16 03:09
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Refactored daemon loop to monitor all active projects simultaneously instead of following only the most recently updated session
+Verified multi-session daemon behavior and removed dead single-project _read_stats() function
 
 ## Discussion
-The daemon architecture had a critical flaw: it used `max(candidates)` to track only the single most-recently-updated stats file, causing it to abandon the first Claude session when a second one started. This session identified the root cause in `_read_stats()` and replaced the single `last_trigger_at` float with a per-project dict, enabling the daemon to poll all active projects each cycle. The fix closes the logic gap that caused leaps demo sessions to go dark when run alongside other Claude sessions in the repo.
+Confirmed the daemon refactor (per-project last_trigger_at dict + _read_all_stats()) works in practice. Live test: wrote a fresh stats file for /leaps while /askr was active. The daemon logged both projects in the same 30s poll cycle at 03:06:09 — leaps first (higher ctx 35%), then askr in cooldown. Per-project cooldown state is independent. Dead _read_stats() function removed and pushed.
 
 ## Accomplishments
-- [x] Identified root cause: `_read_stats()` returns only max(candidates), causing daemon to track single project
-- [x] Refactored daemon loop to use per-project dict instead of single `last_trigger_at` float
-- [x] Modified lifecycle.py to iterate all active projects on each daemon poll cycle
-- [x] Committed and pushed feat(daemon): monitor all active projects simultaneously
+- [x] Verified multi-session behavior live: both /askr and /leaps logged in same 30s cycle with independent cooldowns
+- [x] Confirmed no code paths call _read_stats() after refactor via grep across entire codebase
+- [x] Removed dead _read_stats() single-project function from lifecycle.py line 227
+- [x] Updated decisions.md and handover_bippin.json to reflect completion of multi-session daemon verification
+- [x] Committed refactor(daemon): remove dead _read_stats() single-project function and pushed to main
 
 ## Next Actions
-1. Test multi-session daemon behavior: run Claude session in askr repo AND leaps demo simultaneously, verify both receive daemon updates without switching
-   *Why: The refactor is untested in the actual scenario that broke — need to confirm daemon no longer abandons first session when second starts*
-2. Review the actual edits to lifecycle.py line 1154 area to confirm per-project dict is correctly initialized and iterated
-   *Why: Session shows 3 edits to lifecycle.py but transcript cuts off — need to verify the implementation is complete and syntactically correct*
-3. If multi-session test passes, document the daemon architecture fix in ARCHITECTURE.md or similar, noting that it now handles concurrent Claude sessions
-   *Why: This was a significant architectural limitation that should be recorded so future work doesn't reintroduce single-project tracking*
-4. Check if there are any other places in the codebase that assume single-project daemon behavior and update them
-   *Why: The refactor changes a core assumption — other code may have been written around the old single-project limitation*
+1. Monitor daemon behavior over next few multi-session coding sessions to catch any edge cases in per-project dict iteration or cooldown state management
+   *Why: Live verification passed but extended real-world usage may surface timing or state isolation issues*
+2. Document the multi-session daemon architecture in ARCHITECTURE.md or design docs, noting the per-project last_trigger_at dict and independent cooldown tracking
+   *Why: This was a significant architectural fix that should be recorded to prevent future regressions or misunderstandings*
 
 ## Decisions
-- Replace single `last_trigger_at` float with per-project dict keyed by project root — Enables daemon to track multiple projects independently without losing state when switching between them
-- Iterate all active projects on each daemon poll cycle instead of following max(candidates) — Ensures no session goes dark when multiple Claude sessions are running concurrently
-
-## Failed Approaches
-- Single `last_trigger_at` float tracking only most-recently-updated project — Caused daemon to abandon first session when second Claude session started, leaving first session without daemon monitoring
+- Replace single `last_trigger_at` float with per-project dict keyed by project path — Enables daemon to track independent cooldown state for each active project instead of abandoning sessions when multiple Claude instances run concurrently
+- Remove dead _read_stats() function entirely rather than leave it as fallback — Nothing calls it post-refactor; keeping it risked future confusion or accidental reversion to single-project behavior
 
 ## Files In Play
 - `askr/session/lifecycle.py`
+- `askr_state/decisions.md`
+- `askr_state/handover_bippin.json`
 
 ## Relational Files
-- `askr/session/lifecycle.py` (core): Contains daemon_loop and _read_stats functions that were refactored to support multi-project monitoring
-- `askr_state/implementation_state.md` (tracking): Logs all operations performed this session for audit trail
+- `askr/session/lifecycle.py` (imports): Core daemon loop implementation; _read_stats() removal and per-project dict logic live here
+- `askr_state/decisions.md` (configures): Tracks architectural decisions for this refactor
+- `askr_state/handover_bippin.json` (configures): Session handover state for next Claude session
 
 ## Uncommitted Files
+- `askr_state/goals.md`
+- `askr_state/handover_bippin.json`
 - `askr_state/implementation_state.md`
 - `askr_state/notifications.log`
-
-## Blockers
-- Multi-session daemon behavior untested — need to verify the refactor actually solves the leaps demo problem in practice
