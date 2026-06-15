@@ -194,6 +194,17 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 )
 
             proposed = direction.get("proposed", False)
+            # Context-cut mid-session: user was actively engaged, session was
+            # interrupted. Auto-continue regardless of session type — requiring
+            # manual approval for an involuntary cut defeats the point of askr.
+            if trigger == "context" and proposed:
+                proposed = False
+                stop_prompt = (
+                    f"Context was cut mid-session. Continue from where we left off: "
+                    f"{direction['direction']}. Read the handover file for the full state. "
+                    f"Resume the conversation or work — do not restart from scratch."
+                )
+
             if confidence < 0.70:
                 # Low-confidence: no clear direction — block, ask user what to do
                 notification_type = "direction_confirm"
@@ -204,13 +215,13 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                     f"What should the next session work on?"
                 )
             elif proposed:
-                # High-confidence direction from a talk-only (research/strategy) session.
-                # Don't auto-launch — surface it so the user can approve, queue, or dismiss.
+                # High-confidence from a naturally-ended talk-only session.
+                # Don't auto-launch — surface for user approval.
                 notification_type = "direction_proposal"
                 preview = direction["direction"][:100]
                 message = f"Research session concluded: {preview}"
             else:
-                # High-confidence direction from a coding session — auto-launch
+                # Coding session or context-cut: auto-launch
                 notification_type = "context"
                 message = f"Context at {pct_str} — state saved to git. Opening new chat."
 
