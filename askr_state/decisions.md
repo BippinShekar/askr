@@ -154,3 +154,6 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-16 03:48] [bippin] No tweaks needed to current daemon implementation. Reason: Multi-project monitoring, independent cooldowns, and project drop-off all validated working correctly
 [2026-06-16 03:56] [bippin] product_brief.md will be generated dynamically on git pull, not committed to git. Reason: Eliminates merge conflicts and keeps brief in memory; faster and easier to understand without divergence
 [2026-06-16 03:56] [bippin] architecture.md will become the comprehensive tracking document for roadmap phases. Reason: User indicated this should replace product_brief.md's role; reduces file fragmentation
+[2026-06-16 04:00] [bippin] project_brief.md will not be committed to git. Reason: Committed snapshots create merge conflicts when two users push within minutes; on-demand generation is faster and conflict-free
+[2026-06-16 04:00] [bippin] architecture.md will become the single comprehensive tracking artifact for roadmap phases. Reason: Consolidates state tracking, reduces file fragmentation, and provides clearer structure than current minimal approach
+[2026-06-16 04:00] [bippin] Do not proceed to next build phase until multi-user sync is conflict-free. Reason: Current shared file structure will compound conflicts as adoption scales; must solve before adding features

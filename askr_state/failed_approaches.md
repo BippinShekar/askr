@@ -86,3 +86,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Using real filesystem paths with save/restore in tests — Fragile and slow; module-level constants with patching is cleaner
 - [2026-06-15] Single `last_trigger_at` float tracking only most-recently-updated project — Caused daemon to abandon first session when second Claude session started, leaving first session without daemon monitoring
 - [2026-06-15] Assumed minimal conflicts on shared files with sequential push model — User observed actual race conditions and compounding conflicts when co-founders push within minutes; sequential assumption does not hold under real adoption
+- [2026-06-15] Treating shared committed files (decisions.md, goals.md, project_brief.md) as safe for concurrent edits by multiple users — User observed that similar files with multiple writers create divergence easily, compound into race conditions, and become adoption blockers

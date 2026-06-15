@@ -1,56 +1,58 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 03:56
+Last updated: 2026-06-16 04:00
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Evaluated architecture and conflict-resolution strategy for multi-user adoption; decided to generate product_brief.md dynamically on git pull rather than committing it to avoid divergence conflicts.
+Identified multi-user sync blockers and determined project_brief.md should not be committed; established that architecture.md should become the comprehensive tracking artifact instead.
 
 ## Discussion
-Session focused on adoption readiness and file conflict patterns. User identified that shared files (decisions.md, goals.md, etc.) create race conditions when multiple co-founders push simultaneously. Discussed whether product_brief.md should be committed or generated dynamically. User rejected static committed brief in favor of in-memory generation on pull to eliminate conflicts. Also clarified that architecture.md should become the comprehensive tracking document, replacing product_brief.md's role in the roadmap.
+Session focused on adoption readiness for two co-founders using askr+leaps in parallel. Identified that shared committed files (decisions.md, goals.md, project_brief.md) create race conditions and divergence when both users push within minutes. User rejected committing project_brief.md and proposed generating it on git pull instead (in-memory, no conflicts). Consensus: architecture.md should be the single source of truth for comprehensive state tracking across phases.
 
 ## Accomplishments
-- [x] Identified root cause of multi-user conflicts: shared mutable state files (decisions.md, goals.md, notifications.log) with sequential push assumptions
-- [x] Validated daemon multi-project monitoring is working correctly with independent per-project cooldowns
-- [x] Confirmed no tweaks needed to current daemon implementation
+- [x] Validated daemon multi-project monitoring works correctly with independent per-project cooldowns
+- [x] Identified root cause of adoption friction: committed shared state files create merge conflicts and race conditions
+- [x] Decided project_brief.md should be generated on-demand (git pull hook) rather than committed
 
 ## Next Actions
-1. Design product_brief.md generation logic: create a script that runs on `git pull` to synthesize current state from architecture.md, goals.md, and decisions.md into a fresh brief without committing it
-   *Why: User explicitly rejected static committed brief; dynamic generation eliminates merge conflicts and keeps brief in memory only*
-2. Audit architecture.md for comprehensiveness: ensure it can serve as the single source of truth for roadmap phases and project structure, replacing product_brief.md's tracking role
-   *Why: User indicated architecture.md should become the comprehensive tracking document; need to verify it has sufficient detail for all phases*
-3. Design conflict-resolution strategy for shared mutable files: implement file-level locking or last-write-wins with conflict markers for decisions.md and goals.md when co-founders push within minutes
-   *Why: User identified race conditions and compounding conflicts as blocker to adoption; current sequential assumption breaks under real multi-user load*
-4. Map adoption priority: determine whether askr or leaps should be built first for co-founder sync, based on which project has higher dependency on shared state
-   *Why: User asked which project should be prioritized for adoption; answer depends on conflict resolution strategy and shared file dependencies*
+1. Design conflict-free state sync mechanism: determine which files stay committed (architecture.md only?) vs. which are generated on-demand (project_brief.md, session snapshots)
+   *Why: Current shared committed files (decisions.md, goals.md) cause race conditions when two users push within minutes; this is the primary blocker to co-founder adoption*
+2. Implement git post-pull hook to auto-generate project_brief.md from current state (no commit, stays in memory)
+   *Why: User explicitly rejected committing project_brief.md; on-demand generation unblocks co-founder sync without conflicts*
+3. Refactor architecture.md schema to become the comprehensive tracking artifact for all phases (replace current minimal structure)
+   *Why: User indicated architecture.md should be elevated to primary state document; consolidates tracking and reduces file fragmentation*
+4. Define per-user session isolation: determine what state each user's askr session owns vs. what is shared/merged
+   *Why: Two co-founders writing to same files simultaneously requires clear ownership model to prevent divergence*
+5. Test two-user workflow: bippin and co-founder run askr sessions in parallel on leaps, verify no conflicts and both stay in sync
+   *Why: Validates that adoption-blocking sync issues are resolved before moving to next build phase*
 
 ## Decisions
-- product_brief.md will be generated dynamically on git pull, not committed to git — Eliminates merge conflicts and keeps brief in memory; faster and easier to understand without divergence
-- architecture.md will become the comprehensive tracking document for roadmap phases — User indicated this should replace product_brief.md's role; reduces file fragmentation
+- project_brief.md will not be committed to git — Committed snapshots create merge conflicts when two users push within minutes; on-demand generation is faster and conflict-free
+- architecture.md will become the single comprehensive tracking artifact for roadmap phases — Consolidates state tracking, reduces file fragmentation, and provides clearer structure than current minimal approach
+- Do not proceed to next build phase until multi-user sync is conflict-free — Current shared file structure will compound conflicts as adoption scales; must solve before adding features
 
 ## User-Rejected Approaches
-- **Commit product_brief.md to git as a static tracked file** — "I agree with the generate project brief.md on git pull, as that makes more sense, faster and easier to understand, not commited to git, so stays in memory and updates without conflicts" (domain: product_brief.md, git workflow)
+- **Keep project_brief.md as a committed checkpoint file** — "I agree with the generate project_brief.md on git pull, as that makes more sense, faster and easier to understand, not commited to git, so stays in memory and updates without conflicts" (domain: project_brief.md, git workflow)
 
 ## Failed Approaches
-- Assumed minimal conflicts on shared files with sequential push model — User observed actual race conditions and compounding conflicts when co-founders push within minutes; sequential assumption does not hold under real adoption
+- Treating shared committed files (decisions.md, goals.md, project_brief.md) as safe for concurrent edits by multiple users — User observed that similar files with multiple writers create divergence easily, compound into race conditions, and become adoption blockers
 
 ## Files In Play
-- `askr_state/notifications.log`
-- `askr_state/goals.md`
-- `askr_state/decisions.md`
-- `askr_state/architecture.md`
-- `askr_state/product_brief.md`
+- `/Users/bippin/Desktop/askr/askr_state/handover_bippin.json`
+- `/Users/bippin/Desktop/askr/askr_state/goals.md`
+- `/Users/bippin/Desktop/askr/askr_state/decisions.md`
+- `/Users/bippin/Desktop/askr/askr_state/architecture.md`
+- `/Users/bippin/Desktop/askr/askr_state/project_brief.md`
+- `~/.config/askr/daemon.log`
 
 ## Relational Files
-- `askr_state/architecture.md` (configures): Will become source of truth for roadmap phases and project structure; product_brief.md will be generated from it
-- `askr_state/goals.md` (imported_by): Shared mutable state; source of conflicts when multiple users edit simultaneously
-- `askr_state/decisions.md` (imported_by): Shared mutable state; source of conflicts when multiple users edit simultaneously
-- `~/.config/askr/daemon.log` (tested_by): Validated multi-project monitoring and per-project cooldowns are working correctly
-
-## Uncommitted Files
-- `askr_state/notifications.log`
+- `architecture.md` (configures): Will become primary comprehensive tracking artifact; must be elevated from current minimal state
+- `project_brief.md` (generated_by): Should be generated on git pull hook rather than committed; eliminates merge conflicts
+- `daemon.log` (tested_by): Validates multi-project monitoring and per-project cooldown isolation
 
 ## Blockers
-- Multi-user conflict resolution strategy needed for shared mutable files (decisions.md, goals.md) before adoption with co-founder can proceed safely
+- Shared committed files (decisions.md, goals.md) create race conditions when two co-founders push within minutes
+- No conflict-free state sync mechanism defined for multi-user askr+leaps workflow
+- architecture.md schema not yet designed to handle comprehensive phase tracking
