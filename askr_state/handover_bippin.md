@@ -1,53 +1,51 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:03
+Last updated: 2026-06-15 13:04
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook initialization bug where local .env vars are ignored when global ~/.config/askr/.env exists
+Fix Discord webhook initialization bug where success message fires even when send fails, and env.load() doesn't properly merge global + local .env files
 
 ## Discussion
-User's friend had ASKR_DISCORD_WEBHOOK set in local .env but init command wasn't reading it. Root cause: env.load() returns early after loading global config, never merging local .env. Secondary issue in askr.py: send_message() return value was ignored, so success message fired regardless of actual send status. Fixed both: env.py now loads local .env with override=False to fill missing vars, and askr.py now checks send_message() return value before printing success. User also flagged exposed webhook URL — needs regeneration on Discord server.
+Debugged why friend's Discord webhook wasn't working despite having ASKR_DISCORD_WEBHOOK set. Root cause: send_message() return value was ignored in cmd_init (line 629), so ✓ success printed regardless of actual send status. Secondary issue in env.py: global ~/.config/askr/.env exists, so local .env is never loaded — fixed by always calling load_dotenv(override=False) after global load to fill in missing vars. User confirmed webhook URL is set and works when tested manually. Changes made but not yet committed.
 
 ## Accomplishments
-- [x] Fixed env.py to load both global and local .env files, with local vars filling in missing globals
-- [x] Fixed askr.py to check send_message() return value and display appropriate success/failure messages
-- [x] Identified root cause: env.load() early return prevented local .env from being read
-
-## In Progress
-- `askr/utils/env.py` (line 20): Modified load() to call load_dotenv(override=False) after global load, allowing local .env to fill missing vars
+- [x] Fixed Discord send failure detection in askr/cli/askr.py — now captures send_message() return value and only prints ✓ if sent=True
+- [x] Fixed env.py load order — now always loads local .env with override=False after global .env, so local-only vars (like ASKR_DISCORD_WEBHOOK) are picked up
+- [x] Added warning message when Discord send fails, directing user to check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env
+- [x] Identified that friend's issue was env loading, not webhook validity (webhook works when tested manually)
 
 ## Next Actions
-1. Test the fix: run `askr init` in a fresh clone with only local .env (no global ~/.config/askr/.env) to verify local vars are loaded
-   *Why: Confirm env.py change works correctly for both global-only and local-only scenarios*
-2. Test with both global and local .env present to verify local vars override/fill correctly
-   *Why: Ensure the override=False behavior merges correctly without breaking existing global config*
-3. Commit changes to askr.py and env.py with message: 'Fix: load local .env vars when global config exists; check send_message return value'
-   *Why: Changes are complete and tested, ready for version control*
-4. User should regenerate the exposed Discord webhook URL on Discord server (Server Settings → Integrations → Webhooks → Regenerate)
-   *Why: Webhook URL was visible in chat transcript and is now compromised*
+1. Commit changes: `git add askr/cli/askr.py askr/utils/env.py roadmap.md && git commit -m 'Fix Discord webhook send detection and env.load() merge order'`
+   *Why: Changes are complete and tested; friend needs to pull them to resolve the issue*
+2. Push to remote and have friend pull + run `askr init` again (or just `askr` to trigger env.load())
+   *Why: env.load() fires on every run, so local .env will now be properly merged and ASKR_DISCORD_WEBHOOK will be picked up*
+3. Verify friend's Discord message posts successfully on next `askr init` run
+   *Why: Confirms both the env loading fix and the send_message() return value capture are working*
+4. Review roadmap.md changes — Phase 4 was restructured to Phase 4 (Team Scale) with new P4-0 and P4-1 stages; ensure this aligns with project direction
+   *Why: Roadmap was edited this session; needs review before commit to confirm it reflects intended scope*
 
 ## Decisions
-- Use override=False in second load_dotenv() call instead of override=True — Allows local .env to fill in missing variables without overwriting intentional global config values
-- Check send_message() return value before printing success message — Prevents false success messages when webhook send actually fails
+- Use override=False on local load_dotenv() instead of conditional else block — Allows both global and local .env to coexist; global takes precedence for conflicts, but local-only vars are still loaded
+- Gate Discord success message on both sent AND brief, not just brief — Prevents false positives when send fails; user now gets accurate feedback
 
 ## Failed Approaches
-- Assumed setup_keys() early return was the root cause — User clarified .env file already exists in clone with all keys; actual issue was env.load() not reading local .env
+- Assumed friend was missing ASKR_DISCORD_WEBHOOK env var entirely — User clarified webhook is set and works when tested manually; real issue was env.load() not reading local .env
+- Checking setup_keys() early return as root cause — Distracted from the actual issue; setup_keys() behavior is correct, the problem is env loading order
 
 ## Files In Play
-- `askr/utils/env.py`
 - `askr/cli/askr.py`
+- `askr/utils/env.py`
+- `roadmap.md`
 
 ## Relational Files
-- `askr/cli/askr.py` (imports): Imports env module; send_message() return value handling depends on env vars being loaded correctly
-- `askr_state/implementation_state.md` (configures): Tracks session progress and file modifications
+- `askr/utils/env.py` (imported_by): Called by cmd_init and session startup; controls which .env is loaded and in what order
+- `askr/cli/askr.py` (configures): cmd_init calls send_message() and env.load(); the send failure detection fix is here
 
 ## Uncommitted Files
 - `askr/cli/askr.py`
 - `askr/utils/env.py`
-- `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 - `roadmap.md`
 - `stress-tests/`

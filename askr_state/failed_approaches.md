@@ -46,3 +46,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-14] Placed task queuing and team features in Phase 7 with migration complexity — User clarified single-user deployment makes migration premature; restructured to Phase 4 (Team Scale) with simpler substages
 - [2026-06-15] Assumed the webhook URL was missing or misconfigured — User confirmed the env var IS set and the webhook works when tested manually — issue was purely the error handling logic
 - [2026-06-15] Assumed setup_keys() early return was the root cause — User clarified .env file already exists in clone with all keys; actual issue was env.load() not reading local .env
+- [2026-06-15] Assumed friend was missing ASKR_DISCORD_WEBHOOK env var entirely — User clarified webhook is set and works when tested manually; real issue was env.load() not reading local .env
+- [2026-06-15] Checking setup_keys() early return as root cause — Distracted from the actual issue; setup_keys() behavior is correct, the problem is env loading order
