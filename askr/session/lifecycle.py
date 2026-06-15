@@ -225,32 +225,43 @@ def _session_is_active() -> bool:
 
 
 def _read_stats() -> dict:
+    """Return stats from the most recently modified per-project stats file."""
+    results = _read_all_stats()
+    if not results:
+        return {}
+    return max(results, key=lambda d: d.get("updated_at", ""))
+
+
+def _read_all_stats() -> list:
     """
-    Return stats from the most recently modified per-project stats file.
-    Each project writes to its own file so concurrent sessions never collide.
+    Return stats for ALL active projects with a recent stats file.
+    Replaces the single-winner _read_stats() for multi-session monitoring.
     """
     try:
         if not os.path.isdir(_STATS_DIR):
-            return {}
+            return []
         now = time.time()
-        candidates = [
-            (os.path.getmtime(os.path.join(_STATS_DIR, f)), os.path.join(_STATS_DIR, f))
-            for f in os.listdir(_STATS_DIR)
-            if f.endswith(".json") and now - os.path.getmtime(os.path.join(_STATS_DIR, f)) < SESSION_STALE_SECS
-        ]
-        if not candidates:
-            return {}
-        _, active_path = max(candidates)
-        with open(active_path) as f:
-            data = json.load(f)
-        ua = data.get("updated_at", "")
-        if ua:
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(ua)).total_seconds()
-            if age > SESSION_STALE_SECS:
-                return {}
-        return data
+        results = []
+        for f in os.listdir(_STATS_DIR):
+            if not f.endswith(".json"):
+                continue
+            path = os.path.join(_STATS_DIR, f)
+            if now - os.path.getmtime(path) >= SESSION_STALE_SECS:
+                continue
+            try:
+                with open(path) as fp:
+                    data = json.load(fp)
+                ua = data.get("updated_at", "")
+                if ua:
+                    age = (datetime.now(timezone.utc) - datetime.fromisoformat(ua)).total_seconds()
+                    if age > SESSION_STALE_SECS:
+                        continue
+                results.append(data)
+            except Exception:
+                continue
+        return results
     except Exception:
-        return {}
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -1113,7 +1124,7 @@ def run_daemon():
     _log("daemon started")
 
     was_active = False
-    last_trigger_at = 0.0  # epoch seconds — prevents re-firing on the same session
+    last_trigger_at: dict = {}  # project_path → epoch seconds, prevents re-firing per project
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1141,31 +1152,40 @@ def run_daemon():
             was_active = active
 
             if active:
-                stats = _read_stats()
-                if stats:
-                    # Each project writes its own stats file — no cross-project contamination.
-                    # _read_stats() already picked the most recently active file.
+                # Scan ALL active projects every poll — not just the most recently updated one.
+                # When two sessions run simultaneously (e.g. askr + leaps) each gets checked
+                # independently. Triggers are handled sequentially; pre-compact is the backstop
+                # for a second project that spikes while the first is being handled.
+                all_stats = _read_all_stats()
+                triggered_this_cycle = False
+
+                # Sort highest context first so the most urgent project is handled first
+                for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
                     project_path = stats.get("project_path") or fallback_path
+                    ctx_pct   = stats.get("context_pct", 0)
+                    ctx_label = stats.get("context_label", "ok")
+                    quota_pct = stats.get("quota_pct")
+                    reset_at  = stats.get("quota_reset_at", "")
 
-                    ctx_pct    = stats.get("context_pct", 0)
-                    ctx_label  = stats.get("context_label", "ok")
-                    quota_pct  = stats.get("quota_pct")    # real % from /api/oauth/usage
-                    reset_at   = stats.get("quota_reset_at", "")
-
-                    in_cooldown = (time.time() - last_trigger_at) < TRIGGER_COOLDOWN
+                    proj_last = last_trigger_at.get(project_path, 0.0)
+                    in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
 
                     if in_cooldown:
-                        remaining = int(TRIGGER_COOLDOWN - (time.time() - last_trigger_at))
-                        _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} quota={quota_pct or 0:.1f}%")
+                        remaining = int(TRIGGER_COOLDOWN - (time.time() - proj_last))
+                        _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} project={project_path}")
                     elif ctx_pct >= CONTEXT_TRIGGER:
-                        _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude")
+                        _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude [{project_path}]")
                         _write_checkpoint_pending(stats)
-                        last_trigger_at = time.time()
+                        last_trigger_at[project_path] = time.time()
                         _wait_for_exchange_end_then_kill(project_path)
+                        triggered_this_cycle = True
+                        break  # re-scan all projects next cycle after handling this one
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
-                        _log(f"Trigger B: quota={quota_pct:.1f}% (real API)")
+                        _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
                         _execute_trigger("quota", stats, project_path)
-                        last_trigger_at = time.time()
+                        last_trigger_at[project_path] = time.time()
+                        triggered_this_cycle = True
+                        break
                     else:
                         q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
                         _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str} project={project_path}")
