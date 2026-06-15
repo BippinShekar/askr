@@ -565,12 +565,18 @@ def _infer_direction(project_path: str = "") -> dict:
     except Exception:
         pass
 
-    # Signal 3: next_actions from the most recent CODING session's handover.
+    # Signal 3: next_actions from the most recent handover that has a concrete direction.
+    #
     # Walk handover commit history. For each pair of consecutive handover commits,
-    # check whether any non-askr_state files changed between them. The first pair
-    # where code changed is a coding session — use its handover's next_actions.
-    # This survives arbitrarily many back-to-back conversational sessions: they all
-    # touch only askr_state/ so they get skipped until we reach real code work.
+    # check whether non-askr_state files changed between them:
+    #
+    #   CODING session  → auto-launch (proposed=False): direction is grounded in committed work
+    #   TALK-ONLY session with next_actions → propose to user (proposed=True): research or
+    #       strategy sessions can still conclude with a real implementation directive; surface
+    #       it for approval rather than discarding it or auto-launching blind
+    #   TALK-ONLY session with empty next_actions → skip, keep looking
+    #
+    # First match (coding or talk-only-with-direction) wins.
     try:
         import json as _json
         from askr.state.config import load_developer, state_path
@@ -594,10 +600,9 @@ def _infer_direction(project_path: str = "") -> dict:
                 l.strip() for l in diff_result.stdout.splitlines()
                 if l.strip() and not l.startswith("askr_state/")
             ]
-            if not code_files:
-                continue  # conversational session — skip, try the one before it
+            is_coding = bool(code_files)
 
-            # This was a coding session. Read its handover from git.
+            # Read this session's handover from git
             show_result = subprocess.run(
                 ["git", "show", f"{curr_hash}:{handover_rel}"],
                 capture_output=True, text=True, timeout=10, cwd=cwd,
@@ -607,19 +612,24 @@ def _infer_direction(project_path: str = "") -> dict:
             handover = _json.loads(show_result.stdout)
             actions = handover.get("next_actions", [])
             if not actions:
+                # No direction from this session — keep looking regardless of type
                 continue
             first = actions[0]
             action_text = first.get("action") if isinstance(first, dict) else str(first)
             if not action_text or len(action_text) < 10:
                 continue
-            note = f" ({i} talk-only session(s) since)" if i else ""
+
+            # Talk-only with no direction: already filtered above by `not actions` /
+            # short action_text. If we reach here, there IS a direction.
+            # Coding → auto-launch. Talk-only → propose to user.
             return {
                 "direction": action_text[:200],
                 "confidence": 0.85,
                 "signal_source": "handover_next_actions",
+                "proposed": not is_coding,  # True = surface for approval, False = auto-launch
                 "details": {
                     "commit": curr_hash[:7],
-                    "talk_only_sessions_skipped": i,
+                    "session_type": "coding" if is_coding else "talk_only",
                     "developer": dev,
                 },
             }

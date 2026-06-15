@@ -193,22 +193,26 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                     f"for confirmation from the user."
                 )
 
-            if confidence >= 0.70:
-                # High-confidence: open autonomous session immediately
-                notification_type = "context"
-                message = f"Context at {pct_str} — state saved to git. Opening new chat."
-            else:
-                # Low-confidence: surface direction_confirm gate before launching session.
-                # The extension should show this as a blocking confirmation UI.
-                # If the extension doesn't handle the type, the session still opens —
-                # but stop_prompt already instructs Claude to pause and confirm first.
+            proposed = direction.get("proposed", False)
+            if confidence < 0.70:
+                # Low-confidence: no clear direction — block, ask user what to do
                 notification_type = "direction_confirm"
                 signal_label = direction["signal_source"].replace("_", " ")
                 message = (
                     f"Context at {pct_str} — state saved. "
                     f"Direction unclear (signal: {signal_label}, confidence: {round(confidence * 100)}%). "
-                    f"Session will ask for confirmation before starting."
+                    f"What should the next session work on?"
                 )
+            elif proposed:
+                # High-confidence direction from a talk-only (research/strategy) session.
+                # Don't auto-launch — surface it so the user can approve, queue, or dismiss.
+                notification_type = "direction_proposal"
+                preview = direction["direction"][:100]
+                message = f"Research session concluded: {preview}"
+            else:
+                # High-confidence direction from a coding session — auto-launch
+                notification_type = "context"
+                message = f"Context at {pct_str} — state saved to git. Opening new chat."
 
             payload = {
                 "type": notification_type,

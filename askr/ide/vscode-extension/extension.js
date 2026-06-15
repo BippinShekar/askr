@@ -223,6 +223,33 @@ function checkNotification() {
           vscode.commands.executeCommand('workbench.action.reloadWindow');
         }
       });
+    } else if (n.type === 'direction_proposal') {
+      // High-confidence direction from a talk-only (research/strategy) session.
+      // Don't auto-launch — let the user decide: run it now, queue it, or drop it.
+      const preview = n.direction ? n.direction.slice(0, 120) : n.message;
+      vscode.window.showInformationMessage(
+        `Askr: ${preview}`,
+        'Start Now',
+        'Add to Goals',
+        'Dismiss'
+      ).then(action => {
+        if (!action || action === 'Dismiss') return;
+        const termOpts = { name: 'askr', ...(n.project_path ? { cwd: n.project_path } : {}) };
+        const terminal = vscode.window.createTerminal(termOpts);
+        terminal.show();
+        if (action === 'Add to Goals') {
+          const safeDir = (n.direction || preview).replace(/"/g, '').replace(/`/g, '').slice(0, 120);
+          terminal.sendText(`askr goal add "${safeDir}"`);
+        } else {
+          // Start Now — open Claude with this direction as the launch prompt
+          const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+            ? ` --allowedTools ${n.allowed_tools.join(',')}`
+            : '';
+          const safePrompt = (n.prompt || n.direction || '').replace(/"/g, '').replace(/`/g, '');
+          terminal.sendText(`claude${toolsFlag}`);
+          setTimeout(() => { terminal.sendText(safePrompt, false); terminal.sendText('\r', false); }, 4000);
+        }
+      });
     } else if (n.type === 'direction_confirm' || n.type === 'direction_needed') {
       // Low-confidence or no direction signal — do NOT open a session automatically.
       // Ask the user what to work on; only open Claude once they provide a direction.
