@@ -501,6 +501,99 @@ def _clear_checkpoint_pending():
         pass
 
 
+def _infer_direction(project_path: str = "") -> dict:
+    """
+    Infer what the next autonomous session should work on from deterministic signals.
+
+    Signal priority (highest confidence first):
+      1. Uncommitted files  — work was interrupted here (confidence 0.95)
+      2. blockers.md        — something is explicitly stuck (confidence 0.90)
+      3. git log momentum   — most-touched module in last 10 commits (confidence 0.72)
+      4. Nothing            — no signal found (confidence 0.35)
+
+    Returns {direction, confidence, signal_source, details}
+    Never raises — all errors produce the low-confidence fallback.
+    """
+    cwd = project_path or os.getcwd()
+
+    # Signal 1: uncommitted files
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10, cwd=cwd,
+        )
+        # Do NOT strip() stdout before splitlines — porcelain format is XY<SP>path,
+        # and stripping the full output eats the leading space on the first line,
+        # shifting l[3:] off by one for that entry.
+        lines = [l for l in result.stdout.splitlines() if len(l) > 3]
+        # Filter out askr_state/ noise — those are always modified by the stop hook
+        dirty = [l[3:] for l in lines if not l[3:].startswith("askr_state/")]
+        if dirty:
+            file_list = ", ".join(dirty[:4]) + ("..." if len(dirty) > 4 else "")
+            return {
+                "direction": f"resume uncommitted work on: {file_list}",
+                "confidence": 0.95,
+                "signal_source": "uncommitted_files",
+                "details": dirty,
+            }
+    except Exception:
+        pass
+
+    # Signal 2: blockers.md non-empty
+    try:
+        from askr.state.config import get_state_dir
+        blockers_path = os.path.join(get_state_dir(), "blockers.md")
+        if os.path.exists(blockers_path):
+            content = open(blockers_path).read().strip()
+            # Strip header lines — look for actual blocker entries
+            entries = [l.strip() for l in content.splitlines()
+                       if l.strip() and not l.startswith("#") and l.strip() != "None noted"]
+            if entries:
+                return {
+                    "direction": f"resolve blocker: {entries[0][:120]}",
+                    "confidence": 0.90,
+                    "signal_source": "blockers_md",
+                    "details": entries,
+                }
+    except Exception:
+        pass
+
+    # Signal 3: git log momentum — most-touched top-level module in last 10 commits
+    try:
+        result = subprocess.run(
+            ["git", "log", "--oneline", "--name-only", "-10"],
+            capture_output=True, text=True, timeout=10, cwd=cwd,
+        )
+        from collections import Counter
+        modules: Counter = Counter()
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line or line[0] in "0123456789abcdef" or line.startswith("askr_state"):
+                continue
+            # Top-level module = first path component
+            module = line.split("/")[0]
+            if module:
+                modules[module] += 1
+        if modules:
+            top_module, count = modules.most_common(1)[0]
+            confidence = min(0.72, 0.50 + count * 0.04)  # scales with commit density
+            return {
+                "direction": f"continue work in {top_module}/ ({count} of last 10 commits)",
+                "confidence": round(confidence, 2),
+                "signal_source": "git_momentum",
+                "details": dict(modules.most_common(5)),
+            }
+    except Exception:
+        pass
+
+    return {
+        "direction": "",
+        "confidence": 0.35,
+        "signal_source": "none",
+        "details": [],
+    }
+
+
 def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = "", handover_path: str = ""):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
