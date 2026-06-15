@@ -1,41 +1,42 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:05
+Last updated: 2026-06-15 13:06
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook not being picked up from local .env in askr clone; commit and push the fix.
+Fix Discord webhook pickup from local .env file and commit/push changes to askr repository
 
 ## Discussion
-User's friend cloned askr but Discord webhook from local .env wasn't being used. Root cause: `env.load()` returns early after loading global `~/.config/askr/.env`, preventing local .env keys from being read. Fixed by adding `override=False` to the local `load_dotenv()` call in `env.py`, and fixed a separate bug in `askr.py` where `setup_keys()` exits early if .env exists, never prompting for webhook. Both changes committed and pushed.
+Identified that the global ~/.config/askr/.env was taking precedence over local .env, preventing Discord webhook from being loaded. The fix involved updating env.py to use override=False on local dotenv load, and updating askr.py to call env.load() at startup. Changes were committed and pushed. User clarified that friend only needs to git pull — no need to rerun askr init since env.load() fires on every import.
 
 ## Accomplishments
-- [x] Identified root cause: env.load() returns after global .env load, blocking local .env
-- [x] Fixed env.py: added override=False to local load_dotenv() to allow local keys to merge
-- [x] Fixed askr.py: removed early return in setup_keys() so webhook prompt always fires
-- [x] Committed both fixes with message 'fix: Discord send...' and pushed to remote
+- [x] Identified root cause: global .env override preventing local webhook pickup
+- [x] Fixed env.py to use override=False on local .env load
+- [x] Fixed askr.py to call env.load() at startup
+- [x] Committed and pushed both changes to repository
 
 ## Next Actions
-1. Tell friend to run `git pull` to get the two fixes (env.py and askr.py)
-   *Why: Changes are now on remote; friend's local clone needs them*
-2. Confirm with friend whether to run `askr init` again after pull, or if just running `askr` is enough
-   *Why: User asked this question at end of session; `env.load()` fires on any `askr` command, so init may not be strictly necessary, but init is safer to ensure webhook is properly configured*
-3. Verify friend's local .env has ASKR_DISCORD_WEBHOOK key and that it's now being picked up
-   *Why: Confirm the fix actually resolves the original issue*
+1. Inform friend to run 'git pull' in askr clone to get the env.py and askr.py fixes
+   *Why: Changes are now pushed and ready to be pulled*
+2. Verify friend's local .env has ASKR_DISCORD_WEBHOOK set correctly
+   *Why: The fix now allows local .env to be read; webhook must exist in that file*
+3. Have friend run any askr command (e.g., 'askr' or 'askr init') to trigger env.load() and pick up webhook
+   *Why: env.load() runs on every import, so next command execution will load the webhook automatically*
+4. Test that project brief is sent to Discord webhook on next askr session
+   *Why: Confirms the webhook is now being picked up and used correctly*
 
 ## Decisions
-- Use override=False on local load_dotenv() instead of override=True — Allows global keys to be overridden by local .env, which is the correct precedence for per-project configuration
-- Remove early return in setup_keys() when .env exists — Webhook prompt must always fire during init, even if other keys are already saved
+- No need to ask friend to rerun 'askr init' after git pull — env.load() fires on every import, so the webhook will be picked up automatically on next command execution
 
 ## Files In Play
 - `askr/utils/env.py`
 - `askr/cli/askr.py`
 
 ## Relational Files
-- `.env` (configures): Local .env contains ASKR_DISCORD_WEBHOOK and other keys that need to be loaded
-- `~/.config/askr/.env` (configures): Global env file that was blocking local .env from being read
+- `.env` (configures): Local .env file now properly read for Discord webhook and other keys
+- `~/.config/askr/.env` (configures): Global env file that was previously overriding local .env; now respects local values
 
 ## Uncommitted Files
 - `roadmap.md`

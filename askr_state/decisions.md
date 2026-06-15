@@ -79,3 +79,4 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 13:05] [bippin] Remove early return in cmd_init after checking ANTHROPIC_API_KEY. Reason: Ensures setup_keys() always runs and prompts for webhook, even if API key already exists
 [2026-06-15 13:05] [bippin] Use override=False on local load_dotenv() instead of override=True. Reason: Allows global keys to be overridden by local .env, which is the correct precedence for per-project configuration
 [2026-06-15 13:05] [bippin] Remove early return in setup_keys() when .env exists. Reason: Webhook prompt must always fire during init, even if other keys are already saved
+[2026-06-15 13:06] [bippin] No need to ask friend to rerun 'askr init' after git pull. Reason: env.load() fires on every import, so the webhook will be picked up automatically on next command execution
