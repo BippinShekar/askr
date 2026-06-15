@@ -57,3 +57,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Relying on repo's .env to be loaded during `askr init` without explicit prompt — setup_keys() returns early if ~/.config/askr/.env exists, never reading repo .env; user has no way to configure webhook if global file exists
 - [2026-06-15] Assumed the webhook prompt was appearing but the friend missed it — Further investigation revealed `getpass()` hides input, making the prompt invisible even if it runs
 - [2026-06-15] Relying on `setup_keys()` to prompt for webhook on every `askr init` run — Early return when `~/.config/askr/.env` exists prevented the prompt from ever being asked
+- [2026-06-15] Assuming getpass() was the issue (hiding input visibly) — Distraction; real issue was exception handler swallowing errors before prompt code ran
+- [2026-06-15] Checking if env.load() was picking up stale .env from parent directories — User confirmed fresh clone with no .env file present; issue was earlier in execution flow
