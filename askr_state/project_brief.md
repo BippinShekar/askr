@@ -1,16 +1,17 @@
-Last updated: 2026-06-15 16:38
+Last updated: 2026-06-15 16:42
 
 # Project Brief
 
-Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across invocations and supporting autonomous session continuation. It bridges user intent, LLM reasoning, and local code changes through a session lifecycle that tracks direction (what the user is trying to accomplish), validates progress, and hands off work to autonomous agents when the user steps away.
+Askr is a CLI-based AI coding agent that runs interactive development sessions with an LLM, persisting state across restarts and supporting autonomous continuation. It bridges code editors, subprocess execution, and language models to enable hands-off coding workflows where the AI can pick up where a human left off.
 
 ## What's In Flight
 
-- Direction inference system (Phase 3.13): Three-signal detection (blockers.md, git momentum, checkpoint card) to infer session goals automatically. Recently fixed signal parsing bugs; now stress-testing under high-volume scenarios before HITL validation gate.
-- Checkpoint handover mechanism: Captures session state at end-of-session for autonomous continuation. Currently validating that checkpoint cards display correct metadata (turns remaining, inferred goals) in staging.
-- Notification system: direction_confirm gate fires when inference confidence drops below 0.70, prompting user validation before autonomous handoff.
+- Phase 3.12 directional inference: Fixed two critical bugs in lifecycle.py that were preventing proper signal weighting (blockers.md metadata filtering, git momentum regex). System now correctly infers session direction from three signals: blocker count, file recency, and git momentum. Validated end-to-end.
+- Integration of directional inference into stop-hook handover generation: Currently inference runs standalone; next step is to feed its output into checkpoint creation so autonomous sessions use dynamic direction instead of static prompts.
+- Confidence threshold validation: 0.70 threshold needs real multi-session testing before full autonomous deployment.
+- Multi-file context extension: Current inference assumes single active file; real sessions juggle multiple files.
 
 ## Key Decisions Made
 
-- Goal inference is session-aware, not message-aware. Auto-inferred goals are tagged at session start (session_start.py) to distinguish system suggestions from user-created goals; prevents stale objectives from poisoning autonomous handovers.
-- Checkpoint and launch_mode.json are primary handover state carriers. Git diffs alone
+- Handover system requires architectural redesign, not incremental fixes. Root cause was logic gap where stop checkpoint handler was never invoked, not timing issues.
+- Goal inference must be session-aware and deferred until session-end validation, not auto-inferred mid-session. Auto-
