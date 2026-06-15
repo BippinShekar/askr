@@ -68,3 +68,6 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Checking if send_message() return value was being used as a bool in all callers before making changes — Unnecessary caution; Python allows tuple to be used in boolean context without error, so all existing callers remain safe
 - [2026-06-15] Checking if return value being a tuple breaks callers that use it as a bool — Determined to be a non-issue — Python doesn't care about unused return values, and the two callers that check the return value were already updated in previous edits
 - [2026-06-15] Assuming single global webhook URL works for all repos — User has legitimate need to separate private and official projects with different Discord webhooks
+- [2026-06-15] Inferring next_actions purely from git diff + transcript analysis — Reactive, not proactive. An autonomous session has no guarantee the inferred actions match user intent. Leads to token waste re-verifying the same work.
+- [2026-06-15] Relying on users to maintain explicit task queues per session — Adds friction, requires discipline, kills adoption. Only works for power users.
+- [2026-06-15] Roadmap-driven inference as the primary continuity mechanism — Assumes roadmaps are actively maintained. Most teams don't; the system becomes useless when roadmap goes stale.

@@ -1,117 +1,129 @@
 {
-  "task": "Implement per-project Discord webhook configuration to allow different repos to use different Discord servers for notifications",
-  "discussion_summary": "User needed per-repo webhook support to keep private and shared projects isolated across different Discord servers. Current implementation uses only global env vars. Built a three-stage solution: (1) add `askr_state/config.json` for per-project settings, (2) update `discord.py` to check project config before falling back to global env, (3) update `askr init` to prompt for and save project-specific webhook. This enables team workflows where private projects and shared projects can post to separate Discord channels without requiring separate global key management.",
+  "task": "Diagnose and fix the architectural gap where autonomous session handovers lack directive continuity \u2014 next_actions are inferred from transcript/git but don't drive actual work, making askr unsuitable for cross-team adoption.",
+  "discussion_summary": "The session exposed a critical flaw: handover.md generates next_actions by analyzing past work (transcript + git diff), but this is reactive inference, not proactive direction. An autonomous session reads it and has no guarantee the inferred actions align with what the user actually wants next. The team discussed three paths: (1) explicit per-session task queues (defeats adoption \u2014 users won't maintain them), (2) roadmap-driven inference (only works if roadmap is actively maintained, which most teams don't do), (3) a hybrid task queue system where any team member can append directives to another dev's queue, drained at session start. Option 3 emerged as the only path that scales without requiring user discipline, but it requires Phase 5 (approval gates) first to prevent privilege escalation.",
   "accomplishments": [
     {
-      "what": "Created `askr/state/config.py` with per-project config functions to read/write `askr_state/config.json`",
+      "what": "Identified root cause: next_actions are inferred post-hoc from git/transcript, not derived from explicit user intent",
       "done": true
     },
     {
-      "what": "Updated `askr/clients/discord.py` to resolve webhook from project config first, then fall back to global `ASKR_DISCORD_WEBHOOK` env var",
+      "what": "Mapped three potential solutions and rejected two (explicit queues, roadmap-only) as adoption blockers",
       "done": true
     },
     {
-      "what": "Updated `cmd_init` in `askr/cli/askr.py` to prompt user for project-specific Discord webhook and save it to project config",
+      "what": "Designed Phase 4-1 (task queue per developer) as the viable path forward",
       "done": true
     },
     {
-      "what": "Staged all three files for commit with git add (commit message incomplete in transcript)",
+      "what": "Restructured roadmap.md to move Phase 4 from 'Public Launch' to 'Team Scale' with concrete queue architecture",
       "done": true
     }
   ],
-  "in_progress": [
-    {
-      "file": "/Users/bippin/Desktop/askr/askr/state/config.py",
-      "what": "Per-project config module with load/save functions for `askr_state/config.json`",
-      "last_line": 58
-    },
-    {
-      "file": "/Users/bippin/Desktop/askr/askr/clients/discord.py",
-      "what": "Webhook resolution logic updated to check project config before global env var",
-      "last_line": 65
-    },
-    {
-      "file": "/Users/bippin/Desktop/askr/askr/cli/askr.py",
-      "what": "`cmd_init` updated to prompt for and save project webhook to config",
-      "last_line": 608
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Complete the git commit that was started \u2014 run `git commit -m \"feat: per-project discord webhook configuration\"` to finalize the three-stage implementation",
-      "why": "Changes are staged but commit message was cut off in transcript; need to complete the commit to lock in the feature"
+      "action": "Design and document the approval gate system (Phase 5) \u2014 define what permissions a queued task from another developer should inherit, and how to surface them for approval before session start",
+      "why": "Phase 4-1 (task queue) is unsafe without this; a developer could queue a dangerous operation under another dev's session context"
     },
     {
       "order": 2,
-      "action": "Test `askr init` in a fresh repo to verify it prompts for webhook and saves to `askr_state/config.json`",
-      "why": "Confirm the user-facing flow works end-to-end before shipping"
+      "action": "Implement Phase 4-0 (team directory structure) \u2014 refactor askr_state/ to use teams/<team>/members/<dev>/ layout and update reader/writer to resolve paths via team config",
+      "why": "Prerequisite for task queue and all concurrent team features; current flat layout breaks at scale"
     },
     {
       "order": 3,
-      "action": "Test webhook resolution by setting a project-specific webhook in one repo and global webhook in env, then verify Discord messages use the project one",
-      "why": "Validate the fallback logic works correctly and project config takes precedence"
+      "action": "Implement Phase 4-1 stage 1 \u2014 add `askr task queue <dev> \"...\"` CLI command that appends to tasks/queue.md with author + timestamp",
+      "why": "Enables cross-developer task assignment; unblocks the core adoption problem (directive continuity without user discipline)"
     },
     {
       "order": 4,
-      "action": "Update `CLAUDE.md` or docs to explain the per-project webhook feature and how to set it up",
-      "why": "Users need to understand they can now configure different webhooks per repo during `askr init`"
+      "action": "Update session_start.py to drain queue.md at session begin, inject queued tasks into LLM context before first prompt, archive drained tasks to queue_done.md",
+      "why": "Makes queued tasks actually drive the session; closes the loop between 'task assigned' and 'session executes it'"
     },
     {
       "order": 5,
-      "action": "Consider adding `askr config` CLI command to view/edit project config without re-running `askr init`",
-      "why": "Users may want to change webhook later without reinitializing the entire project state"
+      "action": "Stress-test Phase 4-1 with 2\u20133 developers queuing tasks to each other across 5+ sessions; verify no git conflicts, no lost tasks, correct execution order",
+      "why": "Validates the team-scale architecture before moving to Phase 4-2 (team CLI) and Phase 4-3 (concurrency)"
     }
   ],
   "decisions": [
     {
-      "decision": "Store per-project webhook in `askr_state/config.json` rather than `.env` file in project root",
-      "reason": "Keeps all project state in one directory (`askr_state/`), avoids polluting repo root, and maintains consistency with existing state structure"
+      "decision": "Rejected explicit per-session task queues as the primary solution",
+      "reason": "Requires users to manually maintain task lists per session \u2014 adds friction, kills adoption. Only viable as a fallback for power users."
     },
     {
-      "decision": "Check project config first, then fall back to global env var, rather than requiring one or the other",
-      "reason": "Allows gradual adoption \u2014 existing users with only global env var continue to work, new users can set per-project overrides"
+      "decision": "Rejected roadmap-only inference as sufficient",
+      "reason": "Most teams don't actively maintain roadmaps; relying on it means askr becomes useless the moment the roadmap goes stale."
     },
     {
-      "decision": "Prompt for webhook during `askr init` rather than in a separate `askr config` command",
-      "reason": "Captures the webhook at setup time when user is already configuring the project, reducing friction"
+      "decision": "Chose git-native append-only task queue (Phase 4-1) as the core solution",
+      "reason": "No new infrastructure, no server, no real-time connection required. Any team member can queue work. Audit trail built-in. Scales to team size without discipline."
+    },
+    {
+      "decision": "Moved Phase 4 from 'Public Launch' to 'Team Scale' in roadmap",
+      "reason": "Public launch is premature without team features. The product is not useful for cross-team adoption until task queues work. Team scale is the blocker."
     }
   ],
-  "user_rejected_decisions": [],
-  "failed_approaches": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Building Phase 3.12 (rejection tracking) would help solve the handover directive continuity problem",
+      "user_signal": "Brutally honest: 3.12 doesn't fix this problem at all. It's a separate concern.",
+      "domain": "architecture/roadmap prioritization",
+      "confidence": 0.95
+    }
+  ],
+  "failed_approaches": [
+    {
+      "approach": "Inferring next_actions purely from git diff + transcript analysis",
+      "reason": "Reactive, not proactive. An autonomous session has no guarantee the inferred actions match user intent. Leads to token waste re-verifying the same work."
+    },
+    {
+      "approach": "Relying on users to maintain explicit task queues per session",
+      "reason": "Adds friction, requires discipline, kills adoption. Only works for power users."
+    },
+    {
+      "approach": "Roadmap-driven inference as the primary continuity mechanism",
+      "reason": "Assumes roadmaps are actively maintained. Most teams don't; the system becomes useless when roadmap goes stale."
+    }
+  ],
   "files_in_play": [
-    "askr/state/config.py",
-    "askr/clients/discord.py",
-    "askr/cli/askr.py",
-    "requirements.txt"
+    "roadmap.md"
   ],
   "relational_files": [
     {
-      "file": "askr/state/__init__.py",
-      "relationship": "imports",
-      "why": "May need to export config functions for use elsewhere in the codebase"
-    },
-    {
-      "file": "askr_state/config.json",
+      "file": "askr/session/checkpoint.py",
       "relationship": "configures",
-      "why": "New file that stores per-project webhook and other settings; created by `askr init`"
+      "why": "Generates next_actions via LLM; needs to be updated to accept queued tasks as input"
     },
     {
-      "file": "askr/cli/commands/init.py",
-      "relationship": "imported_by",
-      "why": "If `cmd_init` is in a separate file, it will import the new config functions"
+      "file": "askr/session/session_start.py",
+      "relationship": "configures",
+      "why": "Entry point for sessions; must drain task queue and inject into context before first prompt"
+    },
+    {
+      "file": "askr/state/reader.py",
+      "relationship": "configures",
+      "why": "Must be updated to resolve team-scoped paths (Phase 4-0)"
+    },
+    {
+      "file": "askr/state/writer.py",
+      "relationship": "configures",
+      "why": "Must be updated to write to team-scoped paths and handle queue archival"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_state.md",
+    "askr_state/notifications.log",
     "roadmap.md",
     "stress-tests/"
   ],
-  "blockers": [],
+  "blockers": [
+    "Phase 5 (approval gates) must be designed before Phase 4-1 ships \u2014 task queues are unsafe without permission boundaries"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-05T14:33:00+00:00",
+    "timestamp": "2026-06-15T14:35:00.000000+00:00",
     "developer": "bippin"
   }
 }
