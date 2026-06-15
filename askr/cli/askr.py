@@ -650,11 +650,11 @@ def cmd_init():
             welcome = f"**[askr] {developer} is online** — `{repo_name}`"
             if brief:
                 welcome += f"\n\n**Repo brief:**\n{brief.strip()}"
-            sent = send_message(welcome)
+            sent, err = send_message(welcome)
             if sent and brief:
                 console.print("  [green]✓[/green] repo brief posted to Discord")
             elif not sent:
-                console.print("  [yellow]⚠ Discord send failed[/yellow] — check ASKR_DISCORD_WEBHOOK in ~/.config/askr/.env")
+                console.print(f"  [yellow]⚠ Discord send failed[/yellow] — {err}")
         except Exception as e:
             console.print(f"  [yellow]⚠ Discord error:[/yellow] {e}")
 
@@ -1162,7 +1162,7 @@ def cmd_report():
                 lines.extend(f"✓ {g}" for g in done_today)
             if open_goals:
                 lines.extend(f"- {g}" for g in open_goals[:4])
-            discord_ok = send_message("\n".join(lines))
+            discord_ok, _ = send_message("\n".join(lines))
 
     except Exception as e:
         console.print(f"  [yellow]Report image failed:[/yellow] {e}")

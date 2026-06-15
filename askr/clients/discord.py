@@ -11,15 +11,15 @@ env.load()
 _WEBHOOK_ENV = "ASKR_DISCORD_WEBHOOK"
 
 
-def send_message(text: str) -> bool:
+def send_message(text: str) -> tuple[bool, str]:
     """
     Post text to the configured Discord webhook.
-    Returns True on success, False if webhook not configured or request fails.
+    Returns (True, "") on success, (False, reason) on failure.
     Truncates to Discord's 2000-char message limit.
     """
     url = os.getenv(_WEBHOOK_ENV, "").strip()
     if not url:
-        return False
+        return False, "ASKR_DISCORD_WEBHOOK not set"
 
     payload = json.dumps({"content": text[:2000]}).encode()
     req = urllib.request.Request(
@@ -33,9 +33,13 @@ def send_message(text: str) -> bool:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return resp.status in (200, 204)
-    except (urllib.error.URLError, OSError):
-        return False
+            return resp.status in (200, 204), ""
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}: {e.reason}"
+    except urllib.error.URLError as e:
+        return False, f"URL error: {e.reason}"
+    except OSError as e:
+        return False, str(e)
 
 
 def send_file(file_path: str, caption: str = "") -> bool:
