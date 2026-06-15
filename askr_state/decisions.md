@@ -108,3 +108,6 @@ Format: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.
 [2026-06-15 14:30] [bippin] Apply certifi fix to both send_message and send_file methods in discord.py. Reason: Both methods use urllib and both can encounter SSL verification failures
 [2026-06-15 14:31] [bippin] Global keys in ~/.config/askr/.env are shared across all repos on a machine. Reason: Simplest initial design; setup happens once, not per-project
 [2026-06-15 14:31] [bippin] setup_keys() only runs when ~/.config/askr/.env doesn't exist. Reason: Avoid re-prompting on every askr init; keys are machine-level, not project-level
+[2026-06-15 14:34] [bippin] Store per-project webhook in `askr_state/config.json` rather than `.env` file in project root. Reason: Keeps all project state in one directory (`askr_state/`), avoids polluting repo root, and maintains consistency with existing state structure
+[2026-06-15 14:34] [bippin] Check project config first, then fall back to global env var, rather than requiring one or the other. Reason: Allows gradual adoption — existing users with only global env var continue to work, new users can set per-project overrides
+[2026-06-15 14:34] [bippin] Prompt for webhook during `askr init` rather than in a separate `askr config` command. Reason: Captures the webhook at setup time when user is already configuring the project, reducing friction

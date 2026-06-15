@@ -9,6 +9,12 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [14:33] Ran: git add askr/state/config.py askr/clients/discord.py askr/cli/askr.py && git com
+- [14:33] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:33] Modified: /Users/bippin/Desktop/askr/askr/clients/discord.py
+- [14:33] Modified: /Users/bippin/Desktop/askr/askr/clients/discord.py
+- [14:33] Modified: /Users/bippin/Desktop/askr/askr/clients/discord.py
+- [14:33] Modified: /Users/bippin/Desktop/askr/askr/state/config.py
 - [14:25] Ran: git add askr/clients/discord.py requirements.txt && git commit -m "fix: use cert
 - [14:25] Modified: /Users/bippin/Desktop/askr/requirements.txt
 - [14:25] Modified: /Users/bippin/Desktop/askr/askr/clients/discord.py
