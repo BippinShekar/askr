@@ -1,45 +1,50 @@
 # Handover: bippin
 
-Last updated: 2026-06-15 13:12
+Last updated: 2026-06-15 13:13
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fix Discord webhook configuration so local .env files are picked up during askr init, and ensure the brief is sent to Discord on first run.
+Fix Discord webhook initialization flow so `askr init` prompts for webhook URL when global config doesn't exist, instead of silently failing.
 
 ## Discussion
-The core issue was that `env.load()` returned early when `~/.config/askr/.env` existed, preventing local project `.env` files (containing `ASKR_DISCORD_WEBHOOK`) from being loaded. Additionally, `setup_keys()` bailed early if the global config existed, so it never prompted for the webhook. Two fixes were committed: (1) changed `load_dotenv()` to use `override=False` on local load so global keys win but local-only keys are still picked up, and (2) modified `cmd_init` to detect missing webhook and prompt the user to paste it, saving to `~/.config/askr/.env`. User's friend now sees the Discord send failure warning, indicating the webhook is missing and needs to be provided during init.
+The friend ran `askr init` but got a Discord send failure because the webhook wasn't in `~/.config/askr/.env`. Root cause: `setup_keys()` bails early if the global config file exists (even empty), and `askr init` doesn't read the repo's `.env` file. The fix was to make `cmd_init` detect a missing webhook and prompt the user to paste it, saving to the global config. User then questioned whether `askr init` should read from the repo's `.env` first — clarified that the env.py fix now loads global config first, then repo config, so the webhook can come from either source.
 
 ## Accomplishments
-- [x] Fixed env.py to load local .env with override=False, allowing local-only keys like ASKR_DISCORD_WEBHOOK to be picked up while global config takes precedence for shared keys
-- [x] Modified cmd_init in askr.py to detect missing ASKR_DISCORD_WEBHOOK and prompt user to paste the URL, saving it to ~/.config/askr/.env
-- [x] Committed and pushed both changes to git
+- [x] Modified askr.py cmd_init to detect missing Discord webhook and prompt user to add it during init
+- [x] Committed changes to env.py and askr.py with fixes for webhook detection and loading order
+- [x] Pushed changes so friend can pull and re-run askr init with proper webhook prompt
 
 ## Next Actions
-1. User's friend should run `git pull` to get the latest changes from the askr repo
-   *Why: The fixes for env loading and webhook prompt have been pushed and need to be in the friend's local copy*
-2. Friend should run `askr init` again in the project directory after pulling
-   *Why: The updated cmd_init will now detect the missing webhook and prompt for it, saving it to the global config so the brief can be sent to Discord*
-3. When prompted during askr init, friend should paste the Discord webhook URL from their server settings
-   *Why: This is the missing credential that was causing the 'Discord send failed' warning*
-4. Verify that the project brief is successfully posted to Discord after init completes
-   *Why: This confirms the webhook is working and the integration is complete*
+1. Friend pulls latest changes and runs `askr init` in project directory — should now be prompted for Discord webhook URL if not in global ~/.config/askr/.env
+   *Why: Validates the fix works end-to-end; webhook should be saved and next command should post brief to Discord*
+2. Verify Discord brief posts successfully after webhook is saved during init
+   *Why: Confirms the initialization flow is complete and webhook is being picked up correctly*
+3. Test that subsequent `askr` commands use the webhook without re-prompting
+   *Why: Ensures env.load() on import correctly reads the saved webhook from global config*
+4. Document the init flow in README: repo `.env` is read as fallback, but global `~/.config/askr/.env` takes precedence
+   *Why: Clarifies for users where webhook can be stored and which takes priority*
 
 ## Decisions
-- Use `override=False` on local .env load instead of skipping it entirely when global config exists — Allows local-only keys (like project-specific webhooks) to be picked up while still respecting global config precedence for shared keys
-- Prompt for webhook during askr init rather than requiring manual file editing — Improves user experience and ensures the webhook is saved to the correct location (~/.config/askr/.env) automatically
+- Global `~/.config/askr/.env` is loaded first, then repo `.env` as fallback — not the other way around — Allows user to override repo settings with personal config; prevents accidental commits of personal webhooks to git
+- `askr init` must prompt for webhook if not found in either location, rather than silently failing — Improves UX — user gets immediate feedback and can fix the issue in one step instead of debugging config files
+
+## User-Rejected Approaches
+- **Only read webhook from repo `.env` during `askr init`, not from global config** — "but he won't get the project brief for the repo to his discord right? ... shouldn't it take from the .env setup that exists in the repo already?" (domain: env.py, askr.py cmd_init)
 
 ## Failed Approaches
-- Expecting the webhook to be read from the project's local .env file during init — The early return in env.load() when global config exists prevented local .env from being loaded; also setup_keys() bailed early if global config existed, so it never prompted for the webhook
+- Relying on `setup_keys()` to handle webhook prompting during init — it bails early if global config exists — User never gets prompted if ~/.config/askr/.env already exists, even if webhook is missing or empty
+- Only reading repo `.env` during init without checking global config first — Doesn't allow personal webhook overrides and forces webhook to be committed to git
 
 ## Files In Play
-- `askr/utils/env.py`
 - `askr/cli/askr.py`
+- `askr/utils/env.py`
 
 ## Relational Files
-- `~/.config/askr/.env` (configures): Global configuration file where webhook and other credentials are stored; loaded by env.py on every import
-- `.env` (configures): Local project .env file that may contain project-specific credentials like ASKR_DISCORD_WEBHOOK
+- `~/.config/askr/.env` (configures): Global config file where webhook is saved after user prompts during init
+- `.env` (configures): Repo-level config that serves as fallback if global config doesn't have webhook
+- `roadmap.md` (imported_by): Uncommitted changes show Phase 4 restructuring — not directly related to this session but in working directory
 
 ## Uncommitted Files
 - `roadmap.md`
