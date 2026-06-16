@@ -518,6 +518,22 @@ def _install_gitattributes():
     return False
 
 
+def _register_team_member(developer: str):
+    """Add developer to askr_state/team.json roster. Creates file if missing."""
+    try:
+        team_path = state_path("team.json")
+        roster = {"members": []}
+        if os.path.exists(team_path):
+            with open(team_path) as f:
+                roster = json.load(f)
+        if developer not in roster.get("members", []):
+            roster.setdefault("members", []).append(developer)
+            with open(team_path, "w") as f:
+                json.dump(roster, f, indent=2)
+    except Exception:
+        pass
+
+
 def cmd_init():
     console.print()
     console.rule("[bold]askr init[/]", style="dim")
@@ -547,6 +563,9 @@ def cmd_init():
         from askr.cli.ask import setup_keys
         setup_keys()
         _env.load()
+
+    # Register developer in team roster
+    _register_team_member(developer)
 
     # Create session-specific files from templates
     created, skipped = _create_skeleton_files(developer)
