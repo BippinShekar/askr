@@ -91,3 +91,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-16] Investigated claude_session.pid writing in daemon and session_start hook — Tangential to goals refactor; session ended before this investigation yielded actionable findings
 - [2026-06-16] Assuming PID file alone is sufficient to track Claude process — File can become stale; added process scan as fallback to detect genuinely exited Claude
 - [2026-06-16] Assuming per-dev handover JSON isolation is sufficient for multi-session safety — Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) still have race conditions when multiple Claude sessions write simultaneously
+- [2026-06-16] Unknown — LLM handover unavailable, review transcript manually
