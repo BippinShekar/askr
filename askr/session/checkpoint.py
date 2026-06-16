@@ -366,6 +366,93 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
         pass
 
 
+def _infer_and_queue_tasks(transcript_text: str, state_dir: str, developer: str):
+    """
+    Scan transcript for natural task assignments ("lochan should handle X",
+    "let's have bippin do Y") and queue them automatically.
+    Reads team.json to know valid developer names to assign to.
+    No-op if transcript is empty, team.json missing, or Haiku call fails.
+    """
+    if not transcript_text or len(transcript_text) < 100:
+        return
+    try:
+        team_path = os.path.join(state_dir, "team.json")
+        if not os.path.exists(team_path):
+            return
+        with open(team_path) as f:
+            members = json.load(f).get("members", [])
+        if len(members) < 2:
+            return  # solo — nothing to assign
+
+        from askr.clients.claude import call_claude
+
+        members_str = ", ".join(members)
+        prompt = f"""You are reading a Claude Code session transcript. Your job is to find any natural task assignments in the conversation — where the user says someone should handle a task, or assigns work to a teammate by name.
+
+Known team members: {members_str}
+
+Look for patterns like:
+- "lochan takes care of X"
+- "let's have bippin do Y"
+- "assign Z to lochan"
+- "lochan should handle the auth flow"
+- "I'll do X, lochan does Y"
+
+Transcript (last 4000 chars):
+{transcript_text[-4000:]}
+
+Return a JSON array of assignments found. Each entry: {{"dev": "<member name>", "task": "<concise task description under 100 chars>"}}.
+Only include developers from the known team members list. If no assignments found, return [].
+Be conservative — only extract clear, explicit assignments, not vague mentions."""
+
+        raw = call_claude(
+            "You extract task assignments from session transcripts. Reply with valid JSON only.",
+            prompt,
+            mode="default",
+            query_preview="task assignment inference",
+        )
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+        assignments = json.loads(raw)
+        if not isinstance(assignments, list) or not assignments:
+            return
+
+        import uuid as _uuid
+        tasks_dir = os.path.join(state_dir, "tasks")
+        os.makedirs(tasks_dir, exist_ok=True)
+
+        queued = []
+        for a in assignments:
+            dev  = a.get("dev", "").strip()
+            task = a.get("task", "").strip()
+            if not dev or not task or dev not in members:
+                continue
+            entry = json.dumps({
+                "id":   _uuid.uuid4().hex[:8],
+                "desc": task[:120],
+                "from": developer,
+                "at":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "auto": True,
+            })
+            queue_path = os.path.join(tasks_dir, f"queue_{dev}.jsonl")
+            with open(queue_path, "a") as f:
+                f.write(entry + "\n")
+            queued.append((dev, task))
+
+        if queued:
+            import subprocess as _sp
+            _sp.run(["git", "add", tasks_dir], capture_output=True)
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            msg = f"askr: auto-queued {len(queued)} task(s) from session [{developer}] {ts}"
+            _sp.run(["git", "commit", "-m", msg], capture_output=True)
+            _sp.run(["git", "push", "--quiet"], capture_output=True, timeout=30)
+
+    except Exception:
+        pass
+
+
 def _parse_completed_goals_from_handover(handover, open_goals: list) -> list:
     """Extract completed goals from handover (dict or legacy str) and match against open goals."""
     if not handover or not open_goals:
@@ -556,6 +643,7 @@ def create_checkpoint(
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
     _regenerate_architecture_md(os.getcwd(), state_dir)
+    _infer_and_queue_tasks(transcript_text, state_dir, developer)
 
     completed_goals = []
     try:
