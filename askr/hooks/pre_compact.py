@@ -21,21 +21,31 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
 
-_CLAUDE_PID_PATH    = os.path.expanduser("~/.config/askr/claude_session.pid")
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 
-def _read_claude_pid():
-    """Return Claude's PID from the tracked file, or fall back to pgrep by cwd."""
+def _quota_pct() -> float | None:
+    """Read quota from any recent stats file for this project (quota is per-account)."""
     try:
-        with open(_CLAUDE_PID_PATH) as f:
-            pid = int(f.read().strip())
-        os.kill(pid, 0)
-        return pid
+        from askr.session.monitor import find_project_root, find_project_stats_files
+        project_path = find_project_root()
+        for path in sorted(find_project_stats_files(project_path), key=os.path.getmtime, reverse=True):
+            try:
+                with open(path) as f:
+                    quota = json.load(f).get("quota_pct")
+                if quota is not None:
+                    return quota
+            except Exception:
+                continue
     except Exception:
         pass
-    # PID file missing or stale — search by project cwd (handles manually-opened sessions)
+    return None
+
+
+def _find_all_pids() -> list[int]:
+    """Return all live Claude PIDs for this project."""
+    pids = []
     try:
         import subprocess
         result = subprocess.run(
@@ -52,22 +62,13 @@ def _read_claude_pid():
                 )
                 for line in lsof.stdout.splitlines():
                     if line.startswith("n") and line[1:] == project_path:
-                        return pid
+                        pids.append(pid)
+                        break
             except Exception:
                 continue
     except Exception:
         pass
-    return None
-
-
-def _quota_pct() -> float | None:
-    try:
-        from askr.session.monitor import stats_path_for_project, find_project_root
-        stats_path = stats_path_for_project(find_project_root())
-        with open(stats_path) as f:
-            return json.load(f).get("quota_pct")
-    except Exception:
-        return None
+    return pids
 
 
 def main():
@@ -88,9 +89,10 @@ def main():
         transcript_path=payload.get("transcript_path", ""),
     )
 
-    pid = _read_claude_pid()
-    if not pid:
-        # No tracked PID — can't kill, at least state is saved
+    # Kill ALL Claude sessions for this project — if one hit context overflow,
+    # both need to stop and checkpoint so the daemon opens a single clean session.
+    pids = _find_all_pids()
+    if not pids:
         print(json.dumps({
             "custom_instructions": "Askr has checkpointed state to git. A new session will resume from the handover."
         }))
@@ -110,10 +112,11 @@ def main():
         with open(_CHECKPOINT_PENDING, "w") as f:
             json.dump(pending, f)
 
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
 
 
 if __name__ == "__main__":

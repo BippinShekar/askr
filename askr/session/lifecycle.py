@@ -378,9 +378,9 @@ def _start_claude(project_path: str, initial_prompt: str = "") -> bool:
         return False
 
     # Refuse to open a new session if Claude is already running for this project
-    existing = _find_claude_pid_by_project(project_path)
+    existing = _find_all_claude_pids_by_project(project_path)
     if existing:
-        _log(f"Claude pid {existing} already running for {project_path} — skipping launch to prevent double-session")
+        _log(f"Claude pid(s) {existing} already running for {project_path} — skipping launch to prevent double-session")
         return False
 
     claude_bin = shutil.which("claude") or "claude"
@@ -978,9 +978,9 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     # Stop hook didn't run — do it ourselves, but only if Claude is actually dead.
     # If the kill failed (PID mismatch, timing), the original session is still alive.
     # Opening a new session alongside it causes dual-session chaos.
-    still_alive = _read_claude_pid() or _find_claude_pid_by_project(project_path)
+    still_alive = _find_all_claude_pids_by_project(project_path)
     if still_alive:
-        _log(f"Claude pid {still_alive} still running after kill attempt — skipping fallback launch to prevent double-session")
+        _log(f"Claude pid(s) {still_alive} still running after kill attempt — skipping fallback launch to prevent double-session")
         _clear_checkpoint_pending()
         return
 
@@ -1047,19 +1047,16 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
 
         # If Claude is not traceable via PID file OR by scanning processes,
         # it genuinely exited — nothing to kill.
-        if _read_claude_pid() is None and _find_claude_pid_by_project(project_path) is None:
+        if not _find_all_claude_pids_by_project(project_path):
             _log("claude process not found during exchange wait — skipping kill")
             return False
 
-        # Hard override: if context is within striking distance of auto-compact,
-        # kill immediately regardless of exchange state. Active human conversation
-        # can continue in the new session via handover; losing in-progress output
-        # is better than letting auto-compact destroy the session silently.
+        # Hard override: if ANY session for this project is within striking distance
+        # of auto-compact, kill immediately. Reads MAX across all per-session stats
+        # files so a high-context session is never masked by an idle low-context one.
         try:
-            from askr.session.monitor import stats_path_for_project
-            stats_path = stats_path_for_project(project_path)
-            with open(stats_path) as _sf:
-                current_ctx = json.load(_sf).get("context_pct", 0)
+            from askr.session.monitor import get_max_context_for_project
+            current_ctx = get_max_context_for_project(project_path)
             if current_ctx >= 0.80:
                 _log(f"context at {current_ctx:.1%} — compaction imminent, killing now without waiting for idle")
                 _pre_kill_update_tools(project_path)

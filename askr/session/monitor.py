@@ -30,9 +30,56 @@ def find_project_root(start_dir: str = None) -> str:
 
 
 def stats_path_for_project(project_path: str) -> str:
-    """Per-project stats file — isolates concurrent sessions from overwriting each other."""
+    """Legacy per-project stats file. Used as 0% baseline by session_start reset."""
     hash_ = project_path.replace("/", "-").lstrip("-")
     return os.path.join(_STATS_DIR, hash_ + ".json")
+
+
+def stats_path_for_session(project_path: str, session_id: str) -> str:
+    """Per-session stats file — two concurrent sessions in the same repo each own their file."""
+    hash_ = project_path.replace("/", "-").lstrip("-")
+    return os.path.join(_STATS_DIR, f"{hash_}_{session_id}.json")
+
+
+def find_project_stats_files(project_path: str) -> list[str]:
+    """
+    Return all stats files (legacy or per-session) that belong to this project.
+    Uses exact prefix + separator check to avoid matching sibling projects
+    (e.g. 'askr' must not match 'askr-v2').
+    """
+    hash_ = project_path.replace("/", "-").lstrip("-")
+    result = []
+    try:
+        for f in os.listdir(_STATS_DIR):
+            if not f.endswith(".json"):
+                continue
+            if f == f"{hash_}.json" or f.startswith(f"{hash_}_"):
+                result.append(os.path.join(_STATS_DIR, f))
+    except Exception:
+        pass
+    return result
+
+
+def get_max_context_for_project(project_path: str) -> float:
+    """
+    Return the highest context_pct across all active session stats files for
+    this project. Used by the daemon kill loop to detect when ANY session is
+    close to auto-compact, not just the one that last wrote the shared file.
+    """
+    import time as _time
+    max_ctx = 0.0
+    now = _time.time()
+    for path in find_project_stats_files(project_path):
+        try:
+            if now - os.path.getmtime(path) > 600:  # SESSION_STALE_SECS
+                continue
+            with open(path) as f:
+                ctx = json.load(f).get("context_pct", 0.0)
+            if ctx > max_ctx:
+                max_ctx = ctx
+        except Exception:
+            continue
+    return max_ctx
 
 
 _MODEL_CONTEXT_WINDOWS = {

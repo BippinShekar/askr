@@ -54,7 +54,7 @@ def _quota_needs_refresh(existing: dict) -> bool:
 
 def _write_session_stats():
     try:
-        from askr.session.monitor import get_session_stats, stats_path_for_project, find_project_root
+        from askr.session.monitor import get_session_stats, stats_path_for_session, find_project_root
         from askr.session.forecast import get_forecast
 
         project_path = find_project_root()
@@ -63,7 +63,7 @@ def _write_session_stats():
             return
 
         forecast  = get_forecast(stats)
-        stats_path = stats_path_for_project(project_path)
+        stats_path = stats_path_for_session(project_path, stats.session_id)
         os.makedirs(os.path.dirname(stats_path), exist_ok=True)
 
         # Carry over quota cache from per-project file (not the legacy global)

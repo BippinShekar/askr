@@ -45,8 +45,18 @@ HOOK_TIMEOUTS = {
 }
 
 def _stats_path() -> str:
-    from askr.session.monitor import stats_path_for_project, find_project_root
-    return stats_path_for_project(find_project_root())
+    """
+    Return the most-recently-modified stats file for the current project.
+    With per-session stats files each session owns its own file; the most
+    recent one belongs to whichever session fired PostToolUse last — which
+    is the session the user is actively working in.
+    """
+    from askr.session.monitor import find_project_root, find_project_stats_files, stats_path_for_project
+    project_path = find_project_root()
+    candidates = find_project_stats_files(project_path)
+    if candidates:
+        return max(candidates, key=os.path.getmtime)
+    return stats_path_for_project(project_path)  # fallback if nothing exists yet
 
 
 def _python_cmd() -> str:
