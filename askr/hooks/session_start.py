@@ -111,37 +111,43 @@ def _maybe_suggest_goals(developer: str) -> list[str]:
         return []
 
 
-def _drain_task_queue(developer: str) -> list[str]:
+def _drain_task_queue(developer: str) -> list[dict]:
     """
-    Read pending tasks from askr_state/tasks/queue_<developer>.md.
-    Move them to the done archive, clear the queue, return task strings.
-    Never blocks session start — all errors are swallowed.
+    Read pending tasks from askr_state/tasks/queue_<developer>.jsonl.
+    Archive to done_<developer>.jsonl, clear the queue.
+    Returns list of task dicts. Never blocks session start.
     """
     try:
+        import json as _json
         from askr.state.config import get_state_dir
         tasks_dir  = os.path.join(get_state_dir(), "tasks")
-        queue_path = os.path.join(tasks_dir, f"queue_{developer}.md")
-        done_path  = os.path.join(tasks_dir, f"done_{developer}.md")
+        queue_path = os.path.join(tasks_dir, f"queue_{developer}.jsonl")
+        done_path  = os.path.join(tasks_dir, f"done_{developer}.jsonl")
 
         if not os.path.exists(queue_path):
             return []
 
+        tasks = []
         with open(queue_path) as f:
-            lines = f.readlines()
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        tasks.append(_json.loads(line))
+                    except Exception:
+                        pass
 
-        tasks = [l.rstrip() for l in lines if l.strip() and not l.startswith("#")]
         if not tasks:
             return []
 
-        drain_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        drain_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         with open(done_path, "a") as f:
             for t in tasks:
-                f.write(f"[DONE {drain_ts}] {t}\n")
+                t["drained_at"] = drain_ts
+                f.write(_json.dumps(t) + "\n")
 
-        # Clear queue (keep header only)
-        with open(queue_path, "w") as f:
-            f.write(f"# Task queue: {developer}\n\n")
-
+        # Clear queue
+        open(queue_path, "w").close()
         return tasks
     except Exception:
         return []
@@ -231,7 +237,7 @@ def main():
         )
 
     if queued_tasks:
-        task_list = "\n".join(f"- {t}" for t in queued_tasks)
+        task_list = "\n".join(f"- [{t.get('from','?')}] {t['desc']}" for t in queued_tasks)
         parts.append(
             f"## Tasks Queued by Your Team\n\n"
             f"Your teammates queued {len(queued_tasks)} task(s) for this session. "

@@ -349,14 +349,13 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
                 f.write(content)
             created.append(target)
 
-    # Per-developer task queue — created fresh for each developer
+    # Per-developer task queue (JSONL — one task per line, union-merge safe)
     tasks_dir = state_path("tasks")
     os.makedirs(tasks_dir, exist_ok=True)
-    queue_path = os.path.join(tasks_dir, f"queue_{developer}.md")
+    queue_path = os.path.join(tasks_dir, f"queue_{developer}.jsonl")
     if not os.path.exists(queue_path):
-        with open(queue_path, "w") as f:
-            f.write(f"# Task queue: {developer}\n\n")
-        created.append(f"tasks/queue_{developer}.md")
+        open(queue_path, "w").close()  # empty file — ready to append
+        created.append(f"tasks/queue_{developer}.jsonl")
 
     return created, skipped
 
@@ -1177,12 +1176,72 @@ def cmd_uninstall():
     console.print("  [green]done[/green] — askr fully removed\n")
 
 
+def _load_pending_tasks(dev: str) -> list:
+    """Read pending tasks from queue_<dev>.jsonl. Returns list of task dicts."""
+    path = os.path.join(get_state_dir(), "tasks", f"queue_{dev}.jsonl")
+    if not os.path.exists(path):
+        return []
+    tasks = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    tasks.append(json.loads(line))
+                except Exception:
+                    pass
+    return tasks
+
+
+def _queue_task_for(target_dev: str, description: str, from_dev: str, push: bool = True):
+    """Append a task to target_dev's JSONL queue and optionally commit+push."""
+    import subprocess as _sp
+    import uuid as _uuid
+
+    state_dir  = get_state_dir()
+    tasks_dir  = os.path.join(state_dir, "tasks")
+    os.makedirs(tasks_dir, exist_ok=True)
+    queue_path = os.path.join(tasks_dir, f"queue_{target_dev}.jsonl")
+
+    entry = json.dumps({
+        "id":   _uuid.uuid4().hex[:8],
+        "desc": description.strip(),
+        "from": from_dev,
+        "at":   datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+    with open(queue_path, "a") as f:
+        f.write(entry + "\n")
+
+    if not push:
+        return True
+
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _sp.run(["git", "add", queue_path], capture_output=True)
+        _sp.run(
+            ["git", "commit", "-m", f"askr: task queued for {target_dev} [{from_dev}] {ts}"],
+            capture_output=True,
+        )
+        result = _sp.run(["git", "push", "--quiet"], capture_output=True, timeout=30)
+        if result.returncode == 0:
+            console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
+            console.print(f"  [dim]pushed — {target_dev} will receive it at next session start[/dim]\n")
+        else:
+            console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
+            console.print(f"  [yellow]⚠ push failed — run git push manually[/yellow]\n")
+        return True
+    except Exception as e:
+        console.print(f"\n  [yellow]⚠ commit/push failed: {e}[/yellow]\n")
+        return False
+
+
 def cmd_task(args: list):
     """
     askr task queue <dev> "description"  — add a task to a developer's queue
     askr task list [<dev>]               — show pending tasks for a developer
     """
     import subprocess as _sp
+    import uuid as _uuid
 
     sub = args[0] if args else ""
 
@@ -1192,60 +1251,19 @@ def cmd_task(args: list):
             return
         target_dev  = args[1]
         description = " ".join(args[2:])
-        developer   = load_developer()
-        state_dir   = get_state_dir()
-        tasks_dir   = os.path.join(state_dir, "tasks")
-        os.makedirs(tasks_dir, exist_ok=True)
-        queue_path  = os.path.join(tasks_dir, f"queue_{target_dev}.md")
-
-        ts   = datetime.now().strftime("%Y-%m-%d %H:%M")
-        line = f"[{ts}] [{developer}] {description}\n"
-
-        # Create queue file with header if new
-        if not os.path.exists(queue_path):
-            with open(queue_path, "w") as f:
-                f.write(f"# Task queue: {target_dev}\n\n")
-
-        with open(queue_path, "a") as f:
-            f.write(line)
-
-        # Commit + push immediately so target dev gets it on next git pull
-        try:
-            _sp.run(["git", "add", queue_path], capture_output=True, cwd=os.getcwd())
-            _sp.run(
-                ["git", "commit", "-m", f"askr: task queued for {target_dev} [{developer}] {ts}"],
-                capture_output=True, cwd=os.getcwd(),
-            )
-            push = _sp.run(["git", "push", "--quiet"], capture_output=True, timeout=30, cwd=os.getcwd())
-            if push.returncode == 0:
-                console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
-                console.print(f"  [dim]pushed — {target_dev} will receive it at next session start[/dim]\n")
-            else:
-                console.print(f"\n  [green]✓[/green] queued for [bold]{target_dev}[/bold]: {description}")
-                console.print(f"  [yellow]⚠ push failed — run git push manually[/yellow]\n")
-        except Exception as e:
-            console.print(f"\n  [yellow]⚠ commit/push failed: {e}[/yellow]")
-            console.print(f"  [dim]task written locally — commit and push askr_state/tasks/ manually[/dim]\n")
+        _queue_task_for(target_dev, description, from_dev=load_developer())
 
     elif sub == "list":
         target_dev = args[1] if len(args) > 1 else load_developer()
-        state_dir  = get_state_dir()
-        queue_path = os.path.join(state_dir, "tasks", f"queue_{target_dev}.md")
+        tasks = _load_pending_tasks(target_dev)
 
-        if not os.path.exists(queue_path):
-            console.print(f"\n  [dim]no queue for {target_dev}[/dim]\n")
-            return
-
-        with open(queue_path) as f:
-            lines = [l.rstrip() for l in f if l.strip() and not l.startswith("#")]
-
-        if not lines:
+        if not tasks:
             console.print(f"\n  [dim]{target_dev}: no pending tasks[/dim]\n")
             return
 
-        console.print(f"\n  [bold]{target_dev}[/bold] — {len(lines)} pending task(s):\n")
-        for line in lines:
-            console.print(f"  • {line}")
+        console.print(f"\n  [bold]{target_dev}[/bold] — {len(tasks)} pending task(s):\n")
+        for t in tasks:
+            console.print(f"  • [{t.get('from','?')}] {t['desc']}")
         console.print()
 
     else:

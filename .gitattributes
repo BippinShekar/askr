@@ -4,4 +4,4 @@ askr_state/decisions.md       merge=union
 askr_state/goals.md           merge=union
 askr_state/failed_approaches.md merge=union
 askr_state/notifications.log  merge=union
-askr_state/tasks/queue_*.md   merge=union
+askr_state/tasks/queue_*.jsonl merge=union
