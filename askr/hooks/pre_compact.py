@@ -43,16 +43,38 @@ def _quota_pct() -> float | None:
     return None
 
 
-def _find_all_pids() -> list[int]:
-    """Return all live Claude PIDs for this project."""
-    pids = []
+def _find_session_pid(transcript_path: str) -> int | None:
+    """
+    Find the PID of the Claude process that owns this specific session transcript.
+    Uses lsof to find which process has the JSONL file open — this is precise
+    and correct for multi-session scenarios because each session has a unique file.
+    Falls back to pgrep+cwd match if lsof returns nothing (e.g. file not yet flushed).
+    """
+    import subprocess
+    # Primary: find by open file handle — exact match for this session
+    if transcript_path and os.path.exists(transcript_path):
+        try:
+            result = subprocess.run(
+                ["lsof", "-t", transcript_path],
+                capture_output=True, text=True, timeout=5,
+            )
+            for pid_str in result.stdout.strip().splitlines():
+                try:
+                    pid = int(pid_str)
+                    os.kill(pid, 0)
+                    return pid
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    # Fallback: first Claude process whose cwd matches this project
     try:
-        import subprocess
+        project_path = os.getcwd()
         result = subprocess.run(
             ["pgrep", "-x", "claude"],
             capture_output=True, text=True, timeout=5,
         )
-        project_path = os.getcwd()
         for pid_str in result.stdout.strip().splitlines():
             try:
                 pid = int(pid_str)
@@ -62,13 +84,12 @@ def _find_all_pids() -> list[int]:
                 )
                 for line in lsof.stdout.splitlines():
                     if line.startswith("n") and line[1:] == project_path:
-                        pids.append(pid)
-                        break
+                        return pid
             except Exception:
                 continue
     except Exception:
         pass
-    return pids
+    return None
 
 
 def main():
@@ -81,18 +102,19 @@ def main():
         return
 
     developer = load_developer()
+    transcript_path = payload.get("transcript_path", "")
 
     from askr.session.checkpoint import create_checkpoint
     create_checkpoint(
         trigger_type="emergency",
         developer=developer,
-        transcript_path=payload.get("transcript_path", ""),
+        transcript_path=transcript_path,
     )
 
-    # Kill ALL Claude sessions for this project — if one hit context overflow,
-    # both need to stop and checkpoint so the daemon opens a single clean session.
-    pids = _find_all_pids()
-    if not pids:
+    # Kill only THIS session — PreCompact fires inside one session; other sessions
+    # each have their own PreCompact hook and handle themselves independently.
+    pid = _find_session_pid(transcript_path)
+    if not pid:
         print(json.dumps({
             "custom_instructions": "Askr has checkpointed state to git. A new session will resume from the handover."
         }))
@@ -112,11 +134,10 @@ def main():
         with open(_CHECKPOINT_PENDING, "w") as f:
             json.dump(pending, f)
 
-    for pid in pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
 
 
 if __name__ == "__main__":
