@@ -314,6 +314,38 @@ def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     return pids
 
 
+def _clear_stats_for_pids(pids: list, project_path: str):
+    """
+    Delete per-session stats files for all PIDs about to be killed.
+    Prevents the daemon from re-triggering on a dead session's stale high ctx%
+    after the cooldown expires (cooldown=300s < stale window=600s).
+    """
+    try:
+        from askr.session.monitor import stats_path_for_session
+        claude_projects_dir = os.path.expanduser("~/.claude/projects")
+        for pid in pids:
+            try:
+                result = subprocess.run(
+                    ["lsof", "-a", "-p", str(pid), "-F", "n"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                for line in result.stdout.splitlines():
+                    if not line.startswith("n"):
+                        continue
+                    path = line[1:]
+                    if claude_projects_dir in path and path.endswith(".jsonl"):
+                        session_id = os.path.basename(path).replace(".jsonl", "")
+                        sp = stats_path_for_session(project_path, session_id)
+                        if os.path.exists(sp):
+                            os.remove(sp)
+                            _log(f"cleared stats for session {session_id[:8]} (pid {pid})")
+                        break
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
 def _kill_claude(project_path: str = ""):
     """Kill ALL claude sessions in this project directory."""
     pids = _find_all_claude_pids_by_project(project_path) if project_path else []
@@ -327,6 +359,11 @@ def _kill_claude(project_path: str = ""):
     if not pids:
         _log("no tracked claude PIDs to kill — skipping")
         return
+
+    # Delete stats files before killing — prevents stale high-ctx% from
+    # re-triggering the daemon after the cooldown expires.
+    if project_path:
+        _clear_stats_for_pids(pids, project_path)
 
     _log(f"killing {len(pids)} claude session(s): {pids}")
     for pid in pids:

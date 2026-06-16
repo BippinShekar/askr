@@ -134,6 +134,18 @@ def main():
         with open(_CHECKPOINT_PENDING, "w") as f:
             json.dump(pending, f)
 
+    # Delete own stats file before dying — prevents the daemon from re-triggering
+    # on a dead session's stale high ctx% after the cooldown expires.
+    if transcript_path:
+        try:
+            from askr.session.monitor import stats_path_for_session, find_project_root
+            session_id = os.path.basename(transcript_path).replace(".jsonl", "")
+            sp = stats_path_for_session(find_project_root(), session_id)
+            if os.path.exists(sp):
+                os.remove(sp)
+        except Exception:
+            pass
+
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
