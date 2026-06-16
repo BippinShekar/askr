@@ -15,3 +15,4 @@ __pycache__/
 # generated per-session — regenerated locally, never synced via git to avoid conflicts
 askr_state/architecture.md
 askr_state/project_brief.md
+askr_state/current_task_*.md

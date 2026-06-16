@@ -138,15 +138,6 @@ def load_architecture() -> str:
     return _read(state_path("architecture.md"))
 
 
-def load_current_tasks() -> str:
-    parts = []
-    for path in sorted(glob.glob(state_path("current_task_*.md"))):
-        content = _read(path)
-        if content:
-            parts.append(content)
-    return "\n\n".join(parts)
-
-
 def load_blockers() -> str:
     return _read(state_path("blockers.md"))
 
@@ -158,7 +149,6 @@ def build_context_injection(developer: str = None) -> str:
     team_handovers = load_team_handovers(dev)
     decisions = load_decisions()
     architecture = load_architecture()
-    current_tasks = load_current_tasks()
     blockers = load_blockers()
 
     sections = []
@@ -167,8 +157,6 @@ def build_context_injection(developer: str = None) -> str:
         sections.append(f"YOUR LAST SESSION HANDOVER:\n{own_handover}")
     if team_handovers:
         sections.append(f"TEAM HANDOVERS:\n{team_handovers}")
-    if current_tasks:
-        sections.append(f"CURRENT TASKS:\n{current_tasks}")
     if decisions:
         sections.append(f"RECENT DECISIONS:\n{decisions}")
     if architecture:

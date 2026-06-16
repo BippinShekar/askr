@@ -321,11 +321,10 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
     # architecture.md and implementation_state.md get generated from the codebase
     # only fall back to template if generation fails
     template_only_files = {
-        f"handover_{developer}.md":     "handover_template.md",
-        f"current_task_{developer}.md": "current_task_template.md",
-        "decisions.md":                 "decisions_template.md",
-        "blockers.md":                  "blockers_template.md",
-        "goals.md":                     "goals_template.md",
+        f"handover_{developer}.md": "handover_template.md",
+        "decisions.md":             "decisions_template.md",
+        "blockers.md":              "blockers_template.md",
+        "goals.md":                 "goals_template.md",
     }
 
     created = []
