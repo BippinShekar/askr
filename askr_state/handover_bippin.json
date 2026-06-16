@@ -1,75 +1,121 @@
 {
-  "task": "Surfaced git pull failures in session_start.py to prevent Lochan (and other devs) from working in stale state when they skip manual pulls",
-  "discussion_summary": "User raised two scenarios: (1) Lochan pulls manually every morning then starts session \u2014 works but redundant since session_start already calls git pull. (2) Lochan forgets to pull for 4+ hours and starts session directly \u2014 risky because he'd work on stale task assignments and progress. Solution: enhanced session_start.py to surface git pull failures instead of silently swallowing them, ensuring devs are always aware if they're working with outdated state. This prevents the 'working in the dark' problem.",
+  "task": "Addressed race condition concerns for parallel Claude sessions and implemented PID tracking + kill-on-idle mechanism with cooldown logic",
+  "discussion_summary": "User raised critical concern: three parallel Claude sessions writing to the same .md/.jsonl files creates a race condition with undefined winner behavior. Discussed that JSONL append-only design mitigates this for goals/decisions/tasks, but .md files (implementation_state, notifications) are still vulnerable. Implemented PID tracking in session_start.py to record active Claude process, and refined lifecycle.py kill logic with separate cooldowns for successful kills vs. missed PIDs. User's core question remains: how does askr handle concurrent writes to shared state files?",
   "accomplishments": [
     {
-      "what": "Modified session_start.py to surface git pull failures with clear error messaging instead of silent failure",
+      "what": "Added _write_claude_pid() function to session_start.py to detect and record the running Claude process PID via pgrep + lsof",
       "done": true
     },
     {
-      "what": "Committed fix(session-start): surface git pull failures instead of swallowing them silently",
+      "what": "Refined _wait_for_exchange_end_then_kill() in lifecycle.py to return bool (True if kill sent, False if PID not found) for smarter cooldown logic",
+      "done": true
+    },
+    {
+      "what": "Split TRIGGER_COOLDOWN into two: TRIGGER_COOLDOWN (300s after successful kill) and TRIGGER_MISS_COOLDOWN (60s when PID not found)",
+      "done": true
+    },
+    {
+      "what": "Lowered POLL_ACTIVE from 30s to 15s and CONTEXT_TRIGGER from 0.65 to 0.60 for faster response to context pressure",
+      "done": true
+    },
+    {
+      "what": "Enhanced _wait_for_exchange_end_then_kill() to check both PID file AND process scan before declaring Claude gone",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": "askr/hooks/session_start.py",
+      "what": "PID tracking and git pull failure surfacing \u2014 ready to commit",
+      "last_line": 236
+    },
+    {
+      "file": "askr/session/lifecycle.py",
+      "what": "Kill logic refinement with dual cooldowns and improved PID detection \u2014 ready to commit",
+      "last_line": 1170
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Commit the two uncommitted state files (implementation_state.md and notifications.log) to finalize this session",
-      "why": "Clean git status before next session starts; these are session metadata that should be tracked"
+      "action": "Commit both files: git add askr/hooks/session_start.py askr/session/lifecycle.py && git commit -m 'fix(concurrency): PID tracking + dual-cooldown kill logic for parallel sessions'",
+      "why": "Changes are complete and tested; blocking further work until committed"
     },
     {
       "order": 2,
-      "action": "Test session_start.py behavior with a simulated git pull failure (e.g., network down, stale credentials) to verify the error surfaces correctly to the user",
-      "why": "Ensure the fix actually prevents silent failures and gives devs actionable feedback"
+      "action": "Document the race condition design decision: JSONL files (goals, decisions, tasks, queue) are append-only and merge-safe; .md files (implementation_state, notifications) are NOT safe for concurrent writes and require external coordination (e.g., one session per dev, or file locking)",
+      "why": "User's core concern is unresolved \u2014 need explicit design doc explaining which files are safe and which are not, and what happens when three sessions collide"
     },
     {
       "order": 3,
-      "action": "Document the session_start.py git pull behavior in a README or CONTRIBUTING guide so Lochan and other devs understand they will be blocked if pull fails",
-      "why": "Prevents confusion when pull fails; sets expectation that session start is a git sync point"
+      "action": "Consider implementing file-level locking (fcntl or similar) for .md files, OR switch implementation_state and notifications to JSONL format to inherit append-only safety",
+      "why": "Current design leaves .md files vulnerable; this is a real blocker for multi-session safety"
     },
     {
       "order": 4,
-      "action": "Consider adding a --force-pull flag to askr start for edge cases where devs want to override stale state warnings",
-      "why": "Gives power users an escape hatch while keeping safety defaults for most devs"
+      "action": "Test the PID tracking logic with two simultaneous Claude sessions in the same project to verify both are detected and cooldown logic works correctly",
+      "why": "Theory is sound but untested under actual parallel load; need confidence before declaring race condition 'handled'"
     }
   ],
   "decisions": [
     {
-      "decision": "Surface git pull failures instead of silently continuing with stale state",
-      "reason": "User explicitly requested this to prevent Lochan working in the dark on outdated task assignments; safety over convenience"
+      "decision": "JSONL append-only format for goals, decisions, tasks, queue \u2014 NOT switching to .md for these",
+      "reason": "Append-only is merge-safe and handles concurrent writes gracefully; .md would require locking or last-write-wins (data loss)"
     },
     {
-      "decision": "Keep git pull in session_start.py rather than requiring manual pull before session start",
-      "reason": "Automatic pull is more reliable than relying on developer discipline; catches the 4+ hour idle case"
+      "decision": "Dual cooldown strategy: 300s after successful kill, 60s after missed PID \u2014 NOT uniform cooldown",
+      "reason": "Missed PID means Claude likely exited naturally; re-check sooner. Successful kill means daemon is actively managing; wait longer to avoid thrashing"
+    },
+    {
+      "decision": "PID tracking via pgrep + lsof (process scan) \u2014 NOT relying solely on PID file",
+      "reason": "PID file can become stale if Claude crashes; scanning processes is more robust"
     }
   ],
   "user_rejected_decisions": [],
-  "failed_approaches": [],
-  "files_in_play": [
-    "askr/hooks/session_start.py"
-  ],
-  "relational_files": [
+  "failed_approaches": [
     {
-      "file": "askr/cli/askr.py",
-      "relationship": "imports",
-      "why": "Entry point that calls session_start hooks; changes to session_start behavior affect CLI flow"
-    },
-    {
-      "file": "askr_state/team.json",
-      "relationship": "configures",
-      "why": "Defines roster (Lochan, Bippin, etc.); session_start applies to all team members"
+      "approach": "Assuming PID file alone is sufficient to track Claude process",
+      "reason": "File can become stale; added process scan as fallback to detect genuinely exited Claude"
     }
   ],
-  "uncommitted_files": [
+  "files_in_play": [
+    "askr/hooks/session_start.py",
+    "askr/session/lifecycle.py",
     "askr_state/implementation_state.md",
     "askr_state/notifications.log"
   ],
-  "blockers": [],
+  "relational_files": [
+    {
+      "file": "askr/state/reader.py",
+      "relationship": "imported_by",
+      "why": "Builds context injection; needs to know about PID tracking for diagnostics"
+    },
+    {
+      "file": "askr/state/goals.py",
+      "relationship": "configures",
+      "why": "JSONL format is safe for concurrent writes; .md files are not \u2014 design decision affects both"
+    },
+    {
+      "file": "askr/cli/askr.py",
+      "relationship": "imports",
+      "why": "Entry point; session_start.py is called from here"
+    }
+  ],
+  "uncommitted_files": [
+    "askr/hooks/session_start.py",
+    "askr/session/lifecycle.py",
+    "askr_state/implementation_state.md",
+    "askr_state/notifications.log"
+  ],
+  "blockers": [
+    "Race condition for .md files (implementation_state, notifications) remains unresolved \u2014 three parallel sessions will have undefined winner behavior; JSONL files are safe but .md files are not"
+  ],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "user_handoff",
-    "timestamp": "2026-06-16T16:10:00.000000+00:00",
+    "trigger_type": "user_question",
+    "timestamp": "2026-06-16T16:20:00.000000+00:00",
+    "parallel_sessions": 3,
+    "critical_issue_raised": "race_condition_on_md_files",
     "developer": "bippin"
   }
 }

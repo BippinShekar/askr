@@ -89,3 +89,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-15] Treating shared committed files (decisions.md, goals.md, project_brief.md) as safe for concurrent edits by multiple users — User observed that similar files with multiple writers create divergence easily, compound into race conditions, and become adoption blockers
 - [2026-06-16] Testing task queue with incomplete bash commands (truncated strings in tool calls) — Commands were cut off mid-execution; had to re-run with full syntax to verify functionality
 - [2026-06-16] Investigated claude_session.pid writing in daemon and session_start hook — Tangential to goals refactor; session ended before this investigation yielded actionable findings
+- [2026-06-16] Assuming PID file alone is sufficient to track Claude process — File can become stale; added process scan as fallback to detect genuinely exited Claude
