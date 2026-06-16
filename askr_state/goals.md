@@ -1,5 +1,9 @@
 ## Today - 2026-06-16
 
+- [ ] Resume development from checkpoint and complete blocked tasks <!-- added: 2026-06-16T14:06, auto_suggested -->
+
+- [ ] Review implementation_state.md and recent git diff to identify in-progress work <!-- added: 2026-06-16T14:06, auto_suggested -->
+
 
 
 ## Today - 2026-06-15

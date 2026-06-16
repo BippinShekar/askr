@@ -1,102 +1,132 @@
 {
-  "task": "Identified architectural requirements for multi-developer task assignment and auto-drain workflow; clarified shared vs. unique file structure and blocking semantics.",
-  "discussion_summary": "User rejected the explicit `askr task {dev-name} \"do this\"` workflow as wasteful of conversational turns. Instead, user wants inline task assignment during discussion (e.g., \"let's make sure lochan takes care of Z\") with automatic inference of assignee and task content from context. Session ended mid-design: user is asking for clarification on (1) how tasks get assigned implicitly, (2) how auto-drain works post-pull, (3) whether blockers.md is dev-specific, and (4) the overall approach for task routing and inference.",
+  "task": "Refactored goals.py from markdown to JSONL format with append-only semantics and UUID-based goal tracking",
+  "discussion_summary": "Session focused on migrating the goals system from markdown (goals.md with regex parsing) to structured JSONL (goals.jsonl) to enable reliable multi-developer state management and append-only updates. Investigated daemon PID tracking and session lifecycle hooks to understand how claude_session.pid is written and monitored. The goals.py refactor is incomplete\u2014the file was truncated mid-function at line 262 during the load_open_goals() implementation.",
   "accomplishments": [
     {
-      "what": "Confirmed Stage 1\u20134 shipped: conflict-free .gitattributes, askr init, task queue, and team commands",
+      "what": "Converted goals.py data model from markdown sections to JSONL with per-goal UUID, status field, and ISO timestamps",
       "done": true
     },
     {
-      "what": "Identified user's rejection of explicit task syntax in favor of inline, context-aware assignment",
+      "what": "Implemented _read_all() with append-only conflict resolution (last entry per ID wins)",
+      "done": true
+    },
+    {
+      "what": "Rewrote add_goal() to append structured JSON entries instead of parsing/modifying markdown",
+      "done": true
+    },
+    {
+      "what": "Implemented complete_goal() and new discard_goal() using append-only pattern",
+      "done": true
+    },
+    {
+      "what": "Investigated daemon PID tracking and session_start hook for claude_session.pid writing",
       "done": true
     }
   ],
   "in_progress": [
     {
-      "file": "askr/cli/askr.py",
-      "what": "Design task assignment inference engine and auto-drain post-pull logic",
-      "last_line": 0
-    },
-    {
-      "file": "askr_state/blockers.md",
-      "what": "Clarify whether blockers are dev-specific or shared; design structure",
-      "last_line": 0
+      "file": "askr/state/goals.py",
+      "what": "load_open_goals() function truncated mid-implementation at line 262\u2014needs completion to filter and return open goal texts",
+      "last_line": 262
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Design and document the task inference engine: how Claude Code will extract assignee (e.g., 'lochan') and task description from conversational context without explicit `askr task` syntax. Define the prompt/heuristic that identifies task boundaries.",
-      "why": "User explicitly rejected manual task syntax; inference is the core blocker for the desired workflow."
+      "action": "Complete load_open_goals() in goals.py\u2014finish the list comprehension to return goal texts where status is 'open' or 'backlog'",
+      "why": "Function is truncated and will cause import/runtime errors; blocking any code that calls load_open_goals()"
     },
     {
       "order": 2,
-      "action": "Design auto-drain mechanism: define how tasks in `tasks/queue_{dev}.md` are automatically drained (moved to current_task or completed) when that dev pulls the repo. Decide: does drain happen on git pull hook, on next `askr` command, or on session start?",
-      "why": "User asked 'how are these tasks going to get auto-drained post pull?' \u2014 this is unresolved and critical for the workflow."
+      "action": "Add remaining goal accessor functions: load_done_goals(), load_backlog_goals(), get_goal_by_id(), and update_goal_metadata()",
+      "why": "Other modules likely depend on these; refactor is incomplete without full API"
     },
     {
       "order": 3,
-      "action": "Clarify blockers.md structure: decide if blockers are dev-specific (one per dev) or shared (one global file). If dev-specific, create `blockers_{dev}.md` pattern; if shared, define merge/conflict strategy.",
-      "why": "User asked 'blockers.md will be basically dev specific right?' \u2014 needs explicit design decision and file structure."
+      "action": "Update all callers of goals.py (grep for 'from askr.state.goals import' and 'import askr.state.goals') to use new JSONL-based API",
+      "why": "Old markdown-based functions (e.g., _strip_ts, _section_lines) no longer exist; callers will break"
     },
     {
       "order": 4,
-      "action": "Build a Stage 5 commit: implement task inference hook in Claude Code integration (or as a CLI command) that parses conversation context and auto-queues tasks for teammates.",
-      "why": "Inference engine is the missing piece to enable the desired 'inline assignment' workflow."
+      "action": "Migrate existing goals.md to goals.jsonl using a one-time migration script or manual conversion",
+      "why": "State file format changed; old data must be converted or will be lost"
     },
     {
       "order": 5,
-      "action": "Document the full multi-dev workflow in README or DESIGN.md: shared files (repo code), unique files (queue/current/blockers per dev), task flow (inline \u2192 queue \u2192 current \u2192 done), and auto-drain timing.",
-      "why": "User needs clarity on the complete system before implementation; documentation will unblock design decisions."
+      "action": "Commit goals.py refactor and update .gitattributes if goals.jsonl needs merge strategy (e.g., union or custom driver)",
+      "why": "Append-only JSONL may benefit from conflict-free merge handling in multi-developer scenarios"
     }
   ],
   "decisions": [
     {
-      "decision": "Task assignment must be inferred from conversational context, not explicit CLI syntax.",
-      "reason": "User rejected `askr task {dev-name}` as wasteful; wants inline assignment during discussion."
-    }
-  ],
-  "user_rejected_decisions": [
+      "decision": "Switched goals storage from markdown (goals.md) to JSONL (goals.jsonl)",
+      "reason": "JSONL enables append-only updates, UUID-based deduplication, and conflict-free merging in multi-developer workflows; markdown regex parsing is fragile"
+    },
     {
-      "what_was_proposed": "Explicit task syntax: `askr task {dev-name} \"do this\"` for assigning work to teammates.",
-      "user_signal": "I wouldn't want to waste one conversational turn with claude just to say assign this to lochan. I would instead do something like, while talking about xyz, let's make sure lochan takes care of z.",
-      "domain": "askr/cli/askr.py and task assignment workflow",
-      "confidence": 0.95
+      "decision": "Used append-only pattern with 'last entry per ID wins' for goal updates",
+      "reason": "Avoids locking and read-modify-write races; aligns with team.json and decisions.jsonl patterns already in codebase"
+    },
+    {
+      "decision": "Added 'status' field (open, backlog, done, discarded) instead of parsing checkbox syntax",
+      "reason": "Explicit status is queryable, sortable, and less error-prone than regex on markdown checkboxes"
+    },
+    {
+      "decision": "Used ISO 8601 UTC timestamps (_now_iso()) instead of local time strings",
+      "reason": "Consistent with team coordination across timezones; matches recent decisions.py and blockers.py refactors"
     }
   ],
-  "failed_approaches": [],
+  "user_rejected_decisions": [],
+  "failed_approaches": [
+    {
+      "approach": "Investigated claude_session.pid writing in daemon and session_start hook",
+      "reason": "Tangential to goals refactor; session ended before this investigation yielded actionable findings"
+    }
+  ],
   "files_in_play": [
-    "askr/cli/askr.py",
-    "askr_state/tasks/queue_bippin.md",
-    "askr_state/tasks/queue_lochan.md",
-    "askr_state/blockers.md",
-    "askr_state/current_task_bippin.md",
-    "askr_state/current_task_lochan.md"
+    "askr/state/goals.py"
   ],
   "relational_files": [
     {
-      "file": "askr/hooks/session_start.py",
-      "relationship": "configures",
-      "why": "Session start hook will trigger auto-drain of queued tasks when dev pulls repo."
+      "file": "askr/state/decisions.py",
+      "relationship": "imported_by",
+      "why": "Recently refactored to JSONL; goals.py now follows same pattern"
     },
     {
-      "file": ".gitattributes",
+      "file": "askr/state/blockers.py",
+      "relationship": "imported_by",
+      "why": "Also uses append-only JSONL; goals.py mirrors its data model"
+    },
+    {
+      "file": "askr/state/config.py",
+      "relationship": "imported_by",
+      "why": "Provides state_path() and ensure_state_dir() used by goals.py"
+    },
+    {
+      "file": "askr/hooks/session_start.py",
       "relationship": "configures",
-      "why": "Union merge strategy on append-only task queue files prevents conflicts across devs."
+      "why": "May call add_goal() or load_open_goals() to initialize session state"
+    },
+    {
+      "file": "askr/cli/askr.py",
+      "relationship": "imported_by",
+      "why": "CLI commands likely expose goal management; needs update for new API"
     }
   ],
   "uncommitted_files": [
+    "askr/state/goals.py",
+    "askr_state/goals.md",
+    "askr_state/handover_bippin.md",
+    "askr_state/implementation_state.md",
     "askr_state/notifications.log"
   ],
   "blockers": [
-    "Task inference engine design not yet specified: how does Claude Code extract assignee and task from conversation?",
-    "Auto-drain timing undefined: when do queued tasks move to current_task or complete?",
-    "Blockers.md structure unresolved: dev-specific or shared?"
+    "goals.py load_open_goals() is truncated at line 262; will cause import errors until completed",
+    "Unknown which modules import goals.py functions\u2014need grep to identify all callers before API change is safe"
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-16T13:27:00.000000+00:00",
+    "timestamp": "2026-06-16T14:10:00Z",
     "developer": "bippin"
   }
 }
