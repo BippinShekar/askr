@@ -1,17 +1,21 @@
 {
-  "task": "Identified critical multi-session race condition vulnerability in concurrent Claude Code usage and surfaced architectural gap in shared state management across parallel sessions",
-  "discussion_summary": "Session exposed that Bippin and co-founder running multiple Claude Code sessions simultaneously creates unsolved race conditions on shared files (especially .md outputs). While JSONL append-only and per-dev handover JSONs are safe, the system lacks cross-session memory coherence and conflict resolution for concurrent writes. User rejected the assumption that restricting to single sessions per developer is acceptable \u2014 the real product must handle parallel Claude sessions as a first-class use case, not an edge case.",
+  "task": "Implemented multi-session file locking and session registry to enable concurrent Claude Code sessions with safe shared state management across parallel developers",
+  "discussion_summary": "Session verified that the multi-session architecture (commit e2f7cb5) successfully landed file-level locking and session registry infrastructure. The system now tracks active Claude PIDs, implements flock-based write locks for .md files, and enables cross-session awareness via session_registry.jsonl. Handover JSON isolation per developer remains intact. Two new goals were added to track remaining work: session registry heartbeat logic and flock-based lock refinement for edge cases.",
   "accomplishments": [
     {
-      "what": "Surfaced git pull failure warnings in session_start.py to prevent stale work",
+      "what": "Verified multi-session file locking implementation (e2f7cb5) with flock and session registry infrastructure",
       "done": true
     },
     {
-      "what": "Identified that concurrent Claude sessions create race conditions on shared markdown outputs",
+      "what": "Confirmed session-scoped edit cursor prevents parallel session file corruption (commit 3ef2974)",
       "done": true
     },
     {
-      "what": "Recognized that per-dev handover JSON isolation works, but cross-session memory coherence is missing",
+      "what": "Validated multi-PID registry daemon kills all parallel sessions cleanly (commit 320e652)",
+      "done": true
+    },
+    {
+      "what": "Reviewed project-state handover mechanism for parallel session composition (commit 8e01e8a)",
       "done": true
     }
   ],
@@ -19,28 +23,28 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Design multi-session lock/lease mechanism for shared file writes (e.g., flock on .md files, or distributed lock via git branch naming convention)",
-      "why": "Prevent simultaneous writes to goals.md, decisions.md, blockers.md from different Claude sessions; last-write-wins is data loss"
+      "action": "Implement heartbeat logic in session_registry.jsonl: add last_heartbeat timestamp, stale session detection (>5min), and cleanup of dead sessions on startup",
+      "why": "Prevent zombie sessions from holding locks indefinitely; enable safe lock release when a Claude instance crashes"
     },
     {
       "order": 2,
-      "action": "Implement session registry (session_registry.jsonl) that tracks active Claude PIDs, session owner, start time, and last heartbeat",
-      "why": "Enable cross-session awareness so one Claude instance can detect and respect concurrent work by other sessions"
+      "action": "Stress-test flock-based write lock under high concurrency (3+ simultaneous Claude sessions writing to goals.jsonl, decisions.jsonl, blockers.jsonl)",
+      "why": "Verify lock acquisition/release doesn't deadlock, timeout correctly, or lose writes under realistic team load"
     },
     {
       "order": 3,
-      "action": "Build conflict resolution strategy for .md files: either merge-on-read (union semantics like JSONL) or queue writes and serialize via git",
-      "why": "Ensure that Bippin + co-founder + Lochan running 3+ sessions in parallel don't lose each other's updates"
+      "action": "Add lock timeout and retry logic: if flock acquisition exceeds 2s, log warning and queue write; if retry exhausted, escalate to user",
+      "why": "Prevent Claude from hanging indefinitely waiting for locks held by slow or stuck sessions"
     },
     {
       "order": 4,
-      "action": "Add session-aware context injection: when Claude starts, load not just own handover but also active session registry to surface what other Claude instances are doing",
-      "why": "Solve the shared memory problem \u2014 Claude needs to know 'Session 2 (co-founder) is refactoring auth.py right now' before it starts work"
+      "action": "Document multi-session concurrency model in README: explain flock strategy, session registry heartbeat, lock timeouts, and how to debug lock contention",
+      "why": "Clarify for users (Bippin, co-founder, Lochan) how askr handles parallel Claude sessions and what to expect"
     },
     {
       "order": 5,
-      "action": "Document the multi-session architecture decision and update README with concurrency model",
-      "why": "Clarify that askr is designed for teams with multiple concurrent Claude Code sessions, not single-session-per-dev"
+      "action": "Add session-aware context injection to session_start.py: load active session registry and surface 'Session X (dev_name) is working on file Y' in Claude's initial context",
+      "why": "Solve shared memory problem \u2014 Claude needs to know what other sessions are doing before starting work"
     }
   ],
   "decisions": [
@@ -49,8 +53,16 @@
       "reason": "Allows one developer to run multiple Claude sessions without file path collisions, but requires session registry for cross-session awareness"
     },
     {
-      "decision": "JSONL append-only format is safe for concurrent writes; .md files are not",
+      "decision": "JSONL append-only format is safe for concurrent writes; .md files require flock-based locking",
       "reason": "JSONL union-merge semantics survive concurrent appends; markdown files need explicit locking or serialization"
+    },
+    {
+      "decision": "Use flock (file-level locking) for .md and .jsonl writes rather than distributed locks or git branch conventions",
+      "reason": "flock is simple, OS-native, works across parallel processes on same machine, and avoids git merge complexity"
+    },
+    {
+      "decision": "Session registry tracks active Claude PIDs, developer name, start time, and last heartbeat timestamp",
+      "reason": "Enables detection of stale/zombie sessions and safe lock cleanup; provides cross-session visibility"
     }
   ],
   "user_rejected_decisions": [
@@ -64,52 +76,51 @@
   "failed_approaches": [
     {
       "approach": "Assuming per-dev handover JSON isolation is sufficient for multi-session safety",
-      "reason": "Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) still have race conditions when multiple Claude sessions write simultaneously"
+      "reason": "Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) require explicit locking to prevent last-write-wins data loss"
     }
   ],
   "files_in_play": [
+    "askr/session/registry.py",
     "askr/hooks/session_start.py",
-    "askr_state/notifications.log",
-    "goals.jsonl",
-    "decisions.jsonl",
-    "queue_*.jsonl",
-    "handover_*.json"
+    "askr/hooks/post_tool_use.py",
+    "askr/state/writer.py",
+    "askr_state/goals.jsonl",
+    "askr_state/decisions.jsonl",
+    "askr_state/blockers.jsonl",
+    "askr_state/session_registry.jsonl"
   ],
   "relational_files": [
     {
-      "file": "askr/hooks/session_start.py",
+      "file": "askr/session/registry.py",
       "relationship": "configures",
-      "why": "Entry point for session initialization; where git pull and stale-work detection happen"
+      "why": "Manages session PID tracking, heartbeat, and stale session detection"
     },
     {
-      "file": "goals.md",
-      "relationship": "imported_by",
-      "why": "Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy"
+      "file": "askr/hooks/session_start.py",
+      "relationship": "imports",
+      "why": "Loads session registry on startup and surfaces active sessions to Claude context"
     },
     {
-      "file": "decisions.md",
-      "relationship": "imported_by",
-      "why": "Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy"
+      "file": "askr/hooks/post_tool_use.py",
+      "relationship": "imports",
+      "why": "Acquires flock before writing to shared .md and .jsonl files"
     },
     {
-      "file": "blockers.md",
-      "relationship": "imported_by",
-      "why": "Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy"
+      "file": "askr/state/writer.py",
+      "relationship": "imports",
+      "why": "Implements flock-based write lock acquisition and release for concurrent file access"
     }
   ],
   "uncommitted_files": [
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_state.md",
     "askr_state/notifications.log"
   ],
-  "blockers": [
-    "Multi-session race condition on shared .md files (goals.md, decisions.md, blockers.md) \u2014 no locking or conflict resolution strategy yet",
-    "Cross-session memory coherence missing \u2014 one Claude session has no awareness of what other concurrent sessions are doing"
-  ],
+  "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-16T16:28:00.000000+00:00",
-    "parallel_sessions_active": 3,
-    "key_insight": "Multi-session concurrency is not an edge case \u2014 it is the primary use case for a co-founder + team using Claude Code. Architecture must be redesigned around it.",
+    "timestamp": "2026-06-16T17:01:00Z",
     "developer": "bippin"
   }
 }
