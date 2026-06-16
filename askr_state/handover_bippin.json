@@ -1,25 +1,29 @@
 {
-  "task": "Implemented task queue system for multi-developer workflows, fixed timestamp edge case in team display, and committed Stage 3 & 4 features to main branch",
-  "discussion_summary": "Session focused on integrating a persistent task queue into the session lifecycle so teammates can queue work across sessions. Injected queue into session_start.py main(), created askr_state/tasks directory structure, tested task list/queue/drain commands end-to-end, and fixed a negative-timestamp display bug in the team command that showed future handover times. All Stage 3 (task queue) and Stage 4 (team display) work was committed and pushed.",
+  "task": "Built task queue system for multi-developer coordination with auto-drain on pull, committed Stages 3-4 (team commands and task queue infrastructure)",
+  "discussion_summary": "Session completed the task queue feature allowing developers to queue work for teammates across sessions. User asked critical follow-up questions about file sharing, task assignment inference, and auto-drain mechanics\u2014indicating readiness to move from manual `askr task {dev-name}` commands to implicit task inference from Claude Code discussions. The system is now functional but needs enhancement to support natural language task assignment and automatic inference from context.",
   "accomplishments": [
     {
-      "what": "Injected task queue into session_start.py main() to drain queued tasks at session start",
+      "what": "Task queue directory and queue file created for bippin user",
       "done": true
     },
     {
-      "what": "Created askr_state/tasks directory and initialized queue file for bippin user",
+      "what": "askr task list and askr task queue commands tested and verified working",
       "done": true
     },
     {
-      "what": "Tested task list, task queue, and task drain commands end-to-end via CLI",
+      "what": "Fixed timestamp edge case in team display (negative time \u2192 'active now')",
       "done": true
     },
     {
-      "what": "Fixed timestamp edge case in askr team display (negative time \u2192 'active now')",
+      "what": "Stage 3 (task queue infrastructure) committed as a8c88d9",
       "done": true
     },
     {
-      "what": "Committed Stage 3 (task queue) and Stage 4 (team display) to git and pushed",
+      "what": "Stage 4 (team commands) committed as a5d7fd3",
+      "done": true
+    },
+    {
+      "what": "All changes pushed to remote",
       "done": true
     }
   ],
@@ -27,69 +31,94 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Verify git push completed successfully by checking remote branch matches local HEAD",
-      "why": "Last bash command was git push but output was truncated; confirm Stage 3 & 4 are live on remote"
+      "action": "Design task inference system: define syntax/convention for implicit task assignment in Claude Code (e.g., '@lochan: do XYZ' or special comment markers) so tasks can be inferred from discussion context rather than explicit CLI calls",
+      "why": "User explicitly rejected manual `askr task {dev-name}` workflow and asked if assignment should be 'inferrable' from discussion\u2014this is the core UX gap blocking adoption"
     },
     {
       "order": 2,
-      "action": "Update askr_state/implementation_state.md to mark Stage 3 and Stage 4 as Complete and commit",
-      "why": "implementation_state.md is still uncommitted and needs to reflect that task queue and team features are now done"
+      "action": "Implement auto-drain mechanism: define when/how task queues are automatically processed on git pull (e.g., post-pull hook, daemon polling, or manual drain command) and what 'draining' means (notification, auto-assignment, log entry)",
+      "why": "User asked 'how are these tasks going to get auto-drained post pull?' indicating this is a critical missing piece of the workflow"
     },
     {
       "order": 3,
-      "action": "Test multi-user scenario: queue a task for another user and verify it appears in their task list",
-      "why": "Single-user testing is complete; need to validate cross-user queue isolation and retrieval"
+      "action": "Document file sharing model: clarify which files are shared (askr_state/tasks/*, .gitattributes) vs. unique per developer, and how conflict prevention works when both developers edit task queues simultaneously",
+      "why": "User asked 'what files will be shared with me and the co-founder and what will be unique to us'\u2014this needs explicit documentation"
     },
     {
       "order": 4,
-      "action": "Review Stage 5 goals (daemon monitoring, context triggers, auto-launch) and plan implementation",
-      "why": "Stages 3 & 4 are shipped; next phase requires daemon enhancements and context-aware session triggering"
+      "action": "Add task metadata schema: extend task queue format to capture assignee, context (file/line), inferred intent, and status so tasks carry semantic meaning beyond plain text",
+      "why": "Current queue is append-only text; inference and auto-drain require structured task objects"
+    },
+    {
+      "order": 5,
+      "action": "Test multi-developer scenario: simulate bippin and lochan both pulling, queuing tasks for each other, and verify no conflicts and proper auto-drain behavior",
+      "why": "System has been tested single-user; multi-developer edge cases (concurrent queue writes, stale pulls) need validation"
     }
   ],
   "decisions": [
     {
-      "decision": "Task queue stored as flat markdown file in askr_state/tasks/ per-user, not in database",
-      "reason": "Keeps state conflict-free and git-friendly; simple append/drain model avoids locking"
+      "decision": "Task queue stored as append-only text file in askr_state/tasks/queue_{username}.md rather than structured JSON",
+      "reason": "Append-only format prevents merge conflicts; union merge strategy in .gitattributes handles concurrent writes safely"
     },
     {
-      "decision": "Timestamp edge case (future handover time) handled by displaying 'active now' instead of negative duration",
-      "reason": "Cleaner UX than showing -5m; handles clock skew gracefully without breaking team display"
+      "decision": "Manual CLI command `askr task {dev-name} 'task text'` implemented as MVP before inference layer",
+      "reason": "Establishes working baseline; inference can be layered on top without breaking existing queue format"
     }
   ],
-  "user_rejected_decisions": [],
-  "failed_approaches": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Continuing to use explicit `askr task {dev-name} 'do this'` as the primary task assignment workflow",
+      "user_signal": "won't it be inferrable? like let's assign lochan this task I say in claude code after some discussion regarding XYZ, it's just that we have to use the proper n[aming convention]",
+      "domain": "task assignment UX and CLI interface",
+      "confidence": 0.95
+    }
+  ],
+  "failed_approaches": [
+    {
+      "approach": "Testing task queue with incomplete bash commands (truncated strings in tool calls)",
+      "reason": "Commands were cut off mid-execution; had to re-run with full syntax to verify functionality"
+    }
+  ],
   "files_in_play": [
-    "/Users/bippin/Desktop/askr/askr/hooks/session_start.py",
-    "/Users/bippin/Desktop/askr/askr/cli/askr.py",
-    "/Users/bippin/Desktop/askr/.gitignore",
-    "/Users/bippin/Desktop/askr/.gitattributes",
-    "/Users/bippin/Desktop/askr/askr_state/tasks/queue_bippin.md"
+    "askr/hooks/session_start.py",
+    "askr/cli/askr.py",
+    "askr_state/tasks/queue_bippin.md",
+    ".gitattributes"
   ],
   "relational_files": [
     {
-      "file": "/Users/bippin/Desktop/askr/askr/cli/askr.py",
+      "file": "askr/cli/askr.py",
       "relationship": "imports",
-      "why": "Contains cmd_task and cmd_team entry points that call queue/drain/list logic"
+      "why": "Main CLI entry point; contains task list and team commands tested this session"
     },
     {
-      "file": "/Users/bippin/Desktop/askr/askr/hooks/session_start.py",
-      "relationship": "imported_by",
-      "why": "Called at session start; now drains task queue before running user commands"
-    },
-    {
-      "file": "/Users/bippin/Desktop/askr/askr_state/implementation_state.md",
+      "file": "askr/hooks/session_start.py",
       "relationship": "configures",
-      "why": "Tracks completion status of Stages 1\u20135; needs update to mark Stage 3 & 4 done"
+      "why": "Initializes task queue directory structure on askr init"
+    },
+    {
+      "file": ".gitattributes",
+      "relationship": "configures",
+      "why": "Defines union merge strategy for append-only task queue files to prevent conflicts"
+    },
+    {
+      "file": "askr_state/notifications.log",
+      "relationship": "imported_by",
+      "why": "Uncommitted log file; tracks session lifecycle events"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_state.md"
+    "askr_state/notifications.log"
   ],
-  "blockers": [],
+  "blockers": [
+    "Task inference system not yet designed\u2014unclear how Claude Code should signal task assignment to teammates",
+    "Auto-drain mechanism undefined\u2014no specification for when/how queued tasks are processed",
+    "Task metadata schema missing\u2014current append-only text format cannot capture assignee, context, or status needed for inference and automation"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-16T04:10:00+00:00",
+    "timestamp": "2026-06-16T04:11:00+00:00",
     "developer": "bippin"
   }
 }
