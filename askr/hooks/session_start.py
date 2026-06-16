@@ -24,7 +24,39 @@ from askr.state.reader import build_context_injection
 from askr.state.goals import format_for_context as goals_context
 from askr.state.config import get_state_dir, load_developer
 
-_LAUNCH_MODE_PATH = os.path.expanduser("~/.config/askr/launch_mode.json")
+_LAUNCH_MODE_PATH  = os.path.expanduser("~/.config/askr/launch_mode.json")
+_CLAUDE_PID_PATH   = os.path.expanduser("~/.config/askr/claude_session.pid")
+
+
+def _write_claude_pid():
+    """
+    Find the running Claude process for this project by cwd and record its PID.
+    Called at every session start so the daemon can kill it cleanly on context
+    overflow — even for manually-opened sessions that weren't started by askr.
+    """
+    try:
+        project_path = os.getcwd()
+        result = subprocess.run(
+            ["pgrep", "-x", "claude"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for pid_str in result.stdout.strip().splitlines():
+            try:
+                pid = int(pid_str)
+                lsof = subprocess.run(
+                    ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-F", "n"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                for line in lsof.stdout.splitlines():
+                    if line.startswith("n") and line[1:] == project_path:
+                        os.makedirs(os.path.dirname(_CLAUDE_PID_PATH), exist_ok=True)
+                        with open(_CLAUDE_PID_PATH, "w") as f:
+                            f.write(str(pid))
+                        return
+            except Exception:
+                continue
+    except Exception:
+        pass
 
 
 def git_pull() -> bool:
@@ -201,6 +233,7 @@ def main():
     except Exception:
         payload = {}
 
+    _write_claude_pid()
     _reset_stats_for_project()
 
     pull_ok = True

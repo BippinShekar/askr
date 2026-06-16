@@ -27,13 +27,37 @@ QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 
 def _read_claude_pid():
+    """Return Claude's PID from the tracked file, or fall back to pgrep by cwd."""
     try:
         with open(_CLAUDE_PID_PATH) as f:
             pid = int(f.read().strip())
         os.kill(pid, 0)
         return pid
     except Exception:
-        return None
+        pass
+    # PID file missing or stale — search by project cwd (handles manually-opened sessions)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pgrep", "-x", "claude"],
+            capture_output=True, text=True, timeout=5,
+        )
+        project_path = os.getcwd()
+        for pid_str in result.stdout.strip().splitlines():
+            try:
+                pid = int(pid_str)
+                lsof = subprocess.run(
+                    ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-F", "n"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                for line in lsof.stdout.splitlines():
+                    if line.startswith("n") and line[1:] == project_path:
+                        return pid
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
 
 
 def _quota_pct() -> float | None:

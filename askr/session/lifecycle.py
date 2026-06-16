@@ -104,14 +104,15 @@ def _extension_mtime() -> float:
 _STARTUP_SOURCE_MTIME    = _max_source_mtime()
 _STARTUP_EXTENSION_MTIME = _extension_mtime()
 
-POLL_ACTIVE        = 30    # seconds when session is live
+POLL_ACTIVE        = 15    # seconds when session is live
 POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.65  # fire at 65% — gives enough runway before auto-compact while reducing spurious kills on extended-thinking sessions
+CONTEXT_TRIGGER    = 0.60  # fire at 60% — 40% runway to auto-compact; earlier than 65% to survive extended-thinking spikes
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
-TRIGGER_COOLDOWN   = 300   # seconds to ignore further triggers after one fires
+TRIGGER_COOLDOWN   = 300   # seconds after a successful kill before re-firing
+TRIGGER_MISS_COOLDOWN = 60 # seconds when trigger fired but Claude PID was not found
 
 
 # ---------------------------------------------------------------------------
@@ -1006,7 +1007,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
     _start_claude(project_path)
 
 
-def _wait_for_exchange_end_then_kill(project_path: str):
+def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
     """
     Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
     the current exchange is done — kill Claude so the Stop hook fires and
@@ -1016,6 +1017,9 @@ def _wait_for_exchange_end_then_kill(project_path: str):
     not be killed mid-API-call. PreCompact is the backstop for sessions that
     blow past the threshold in a single turn — it fires at a clean turn
     boundary, never mid-thinking.
+
+    Returns True if a kill was sent, False if Claude was not found (caller
+    uses this to decide whether to apply the full TRIGGER_COOLDOWN).
     """
     IDLE_SECS = 20   # seconds of JSONL silence → exchange is done
     POLL      = 5
@@ -1027,10 +1031,11 @@ def _wait_for_exchange_end_then_kill(project_path: str):
     while True:
         time.sleep(POLL)
 
-        # If Claude exited on its own (user stopped it, crash, etc.), nothing to kill
-        if _read_claude_pid() is None:
-            _log("claude process gone during exchange wait — skipping kill")
-            return
+        # If Claude is not traceable via PID file OR by scanning processes,
+        # it genuinely exited — nothing to kill.
+        if _read_claude_pid() is None and _find_claude_pid_by_project(project_path) is None:
+            _log("claude process not found during exchange wait — skipping kill")
+            return False
 
         # Hard override: if context is within striking distance of auto-compact,
         # kill immediately regardless of exchange state. Active human conversation
@@ -1046,7 +1051,7 @@ def _wait_for_exchange_end_then_kill(project_path: str):
                 _pre_kill_update_tools(project_path)
                 _kill_claude(project_path)
                 _wait_for_stop_hook_or_fallback(project_path)
-                return
+                return True
         except Exception:
             pass
 
@@ -1076,7 +1081,7 @@ def _wait_for_exchange_end_then_kill(project_path: str):
             _pre_kill_update_tools(project_path)
             _kill_claude(project_path)
             _wait_for_stop_hook_or_fallback(project_path)
-            return
+            return True
 
 
 def _maybe_autolaunch(project_path: str):
@@ -1165,8 +1170,15 @@ def run_daemon():
                     elif ctx_pct >= CONTEXT_TRIGGER:
                         _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude [{project_path}]")
                         _write_checkpoint_pending(stats)
-                        last_trigger_at[project_path] = time.time()
-                        _wait_for_exchange_end_then_kill(project_path)
+                        killed = _wait_for_exchange_end_then_kill(project_path)
+                        if killed:
+                            # Full cooldown — kill was sent, new session is starting
+                            last_trigger_at[project_path] = time.time()
+                        else:
+                            # Claude not found — short cooldown so we retry quickly
+                            # rather than waiting the full 5 minutes
+                            last_trigger_at[project_path] = time.time() - TRIGGER_COOLDOWN + TRIGGER_MISS_COOLDOWN
+                            _log(f"kill skipped (claude not found) — retry in {TRIGGER_MISS_COOLDOWN}s")
                         triggered_this_cycle = True
                         break  # re-scan all projects next cycle after handling this one
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
