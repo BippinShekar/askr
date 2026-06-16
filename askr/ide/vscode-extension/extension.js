@@ -7,9 +7,27 @@ const STATS_DIR         = path.join(os.homedir(), '.config', 'askr', 'stats');
 const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
 
-function projectStatsPath() {
+function projectHashPrefix() {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-  const hash = root.replace(/\//g, '-').replace(/^-/, '');
+  return root.replace(/\//g, '-').replace(/^-/, '');
+}
+
+function projectStatsPath() {
+  // Per-session files ({hash}_{session_id}.json) are what post_tool_use writes.
+  // The legacy {hash}.json is reset to 0% on session start and never updated.
+  // Pick the most recently modified file that matches this project's prefix.
+  const hash = projectHashPrefix();
+  try {
+    const files = fs.readdirSync(STATS_DIR).filter(f =>
+      f.endsWith('.json') && (f === hash + '.json' || f.startsWith(hash + '_'))
+    );
+    if (files.length > 0) {
+      const newest = files
+        .map(f => path.join(STATS_DIR, f))
+        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+      return newest;
+    }
+  } catch {}
   return path.join(STATS_DIR, hash + '.json');
 }
 
@@ -313,10 +331,13 @@ function activate(context) {
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
   try {
-    const projectFile = path.basename(projectStatsPath());
+    const hash = projectHashPrefix();
     if (!fs.existsSync(STATS_DIR)) fs.mkdirSync(STATS_DIR, { recursive: true });
     const watcher = fs.watch(STATS_DIR, (_, filename) => {
-      if (filename === projectFile) refresh();
+      // Trigger on the legacy file OR any per-session file for this project
+      if (filename && (filename === hash + '.json' || filename.startsWith(hash + '_'))) {
+        refresh();
+      }
     });
     context.subscriptions.push({ dispose: () => watcher.close() });
   } catch {}
