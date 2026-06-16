@@ -326,7 +326,7 @@ def _append_failed_approaches(handover, state_dir: str):
 
 
 def _write_decisions_from_handover(handover, state_dir: str, developer: str):
-    """Auto-populate decisions.md from JSON handover. No-op for legacy str handovers."""
+    """Append new decisions from handover JSON to decisions.jsonl (one JSON object per line)."""
     if not isinstance(handover, dict):
         return
     try:
@@ -334,34 +334,29 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
         if not decisions:
             return
 
-        path = os.path.join(state_dir, "decisions.md")
+        path = os.path.join(state_dir, "decisions.jsonl")
         existing_text = ""
         if os.path.exists(path):
             with open(path) as f:
-                existing_text = f.read()
+                existing_text = f.read().lower()
 
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        header = "" if existing_text else "# Decisions\n\nAppend-only. One line per decision. Never edit existing lines.\n\nFormat: [YYYY-MM-DD HH:MM] [developer] Decision text. Reason: reason text.\n\n---\n"
-
-        new_lines = []
+        new_entries = []
         for d in decisions:
-            text = d.get("decision", "").strip()
+            text   = d.get("decision", "").strip()
             reason = d.get("reason", "").strip()
             if not text or len(text) < 10:
                 continue
-            line = f"[{ts}] [{developer}] {text}"
-            if reason:
-                line += f". Reason: {reason}"
-            if text.lower() not in existing_text.lower():
-                new_lines.append(line)
+            if text.lower() in existing_text:
+                continue
+            new_entries.append(json.dumps({
+                "at": ts, "dev": developer,
+                "decision": text, "reason": reason,
+            }))
 
-        if not new_lines:
-            return
-
-        with open(path, "a") as f:
-            if header:
-                f.write(header)
-            f.write("\n".join(new_lines) + "\n")
+        if new_entries:
+            with open(path, "a") as f:
+                f.write("\n".join(new_entries) + "\n")
     except Exception:
         pass
 

@@ -126,12 +126,24 @@ def load_team_handovers(developer: str = None) -> str:
 
 
 def load_decisions(last_n: int = 20) -> str:
-    path = state_path("decisions.md")
+    path = state_path("decisions.jsonl")
     if not os.path.exists(path):
         return ""
+    entries = []
     with open(path) as f:
-        lines = [l.rstrip() for l in f if l.strip() and l.startswith("[")]
-    return "\n".join(lines[-last_n:])
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = _json.loads(line)
+                text = f"[{d.get('at','')}] [{d.get('dev','')}] {d.get('decision','')}"
+                if d.get("reason"):
+                    text += f". Reason: {d['reason']}"
+                entries.append(text)
+            except Exception:
+                pass
+    return "\n".join(entries[-last_n:])
 
 
 def load_architecture() -> str:
