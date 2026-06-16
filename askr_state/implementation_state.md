@@ -191,3 +191,28 @@ from askr.state.writer import file_lock, append_to_implementation_s
 
 ### Files Owned
 <!-- /section:bippin -->
+
+<!-- section:dev -->
+## dev
+
+Last active: 2026-06-17 03:34
+
+### In Progress
+
+- [03:36] Ran: find . -path ./venv -prune -o -name "*.py" -print | xargs grep -l "def main\|arg
+- [03:36] Ran: cat /Users/bippin/Desktop/askr/install.sh; echo ---; which askr 2>/dev/null; cat
+- [03:36] Ran: cat ~/.config/askr/stop_hook_error.log 2>/dev/null | tail -30; echo "---daemon l
+- [03:36] Ran: grep -n "def cmd_init\|def load_developer\|team.json\|developer\b\|ASKR_DEV\|inp
+- [03:35] Ran: grep -rn "decisions.jsonl\|goals.jsonl\|append_decision" /Users/bippin/Desktop/a
+- [03:35] Ran: grep -rn "decisions.jsonl\|goals.jsonl\|append_decision\b" /Users/bippin/Desktop
+- [03:35] Ran: grep -n "decisions.md\|decisions.jsonl\|goals.md\|goals.jsonl\|flock\|file_lock"
+- [03:35] Ran: ls -la askr_state/tasks/ 2>/dev/null; echo ---; cat askr_state/tasks/*.md 2>/dev
+- [03:35] Ran: sed -n '238,630p' /Users/bippin/Desktop/askr/roadmap.md
+- [03:35] Ran: grep -n "^#\|^##\|Status:\|STATUS\|✓\|DONE\|TODO\|IN PROGRESS\|NOT STARTED" /Use
+- [03:34] Ran: wc -l askr_state/roadmap.md askr_state/decisions.md askr_state/failed_approaches
+- [03:34] Ran: ls askr_state/ && echo "---" && ls -la
+
+### Completed
+
+### Files Owned
+<!-- /section:dev -->
