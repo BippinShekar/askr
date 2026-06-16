@@ -1040,7 +1040,12 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
             _clear_checkpoint_pending()
             return
 
-    _log("Stop hook didn't fire after kill — running checkpoint + restart directly")
+    # Distinguish: Stop hook ran but notification write failed vs Stop hook never ran.
+    _STOP_ERROR_LOG = os.path.expanduser("~/.config/askr/stop_hook_error.log")
+    if os.path.exists(_STOP_ERROR_LOG):
+        _log("Stop hook ran but notification write failed — check stop_hook_error.log; running daemon fallback")
+    else:
+        _log("Stop hook didn't fire after kill (SIGKILL?) — running checkpoint + restart directly")
     _clear_checkpoint_pending()
     checkpoint_result = {}
     try:
@@ -1055,14 +1060,30 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
-    goal_part = f" Work on: {next_goal}." if next_goal else ""
-    daemon_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
+
+    # Use direction inference for the same quality prompt the Stop hook would give.
+    # Falls back to generic "read handover" if inference fails — never blocks launch.
+    daemon_prompt = ""
+    try:
+        direction = _infer_direction(project_path)
+        if direction["confidence"] >= 0.70:
+            daemon_prompt = (
+                f"Context was cut mid-session. Continue from where we left off: "
+                f"{direction['direction']}. Read the handover file for the full state. "
+                f"Resume the conversation or work — do not restart from scratch."
+            )
+    except Exception:
+        pass
+    if not daemon_prompt:
+        goal_part = f" Work on: {next_goal}." if next_goal else ""
+        daemon_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
+
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
                 "type": "context",
-                "message": "Context limit — Stop hook didn't fire. State saved to git. Opening new chat.",
+                "message": "Context limit — state saved to git. Opening new chat.",
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
@@ -1071,9 +1092,14 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
         _log("daemon fallback: wrote notification.json — extension will open new terminal")
+        # Clear the error log now that we've recovered — next failure is a fresh incident.
+        try:
+            os.remove(_STOP_ERROR_LOG)
+        except Exception:
+            pass
     except Exception as e:
         _log(f"daemon fallback notification error: {e}")
-    # Also spawn Terminal.app fallback in case extension isn't active
+    # Terminal.app fallback: fires after 6s if extension doesn't claim the notification.
     _start_claude(project_path)
 
 
