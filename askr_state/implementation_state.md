@@ -41,6 +41,9 @@ Last active: 2026-06-16 16:58
 
 ### In Progress
 
+- [21:29] Ran: git add askr/hooks/pre_compact.py && git commit -m "fix(pre_compact): kill only 
+- [21:29] Ran: venv/bin/python -c "import askr.hooks.pre_compact; print('ok')"
+- [21:29] Modified: /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py
 - [21:23] Ran: git push
 - [21:23] Ran: git add askr/session/monitor.py askr/hooks/post_tool_use.py askr/cli/askr.py ask
 - [21:23] Ran: git diff --stat
