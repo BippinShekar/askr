@@ -93,3 +93,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-16] Assuming per-dev handover JSON isolation is sufficient for multi-session safety — Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) still have race conditions when multiple Claude sessions write simultaneously
 - [2026-06-16] Unknown — LLM handover unavailable, review transcript manually
 - [2026-06-16] Assuming per-dev handover JSON isolation is sufficient for multi-session safety — Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) require explicit locking to prevent last-write-wins data loss
+- [2026-06-16] Relying on extension to auto-launch Claude without session-active checks — Caused duplicate Claude instances when daemon notifications fired while a session was already running; context cuts triggered re-spawn
