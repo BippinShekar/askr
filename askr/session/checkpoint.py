@@ -18,8 +18,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 _RESULT_PATH        = os.path.expanduser("~/.config/askr/checkpoint_result.json")
-_EDIT_CURSOR_PATH   = os.path.expanduser("~/.config/askr/edit_cursor.json")
+_CURSOR_DIR         = os.path.expanduser("~/.config/askr/cursors")
 _MAX_TRANSCRIPT_ENTRIES = 60  # enough to capture a substantial work session
+
+
+def _cursor_path(session_id: str) -> str:
+    return os.path.join(_CURSOR_DIR, f"edit_cursor_{session_id}.json")
 
 
 # ---------------------------------------------------------------------------
@@ -133,24 +137,29 @@ def _build_transcript_text(entries: list) -> str:
     return "\n".join(lines)
 
 
-def _load_edit_cursor() -> dict:
-    """Load file→line tracking written by PostToolUse hook during the session."""
-    try:
-        if os.path.exists(_EDIT_CURSOR_PATH):
-            with open(_EDIT_CURSOR_PATH) as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+def _load_edit_cursor(session_id: str = "") -> dict:
+    """Load file→line tracking for this session. Session-scoped to survive parallel sessions."""
+    cursor = {}
+    if session_id:
+        try:
+            p = _cursor_path(session_id)
+            if os.path.exists(p):
+                with open(p) as f:
+                    cursor = json.load(f)
+        except Exception:
+            pass
+    return cursor
 
 
-def _clear_edit_cursor():
-    """Reset cursor after checkpoint so next session starts clean."""
-    try:
-        if os.path.exists(_EDIT_CURSOR_PATH):
-            os.remove(_EDIT_CURSOR_PATH)
-    except Exception:
-        pass
+def _clear_edit_cursor(session_id: str = ""):
+    """Delete this session's cursor file after checkpoint."""
+    if session_id:
+        try:
+            p = _cursor_path(session_id)
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
 
 
 def _get_uncommitted_files() -> list:
@@ -169,6 +178,7 @@ def _generate_handover_with_llm(
     transcript_text: str,
     trigger_type: str = "stop",
     open_goals: list = None,
+    session_id: str = "",
 ) -> Optional[dict]:
     """
     Call Haiku to generate a structured JSON handover from the transcript.
@@ -179,7 +189,7 @@ def _generate_handover_with_llm(
     try:
         from askr.clients.claude import call_claude
 
-        edit_cursor = _load_edit_cursor()
+        edit_cursor = _load_edit_cursor(session_id)
         uncommitted_files = _get_uncommitted_files()
 
         edit_cursor_text = "\n".join(
@@ -566,6 +576,7 @@ def create_checkpoint(
     developer: str,
     transcript_path: str = "",
     state_dir: Optional[str] = None,
+    session_id: str = "",
 ) -> dict:
     """
     Generate handover, update state files, commit and push.
@@ -624,7 +635,7 @@ def create_checkpoint(
         except Exception:
             pass
 
-        llm_summary = _generate_handover_with_llm(transcript_text, trigger_type=trigger_type, open_goals=open_goals)
+        llm_summary = _generate_handover_with_llm(transcript_text, trigger_type=trigger_type, open_goals=open_goals, session_id=session_id)
         if llm_summary:
             summary = llm_summary
             tool_actions = _extract_tool_actions(entries)
@@ -669,7 +680,7 @@ def create_checkpoint(
         "project_path": os.getcwd(),
     }
 
-    _clear_edit_cursor()
+    _clear_edit_cursor(session_id)
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)

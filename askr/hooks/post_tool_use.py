@@ -155,8 +155,12 @@ def _write_session_stats():
 
 _GUARD_BLOCKS_PATH   = os.path.expanduser("~/.config/askr/guard_blocks.json")
 _TURN_COUNTER_PATH   = os.path.expanduser("~/.config/askr/turn_counter.json")
-_EDIT_CURSOR_PATH    = os.path.expanduser("~/.config/askr/edit_cursor.json")
+_CURSOR_DIR          = os.path.expanduser("~/.config/askr/cursors")
 _REFRESH_EVERY_N     = 10  # inject constraint reminder every N tool uses
+
+
+def _cursor_path(session_id: str) -> str:
+    return os.path.join(_CURSOR_DIR, f"edit_cursor_{session_id}.json")
 
 
 def _find_edit_line(tool_name: str, tool_input: dict, file_path: str) -> int:
@@ -185,9 +189,11 @@ def _find_edit_line(tool_name: str, tool_input: dict, file_path: str) -> int:
     return 0
 
 
-def _update_edit_cursor(tool_name: str, tool_input: dict):
-    """Track file + exact line of every write op — ground truth for handover in_progress."""
+def _update_edit_cursor(tool_name: str, tool_input: dict, session_id: str):
+    """Track file + exact line of every write op — scoped per session_id to survive parallel sessions."""
     if tool_name not in ("Write", "Edit", "MultiEdit"):
+        return
+    if not session_id:
         return
     try:
         file_path = (tool_input.get("file_path") or tool_input.get("path", "")).strip()
@@ -195,19 +201,20 @@ def _update_edit_cursor(tool_name: str, tool_input: dict):
             return
 
         line = _find_edit_line(tool_name, tool_input, file_path)
+        path = _cursor_path(session_id)
 
         cursor = {}
-        if os.path.exists(_EDIT_CURSOR_PATH):
+        if os.path.exists(path):
             try:
-                with open(_EDIT_CURSOR_PATH) as f:
+                with open(path) as f:
                     cursor = json.load(f)
             except Exception:
                 cursor = {}
 
         cursor[file_path] = {"line": line, "ts": datetime.now().strftime("%H:%M"), "tool": tool_name}
 
-        os.makedirs(os.path.dirname(_EDIT_CURSOR_PATH), exist_ok=True)
-        with open(_EDIT_CURSOR_PATH, "w") as f:
+        os.makedirs(_CURSOR_DIR, exist_ok=True)
+        with open(path, "w") as f:
             json.dump(cursor, f, indent=2)
     except Exception:
         pass
@@ -308,12 +315,13 @@ def main():
     if not os.path.isdir(get_state_dir()):
         return
 
-    tool_name = payload.get("tool_name", "")
+    tool_name  = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
+    session_id = payload.get("session_id", "")
 
     file_path = tool_input.get("file_path") or tool_input.get("path", "")
     _check_guard_resolution(tool_name, file_path)
-    _update_edit_cursor(tool_name, tool_input)
+    _update_edit_cursor(tool_name, tool_input, session_id)
 
     activity = _extract_activity(tool_name, tool_input)
 

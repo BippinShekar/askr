@@ -430,9 +430,10 @@ def main():
     if not os.path.isdir(get_state_dir()):
         return
 
-    developer = load_developer()
+    developer       = load_developer()
     transcript_path = payload.get("transcript_path", "")
-    autonomous = _was_autonomous()
+    session_id      = payload.get("session_id", "")
+    autonomous      = _was_autonomous()
     _update_allowed_tools(transcript_path)
     _extract_and_save_decisions(transcript_path, get_state_dir())
 
@@ -443,6 +444,7 @@ def main():
         trigger_type="stop",
         developer=developer,
         transcript_path=transcript_path,
+        session_id=session_id,
     )
 
     completed_goals = result.get("completed_goals", [])
