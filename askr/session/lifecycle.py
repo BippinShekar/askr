@@ -288,8 +288,9 @@ def _clear_claude_pid():
         pass
 
 
-def _find_claude_pid_by_project(project_path: str) -> int | None:
-    """Find a running 'claude' process whose cwd matches project_path."""
+def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
+    """Find ALL running 'claude' processes whose cwd matches project_path."""
+    pids = []
     try:
         result = subprocess.run(
             ["pgrep", "-x", "claude"],
@@ -304,45 +305,58 @@ def _find_claude_pid_by_project(project_path: str) -> int | None:
                 )
                 for line in lsof_result.stdout.splitlines():
                     if line.startswith("n") and line[1:] == project_path:
-                        return pid
+                        pids.append(pid)
+                        break
             except Exception:
                 continue
     except Exception:
         pass
-    return None
+    return pids
 
 
 def _kill_claude(project_path: str = ""):
-    """Kill the tracked claude PID, or fall back to finding it by project cwd."""
-    pid = _read_claude_pid()
-    if pid is None and project_path:
-        pid = _find_claude_pid_by_project(project_path)
-        if pid:
-            _log(f"no tracked PID — found claude pid {pid} by cwd")
-    if pid is None:
-        _log("no tracked claude PID to kill — skipping")
+    """Kill ALL claude sessions in this project directory."""
+    pids = _find_all_claude_pids_by_project(project_path) if project_path else []
+
+    # Fall back to legacy single-PID file if no project path given
+    if not pids:
+        legacy = _read_claude_pid()
+        if legacy:
+            pids = [legacy]
+
+    if not pids:
+        _log("no tracked claude PIDs to kill — skipping")
         return
-    try:
-        os.kill(pid, signal.SIGTERM)
-        _log(f"sent SIGTERM to claude pid {pid}")
-    except ProcessLookupError:
-        _clear_claude_pid()
-        return
+
+    _log(f"killing {len(pids)} claude session(s): {pids}")
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            _log(f"sent SIGTERM to claude pid {pid}")
+        except ProcessLookupError:
+            pass
+
     # Give Claude 15s to run Stop hook and exit gracefully.
-    # 2s was too short for extended-thinking sessions mid-API-call.
+    alive = list(pids)
     for _ in range(15):
         time.sleep(1)
+        still_alive = []
+        for pid in alive:
+            try:
+                os.kill(pid, 0)
+                still_alive.append(pid)
+            except ProcessLookupError:
+                _log(f"claude pid {pid} exited cleanly after SIGTERM")
+        alive = still_alive
+        if not alive:
+            break
+
+    for pid in alive:
         try:
-            os.kill(pid, 0)
+            os.kill(pid, signal.SIGKILL)
+            _log(f"sent SIGKILL to claude pid {pid} (still alive after 15s)")
         except ProcessLookupError:
-            _log(f"claude pid {pid} exited cleanly after SIGTERM")
-            _clear_claude_pid()
-            return
-    try:
-        os.kill(pid, signal.SIGKILL)
-        _log(f"sent SIGKILL to claude pid {pid} (still alive after 15s)")
-    except ProcessLookupError:
-        pass
+            pass
     _clear_claude_pid()
 
 

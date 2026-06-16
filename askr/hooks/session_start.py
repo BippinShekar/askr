@@ -25,14 +25,18 @@ from askr.state.goals import format_for_context as goals_context
 from askr.state.config import get_state_dir, load_developer
 
 _LAUNCH_MODE_PATH  = os.path.expanduser("~/.config/askr/launch_mode.json")
-_CLAUDE_PID_PATH   = os.path.expanduser("~/.config/askr/claude_session.pid")
+_SESSIONS_DIR      = os.path.expanduser("~/.config/askr")
 
 
-def _write_claude_pid():
+def _sessions_path(developer: str) -> str:
+    return os.path.join(_SESSIONS_DIR, f"claude_sessions_{developer}.json")
+
+
+def _write_claude_pid(developer: str):
     """
-    Find the running Claude process for this project by cwd and record its PID.
-    Called at every session start so the daemon can kill it cleanly on context
-    overflow — even for manually-opened sessions that weren't started by askr.
+    Find the running Claude process for this project and append its PID to the
+    per-developer sessions registry. Supports parallel sessions — each registers
+    its own PID so the daemon can kill all of them.
     """
     try:
         project_path = os.getcwd()
@@ -49,9 +53,27 @@ def _write_claude_pid():
                 )
                 for line in lsof.stdout.splitlines():
                     if line.startswith("n") and line[1:] == project_path:
-                        os.makedirs(os.path.dirname(_CLAUDE_PID_PATH), exist_ok=True)
-                        with open(_CLAUDE_PID_PATH, "w") as f:
-                            f.write(str(pid))
+                        path = _sessions_path(developer)
+                        os.makedirs(_SESSIONS_DIR, exist_ok=True)
+                        registry = []
+                        try:
+                            with open(path) as f:
+                                registry = json.load(f)
+                        except Exception:
+                            registry = []
+                        # Prune dead PIDs, then add this one
+                        import signal as _sig
+                        live = []
+                        for p in registry:
+                            try:
+                                os.kill(p, 0)
+                                live.append(p)
+                            except OSError:
+                                pass
+                        if pid not in live:
+                            live.append(pid)
+                        with open(path, "w") as f:
+                            json.dump(live, f)
                         return
             except Exception:
                 continue
@@ -233,7 +255,6 @@ def main():
     except Exception:
         payload = {}
 
-    _write_claude_pid()
     _reset_stats_for_project()
 
     pull_ok = True
@@ -247,6 +268,7 @@ def main():
         pass
 
     developer = load_developer()
+    _write_claude_pid(developer)
     queued_tasks = _drain_task_queue(developer)
     _archive_stale_goals()
     _notify_stale_goals()
