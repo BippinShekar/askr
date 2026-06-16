@@ -1,61 +1,45 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 16:20
+Last updated: 2026-06-16 16:21
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Addressed race condition concerns for parallel Claude sessions and implemented PID tracking + kill-on-idle mechanism with cooldown logic
+Fixed lifecycle.py and pre_compact.py to add PID fallback via pgrep, implement POLL_ACTIVE/CONTEXT_TRIGGER constants, and return bool from _wait_for_exchange_end_then_kill for cooldown control
 
 ## Discussion
-User raised critical concern: three parallel Claude sessions writing to the same .md/.jsonl files creates a race condition with undefined winner behavior. Discussed that JSONL append-only design mitigates this for goals/decisions/tasks, but .md files (implementation_state, notifications) are still vulnerable. Implemented PID tracking in session_start.py to record active Claude process, and refined lifecycle.py kill logic with separate cooldowns for successful kills vs. missed PIDs. User's core question remains: how does askr handle concurrent writes to shared state files?
+Session focused on hardening the exchange-monitor kill path and daemon loop cooldown logic. Added pgrep fallback for PID lookup in pre_compact.py to handle cases where Claude PID file is missing or stale. Modified lifecycle.py to return boolean from _wait_for_exchange_end_then_kill so the daemon loop can apply cooldown only when a kill actually occurred, preventing tight spin loops. Verified syntax and constants are in place before attempting commit.
 
 ## Accomplishments
-- [x] Added _write_claude_pid() function to session_start.py to detect and record the running Claude process PID via pgrep + lsof
-- [x] Refined _wait_for_exchange_end_then_kill() in lifecycle.py to return bool (True if kill sent, False if PID not found) for smarter cooldown logic
-- [x] Split TRIGGER_COOLDOWN into two: TRIGGER_COOLDOWN (300s after successful kill) and TRIGGER_MISS_COOLDOWN (60s when PID not found)
-- [x] Lowered POLL_ACTIVE from 30s to 15s and CONTEXT_TRIGGER from 0.65 to 0.60 for faster response to context pressure
-- [x] Enhanced _wait_for_exchange_end_then_kill() to check both PID file AND process scan before declaring Claude gone
-
-## In Progress
-- `askr/hooks/session_start.py` (line 236): PID tracking and git pull failure surfacing — ready to commit
-- `askr/session/lifecycle.py` (line 1170): Kill logic refinement with dual cooldowns and improved PID detection — ready to commit
+- [x] Added POLL_ACTIVE, CONTEXT_TRIGGER constants and pgrep fallback to pre_compact.py
+- [x] Modified _wait_for_exchange_end_then_kill to return bool and updated all kill paths to return True
+- [x] Updated daemon loop in lifecycle.py to use return value for cooldown control
+- [x] Verified syntax validity and presence of new constants via grep and import checks
 
 ## Next Actions
-1. Commit both files: git add askr/hooks/session_start.py askr/session/lifecycle.py && git commit -m 'fix(concurrency): PID tracking + dual-cooldown kill logic for parallel sessions'
-   *Why: Changes are complete and tested; blocking further work until committed*
-2. Document the race condition design decision: JSONL files (goals, decisions, tasks, queue) are append-only and merge-safe; .md files (implementation_state, notifications) are NOT safe for concurrent writes and require external coordination (e.g., one session per dev, or file locking)
-   *Why: User's core concern is unresolved — need explicit design doc explaining which files are safe and which are not, and what happens when three sessions collide*
-3. Consider implementing file-level locking (fcntl or similar) for .md files, OR switch implementation_state and notifications to JSONL format to inherit append-only safety
-   *Why: Current design leaves .md files vulnerable; this is a real blocker for multi-session safety*
-4. Test the PID tracking logic with two simultaneous Claude sessions in the same project to verify both are detected and cooldown logic works correctly
-   *Why: Theory is sound but untested under actual parallel load; need confidence before declaring race condition 'handled'*
+1. Complete the git add command that was cut off (git add askr/hooks/session_start.py askr/hooks/pre_compact.py askr/session/lifecycle.py) and verify staging
+   *Why: The add command in the transcript was incomplete ('askr/session/lifec' truncated). Must stage all three modified files before commit.*
+2. Create three logical commits: (1) session_start.py changes, (2) pre_compact.py PID fallback, (3) lifecycle.py return-bool and cooldown logic
+   *Why: Clean git history per the stated goal. Each file group represents a distinct concern.*
+3. Run integration test: spawn a session, verify Claude PID is written, kill Claude process, verify daemon detects kill and applies cooldown without spin
+   *Why: The changes are syntactically valid but untested in live scenario. Need to confirm pgrep fallback works and cooldown prevents tight loops.*
+4. Update askr_state/implementation_state.md to mark this work complete and move to next priority from blockers or goals
+   *Why: Handover state file is uncommitted and needs to reflect session outcome.*
 
 ## Decisions
-- JSONL append-only format for goals, decisions, tasks, queue — NOT switching to .md for these — Append-only is merge-safe and handles concurrent writes gracefully; .md would require locking or last-write-wins (data loss)
-- Dual cooldown strategy: 300s after successful kill, 60s after missed PID — NOT uniform cooldown — Missed PID means Claude likely exited naturally; re-check sooner. Successful kill means daemon is actively managing; wait longer to avoid thrashing
-- PID tracking via pgrep + lsof (process scan) — NOT relying solely on PID file — PID file can become stale if Claude crashes; scanning processes is more robust
-
-## Failed Approaches
-- Assuming PID file alone is sufficient to track Claude process — File can become stale; added process scan as fallback to detect genuinely exited Claude
+- Return bool from _wait_for_exchange_end_then_kill instead of void — Allows daemon loop to distinguish between 'kill happened' and 'timeout/no-op' so cooldown is applied only when needed, preventing spin loops on repeated checks.
+- Use pgrep as fallback for PID lookup in pre_compact.py — Handles race condition where Claude PID file is missing or stale; pgrep can find the process by name if it still exists.
 
 ## Files In Play
 - `askr/hooks/session_start.py`
+- `askr/hooks/pre_compact.py`
 - `askr/session/lifecycle.py`
-- `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
 
 ## Relational Files
-- `askr/state/reader.py` (imported_by): Builds context injection; needs to know about PID tracking for diagnostics
-- `askr/state/goals.py` (configures): JSONL format is safe for concurrent writes; .md files are not — design decision affects both
-- `askr/cli/askr.py` (imports): Entry point; session_start.py is called from here
+- `askr/session/lifecycle.py` (imports): Daemon loop and exchange-monitor kill logic are core to session lifecycle; changes here affect cooldown behavior.
+- `askr/hooks/pre_compact.py` (imported_by): Called during context-cut hook; PID fallback ensures it can find Claude process even if PID file is stale.
+- `askr/hooks/session_start.py` (configures): Initializes session state and constants; POLL_ACTIVE and CONTEXT_TRIGGER are used by lifecycle and pre_compact.
 
 ## Uncommitted Files
-- `askr/hooks/session_start.py`
-- `askr/session/lifecycle.py`
 - `askr_state/implementation_state.md`
-- `askr_state/notifications.log`
-
-## Blockers
-- Race condition for .md files (implementation_state, notifications) remains unresolved — three parallel sessions will have undefined winner behavior; JSONL files are safe but .md files are not

@@ -9,6 +9,9 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [16:21] Ran: git push
+- [16:21] Ran: git add askr/hooks/session_start.py askr/hooks/pre_compact.py askr/session/lifec
+- [16:21] Ran: git diff --stat
 - [16:20] Ran: grep -n "TRIGGER_MISS_COOLDOWN\|POLL_ACTIVE\|CONTEXT_TRIGGER\|_write_claude_pid\
 - [16:20] Ran: venv/bin/python -c "import askr.hooks.session_start; print('session_start ok')" 
 - [16:20] Modified: /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py
