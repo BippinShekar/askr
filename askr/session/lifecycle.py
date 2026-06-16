@@ -1099,8 +1099,46 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
             pass
     except Exception as e:
         _log(f"daemon fallback notification error: {e}")
-    # Terminal.app fallback: fires after 6s if extension doesn't claim the notification.
-    _start_claude(project_path)
+
+    # Spawn Terminal.app fallback — fires after 6s if extension doesn't claim the notification.
+    # Do NOT call _start_claude here: it would overwrite the direction-inferred context
+    # notification we just wrote with a generic goal_launch notification and wrong prompt.
+    existing = _find_all_claude_pids_by_project(project_path)
+    if existing:
+        _log(f"Claude pid(s) {existing} already running for {project_path} — skipping Terminal.app fallback")
+    else:
+        claude_bin = shutil.which("claude") or "claude"
+        tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
+        safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
+        notif_path  = _NOTIFICATION_PATH
+        fallback_script = (
+            f"import time, json, os, subprocess\n"
+            f"time.sleep(6)\n"
+            f"try:\n"
+            f"    with open({repr(notif_path)}) as _f:\n"
+            f"        _d = json.load(_f)\n"
+            f"    if _d.get('shown'): exit(0)\n"
+            f"except Exception: pass\n"
+            f"_start_cmd = 'cd {project_path} && {claude_bin}{tools_flag}'\n"
+            f"_open_script = 'tell application \"Terminal\"\\n  do script \"' + _start_cmd + '\"\\n  activate\\nend tell'\n"
+            f"subprocess.run(['osascript', '-e', _open_script], timeout=5, "
+            f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            f"time.sleep(10)\n"
+            f"_type_script = 'tell application \"Terminal\"\\n  tell front window\\n"
+            f"    keystroke {repr(safe_prompt)}\\n    key code 36\\n  end tell\\nend tell'\n"
+            f"subprocess.run(['osascript', '-e', _type_script], timeout=5, "
+            f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+        )
+        try:
+            subprocess.Popen(
+                [sys.executable, "-c", fallback_script],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _log("fallback watcher spawned — Terminal.app fires in 6s if extension doesn't handle it")
+        except Exception as e:
+            _log(f"fallback watcher spawn failed: {e}")
 
 
 def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
