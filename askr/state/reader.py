@@ -162,7 +162,7 @@ def build_context_injection(developer: str = None) -> str:
     if architecture:
         sections.append(f"ARCHITECTURE:\n{architecture}")
     if blockers:
-        sections.append(f"BLOCKERS:\n{blockers}")
+        sections.append(f"UNIVERSAL BLOCKERS (affect whole team):\n{blockers}")
 
     if not sections:
         return ""
