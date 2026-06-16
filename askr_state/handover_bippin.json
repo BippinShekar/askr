@@ -1,124 +1,102 @@
 {
-  "task": "Built task queue system for multi-developer coordination with auto-drain on pull, committed Stages 3-4 (team commands and task queue infrastructure)",
-  "discussion_summary": "Session completed the task queue feature allowing developers to queue work for teammates across sessions. User asked critical follow-up questions about file sharing, task assignment inference, and auto-drain mechanics\u2014indicating readiness to move from manual `askr task {dev-name}` commands to implicit task inference from Claude Code discussions. The system is now functional but needs enhancement to support natural language task assignment and automatic inference from context.",
+  "task": "Identified architectural requirements for multi-developer task assignment and auto-drain workflow; clarified shared vs. unique file structure and blocking semantics.",
+  "discussion_summary": "User rejected the explicit `askr task {dev-name} \"do this\"` workflow as wasteful of conversational turns. Instead, user wants inline task assignment during discussion (e.g., \"let's make sure lochan takes care of Z\") with automatic inference of assignee and task content from context. Session ended mid-design: user is asking for clarification on (1) how tasks get assigned implicitly, (2) how auto-drain works post-pull, (3) whether blockers.md is dev-specific, and (4) the overall approach for task routing and inference.",
   "accomplishments": [
     {
-      "what": "Task queue directory and queue file created for bippin user",
+      "what": "Confirmed Stage 1\u20134 shipped: conflict-free .gitattributes, askr init, task queue, and team commands",
       "done": true
     },
     {
-      "what": "askr task list and askr task queue commands tested and verified working",
-      "done": true
-    },
-    {
-      "what": "Fixed timestamp edge case in team display (negative time \u2192 'active now')",
-      "done": true
-    },
-    {
-      "what": "Stage 3 (task queue infrastructure) committed as a8c88d9",
-      "done": true
-    },
-    {
-      "what": "Stage 4 (team commands) committed as a5d7fd3",
-      "done": true
-    },
-    {
-      "what": "All changes pushed to remote",
+      "what": "Identified user's rejection of explicit task syntax in favor of inline, context-aware assignment",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": "askr/cli/askr.py",
+      "what": "Design task assignment inference engine and auto-drain post-pull logic",
+      "last_line": 0
+    },
+    {
+      "file": "askr_state/blockers.md",
+      "what": "Clarify whether blockers are dev-specific or shared; design structure",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Design task inference system: define syntax/convention for implicit task assignment in Claude Code (e.g., '@lochan: do XYZ' or special comment markers) so tasks can be inferred from discussion context rather than explicit CLI calls",
-      "why": "User explicitly rejected manual `askr task {dev-name}` workflow and asked if assignment should be 'inferrable' from discussion\u2014this is the core UX gap blocking adoption"
+      "action": "Design and document the task inference engine: how Claude Code will extract assignee (e.g., 'lochan') and task description from conversational context without explicit `askr task` syntax. Define the prompt/heuristic that identifies task boundaries.",
+      "why": "User explicitly rejected manual task syntax; inference is the core blocker for the desired workflow."
     },
     {
       "order": 2,
-      "action": "Implement auto-drain mechanism: define when/how task queues are automatically processed on git pull (e.g., post-pull hook, daemon polling, or manual drain command) and what 'draining' means (notification, auto-assignment, log entry)",
-      "why": "User asked 'how are these tasks going to get auto-drained post pull?' indicating this is a critical missing piece of the workflow"
+      "action": "Design auto-drain mechanism: define how tasks in `tasks/queue_{dev}.md` are automatically drained (moved to current_task or completed) when that dev pulls the repo. Decide: does drain happen on git pull hook, on next `askr` command, or on session start?",
+      "why": "User asked 'how are these tasks going to get auto-drained post pull?' \u2014 this is unresolved and critical for the workflow."
     },
     {
       "order": 3,
-      "action": "Document file sharing model: clarify which files are shared (askr_state/tasks/*, .gitattributes) vs. unique per developer, and how conflict prevention works when both developers edit task queues simultaneously",
-      "why": "User asked 'what files will be shared with me and the co-founder and what will be unique to us'\u2014this needs explicit documentation"
+      "action": "Clarify blockers.md structure: decide if blockers are dev-specific (one per dev) or shared (one global file). If dev-specific, create `blockers_{dev}.md` pattern; if shared, define merge/conflict strategy.",
+      "why": "User asked 'blockers.md will be basically dev specific right?' \u2014 needs explicit design decision and file structure."
     },
     {
       "order": 4,
-      "action": "Add task metadata schema: extend task queue format to capture assignee, context (file/line), inferred intent, and status so tasks carry semantic meaning beyond plain text",
-      "why": "Current queue is append-only text; inference and auto-drain require structured task objects"
+      "action": "Build a Stage 5 commit: implement task inference hook in Claude Code integration (or as a CLI command) that parses conversation context and auto-queues tasks for teammates.",
+      "why": "Inference engine is the missing piece to enable the desired 'inline assignment' workflow."
     },
     {
       "order": 5,
-      "action": "Test multi-developer scenario: simulate bippin and lochan both pulling, queuing tasks for each other, and verify no conflicts and proper auto-drain behavior",
-      "why": "System has been tested single-user; multi-developer edge cases (concurrent queue writes, stale pulls) need validation"
+      "action": "Document the full multi-dev workflow in README or DESIGN.md: shared files (repo code), unique files (queue/current/blockers per dev), task flow (inline \u2192 queue \u2192 current \u2192 done), and auto-drain timing.",
+      "why": "User needs clarity on the complete system before implementation; documentation will unblock design decisions."
     }
   ],
   "decisions": [
     {
-      "decision": "Task queue stored as append-only text file in askr_state/tasks/queue_{username}.md rather than structured JSON",
-      "reason": "Append-only format prevents merge conflicts; union merge strategy in .gitattributes handles concurrent writes safely"
-    },
-    {
-      "decision": "Manual CLI command `askr task {dev-name} 'task text'` implemented as MVP before inference layer",
-      "reason": "Establishes working baseline; inference can be layered on top without breaking existing queue format"
+      "decision": "Task assignment must be inferred from conversational context, not explicit CLI syntax.",
+      "reason": "User rejected `askr task {dev-name}` as wasteful; wants inline assignment during discussion."
     }
   ],
   "user_rejected_decisions": [
     {
-      "what_was_proposed": "Continuing to use explicit `askr task {dev-name} 'do this'` as the primary task assignment workflow",
-      "user_signal": "won't it be inferrable? like let's assign lochan this task I say in claude code after some discussion regarding XYZ, it's just that we have to use the proper n[aming convention]",
-      "domain": "task assignment UX and CLI interface",
+      "what_was_proposed": "Explicit task syntax: `askr task {dev-name} \"do this\"` for assigning work to teammates.",
+      "user_signal": "I wouldn't want to waste one conversational turn with claude just to say assign this to lochan. I would instead do something like, while talking about xyz, let's make sure lochan takes care of z.",
+      "domain": "askr/cli/askr.py and task assignment workflow",
       "confidence": 0.95
     }
   ],
-  "failed_approaches": [
-    {
-      "approach": "Testing task queue with incomplete bash commands (truncated strings in tool calls)",
-      "reason": "Commands were cut off mid-execution; had to re-run with full syntax to verify functionality"
-    }
-  ],
+  "failed_approaches": [],
   "files_in_play": [
-    "askr/hooks/session_start.py",
     "askr/cli/askr.py",
     "askr_state/tasks/queue_bippin.md",
-    ".gitattributes"
+    "askr_state/tasks/queue_lochan.md",
+    "askr_state/blockers.md",
+    "askr_state/current_task_bippin.md",
+    "askr_state/current_task_lochan.md"
   ],
   "relational_files": [
     {
-      "file": "askr/cli/askr.py",
-      "relationship": "imports",
-      "why": "Main CLI entry point; contains task list and team commands tested this session"
-    },
-    {
       "file": "askr/hooks/session_start.py",
       "relationship": "configures",
-      "why": "Initializes task queue directory structure on askr init"
+      "why": "Session start hook will trigger auto-drain of queued tasks when dev pulls repo."
     },
     {
       "file": ".gitattributes",
       "relationship": "configures",
-      "why": "Defines union merge strategy for append-only task queue files to prevent conflicts"
-    },
-    {
-      "file": "askr_state/notifications.log",
-      "relationship": "imported_by",
-      "why": "Uncommitted log file; tracks session lifecycle events"
+      "why": "Union merge strategy on append-only task queue files prevents conflicts across devs."
     }
   ],
   "uncommitted_files": [
     "askr_state/notifications.log"
   ],
   "blockers": [
-    "Task inference system not yet designed\u2014unclear how Claude Code should signal task assignment to teammates",
-    "Auto-drain mechanism undefined\u2014no specification for when/how queued tasks are processed",
-    "Task metadata schema missing\u2014current append-only text format cannot capture assignee, context, or status needed for inference and automation"
+    "Task inference engine design not yet specified: how does Claude Code extract assignee and task from conversation?",
+    "Auto-drain timing undefined: when do queued tasks move to current_task or complete?",
+    "Blockers.md structure unresolved: dev-specific or shared?"
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-16T04:11:00+00:00",
+    "timestamp": "2026-06-16T13:27:00.000000+00:00",
     "developer": "bippin"
   }
 }
