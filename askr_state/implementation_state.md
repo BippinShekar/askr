@@ -41,6 +41,18 @@ Last active: 2026-06-16 16:58
 
 ### In Progress
 
+- [21:31] Ran: ps aux | grep -i "claude" | grep -v grep | head -5
+- [21:31] Ran: cat ~/.config/askr/notification.json 2>/dev/null || echo "no notification file"
+- [21:31] Ran: diff /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js /Users/bi
+- [21:31] Ran: cp /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js /Users/bipp
+- [21:30] Ran: find /Users/bippin/Desktop/askr/askr/ide -type f | head -20
+- [21:30] Ran: find /Users/bippin/Desktop/askr -name "Makefile" -o -name "deploy*.sh" -o -name 
+- [21:30] Ran: diff /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js /Users/bi
+- [21:30] Ran: find /Users/bippin/Desktop/askr -name "*.ts" -o -name "extension.js" 2>/dev/null
+- [21:30] Ran: ls /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/
+- [21:30] Ran: git log --oneline -8
+- [21:30] Ran: ls /Users/bippin/Desktop/askr/askr_state/ 2>/dev/null
+- [21:30] Ran: find /Users/bippin/Desktop/askr -name "handover*" -o -name "HANDOVER*" 2>/dev/nu
 - [21:29] Ran: git add askr/hooks/pre_compact.py && git commit -m "fix(pre_compact): kill only 
 - [21:29] Ran: venv/bin/python -c "import askr.hooks.pre_compact; print('ok')"
 - [21:29] Modified: /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py
