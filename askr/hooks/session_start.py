@@ -27,11 +27,12 @@ from askr.state.config import get_state_dir, load_developer
 _LAUNCH_MODE_PATH = os.path.expanduser("~/.config/askr/launch_mode.json")
 
 
-def git_pull():
+def git_pull() -> bool:
     try:
-        subprocess.run(["git", "pull", "--quiet"], capture_output=True, timeout=15)
+        result = subprocess.run(["git", "pull", "--quiet"], capture_output=True, timeout=15)
+        return result.returncode == 0
     except Exception:
-        pass
+        return False
 
 
 def _read_launch_mode() -> dict:
@@ -202,8 +203,9 @@ def main():
 
     _reset_stats_for_project()
 
+    pull_ok = True
     if os.path.isdir(get_state_dir()):
-        git_pull()
+        pull_ok = git_pull()
 
     try:
         from askr.state.analytics import record_session_start
@@ -252,6 +254,13 @@ def main():
             f"This session was started automatically by askr after a context or quota checkpoint. "
             f"Pick up from the handover above and work on:\n\n**{goal_text}**\n\n"
             f"Continue autonomously. When done, the session will be checkpointed again."
+        )
+
+    if not pull_ok:
+        parts.insert(0,
+            "⚠️ WARNING: git pull failed at session start. "
+            "Team task queue and shared state may be stale. "
+            "Run `git pull` manually before making changes, or your work may conflict with teammates'."
         )
 
     if parts:
