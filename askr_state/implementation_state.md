@@ -9,6 +9,45 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [14:15] Ran: git push --quiet && echo "pushed"
+- [14:15] Ran: git commit -m "$(cat <<'EOF'
+feat(goals): goals.md → goals.jsonl — append-only J
+- [14:15] Ran: git add .gitattributes .gitignore askr/cli/askr.py askr/session/checkpoint.py as
+- [14:15] Ran: git diff askr_state/goals.jsonl | head -20
+- [14:14] Ran: git rm --cached askr_state/goals.md 2>/dev/null || echo "already untracked"
+git 
+- [14:14] Ran: venv/bin/python3 -c "
+from askr.state.goals import add_goal, complete_goal, disc
+- [14:14] Ran: git diff --stat HEAD -- askr_state/goals.jsonl
+git status askr_state/goals.jsonl
+- [14:13] Ran: git show HEAD:askr_state/goals.jsonl | python3 -c "
+import sys, json
+lines = [l 
+- [14:13] Ran: wc -l askr_state/goals.jsonl
+venv/bin/python3 -c "
+import json
+with open('askr_s
+- [14:13] Ran: git log --oneline -- askr_state/goals.jsonl | head -3
+git show HEAD:askr_state/g
+- [14:13] Ran: git log --oneline -5 2>/dev/null; echo "---"; ls -la askr_state/goals.jsonl
+- [14:12] Ran: venv/bin/python3 -c "
+import json
+entries = []
+with open('askr_state/goals.jsonl
+- [14:11] Ran: venv/bin/python3 -c "
+from datetime import date
+print('today:', date.today().str
+- [14:11] Ran: venv/bin/python3 -c "
+import json
+with open('askr_state/goals.jsonl') as f:
+    
+- [14:11] Ran: grep '"status":"open"' askr_state/goals.jsonl | head -5
+wc -l askr_state/goals.j
+- [14:11] Ran: venv/bin/python3 -c "
+from askr.state.goals import load_open_goals, load_today_g
+- [14:11] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:11] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
+- [14:11] Modified: /Users/bippin/Desktop/askr/askr/cli/askr.py
 - [14:11] Modified: /Users/bippin/Desktop/askr/askr/session/checkpoint.py
 - [14:11] Modified: /Users/bippin/Desktop/askr/.gitignore
 - [14:11] Modified: /Users/bippin/Desktop/askr/.gitattributes
