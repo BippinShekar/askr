@@ -179,10 +179,14 @@ def _generate_handover_with_llm(
     trigger_type: str = "stop",
     open_goals: list = None,
     session_id: str = "",
+    existing_handover: dict = None,
 ) -> Optional[dict]:
     """
-    Call Haiku to generate a structured JSON handover from the transcript.
-    Returns a parsed dict on success, None on failure (caller uses mechanical fallback).
+    Call Haiku to update the project state document from this session's transcript.
+
+    If existing_handover is provided (the current project state), Haiku merges it
+    with what this session did — producing a living project state, not a session diary.
+    This makes parallel sessions composable: each session end ADDS to project knowledge.
     """
     if not transcript_text.strip():
         return None
@@ -205,9 +209,21 @@ def _generate_handover_with_llm(
         now_iso = datetime.now(timezone.utc).isoformat()
         uncommitted_json = json.dumps(uncommitted_files)
 
-        prompt = f"""A Claude Code session just ended. Generate a structured JSON handover for the NEXT session to continue from exactly where this one stopped.
+        existing_state_section = ""
+        if existing_handover:
+            try:
+                existing_json = json.dumps(existing_handover, indent=2)[:4000]
+                existing_state_section = f"""
+EXISTING PROJECT STATE (accumulated from prior sessions — update this, do not erase it):
+{existing_json}
 
-SESSION TRANSCRIPT:
+"""
+            except Exception:
+                pass
+
+        prompt = f"""A Claude Code session just ended. Update the project state document to reflect what this session accomplished.
+{existing_state_section}
+SESSION TRANSCRIPT (this session only):
 {transcript_text}
 
 TRACKED FILE EDITS — ground truth from PostToolUse hook (exact line numbers, not inferred):
@@ -219,10 +235,10 @@ UNCOMMITTED FILES — from git status (do not change this field):
 Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 
 {{
-  "task": "one sentence PAST-TENSE OUTCOME — what was accomplished this session (e.g. 'Fixed X', 'Built Y', 'Refactored Z to do W')",
-  "discussion_summary": "key context, reasoning, and what shaped decisions this session — 2-4 sentences",
+  "task": "one sentence PAST-TENSE summary of what the project accomplished across all recent sessions",
+  "discussion_summary": "key context, reasoning, and accumulated understanding — 2-4 sentences synthesising all known sessions",
   "accomplishments": [{{"what": "concrete thing completed", "done": true}}],
-  "in_progress": [{{"file": "exact/path.py", "what": "what was being done here", "last_line": 0}}],
+  "in_progress": [{{"file": "exact/path.py", "what": "what is being done here", "last_line": 0}}],
   "next_actions": [
     {{"order": 1, "action": "specific immediately actionable instruction", "why": "why this is next"}},
     {{"order": 2, "action": "...", "why": "..."}}
@@ -231,7 +247,7 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
   "user_rejected_decisions": [{{"what_was_proposed": "...", "user_signal": "exact or paraphrased rejection", "domain": "file or area it affects", "confidence": 0.9}}],
   "failed_approaches": [{{"approach": "what was tried", "reason": "why it failed"}}],
   "files_in_play": ["exact/path.py"],
-  "relational_files": [{{"file": "exact/path.py", "relationship": "imports|imported_by|configures|tested_by", "why": "why relevant to this session"}}],
+  "relational_files": [{{"file": "exact/path.py", "relationship": "imports|imported_by|configures|tested_by", "why": "why relevant"}}],
   "uncommitted_files": {uncommitted_json},
   "blockers": ["specific blocker"],
   "completed_goals": [],
@@ -239,15 +255,17 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 }}
 
 Rules:
-- task: PAST TENSE OUTCOME. "Fixed X" not "Fix X". Describes what was accomplished, not what needs doing. An autonomous session reading this must know the work is done.
-- FINAL STATE ONLY. Reversed or superseded approaches go in failed_approaches, never next_actions.
-- LAST EXCHANGE WINS. Handover reflects where things ended, not what was tried along the way.
-- in_progress.last_line: USE values from TRACKED FILE EDITS — they are exact. Estimate only for files not in that list.
+- This is a PROJECT STATE document, not a session diary. It accumulates across sessions.
+- MERGE, do not replace: keep relevant items from EXISTING PROJECT STATE; update or remove items this session resolved.
+- in_progress: REMOVE items this session completed. KEEP still-relevant items from existing state. ADD new in-progress from this session.
+- next_actions: REMOVE actions this session completed (check git log). KEEP still-valid ones. ADD new ones.
+- decisions: KEEP all existing decisions. APPEND new ones from this session. Never lose prior decisions.
+- failed_approaches: KEEP all existing. APPEND new ones from this session.
+- task: PAST TENSE. Describes the overall project state, not just this session's work.
+- in_progress.last_line: USE values from TRACKED FILE EDITS — they are exact. Estimate only for unlisted files.
 - uncommitted_files: already set above from git — copy it verbatim, do not change.
-- next_actions: 3-5 ordered actions for work NOT YET DONE. Never list operations already visible in RECENT GIT LOG above. If git shows a commit was made, that work is done — do not list it again.
-- user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include. Empty array if uncertain.
-- decisions: choices between alternatives that rule something out — not observations or facts.
-- completed_goals: list exact goal strings from OPEN GOALS that are clearly finished per transcript. Conservative.
+- user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include.
+- completed_goals: list exact goal strings from OPEN GOALS completed THIS SESSION only. Conservative.
 - Empty array [] for sections with nothing to report. Never null."""
 
         raw = call_claude(
@@ -635,7 +653,24 @@ def create_checkpoint(
         except Exception:
             pass
 
-        llm_summary = _generate_handover_with_llm(transcript_text, trigger_type=trigger_type, open_goals=open_goals, session_id=session_id)
+        # Load existing handover as project state baseline — Haiku will UPDATE it,
+        # not replace it. This is what makes parallel sessions composable.
+        existing_handover = None
+        try:
+            from askr.state.reader import load_own_handover_raw
+            raw = load_own_handover_raw(developer)
+            if isinstance(raw, dict) and raw:
+                existing_handover = raw
+        except Exception:
+            pass
+
+        llm_summary = _generate_handover_with_llm(
+            transcript_text,
+            trigger_type=trigger_type,
+            open_goals=open_goals,
+            session_id=session_id,
+            existing_handover=existing_handover,
+        )
         if llm_summary:
             summary = llm_summary
             tool_actions = _extract_tool_actions(entries)
