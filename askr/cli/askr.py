@@ -324,7 +324,6 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
         f"handover_{developer}.md": "handover_template.md",
         "decisions.md":             "decisions_template.md",
         "blockers.md":              "blockers_template.md",
-        "goals.md":                 "goals_template.md",
     }
 
     created = []
@@ -353,8 +352,14 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
     os.makedirs(tasks_dir, exist_ok=True)
     queue_path = os.path.join(tasks_dir, f"queue_{developer}.jsonl")
     if not os.path.exists(queue_path):
-        open(queue_path, "w").close()  # empty file — ready to append
+        open(queue_path, "w").close()
         created.append(f"tasks/queue_{developer}.jsonl")
+
+    # Shared goals store (JSONL — append-only, union-merge safe)
+    goals_path = state_path("goals.jsonl")
+    if not os.path.exists(goals_path):
+        open(goals_path, "w").close()
+        created.append("goals.jsonl")
 
     return created, skipped
 
@@ -494,11 +499,11 @@ def _update_gitignore():
 def _install_gitattributes():
     """Write union-merge rules for append-only shared state files."""
     rules = [
-        "askr_state/decisions.md       merge=union",
-        "askr_state/goals.md           merge=union",
+        "askr_state/decisions.jsonl    merge=union",
+        "askr_state/goals.jsonl        merge=union",
         "askr_state/failed_approaches.md merge=union",
         "askr_state/notifications.log  merge=union",
-        "askr_state/tasks/queue_*.md   merge=union",
+        "askr_state/tasks/queue_*.jsonl merge=union",
     ]
     ga_path = ".gitattributes"
     existing = ""

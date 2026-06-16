@@ -1,212 +1,131 @@
 import os
-import re
-from datetime import datetime, date
+import json
+import uuid
+from datetime import datetime, date, timezone
 from askr.state.config import state_path, ensure_state_dir
 
-GOALS_FILE = "goals.md"
+GOALS_FILE = "goals.jsonl"
 
 
-def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M")
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _today() -> str:
     return date.today().strftime("%Y-%m-%d")
 
 
-def _read() -> str:
-    path = state_path(GOALS_FILE)
-    if not os.path.exists(path):
-        return ""
-    with open(path) as f:
-        return f.read()
+def _path() -> str:
+    return state_path(GOALS_FILE)
 
 
-def _write(content: str):
-    ensure_state_dir()
-    with open(state_path(GOALS_FILE), "w") as f:
-        f.write(content)
-
-
-def _today_header() -> str:
-    return f"## Today - {_today()}"
-
-
-def _section_lines(content: str, header: str) -> list[str]:
-    if header not in content:
+def _read_all() -> list[dict]:
+    """Read goals from JSONL. Last entry per ID wins (append-only update pattern)."""
+    p = _path()
+    if not os.path.exists(p):
         return []
-    start = content.index(header) + len(header)
-    rest = content[start:]
-    end = rest.find("\n## ")
-    section = rest[:end] if end > 0 else rest
-    return [l.strip() for l in section.split("\n") if l.strip()]
+    by_id: dict[str, dict] = {}
+    with open(p) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                eid = entry.get("id")
+                if eid:
+                    by_id[eid] = entry
+            except Exception:
+                pass
+    return list(by_id.values())
+
+
+def _append(entry: dict):
+    ensure_state_dir()
+    with open(_path(), "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
 
 def add_goal(text: str, section: str = "today", auto_suggested: bool = False):
-    content = _read()
-    today_hdr = _today_header()
-    ts = datetime.now().strftime("%Y-%m-%dT%H:%M")
-    meta = f"added: {ts}"
-    if auto_suggested:
-        meta += ", auto_suggested"
-    new_line = f"- [ ] {text.strip()} <!-- {meta} -->"
-
-    if not content:
-        _write(
-            f"# Goals\n\n{today_hdr}\n\n{new_line}\n\n"
-            f"## Backlog\n\n## Done\n\n"
-        )
-        return
-
-    target = today_hdr if section == "today" else "## Backlog"
-
-    if target in content:
-        idx = content.index(target) + len(target)
-        content = content[:idx] + f"\n\n{new_line}" + content[idx:]
-    elif section == "today":
-        content = f"{today_hdr}\n\n{new_line}\n\n" + content
-    else:
-        content = content.rstrip() + f"\n\n## Backlog\n\n{new_line}\n"
-
-    _write(content)
+    _append({
+        "id":            uuid.uuid4().hex[:8],
+        "text":          text.strip(),
+        "status":        "open" if section == "today" else "backlog",
+        "date":          _today(),
+        "added":         _now_iso(),
+        "auto_suggested": auto_suggested,
+        "done_at":       None,
+    })
 
 
 def complete_goal(text: str) -> bool:
-    content = _read()
-    if not content:
-        return False
-
-    matched = None
-    for line in content.split("\n"):
-        if line.strip().startswith(("- [ ]", "- [x]")) and _strip_ts(line.strip()[5:]) == text.strip():
-            matched = line
-            break
-
-    if not matched:
-        return False
-
-    content = content.replace(matched + "\n", "").replace(matched, "")
-
-    done_line = f"[{_now()}] {text.strip()}"
-    if "## Done" in content:
-        content = content.replace("## Done\n", f"## Done\n{done_line}\n", 1)
-    else:
-        content = content.rstrip() + f"\n\n## Done\n{done_line}\n"
-
-    _write(content)
-    return True
+    for g in _read_all():
+        if g.get("text", "").strip() == text.strip() and g.get("status") in ("open", "backlog"):
+            _append({**g, "status": "done", "done_at": _now_iso()})
+            return True
+    return False
 
 
-def _strip_ts(text: str) -> str:
-    return re.sub(r'\s*<!--.*?-->', '', text).strip()
+def discard_goal(text: str) -> bool:
+    for g in _read_all():
+        if g.get("text", "").strip() == text.strip() and g.get("status") in ("open", "backlog"):
+            _append({**g, "status": "discarded", "done_at": _now_iso()})
+            return True
+    return False
 
 
 def load_open_goals() -> list[str]:
-    content = _read()
-    if not content:
-        return []
-    return [
-        _strip_ts(l.strip()[5:])
-        for l in content.split("\n")
-        if l.strip().startswith("- [ ]")
-    ]
+    return [g["text"] for g in _read_all() if g.get("status") in ("open", "backlog")]
 
 
 def load_today_goals() -> list[str]:
-    content = _read()
-    if not content:
-        return []
-    lines = _section_lines(content, _today_header())
-    return [_strip_ts(l[5:]) for l in lines if l.startswith("- [ ]")]
+    today = _today()
+    return [
+        g["text"] for g in _read_all()
+        if g.get("status") == "open" and g.get("date") == today
+    ]
 
 
 def get_stale_goals(hours: int = 6) -> list[tuple[str, str, float]]:
-    """
-    Return goals older than `hours` as list of (clean_text, added_iso, hours_old).
-    Only checks goals with a stored timestamp — silently skips goals without one.
-    """
-    content = _read()
-    if not content:
-        return []
-
+    now = datetime.now(timezone.utc)
     stale = []
-    now = datetime.now()
-    for line in content.split("\n"):
-        if not line.strip().startswith("- [ ]"):
+    for g in _read_all():
+        if g.get("status") not in ("open", "backlog"):
             continue
-        m = re.search(r'<!-- added: (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}) -->', line)
-        if not m:
+        added_str = g.get("added", "")
+        if not added_str:
             continue
         try:
-            added = datetime.fromisoformat(m.group(1))
+            added = datetime.fromisoformat(added_str.replace("Z", "+00:00"))
             age_hours = (now - added).total_seconds() / 3600
             if age_hours >= hours:
-                stale.append((_strip_ts(line.strip()[5:]), m.group(1), round(age_hours, 1)))
+                stale.append((g["text"], added_str, round(age_hours, 1)))
         except Exception:
             continue
     return stale
 
 
-def discard_goal(text: str) -> bool:
-    content = _read()
-    if not content:
-        return False
-
-    # Match line with or without timestamp comment
-    target = None
-    for line in content.split("\n"):
-        if line.strip().startswith("- [ ]") and _strip_ts(line.strip()[5:]) == text.strip():
-            target = line
-            break
-
-    if not target:
-        return False
-
-    content = content.replace(target + "\n", "").replace(target, "")
-
-    done_line = f"[{_now()}] DISCARDED: {text.strip()}"
-    if "## Done" in content:
-        content = content.replace("## Done\n", f"## Done\n{done_line}\n", 1)
-    else:
-        content = content.rstrip() + f"\n\n## Done\n{done_line}\n"
-
-    _write(content)
-    return True
-
-
 def expire_auto_suggested_goals() -> int:
-    """
-    Discard any open goals tagged auto_suggested. Called at session end.
-    These are single-session hints — if not completed, they shouldn't carry
-    forward and contaminate the next session's context or autonomous prompts.
-    Returns count removed.
-    """
-    content = _read()
-    if not content:
-        return 0
-    to_discard = [
-        _strip_ts(line.strip()[5:])
-        for line in content.split("\n")
-        if line.strip().startswith("- [ ]") and "auto_suggested" in line
-    ]
-    for text in to_discard:
-        discard_goal(text)
-    return len(to_discard)
+    count = 0
+    for g in _read_all():
+        if g.get("auto_suggested") and g.get("status") in ("open", "backlog"):
+            _append({**g, "status": "discarded", "done_at": _now_iso()})
+            count += 1
+    return count
 
 
 def load_done_today() -> list[str]:
-    content = _read()
-    if not content:
-        return []
     today = _today()
-    lines = _section_lines(content, "## Done")
-    return [l for l in lines if l.startswith(f"[{today}")]
+    return [
+        g["text"] for g in _read_all()
+        if g.get("status") == "done" and (g.get("done_at") or "")[:10] == today
+    ]
 
 
 def format_for_context() -> str:
     today_goals = load_today_goals()
-    open_goals = load_open_goals()
-    backlog = [g for g in open_goals if g not in today_goals]
+    open_goals  = load_open_goals()
+    backlog     = [g for g in open_goals if g not in today_goals]
 
     if not open_goals:
         return ""
@@ -226,20 +145,48 @@ def format_for_context() -> str:
     return "\n".join(parts)
 
 
+def archive_stale_goals() -> int:
+    today = _today()
+    count = 0
+    for g in _read_all():
+        if g.get("status") == "open" and g.get("date") != today:
+            _append({**g, "status": "backlog"})
+            count += 1
+    return count
+
+
 def suggest_goals_from_handover(developer: str) -> list[str]:
     """
     Call Haiku to extract 1-2 suggested goals from the developer's last handover.
-    Only called when today has no goals set. Returns [] if handover is missing,
-    empty, or the Haiku call fails — so session start is never blocked.
+    Tries JSON handover first, then .md fallback.
+    Returns [] if handover is missing, empty, or the Haiku call fails.
     """
     try:
         from askr.state.config import state_path as _state_path
-        handover_path = _state_path(f"handover_{developer}.md")
-        if not os.path.exists(handover_path):
-            return []
 
-        with open(handover_path) as f:
-            handover = f.read().strip()
+        handover = ""
+        json_path = _state_path(f"handover_{developer}.json")
+        md_path   = _state_path(f"handover_{developer}.md")
+
+        if os.path.exists(json_path):
+            try:
+                with open(json_path) as f:
+                    data = json.load(f)
+                parts = []
+                if data.get("task"):
+                    parts.append(f"Task: {data['task']}")
+                if data.get("next_actions"):
+                    actions = [a.get("action", "") for a in data["next_actions"][:3]]
+                    parts.append("Next: " + "; ".join(actions))
+                if data.get("in_progress"):
+                    files = [ip.get("file", "") for ip in data["in_progress"][:3]]
+                    parts.append("In progress: " + ", ".join(files))
+                handover = "\n".join(parts)
+            except Exception:
+                pass
+        elif os.path.exists(md_path):
+            with open(md_path) as f:
+                handover = f.read().strip()
 
         if len(handover) < 50:
             return []
@@ -277,66 +224,15 @@ If the handover is empty or unclear, return []."""
         return []
 
 
-def archive_stale_goals() -> int:
-    """
-    Move uncompleted goals from past-dated Today sections to Backlog.
-    Called at every session start — prevents stale goals from driving new sessions.
-    Returns count of goals archived.
-    """
-    content = _read()
-    if not content:
-        return 0
-
-    today = _today()
-    lines = content.split('\n')
-    result_lines = []
-    stale_goals = []
-    in_stale = False
-
-    for line in lines:
-        m = re.match(r'^## Today - (\d{4}-\d{2}-\d{2})$', line.strip())
-        if m:
-            if m.group(1) != today:
-                in_stale = True
-                continue  # drop the stale header
-            else:
-                in_stale = False
-        elif line.strip().startswith('## '):
-            in_stale = False
-
-        if in_stale:
-            if line.strip().startswith('- [ ]'):
-                stale_goals.append(line.strip())
-            continue  # drop all lines in stale section
-
-        result_lines.append(line)
-
-    if not stale_goals:
-        return 0
-
-    content = '\n'.join(result_lines)
-    insert = '\n'.join(stale_goals) + '\n'
-    if '## Backlog' in content:
-        content = content.replace('## Backlog\n', f'## Backlog\n{insert}', 1)
-    else:
-        content = content.rstrip() + '\n\n## Backlog\n\n' + insert
-
-    _write(content)
-    return len(stale_goals)
-
-
 def infer_completed_from_activity(activity_lines: list[str], goals: list[str]) -> list[str]:
-    """
-    Use LLM to infer which goals were completed based on session activity.
-    Returns list of goal texts that appear to be done.
-    """
+    """Use LLM to infer which goals were completed based on session activity."""
     if not goals or not activity_lines:
         return []
-
     try:
         from askr.clients.claude import call_claude
+        import json as _json
 
-        goals_text = "\n".join(f"- {g}" for g in goals)
+        goals_text   = "\n".join(f"- {g}" for g in goals)
         activity_text = "\n".join(activity_lines[:30])
 
         prompt = f"""These were the open goals:
@@ -359,8 +255,7 @@ Only include goals where the activity clearly shows completion. Be conservative.
         if result.startswith("```"):
             result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-        import json
-        completed = json.loads(result)
+        completed = _json.loads(result)
         return [g for g in completed if g in goals]
 
     except Exception:

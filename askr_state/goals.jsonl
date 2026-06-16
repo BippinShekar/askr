@@ -40,3 +40,5 @@
 {"id": "f6634597", "text": "Review implementation_state.md and recent git diff to identify in-progress work", "status": "open", "date": "2026-06-16", "added": "2026-06-16T14:06:00Z", "auto_suggested": true, "done_at": null}
 {"id": "d5805b15", "text": "Resume development from checkpoint and complete blocked tasks", "status": "discarded", "date": "2026-06-16", "added": "2026-06-16T14:06:00Z", "auto_suggested": true, "done_at": "2026-06-16T08:41:21Z"}
 {"id": "f6634597", "text": "Review implementation_state.md and recent git diff to identify in-progress work", "status": "discarded", "date": "2026-06-16", "added": "2026-06-16T14:06:00Z", "auto_suggested": true, "done_at": "2026-06-16T08:41:21Z"}
+{"id": "6e9d9b7d", "text": "test JSONL goal migration", "status": "open", "date": "2026-06-16", "added": "2026-06-16T08:44:48Z", "auto_suggested": false, "done_at": null}
+{"id": "6e9d9b7d", "text": "test JSONL goal migration", "status": "done", "date": "2026-06-16", "added": "2026-06-16T08:44:48Z", "auto_suggested": false, "done_at": "2026-06-16T08:44:48Z"}

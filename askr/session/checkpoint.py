@@ -801,9 +801,8 @@ def _generate_project_brief(state_dir: str, developer: str):
     Written for a human — co-founder or new hire should be fully oriented from this file alone.
     """
     try:
-        decisions_path = os.path.join(state_dir, "decisions.md")
+        decisions_path = os.path.join(state_dir, "decisions.jsonl")
         arch_path      = os.path.join(state_dir, "architecture.md")
-        handover_path  = os.path.join(state_dir, f"handover_{developer}.md")
         brief_path     = os.path.join(state_dir, "project_brief.md")
 
         def _read(p):
@@ -813,9 +812,34 @@ def _generate_project_brief(state_dir: str, developer: str):
             except Exception:
                 return ""
 
-        decisions  = _read(decisions_path)
+        def _read_decisions_jsonl(p):
+            try:
+                lines = []
+                with open(p) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        d = json.loads(line)
+                        text = f"[{d.get('at','')}] [{d.get('dev','')}] {d.get('decision','')}"
+                        if d.get("reason"):
+                            text += f". Reason: {d['reason']}"
+                        lines.append(text)
+                return "\n".join(lines[-30:])
+            except Exception:
+                return ""
+
+        decisions  = _read_decisions_jsonl(decisions_path)
         arch       = _read(arch_path)
-        handover   = _read(handover_path)
+
+        # Try JSON handover first, then .md fallback
+        handover = ""
+        json_handover_path = os.path.join(state_dir, f"handover_{developer}.json")
+        md_handover_path   = os.path.join(state_dir, f"handover_{developer}.md")
+        if os.path.exists(json_handover_path):
+            handover = _read(json_handover_path)
+        elif os.path.exists(md_handover_path):
+            handover = _read(md_handover_path)
 
         from askr.state.goals import load_open_goals
         open_goals = "\n".join(f"- {g}" for g in (load_open_goals() or []))
