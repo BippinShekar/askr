@@ -1,25 +1,25 @@
 {
-  "task": "Migrated goals.md to append-only goals.jsonl JSONL format, verified data integrity, and pushed changes to main branch",
-  "discussion_summary": "Session focused on converting the goals tracking system from markdown to JSONL for better merge safety and programmatic access. Verified that 40 unique goals were correctly preserved during migration, confirmed the stop hook had already discarded auto_suggested entries, tested the goals.py module functions, and completed the git workflow to commit and push the changes. The append-only JSONL structure ensures union-merge safety across concurrent developer sessions.",
+  "task": "Completed 7-stage goals refactoring (goals.md \u2192 goals.jsonl append-only JSONL) and identified critical workflow gaps for multi-developer task assignment and session synchronization",
+  "discussion_summary": "Session concluded Stage 7 with goals.jsonl migration and commit (0d68847). User then raised two critical scenarios: (1) Lochan pulling every morning to sync assigned tasks, and (2) Lochan starting a session after 4+ hours idle without pulling, risking stale task state. User is asking how askr should handle both scenarios and whether a pre-session pull hook should be implemented to prevent working in the dark on outdated assignments.",
   "accomplishments": [
     {
-      "what": "Converted goals.md to goals.jsonl with append-only JSONL structure",
+      "what": "Migrated goals.md to append-only goals.jsonl with union-merge safety",
       "done": true
     },
     {
-      "what": "Verified 40 unique goals preserved and auto_suggested entries correctly discarded",
+      "what": "Verified add_goal() and complete_goal() JSONL functions work correctly",
       "done": true
     },
     {
-      "what": "Tested add_goal, complete_goal, and discard_goal functions in askr.state.goals module",
+      "what": "Committed Stage 7 with .gitattributes, .gitignore, and core CLI/checkpoint updates",
       "done": true
     },
     {
-      "what": "Untracked goals.md from git and committed migration with descriptive message",
+      "what": "Pushed all changes to remote (commit 0d68847)",
       "done": true
     },
     {
-      "what": "Pushed changes to main branch",
+      "what": "Identified two critical multi-dev workflow scenarios requiring pre-session sync",
       "done": true
     }
   ],
@@ -27,71 +27,85 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Commit the two uncommitted files: askr_state/implementation_state.md and askr_state/notifications.log with message 'docs: session log for goals.jsonl migration'",
-      "why": "Clean up working directory and preserve session history in version control"
+      "action": "Design pre-session pull hook in askr/session/checkpoint.py \u2014 implement session_start() to call git pull --rebase before any work begins, with conflict resolution strategy (abort if conflicts, notify user)",
+      "why": "Prevents Lochan (and any dev) from working on stale task assignments after idle periods; ensures task queue, goals, and decisions are always current"
     },
     {
       "order": 2,
-      "action": "Verify goals.jsonl is being read correctly by the CLI in next session by running 'askr goals list' and 'askr goals open'",
-      "why": "Ensure the migration is fully functional end-to-end in the user-facing interface"
+      "action": "Add session_start() notification to askr_state/notifications.log with timestamp and pulled commit hash; log any merge conflicts or skipped pulls",
+      "why": "Provides audit trail of when devs synced; helps diagnose why a dev worked on outdated tasks"
     },
     {
       "order": 3,
-      "action": "Update any documentation or README that references goals.md to point to goals.jsonl instead",
-      "why": "Keep documentation in sync with implementation"
+      "action": "Document two scenarios in README or WORKFLOW.md: (A) morning pull \u2192 work all day, (B) idle 4+ hours \u2192 pre-session auto-pull. Show expected behavior for each",
+      "why": "Clarifies to Lochan and team what askr guarantees; sets expectations for when sync happens"
+    },
+    {
+      "order": 4,
+      "action": "Implement optional --skip-pull flag for askr start (for offline work or testing); default is always pull",
+      "why": "Gives power users escape hatch while keeping safe default for most devs"
+    },
+    {
+      "order": 5,
+      "action": "Test pre-session pull with simulated stale queue_lochan.jsonl and new task assignments from another dev; verify Lochan sees new tasks on session start",
+      "why": "Validates the core workflow the user is asking about; ensures no race conditions or lost updates"
     }
   ],
   "decisions": [
     {
-      "decision": "goals.md is now untracked and replaced by goals.jsonl as the source of truth",
-      "reason": "JSONL format provides append-only semantics that are union-merge safe across concurrent developer sessions, unlike markdown"
+      "decision": "Pre-session pull should be mandatory by default (not opt-in)",
+      "reason": "User's concern about working 'in the dark' is a safety issue; opt-in would let devs forget and cause confusion"
     },
     {
-      "decision": "Auto-suggested goals are discarded during migration and not preserved in goals.jsonl",
-      "reason": "They are ephemeral and regenerated per session; preserving them would create noise and merge conflicts"
+      "decision": "Pull happens before session checkpoint is written, not after",
+      "reason": "Ensures handover JSON reflects latest remote state; prevents committing stale task references"
+    },
+    {
+      "decision": "Merge conflicts on pull should abort the session with clear error, not auto-resolve",
+      "reason": "Conflicts indicate real divergence (e.g., two devs edited same task); requires human judgment"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr_state/goals.jsonl",
-    "askr/state/goals.py",
-    "askr/cli/askr.py",
     "askr/session/checkpoint.py",
-    ".gitignore",
-    ".gitattributes"
+    "askr/cli/askr.py",
+    "askr_state/queue_lochan.jsonl",
+    "askr_state/notifications.log"
   ],
   "relational_files": [
     {
-      "file": "askr/state/goals.py",
-      "relationship": "imported_by",
-      "why": "Module provides load_open_goals, add_goal, complete_goal, discard_goal functions used by CLI and checkpoint"
+      "file": "askr/session/checkpoint.py",
+      "relationship": "imports",
+      "why": "Will add session_start() hook that calls git pull before checkpoint write"
     },
     {
       "file": "askr/cli/askr.py",
       "relationship": "imports",
-      "why": "CLI entry point that calls goals module functions; modified to use new JSONL structure"
+      "why": "CLI entry point must call session_start() when user runs askr start"
     },
     {
-      "file": "askr/session/checkpoint.py",
-      "relationship": "imports",
-      "why": "Stop hook that runs goal migration and cleanup; modified to handle JSONL format"
-    },
-    {
-      "file": ".gitignore",
+      "file": "askr_state/queue_lochan.jsonl",
       "relationship": "configures",
-      "why": "Updated to ignore goals.md and ensure goals.jsonl is tracked"
+      "why": "Pre-session pull ensures this file is always synced with remote before Lochan sees it"
+    },
+    {
+      "file": ".gitattributes",
+      "relationship": "configures",
+      "why": "Union merge strategy on JSONL files ensures pre-session pull doesn't lose task entries"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_state.md",
     "askr_state/notifications.log"
   ],
-  "blockers": [],
+  "blockers": [
+    "Need to decide: should pre-session pull be blocking (abort if fails) or warning-only (log and continue)?"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-16T14:15:00+00:00",
+    "timestamp": "2026-06-16T14:16:00.000000+00:00",
+    "user_question_raised": "How should askr handle task assignment sync when Lochan pulls every morning vs. when he forgets and starts a session after 4+ hours idle?",
     "developer": "bippin"
   }
 }

@@ -1,49 +1,54 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 14:15
+Last updated: 2026-06-16 16:02
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Migrated goals.md to append-only goals.jsonl JSONL format, verified data integrity, and pushed changes to main branch
+Completed 7-stage goals refactoring (goals.md → goals.jsonl append-only JSONL) and identified critical workflow gaps for multi-developer task assignment and session synchronization
 
 ## Discussion
-Session focused on converting the goals tracking system from markdown to JSONL for better merge safety and programmatic access. Verified that 40 unique goals were correctly preserved during migration, confirmed the stop hook had already discarded auto_suggested entries, tested the goals.py module functions, and completed the git workflow to commit and push the changes. The append-only JSONL structure ensures union-merge safety across concurrent developer sessions.
+Session concluded Stage 7 with goals.jsonl migration and commit (0d68847). User then raised two critical scenarios: (1) Lochan pulling every morning to sync assigned tasks, and (2) Lochan starting a session after 4+ hours idle without pulling, risking stale task state. User is asking how askr should handle both scenarios and whether a pre-session pull hook should be implemented to prevent working in the dark on outdated assignments.
 
 ## Accomplishments
-- [x] Converted goals.md to goals.jsonl with append-only JSONL structure
-- [x] Verified 40 unique goals preserved and auto_suggested entries correctly discarded
-- [x] Tested add_goal, complete_goal, and discard_goal functions in askr.state.goals module
-- [x] Untracked goals.md from git and committed migration with descriptive message
-- [x] Pushed changes to main branch
+- [x] Migrated goals.md to append-only goals.jsonl with union-merge safety
+- [x] Verified add_goal() and complete_goal() JSONL functions work correctly
+- [x] Committed Stage 7 with .gitattributes, .gitignore, and core CLI/checkpoint updates
+- [x] Pushed all changes to remote (commit 0d68847)
+- [x] Identified two critical multi-dev workflow scenarios requiring pre-session sync
 
 ## Next Actions
-1. Commit the two uncommitted files: askr_state/implementation_state.md and askr_state/notifications.log with message 'docs: session log for goals.jsonl migration'
-   *Why: Clean up working directory and preserve session history in version control*
-2. Verify goals.jsonl is being read correctly by the CLI in next session by running 'askr goals list' and 'askr goals open'
-   *Why: Ensure the migration is fully functional end-to-end in the user-facing interface*
-3. Update any documentation or README that references goals.md to point to goals.jsonl instead
-   *Why: Keep documentation in sync with implementation*
+1. Design pre-session pull hook in askr/session/checkpoint.py — implement session_start() to call git pull --rebase before any work begins, with conflict resolution strategy (abort if conflicts, notify user)
+   *Why: Prevents Lochan (and any dev) from working on stale task assignments after idle periods; ensures task queue, goals, and decisions are always current*
+2. Add session_start() notification to askr_state/notifications.log with timestamp and pulled commit hash; log any merge conflicts or skipped pulls
+   *Why: Provides audit trail of when devs synced; helps diagnose why a dev worked on outdated tasks*
+3. Document two scenarios in README or WORKFLOW.md: (A) morning pull → work all day, (B) idle 4+ hours → pre-session auto-pull. Show expected behavior for each
+   *Why: Clarifies to Lochan and team what askr guarantees; sets expectations for when sync happens*
+4. Implement optional --skip-pull flag for askr start (for offline work or testing); default is always pull
+   *Why: Gives power users escape hatch while keeping safe default for most devs*
+5. Test pre-session pull with simulated stale queue_lochan.jsonl and new task assignments from another dev; verify Lochan sees new tasks on session start
+   *Why: Validates the core workflow the user is asking about; ensures no race conditions or lost updates*
 
 ## Decisions
-- goals.md is now untracked and replaced by goals.jsonl as the source of truth — JSONL format provides append-only semantics that are union-merge safe across concurrent developer sessions, unlike markdown
-- Auto-suggested goals are discarded during migration and not preserved in goals.jsonl — They are ephemeral and regenerated per session; preserving them would create noise and merge conflicts
+- Pre-session pull should be mandatory by default (not opt-in) — User's concern about working 'in the dark' is a safety issue; opt-in would let devs forget and cause confusion
+- Pull happens before session checkpoint is written, not after — Ensures handover JSON reflects latest remote state; prevents committing stale task references
+- Merge conflicts on pull should abort the session with clear error, not auto-resolve — Conflicts indicate real divergence (e.g., two devs edited same task); requires human judgment
 
 ## Files In Play
-- `askr_state/goals.jsonl`
-- `askr/state/goals.py`
-- `askr/cli/askr.py`
 - `askr/session/checkpoint.py`
-- `.gitignore`
-- `.gitattributes`
+- `askr/cli/askr.py`
+- `askr_state/queue_lochan.jsonl`
+- `askr_state/notifications.log`
 
 ## Relational Files
-- `askr/state/goals.py` (imported_by): Module provides load_open_goals, add_goal, complete_goal, discard_goal functions used by CLI and checkpoint
-- `askr/cli/askr.py` (imports): CLI entry point that calls goals module functions; modified to use new JSONL structure
-- `askr/session/checkpoint.py` (imports): Stop hook that runs goal migration and cleanup; modified to handle JSONL format
-- `.gitignore` (configures): Updated to ignore goals.md and ensure goals.jsonl is tracked
+- `askr/session/checkpoint.py` (imports): Will add session_start() hook that calls git pull before checkpoint write
+- `askr/cli/askr.py` (imports): CLI entry point must call session_start() when user runs askr start
+- `askr_state/queue_lochan.jsonl` (configures): Pre-session pull ensures this file is always synced with remote before Lochan sees it
+- `.gitattributes` (configures): Union merge strategy on JSONL files ensures pre-session pull doesn't lose task entries
 
 ## Uncommitted Files
-- `askr_state/implementation_state.md`
 - `askr_state/notifications.log`
+
+## Blockers
+- Need to decide: should pre-session pull be blocking (abort if fails) or warning-only (log and continue)?
