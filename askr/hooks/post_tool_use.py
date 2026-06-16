@@ -239,13 +239,24 @@ def _maybe_refresh_constraints():
         if count % _REFRESH_EVERY_N != 0:
             return
 
-        # Load top 5 decisions (most recent lines)
-        decisions_path = state_path("decisions.md")
+        # Load top 5 decisions (most recent lines from JSONL)
+        decisions_path = state_path("decisions.jsonl")
         if not os.path.exists(decisions_path):
             return
+        entries = []
         with open(decisions_path) as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-        recent = lines[-5:]
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                    text = d.get("decision", "").strip()
+                    if text:
+                        entries.append(text)
+                except Exception:
+                    pass
+        recent = entries[-5:]
         if not recent:
             return
 

@@ -258,7 +258,7 @@ _DECISION_RE = __import__('re').compile(
 
 
 def _extract_and_save_decisions(transcript_path: str, state_dir: str):
-    """Keyword-detect settled decisions in Claude's last response and append to decisions.md."""
+    """Keyword-detect settled decisions in Claude's last response and append to decisions.jsonl."""
     if not transcript_path or not os.path.exists(transcript_path):
         return
     try:
@@ -274,7 +274,6 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
                         pass
 
         # Collect text from all assistant blocks in the last turn
-        # (entries after the final user message)
         last_user_idx = -1
         for i, entry in enumerate(lines):
             if entry.get("type") == "user":
@@ -291,7 +290,6 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
         if not full_text.strip():
             return
 
-        # Extract sentences containing decision language
         sentences = re.split(r'(?<=[.!?])\s+', full_text)
         decisions = []
         for s in sentences:
@@ -304,16 +302,13 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
         if not decisions:
             return
 
-        decisions_path = os.path.join(state_dir, "decisions.md")
+        from askr.state.config import load_developer
+        developer = load_developer()
+        decisions_path = os.path.join(state_dir, "decisions.jsonl")
         ts = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M")
-        header = ""
-        if not os.path.exists(decisions_path):
-            header = "# Decisions\n\nAuto-captured from session activity. Edit freely.\n\n"
         with open(decisions_path, "a") as f:
-            if header:
-                f.write(header)
             for d in decisions:
-                f.write(f"[{ts}] {d}\n")
+                f.write(json.dumps({"at": ts, "dev": developer, "decision": d, "reason": ""}) + "\n")
     except Exception:
         pass
 
