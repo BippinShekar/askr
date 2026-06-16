@@ -9,6 +9,10 @@ Last active: 2026-06-05 01:30
 
 ### In Progress
 
+- [16:10] Ran: git add askr/hooks/session_start.py && git commit -m "fix(session-start): surfac
+- [16:10] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [16:10] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
+- [16:10] Modified: /Users/bippin/Desktop/askr/askr/hooks/session_start.py
 - [14:15] Ran: git push --quiet && echo "pushed"
 - [14:15] Ran: git commit -m "$(cat <<'EOF'
 feat(goals): goals.md → goals.jsonl — append-only J
