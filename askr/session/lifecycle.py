@@ -314,6 +314,14 @@ def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     return pids
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, OSError):
+        return False
+
+
 def _clear_stats_for_pids(pids: list, project_path: str):
     """
     Delete per-session stats files for all PIDs about to be killed.
@@ -358,7 +366,7 @@ def _kill_claude(project_path: str = ""):
 
     if not pids:
         _log("no tracked claude PIDs to kill — skipping")
-        return
+        return []
 
     # Delete stats files before killing — prevents stale high-ctx% from
     # re-triggering the daemon after the cooldown expires.
@@ -395,6 +403,7 @@ def _kill_claude(project_path: str = ""):
         except ProcessLookupError:
             pass
     _clear_claude_pid()
+    return pids  # return so callers can pass to _wait_for_stop_hook_or_fallback
 
 
 def _load_allowed_tools(project_path: str) -> list:
@@ -999,12 +1008,21 @@ def _pre_kill_update_tools(project_path: str):
         _log(f"pre-kill update error: {e}")
 
 
-def _wait_for_stop_hook_or_fallback(project_path: str):
+def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None):
     """
     After killing Claude, wait up to 20s for the Stop hook to consume
-    checkpoint_pending.json (which means it ran, created the checkpoint,
-    and wrote notification.json). If it's still there, the Stop hook didn't
-    fire (likely SIGKILL) — handle the restart directly.
+    checkpoint_pending.json AND write a fresh notification.json.
+
+    The Stop hook now only deletes checkpoint_pending AFTER successfully writing
+    the notification. So "checkpoint_pending gone" reliably means "notification
+    written and extension will handle the relaunch."
+
+    If checkpoint_pending persists after 20s, the Stop hook didn't fire (likely
+    SIGKILL) — run checkpoint + restart directly.
+
+    killed_pids: the specific PIDs we sent SIGTERM to. Only skip the fallback if
+    one of THOSE pids is still alive (kill genuinely failed). Unrelated Claude
+    sessions sharing the same CWD must not block the continuation.
     """
     WAIT = 20
     for _ in range(WAIT):
@@ -1012,14 +1030,15 @@ def _wait_for_stop_hook_or_fallback(project_path: str):
         if not os.path.exists(_CHECKPOINT_PENDING):
             _log("Stop hook consumed checkpoint_pending — restart delegated to extension")
             return
-    # Stop hook didn't run — do it ourselves, but only if Claude is actually dead.
-    # If the kill failed (PID mismatch, timing), the original session is still alive.
-    # Opening a new session alongside it causes dual-session chaos.
-    still_alive = _find_all_claude_pids_by_project(project_path)
-    if still_alive:
-        _log(f"Claude pid(s) {still_alive} still running after kill attempt — skipping fallback launch to prevent double-session")
-        _clear_checkpoint_pending()
-        return
+    # Stop hook didn't fire. Only skip if the specific session we killed is
+    # still alive — meaning the kill itself failed, not just that some other
+    # pre-existing Claude session happens to share this project's CWD.
+    if killed_pids:
+        still_alive = [p for p in killed_pids if _pid_alive(p)]
+        if still_alive:
+            _log(f"Claude pid(s) {still_alive} still alive after SIGTERM — kill failed, skipping fallback to avoid double-session")
+            _clear_checkpoint_pending()
+            return
 
     _log("Stop hook didn't fire after kill — running checkpoint + restart directly")
     _clear_checkpoint_pending()
@@ -1097,8 +1116,8 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
             if current_ctx >= 0.80:
                 _log(f"context at {current_ctx:.1%} — compaction imminent, killing now without waiting for idle")
                 _pre_kill_update_tools(project_path)
-                _kill_claude(project_path)
-                _wait_for_stop_hook_or_fallback(project_path)
+                killed = _kill_claude(project_path)
+                _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
                 return True
         except Exception:
             pass
@@ -1127,8 +1146,8 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
         elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
             _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
             _pre_kill_update_tools(project_path)
-            _kill_claude(project_path)
-            _wait_for_stop_hook_or_fallback(project_path)
+            killed = _kill_claude(project_path)
+            _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
             return True
 
 

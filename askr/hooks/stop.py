@@ -120,7 +120,9 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
             return False
         with open(_CHECKPOINT_PENDING) as f:
             pending = json.load(f)
-        os.remove(_CHECKPOINT_PENDING)
+        # Do NOT delete checkpoint_pending yet — only delete after notification is
+        # successfully written. If writing fails, the flag stays and the daemon's
+        # 20s fallback kicks in instead of silently dropping the continuation.
     except Exception:
         return False
 
@@ -133,6 +135,10 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
             written = _dt_check.datetime.fromisoformat(written_at)
             age_s = (_dt_check.datetime.now(_dt_check.timezone.utc) - written).total_seconds()
             if age_s > 300:
+                try:
+                    os.remove(_CHECKPOINT_PENDING)
+                except Exception:
+                    pass
                 return False
     except Exception:
         pass
@@ -243,8 +249,24 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
 
+        # Notification written successfully — now safe to remove the flag.
+        try:
+            os.remove(_CHECKPOINT_PENDING)
+        except Exception:
+            pass
+
         return True
-    except Exception:
+    except Exception as _e:
+        # Log the failure so it's diagnosable from daemon.log; leave
+        # checkpoint_pending intact so the daemon's 20s fallback fires.
+        try:
+            import traceback as _tb, datetime as _dt2
+            ts = _dt2.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_path = os.path.expanduser("~/.config/askr/stop_hook_error.log")
+            with open(log_path, "a") as _lf:
+                _lf.write(f"[{ts}] _write_relaunch_notification_if_pending failed:\n{_tb.format_exc()}\n")
+        except Exception:
+            pass
         return False
 
 
