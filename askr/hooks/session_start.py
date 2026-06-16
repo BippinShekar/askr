@@ -268,7 +268,16 @@ def main():
         pass
 
     developer = load_developer()
+    session_id = payload.get("session_id", "")
     _write_claude_pid(developer)
+
+    if session_id:
+        try:
+            from askr.session.registry import register_session
+            register_session(session_id, developer)
+        except Exception:
+            pass
+
     queued_tasks = _drain_task_queue(developer)
     _archive_stale_goals()
     _notify_stale_goals()
@@ -317,6 +326,32 @@ def main():
             "Team task queue and shared state may be stale. "
             "Run `git pull` manually before making changes, or your work may conflict with teammates'."
         )
+
+    if session_id:
+        try:
+            from askr.session.registry import get_active_sessions
+            siblings = get_active_sessions(exclude_session_id=session_id)
+            if siblings:
+                lines = []
+                for s in siblings:
+                    dev = s.get("dev", "?")
+                    hb = s.get("last_heartbeat", "")
+                    try:
+                        age_min = int(
+                            (datetime.now(timezone.utc) - datetime.fromisoformat(hb)).total_seconds() / 60
+                        )
+                        age_str = f"{age_min}m ago"
+                    except Exception:
+                        age_str = "recently"
+                    lines.append(f"- **{dev}** (last active: {age_str})")
+                parts.append(
+                    "## Active Parallel Sessions\n\n"
+                    "Other Claude sessions are running on this project right now. "
+                    "Check their handover files before touching shared files:\n\n"
+                    + "\n".join(lines)
+                )
+        except Exception:
+            pass
 
     if parts:
         print(json.dumps({"context": "\n\n".join(parts)}))

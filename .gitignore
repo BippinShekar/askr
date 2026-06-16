@@ -18,3 +18,10 @@ askr_state/project_brief.md
 askr_state/current_task_*.md
 askr_state/decisions.md
 askr_state/goals.md
+
+# flock sidecar lock files — ephemeral, never committed
+askr_state/**/*.lock
+askr_state/*.lock
+
+# active session registry — ephemeral, machine-local
+askr_state/sessions/

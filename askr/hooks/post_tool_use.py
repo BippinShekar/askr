@@ -10,7 +10,6 @@ Also runs the session monitor + forecast and writes stats for StatusLine.
 import sys
 import os
 import json
-import re
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -35,45 +34,8 @@ def _extract_activity(tool_name: str, tool_input: dict) -> str | None:
 
 
 def _append_to_section(dev: str, entry: str):
-    path = state_path("implementation_state.md")
-    section_start = f"<!-- section:{dev} -->"
-    section_end = f"<!-- /section:{dev} -->"
-
-    if not os.path.exists(path):
-        from askr.state.writer import update_implementation_section
-        update_implementation_section(
-            f"### In Progress\n\n{entry}\n\n### Completed\n\n### Files Owned\n",
-            dev
-        )
-        return
-
-    with open(path) as f:
-        content = f.read()
-
-    if section_start not in content:
-        from askr.state.writer import update_implementation_section
-        update_implementation_section(
-            f"### In Progress\n\n{entry}\n\n### Completed\n\n### Files Owned\n",
-            dev
-        )
-        return
-
-    # insert entry after "### In Progress" line within this developer's section
-    pattern = rf"({re.escape(section_start)}.*?### In Progress\n)"
-    match = re.search(pattern, content, re.DOTALL)
-    if match:
-        insert_at = match.end()
-        updated = content[:insert_at] + f"\n{entry}" + content[insert_at:]
-        with open(path, "w") as f:
-            f.write(updated)
-    else:
-        # section exists but no "### In Progress" header - append entry before section end
-        updated = content.replace(
-            section_end,
-            f"### In Progress\n\n{entry}\n\n{section_end}"
-        )
-        with open(path, "w") as f:
-            f.write(updated)
+    from askr.state.writer import append_to_implementation_section
+    append_to_implementation_section(dev, entry)
 
 
 _QUOTA_REFRESH_SECS = 120  # call usage API at most once every 2 minutes
@@ -344,6 +306,19 @@ def main():
 
     _write_session_stats()
     _maybe_refresh_constraints()
+
+    # Heartbeat: update session registry every 5 tool uses
+    if session_id:
+        try:
+            counter_data = {}
+            if os.path.exists(_TURN_COUNTER_PATH):
+                with open(_TURN_COUNTER_PATH) as f:
+                    counter_data = json.load(f)
+            if counter_data.get("count", 0) % 5 == 0:
+                from askr.session.registry import update_heartbeat
+                update_heartbeat(session_id)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

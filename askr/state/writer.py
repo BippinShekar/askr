@@ -1,12 +1,44 @@
 import os
 import re
 import json as _json
+import fcntl
+import time
+from contextlib import contextmanager
 from datetime import datetime
 from askr.state.config import load_developer, state_path, ensure_state_dir
 
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+@contextmanager
+def file_lock(path: str, timeout: float = 5.0):
+    """Exclusive advisory lock on `path` using a .lock sidecar file.
+
+    Holds the lock for the duration of the `with` block. Auto-released if the
+    process dies. Degrades gracefully (yields anyway) if locking fails.
+    """
+    lock_path = path + ".lock"
+    try:
+        os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+        lf = open(lock_path, "w")
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    break  # timeout: proceed anyway, prefer data over deadlock
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+            lf.close()
+    except Exception:
+        yield
 
 
 def _read(path: str) -> str:
@@ -18,8 +50,9 @@ def _read(path: str) -> str:
 
 def _write(path: str, content: str):
     ensure_state_dir()
-    with open(path, "w") as f:
-        f.write(content)
+    with file_lock(path):
+        with open(path, "w") as f:
+            f.write(content)
 
 
 def _handover_json_to_md(data: dict, developer: str = "") -> str:
@@ -119,12 +152,12 @@ def append_decision(decision: str, reason: str = "", developer: str = None):
     if reason:
         line += f". Reason: {reason.strip()}"
 
-    if not os.path.exists(path):
-        with open(path, "w") as f:
-            f.write("# Decisions\n\nAppend-only. One line per decision.\n\n")
-
-    with open(path, "a") as f:
-        f.write(line + "\n")
+    with file_lock(path):
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                f.write("# Decisions\n\nAppend-only. One line per decision.\n\n")
+        with open(path, "a") as f:
+            f.write(line + "\n")
 
 
 def update_implementation_section(content: str, developer: str = None):
@@ -136,23 +169,57 @@ def update_implementation_section(content: str, developer: str = None):
     section_end = f"<!-- /section:{dev} -->"
     new_section = f"{section_start}\n## {dev}\n\nLast active: {_now()}\n\n{content.strip()}\n{section_end}"
 
-    existing = _read(path)
-
-    if section_start in existing:
-        updated = re.sub(
-            rf"{re.escape(section_start)}.*?{re.escape(section_end)}",
-            new_section,
-            existing,
-            flags=re.DOTALL
-        )
-        _write(path, updated)
-    else:
-        if not existing:
-            header = "# Implementation State\n\nEach developer owns their section.\n\n"
-            _write(path, header + new_section + "\n")
+    with file_lock(path):
+        existing = _read(path)
+        if section_start in existing:
+            updated = re.sub(
+                rf"{re.escape(section_start)}.*?{re.escape(section_end)}",
+                new_section,
+                existing,
+                flags=re.DOTALL
+            )
+            with open(path, "w") as f:
+                f.write(updated)
         else:
-            with open(path, "a") as f:
-                f.write("\n" + new_section + "\n")
+            if not existing:
+                header = "# Implementation State\n\nEach developer owns their section.\n\n"
+                with open(path, "w") as f:
+                    f.write(header + new_section + "\n")
+            else:
+                with open(path, "a") as f:
+                    f.write("\n" + new_section + "\n")
+
+
+def append_to_implementation_section(dev: str, entry: str):
+    """Atomic read-modify-write on implementation_state.md for a single log line."""
+    path = state_path("implementation_state.md")
+    ensure_state_dir()
+
+    section_start = f"<!-- section:{dev} -->"
+    section_end = f"<!-- /section:{dev} -->"
+
+    with file_lock(path):
+        existing = _read(path)
+        if not existing or section_start not in existing:
+            # Bootstrap section then insert entry
+            update_implementation_section(
+                f"### In Progress\n\n{entry}\n\n### Completed\n\n### Files Owned\n",
+                dev,
+            )
+            return
+
+        pattern = rf"({re.escape(section_start)}.*?### In Progress\n)"
+        match = re.search(pattern, existing, re.DOTALL)
+        if match:
+            insert_at = match.end()
+            updated = existing[:insert_at] + f"\n{entry}" + existing[insert_at:]
+        else:
+            updated = existing.replace(
+                section_end,
+                f"### In Progress\n\n{entry}\n\n{section_end}",
+            )
+        with open(path, "w") as f:
+            f.write(updated)
 
 
 def update_architecture(content: str):

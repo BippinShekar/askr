@@ -432,6 +432,13 @@ def main():
     _update_allowed_tools(transcript_path)
     _extract_and_save_decisions(transcript_path, get_state_dir())
 
+    if session_id:
+        try:
+            from askr.session.registry import deregister_session
+            deregister_session(session_id)
+        except Exception:
+            pass
+
     # Always run the authoritative stop checkpoint first — this is ground truth.
     # _write_relaunch_notification_if_pending uses its result but never replaces it.
     from askr.session.checkpoint import create_checkpoint
