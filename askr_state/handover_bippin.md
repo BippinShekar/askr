@@ -1,52 +1,60 @@
 # Handover: bippin
 
-Last updated: 2026-06-16 16:26
+Last updated: 2026-06-16 16:41
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fixed Claude PID tracking and session lifecycle management across three files to prevent accidental context compaction during multi-session workflows
+Identified critical multi-session race condition vulnerability in concurrent Claude Code usage and surfaced architectural gap in shared state management across parallel sessions
 
 ## Discussion
-Added pgrep+lsof fallback PID detection in session_start.py and pre_compact.py, implemented proper return bool signatures in lifecycle.py kill functions, and added cooldown control to daemon loop. User raised critical concern: current implementation kills the FIRST PID found, but they routinely run 2+ simultaneous Claude Code sessions in the same repo — killing the wrong session is a real risk. This needs architectural rethinking before the fix is production-safe.
+Session exposed that Bippin and co-founder running multiple Claude Code sessions simultaneously creates unsolved race conditions on shared files (especially .md outputs). While JSONL append-only and per-dev handover JSONs are safe, the system lacks cross-session memory coherence and conflict resolution for concurrent writes. User rejected the assumption that restricting to single sessions per developer is acceptable — the real product must handle parallel Claude sessions as a first-class use case, not an edge case.
 
 ## Accomplishments
-- [x] Added _write_claude_pid() with pgrep+lsof fallback to session_start.py
-- [x] Fixed _wait_for_exchange_end_then_kill() to return bool and use PID fallback in lifecycle.py
-- [x] Updated daemon loop to use kill return value for cooldown control
-- [x] Added pgrep fallback to pre_compact.py PID lookup
-- [x] Verified syntax validity and constant presence across all three files
+- [x] Surfaced git pull failure warnings in session_start.py to prevent stale work
+- [x] Identified that concurrent Claude sessions create race conditions on shared markdown outputs
+- [x] Recognized that per-dev handover JSON isolation works, but cross-session memory coherence is missing
 
 ## Next Actions
-1. CRITICAL: Redesign PID tracking to support multi-session workflows. Current approach kills first matching PID — unsafe when 2+ Claude sessions run in same repo. Options: (a) write session-specific PID file with UUID suffix, (b) track PID in memory-mapped state with session context, (c) use process group IDs instead of single PID. Evaluate which fits askr's architecture.
-   *Why: User explicitly flagged this as a blocker — current fix breaks their actual workflow. Must resolve before this code is safe to use.*
-2. Once multi-session strategy is chosen, update _write_claude_pid() and pre_compact.py lookup logic to respect session isolation. Add integration test with 2 simultaneous sessions to verify correct PID is killed.
-   *Why: Prevents regression and validates the fix works for real-world usage patterns.*
-3. Commit the three files (session_start.py, lifecycle.py, pre_compact.py) with message 'fix(session-lifecycle): add PID tracking with pgrep fallback — multi-session support pending'
-   *Why: Code is syntactically valid and improves single-session reliability. Multi-session fix can land in follow-up commit once strategy is chosen.*
-4. Document the multi-session limitation in a blocker or decision note so future sessions don't re-solve this without addressing the architectural gap.
-   *Why: Prevents silent failures and makes the constraint explicit for the next developer.*
+1. Design multi-session lock/lease mechanism for shared file writes (e.g., flock on .md files, or distributed lock via git branch naming convention)
+   *Why: Prevent simultaneous writes to goals.md, decisions.md, blockers.md from different Claude sessions; last-write-wins is data loss*
+2. Implement session registry (session_registry.jsonl) that tracks active Claude PIDs, session owner, start time, and last heartbeat
+   *Why: Enable cross-session awareness so one Claude instance can detect and respect concurrent work by other sessions*
+3. Build conflict resolution strategy for .md files: either merge-on-read (union semantics like JSONL) or queue writes and serialize via git
+   *Why: Ensure that Bippin + co-founder + Lochan running 3+ sessions in parallel don't lose each other's updates*
+4. Add session-aware context injection: when Claude starts, load not just own handover but also active session registry to surface what other Claude instances are doing
+   *Why: Solve the shared memory problem — Claude needs to know 'Session 2 (co-founder) is refactoring auth.py right now' before it starts work*
+5. Document the multi-session architecture decision and update README with concurrency model
+   *Why: Clarify that askr is designed for teams with multiple concurrent Claude Code sessions, not single-session-per-dev*
 
 ## Decisions
-- Implemented pgrep+lsof fallback for PID detection instead of relying solely on Claude's process tree — Increases robustness across different Claude launch methods (CLI, app, etc.)
-- Added return bool to kill functions to enable cooldown control in daemon loop — Allows graceful backoff when kill succeeds, preventing tight retry loops
+- Per-dev handover JSON files (handover_<dev>.json) are isolated by developer, not by session — Allows one developer to run multiple Claude sessions without file path collisions, but requires session registry for cross-session awareness
+- JSONL append-only format is safe for concurrent writes; .md files are not — JSONL union-merge semantics survive concurrent appends; markdown files need explicit locking or serialization
 
 ## User-Rejected Approaches
-- **Current PID-killing approach as production-ready for multi-session workflows** — "killing the first pid doesn't really work, cause I usually run around 2 simultaneous claude code sessions in a singular repo" (domain: session lifecycle management, PID tracking)
+- **Restricting each developer to a single Claude Code session to avoid race conditions** — "assuming a developer using claude code is restricted to a singular session is basically being optimistic to build a underwhelming system" (domain: askr architecture / concurrency model)
+
+## Failed Approaches
+- Assuming per-dev handover JSON isolation is sufficient for multi-session safety — Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) still have race conditions when multiple Claude sessions write simultaneously
 
 ## Files In Play
 - `askr/hooks/session_start.py`
-- `askr/session/lifecycle.py`
-- `askr/hooks/pre_compact.py`
+- `askr_state/notifications.log`
+- `goals.jsonl`
+- `decisions.jsonl`
+- `queue_*.jsonl`
+- `handover_*.json`
 
 ## Relational Files
-- `askr/session/lifecycle.py` (imports): Core daemon loop that uses kill return value for cooldown control
-- `askr/hooks/pre_compact.py` (imported_by): Calls PID lookup logic to prevent accidental compaction during active sessions
-- `askr/hooks/session_start.py` (configures): Writes the PID that lifecycle and pre_compact depend on
+- `askr/hooks/session_start.py` (configures): Entry point for session initialization; where git pull and stale-work detection happen
+- `goals.md` (imported_by): Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy
+- `decisions.md` (imported_by): Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy
+- `blockers.md` (imported_by): Shared file written by multiple concurrent Claude sessions; needs locking or merge strategy
 
 ## Uncommitted Files
 - `askr_state/notifications.log`
 
 ## Blockers
-- Multi-session PID isolation: current implementation kills first matching PID, unsafe when 2+ Claude sessions run in same repo. Needs architectural redesign before production use.
+- Multi-session race condition on shared .md files (goals.md, decisions.md, blockers.md) — no locking or conflict resolution strategy yet
+- Cross-session memory coherence missing — one Claude session has no awareness of what other concurrent sessions are doing
