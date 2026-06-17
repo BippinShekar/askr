@@ -610,8 +610,8 @@ def create_checkpoint(
     if trigger_type == "emergency":
         summary = (
             "## What Was Being Done\n\nEmergency checkpoint triggered.\n\n"
-            "## Current State\n\n- Check implementation_state.md for what was in progress\n\n"
-            "## Next Step\n\nReview recent git diff and implementation_state.md, then continue.\n\n"
+            f"## Current State\n\n- Check implementation_{developer}.jsonl for what was in progress\n\n"
+            f"## Next Step\n\nReview recent git diff and implementation_{developer}.jsonl, then continue.\n\n"
             "## Blockers\n\nNone noted"
         )
         tool_actions = _extract_tool_actions(entries)

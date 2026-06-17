@@ -151,7 +151,7 @@ def _notify_stale_goals():
 def _maybe_suggest_goals(developer: str) -> list[str]:
     """
     If today has no goals, suggest 1-2 from the last handover via Haiku.
-    Adds them to goals.md and returns the list (empty if skipped/failed).
+    Adds them to goals.jsonl and returns the list (empty if skipped/failed).
     Never blocks session start — all errors are swallowed.
     """
     try:

@@ -691,7 +691,9 @@ def cmd_init():
     import getpass as _gp
     from askr.state.config import load_project_config, save_project_config
 
-    # Per-project webhook (overrides global) — committed to askr_state/config.json
+    # Per-project webhook (overrides global) — stored locally in askr_state/config.json,
+    # which is gitignored. Never committed: it's a plaintext secret, and each teammate
+    # should set their own (or share it out of band, e.g. 1Password/DM).
     existing_project_hook = load_project_config().get("discord_webhook", "")
     console.print()
     console.print(f"  [dim]project Discord webhook (current: {'set' if existing_project_hook else 'none'})[/dim]")
@@ -701,7 +703,7 @@ def cmd_init():
         project_hook = ""
     if project_hook:
         save_project_config({"discord_webhook": project_hook})
-        console.print("  [green]✓[/green] project webhook saved to askr_state/config.json")
+        console.print("  [green]✓[/green] project webhook saved to askr_state/config.json [dim](gitignored, not synced to teammates)[/dim]")
     elif existing_project_hook:
         console.print("  [dim]- project webhook unchanged[/dim]")
 

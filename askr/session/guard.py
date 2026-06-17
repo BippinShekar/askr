@@ -28,11 +28,32 @@ def _read(path: str, limit: int = 2000) -> str:
         return ""
 
 
+def _load_recent_decisions(state_dir: str, limit_lines: int = 30) -> str:
+    path = os.path.join(state_dir, "decisions.jsonl")
+    if not os.path.exists(path):
+        return ""
+    lines = []
+    with open(path) as f:
+        for raw_line in f:
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+            try:
+                d = json.loads(raw_line)
+                text = f"[{d.get('at', '')}] [{d.get('dev', '')}] {d.get('decision', '')}"
+                if d.get("reason"):
+                    text += f". Reason: {d['reason']}"
+                lines.append(text)
+            except Exception:
+                pass
+    return "\n".join(lines[-limit_lines:])
+
+
 def _load_context(developer: str, state_dir: str) -> dict:
     return {
         "architecture":      _read(os.path.join(state_dir, "architecture.md")),
         "handover":          _read(os.path.join(state_dir, f"handover_{developer}.md")),
-        "decisions":         _read(os.path.join(state_dir, "decisions.md"), limit=1500),
+        "decisions":         _load_recent_decisions(state_dir),
         "failed_approaches": _read(os.path.join(state_dir, "failed_approaches.md"), limit=1500),
     }
 

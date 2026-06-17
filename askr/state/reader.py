@@ -146,6 +146,32 @@ def load_decisions(last_n: int = 20) -> str:
     return "\n".join(entries[-last_n:])
 
 
+def load_implementation_log(developer: str = None, type_filter: str = None, limit: int = 50) -> str:
+    """Read a developer's structured implementation log, optionally filtered by entry type."""
+    dev = developer or load_developer()
+    path = state_path(f"implementation_{dev}.jsonl")
+    if not os.path.exists(path):
+        return ""
+    entries = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = _json.loads(line)
+                if type_filter and e.get("type") != type_filter:
+                    continue
+                entries.append(e)
+            except Exception:
+                pass
+    lines = []
+    for e in entries[-limit:]:
+        sess = f" [{e['session_id'][:8]}]" if e.get("session_id") else ""
+        lines.append(f"- [{e.get('ts', '')}]{sess} {e.get('type', '')}: {e.get('detail', '')}")
+    return "\n".join(lines)
+
+
 def load_architecture() -> str:
     return _read(state_path("architecture.md"))
 

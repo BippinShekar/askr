@@ -1,15 +1,18 @@
 import os
-import re
 import json as _json
 import fcntl
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from askr.state.config import load_developer, state_path, ensure_state_dir
 
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @contextmanager
@@ -143,83 +146,25 @@ def write_current_task(objective: str, developer: str = None):
     _write(path, f"# Current Task: {dev}\n\nLast updated: {_now()}\n\n## Objective\n\n{objective.strip()}\n")
 
 
-def append_decision(decision: str, reason: str = "", developer: str = None):
+def append_implementation_entry(entry_type: str, detail: str, developer: str = None, session_id: str = None):
+    """Append one structured action to the developer's implementation log.
+
+    JSONL, one file per developer — union-merge safe across concurrent pushes,
+    filterable by type/session_id without parsing markdown sections.
+    """
     dev = developer or load_developer()
-    path = state_path("decisions.md")
+    path = state_path(f"implementation_{dev}.jsonl")
     ensure_state_dir()
 
-    line = f"[{_now()}] [{dev}] {decision.strip()}"
-    if reason:
-        line += f". Reason: {reason.strip()}"
-
+    entry = {
+        "ts": _now_iso(),
+        "session_id": session_id,
+        "type": entry_type,
+        "detail": detail,
+    }
     with file_lock(path):
-        if not os.path.exists(path):
-            with open(path, "w") as f:
-                f.write("# Decisions\n\nAppend-only. One line per decision.\n\n")
         with open(path, "a") as f:
-            f.write(line + "\n")
-
-
-def update_implementation_section(content: str, developer: str = None):
-    dev = developer or load_developer()
-    path = state_path("implementation_state.md")
-    ensure_state_dir()
-
-    section_start = f"<!-- section:{dev} -->"
-    section_end = f"<!-- /section:{dev} -->"
-    new_section = f"{section_start}\n## {dev}\n\nLast active: {_now()}\n\n{content.strip()}\n{section_end}"
-
-    with file_lock(path):
-        existing = _read(path)
-        if section_start in existing:
-            updated = re.sub(
-                rf"{re.escape(section_start)}.*?{re.escape(section_end)}",
-                new_section,
-                existing,
-                flags=re.DOTALL
-            )
-            with open(path, "w") as f:
-                f.write(updated)
-        else:
-            if not existing:
-                header = "# Implementation State\n\nEach developer owns their section.\n\n"
-                with open(path, "w") as f:
-                    f.write(header + new_section + "\n")
-            else:
-                with open(path, "a") as f:
-                    f.write("\n" + new_section + "\n")
-
-
-def append_to_implementation_section(dev: str, entry: str):
-    """Atomic read-modify-write on implementation_state.md for a single log line."""
-    path = state_path("implementation_state.md")
-    ensure_state_dir()
-
-    section_start = f"<!-- section:{dev} -->"
-    section_end = f"<!-- /section:{dev} -->"
-
-    with file_lock(path):
-        existing = _read(path)
-        if not existing or section_start not in existing:
-            # Bootstrap section then insert entry
-            update_implementation_section(
-                f"### In Progress\n\n{entry}\n\n### Completed\n\n### Files Owned\n",
-                dev,
-            )
-            return
-
-        pattern = rf"({re.escape(section_start)}.*?### In Progress\n)"
-        match = re.search(pattern, existing, re.DOTALL)
-        if match:
-            insert_at = match.end()
-            updated = existing[:insert_at] + f"\n{entry}" + existing[insert_at:]
-        else:
-            updated = existing.replace(
-                section_end,
-                f"### In Progress\n\n{entry}\n\n{section_end}",
-            )
-        with open(path, "w") as f:
-            f.write(updated)
+            f.write(_json.dumps(entry) + "\n")
 
 
 def update_architecture(content: str):

@@ -3,7 +3,7 @@
 Claude Code Hook - PostToolUse
 
 Fires after every tool execution.
-Tracks file writes and command runs into implementation_state.md.
+Tracks file writes and command runs into implementation_<dev>.jsonl.
 Also runs the session monitor + forecast and writes stats for StatusLine.
 """
 
@@ -21,21 +21,17 @@ _LEGACY_STATS_PATH = os.path.expanduser("~/.config/askr/session_stats.json")
 _SKIP_TOOLS = {"Read", "Glob", "Grep", "LS", "WebSearch", "WebFetch", "TodoRead"}
 
 
-def _extract_activity(tool_name: str, tool_input: dict) -> str | None:
+def _extract_activity(tool_name: str, tool_input: dict) -> tuple[str, str] | None:
+    """Returns (entry_type, detail) for implementation_<dev>.jsonl, or None to skip."""
     if tool_name in _SKIP_TOOLS:
         return None
     if tool_name in ("Write", "Edit", "MultiEdit"):
         path = tool_input.get("file_path") or tool_input.get("path", "")
-        return f"Modified: {path}" if path else None
+        return ("file_modified", path) if path else None
     if tool_name == "Bash":
         cmd = (tool_input.get("command") or tool_input.get("cmd", ""))[:80]
-        return f"Ran: {cmd}" if cmd else None
+        return ("command", cmd) if cmd else None
     return None
-
-
-def _append_to_section(dev: str, entry: str):
-    from askr.state.writer import append_to_implementation_section
-    append_to_implementation_section(dev, entry)
 
 
 _QUOTA_REFRESH_SECS = 120  # call usage API at most once every 2 minutes
@@ -299,10 +295,11 @@ def main():
     activity = _extract_activity(tool_name, tool_input)
 
     dev = load_developer()
-    ts = datetime.now().strftime("%H:%M")
 
     if activity:
-        _append_to_section(dev, f"- [{ts}] {activity}")
+        entry_type, detail = activity
+        from askr.state.writer import append_implementation_entry
+        append_implementation_entry(entry_type, detail, dev, session_id)
 
     _write_session_stats()
     _maybe_refresh_constraints()

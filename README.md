@@ -48,10 +48,10 @@ Structured markdown files committed to git on every checkpoint. Both developers 
 |---|---|
 | `handover_<dev>.md` | Last session's objective, next step, files changed |
 | `current_task_<dev>.md` | Last 5 user prompts with timestamps |
-| `decisions.md` | Append-only timestamped decision log |
-| `implementation_state.md` | Per-developer in-progress + completed work |
+| `decisions.jsonl` | Append-only timestamped decision log (union-merge safe) |
+| `implementation_<dev>.jsonl` | Per-developer action log — file edits + commands, typed, timestamped, with session ID |
 | `architecture.md` | System overview, modules, patterns |
-| `goals.md` | Today's goals, backlog, done — tracked across sessions |
+| `goals.jsonl` | Today's goals, backlog, done — tracked across sessions (union-merge safe) |
 
 ### Goals (auto-managed)
 
@@ -231,7 +231,7 @@ SessionStart hook fires
   → if no goals today: Haiku suggests from last handover
          ↓
 Developer works with Claude
-  → PostToolUse hook: updates implementation_state.md
+  → PostToolUse hook: appends to implementation_<dev>.jsonl
                       writes session_stats.json for status bar
   → UserPromptSubmit hook: records last 5 prompts to current_task.md
          ↓
@@ -291,11 +291,11 @@ askr/                        # Python package
 askr_state/                  # project state data (committed to git)
   handover_<dev>.md
   current_task_<dev>.md
-  decisions.md
-  implementation_state.md
+  decisions.jsonl
+  implementation_<dev>.jsonl
   architecture.md
   blockers.md
-  goals.md
+  goals.jsonl
 ```
 
 ---
