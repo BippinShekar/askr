@@ -986,19 +986,75 @@ def _open_companion_session(project_path: str, session_id: str = None):
 
 def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
     """
-    Context trigger fired — open a companion session immediately. No idle-wait
-    and no kill: since the live session is never interrupted, there's no need
-    to wait for "a safe moment" before acting.
+    Context trigger fired. Never kills the live session — but popping a new
+    terminal and stealing focus mid-turn is its own kind of disruptive, even
+    without killing anything. Wait for the current exchange to go idle first,
+    then open the companion session, so the user finishes what they're doing
+    and gets directed to the fresh session afterward, not interrupted mid-turn.
+
+    Hard override: if context is critically high (>=80%, Claude's own
+    auto-compact is imminent), skip the wait — being ready before that happens
+    matters more than turn-boundary courtesy at that point.
 
     Returns True if a live session was found for this project (full cooldown
     applies), False if not (short retry — the project may just be between
     sessions and this stats read is about to go stale on its own).
     """
-    found = bool(_find_all_claude_pids_by_project(project_path))
-    if not found:
+    if not _find_all_claude_pids_by_project(project_path):
         _log("claude process not found for this project — opening companion session anyway")
+        _open_companion_session(project_path, session_id)
+        return False
+
+    IDLE_SECS = 360  # seconds of JSONL silence → current exchange is done
+    POLL      = 5
+
+    _log("waiting for the current exchange to finish before opening companion session...")
+    last_mtime = None
+    idle_since = None
+
+    while True:
+        time.sleep(POLL)
+
+        if not _find_all_claude_pids_by_project(project_path):
+            _log("claude session ended on its own while waiting — opening companion session")
+            break
+
+        try:
+            from askr.session.monitor import get_max_context_for_project
+            current_ctx = get_max_context_for_project(project_path)
+            if current_ctx >= 0.80:
+                _log(f"context at {current_ctx:.1%} — compaction imminent, opening companion now without waiting for idle")
+                break
+        except Exception:
+            pass
+
+        try:
+            sessions_dir = os.path.join(
+                os.path.expanduser("~/.claude/projects"),
+                project_path.replace("/", "-"),
+            )
+            files = [
+                os.path.join(sessions_dir, f)
+                for f in os.listdir(sessions_dir)
+                if f.endswith(".jsonl")
+            ] if os.path.isdir(sessions_dir) else []
+            jsonl = max(files, key=os.path.getmtime) if files else None
+            mtime = os.path.getmtime(jsonl) if jsonl else None
+        except Exception:
+            mtime = None
+
+        if mtime is None:
+            continue
+
+        if mtime != last_mtime:
+            last_mtime = mtime
+            idle_since = time.time()
+        elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
+            _log(f"exchange idle for {IDLE_SECS}s — opening companion session")
+            break
+
     _open_companion_session(project_path, session_id)
-    return found
+    return True
 
 
 def _maybe_autolaunch(project_path: str):
