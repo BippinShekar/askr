@@ -1,14 +1,14 @@
 # Handover: bippin
 
-Last updated: 2026-06-17 17:45
+Last updated: 2026-06-17 17:49
 
 ## Task
 
-Unknown — transcript unavailable
+brother askr uninstall in X repo, should take effect in said X repo only, not throughout the system, right. If they do want to do some sort of universall uninstall it must be like brew uninstall or soemthing, once I setup brew isntall that is.
 
 ## Status
 
-Unknown — no file modifications found in transcript
+- /Users/bippin/Desktop/askr/askr/cli/askr.py — modified this session, verify state
 
 ## Failed Approaches
 
@@ -16,7 +16,7 @@ Unknown — LLM handover unavailable, review transcript manually
 
 ## Next Action
 
-Unknown — run `git diff HEAD~1` to see what changed last session
+Inspect /Users/bippin/Desktop/askr/askr/cli/askr.py — last file modified this session
 
 ## Open Questions
 
