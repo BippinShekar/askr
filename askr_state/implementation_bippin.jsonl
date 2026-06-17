@@ -107,3 +107,8 @@
 {"ts": "2026-06-17T13:34:26Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git add askr/cli/askr.py askr/hooks/session_start.py askr/session/checkpoint.py "}
 {"ts": "2026-06-17T13:34:31Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(tasks): lock queue file across read/write to pr"}
 {"ts": "2026-06-17T13:34:37Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git push"}
+{"ts": "2026-06-17T13:35:30Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "cat /Users/bippin/Desktop/askr/askr_state/decisions.jsonl 2>/dev/null | tail -30"}
+{"ts": "2026-06-17T13:35:50Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "grep -rn \"register_session\\|update_heartbeat\\|deregister_session\\|get_active_ses"}
+{"ts": "2026-06-17T13:36:00Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "sed -n '290,330p' /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py; echo \""}
+{"ts": "2026-06-17T13:36:07Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "git log --oneline -5 -- askr/session/registry.py && echo --- && git log -1 --for"}
+{"ts": "2026-06-17T13:36:16Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "ls askr_state/sessions/ 2>/dev/null; echo \"---\"; grep -n \"_TURN_COUNTER_PATH\\|de"}
