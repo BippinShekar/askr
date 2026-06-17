@@ -570,6 +570,18 @@ def _build_fallback_summary(entries: list) -> tuple[str, list]:
 # Git
 # ---------------------------------------------------------------------------
 
+_PUSH_ERROR_LOG = os.path.expanduser("~/.config/askr/checkpoint_error.log")
+
+
+def _log_push_failure(developer: str, detail: str):
+    try:
+        os.makedirs(os.path.dirname(_PUSH_ERROR_LOG), exist_ok=True)
+        with open(_PUSH_ERROR_LOG, "a") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()} push failed [{developer}]: {detail.strip()[:500]}\n")
+    except Exception:
+        pass
+
+
 def git_commit_push(state_dir: str, developer: str, trigger_type: str):
     try:
         subprocess.run(["git", "add", state_dir], capture_output=True)
@@ -585,9 +597,33 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
             ["git", "commit", "-m", f"askr: {label} [{developer}] {ts}"],
             capture_output=True,
         )
-        subprocess.run(["git", "push", "--quiet"], capture_output=True, timeout=30)
-    except Exception:
-        pass
+
+        # Concurrent sessions (multi-dev) can push between our commit and our push.
+        # Rebase onto the remote first so a non-fast-forward push doesn't get silently
+        # dropped — retry once after pulling before giving up.
+        last_err = ""
+        for attempt in range(2):
+            pull = subprocess.run(
+                ["git", "pull", "--rebase", "--autostash", "--quiet"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if pull.returncode != 0:
+                # Rebase conflict or other failure — abort to avoid leaving the repo
+                # mid-rebase. Our local commit is preserved; next checkpoint retries.
+                subprocess.run(["git", "rebase", "--abort"], capture_output=True, timeout=10)
+                last_err = pull.stderr or pull.stdout
+                break
+
+            push = subprocess.run(
+                ["git", "push", "--quiet"], capture_output=True, text=True, timeout=30,
+            )
+            if push.returncode == 0:
+                return
+            last_err = push.stderr or push.stdout
+
+        _log_push_failure(developer, last_err or "unknown error")
+    except Exception as e:
+        _log_push_failure(developer, str(e))
 
 
 # ---------------------------------------------------------------------------
