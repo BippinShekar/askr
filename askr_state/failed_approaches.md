@@ -97,3 +97,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-17] Relying on session lifetime alone to clean up stats files — Ghost stats files persisted beyond session death because cleanup was not keyed to any persistent state; switching to trigger cooldown state provides reliable cleanup trigger
 - [2026-06-17] Blind fallback checkpoint on any stats write failure without logging — Silent fallback masked underlying I/O issues and made debugging harder; now logs failures and queues checkpoint explicitly
 - [2026-06-17] Killing the user's live Claude session to spawn a new one for background tasks — Caused context loss, terminal disruption, and poor UX; users lost their active conversation state when daemon needed to run background work.
+- [2026-06-17] Immediate companion spawn on trigger without waiting for turn to finish — Caused abrupt UX disruption by opening new terminal mid-flow, interrupting user's current interaction

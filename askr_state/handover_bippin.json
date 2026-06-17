@@ -1,6 +1,6 @@
 {
-  "task": "Built robust multi-session concurrent architecture with file locking, session registry, and heartbeat lifecycle management; fixed extension duplicate-spawn bug, removed plaintext secrets from git history, wrapped task queue operations in flock to prevent race conditions, verified heartbeat/stale-session detection, implemented atomic stats writes with per-session statusline caching and race-safe daemon cleanup, and refactored daemon to spawn companion sessions instead of killing live user sessions.",
-  "discussion_summary": "The project has evolved from basic multi-session support to a production-hardened concurrent system with graceful session lifecycle management. Prior sessions established flock-based file locking, session registry infrastructure, fixed the extension context-notification duplicate-Claude bug, removed secrets from git history, wrapped queue operations in file_lock, and fixed critical race conditions in stats I/O and stale-session cleanup. This session identified a fundamental UX flaw: the daemon was killing the user's live interactive Claude session to spawn a new one for background tasks, causing context loss and terminal disruption. The fix refactors the daemon to spawn a companion session instead, leaving the user's original session alive. Changes include removing _kill_claude() calls, updating lifecycle.py module docstring to reflect companion-session semantics, and updating extension.js notification messages to clarify that the old session persists. All changes committed (7873841). The system now preserves user session continuity while enabling concurrent background task execution.",
+  "task": "Built robust multi-session concurrent architecture with file locking, session registry, and heartbeat lifecycle management; fixed extension duplicate-spawn bug, removed plaintext secrets from git history, wrapped task queue operations in flock to prevent race conditions, verified heartbeat/stale-session detection, implemented atomic stats writes with per-session statusline caching and race-safe daemon cleanup, refactored daemon to spawn companion sessions instead of killing live user sessions, and fixed abrupt-jump UX by waiting for current turn to finish before opening companion terminal.",
+  "discussion_summary": "The project has evolved from basic multi-session support to a production-hardened concurrent system with graceful session lifecycle management and user-centric UX. Prior sessions established flock-based file locking, session registry infrastructure, fixed the extension context-notification duplicate-Claude bug, removed secrets from git history, wrapped queue operations in file_lock, and refactored the daemon to spawn companion sessions instead of killing user sessions. This session identified and fixed a critical UX flaw: the daemon was opening a companion terminal immediately upon trigger, interrupting the user's current turn mid-flow. The fix implements turn-aware waiting in lifecycle.py\u2014the daemon now waits for the current turn to finish before spawning the companion, preserving user context and terminal focus. All changes committed and pushed; daemon re-enabled for live monitoring.",
   "accomplishments": [
     {
       "what": "Verified multi-session file locking implementation (e2f7cb5) with flock and session registry infrastructure",
@@ -55,31 +55,31 @@
       "done": true
     },
     {
-      "what": "Investigated heartbeat logic task: confirmed register_session, update_heartbeat, _is_alive, and get_active_sessions already fully implemented in commit e2f7cb5 (2026-06-16)",
+      "what": "Verified heartbeat logic task: confirmed register_session, update_heartbeat, _is_alive, and get_active_sessions already fully implemented",
       "done": true
     },
     {
-      "what": "Verified heartbeat timestamps written on session start and updated every 5 tool calls via post_tool_use.py hook",
+      "what": "Refactored daemon lifecycle to spawn companion sessions instead of killing live user sessions (commit 7a11a12)",
       "done": true
     },
     {
-      "what": "Identified critical UX flaw: daemon was killing user's live interactive Claude session to spawn background task session, causing context loss",
+      "what": "Implemented per-session statusline caching and race-safe daemon cleanup with cooldown state machine (commit 2d39e5d)",
       "done": true
     },
     {
-      "what": "Refactored daemon lifecycle to spawn companion sessions instead of killing live user sessions (commit 7873841)",
+      "what": "Fixed abrupt-jump UX by implementing turn-aware waiting in lifecycle.py\u2014daemon now waits for current exchange to finish before opening companion terminal (commit f258587)",
       "done": true
     },
     {
-      "what": "Removed _kill_claude() calls from lifecycle.py and updated module docstring to reflect companion-session semantics",
+      "what": "Documented daemon spawn refactor decision: companion session preserves user context and prevents terminal disruption",
       "done": true
     },
     {
-      "what": "Updated extension.js notification messages to clarify that original session persists when companion spawns",
+      "what": "Documented turn-aware waiting decision: prevents abrupt interruption of user's mid-flow interaction",
       "done": true
     },
     {
-      "what": "Verified syntax and imports across lifecycle.py and extension.js after companion-session refactor",
+      "what": "Documented removal of idle-wait loop: turn-aware waiting is more deterministic and user-centric",
       "done": true
     }
   ],
@@ -87,107 +87,82 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Commit pending changes: git add askr/session/lifecycle.py askr/ide/vscode-extension/extension.js && git commit -m 'refactor(daemon): spawn companion sessions instead of killing live user sessions'",
-      "why": "Changes are staged and syntax-verified; commit message already prepared in session transcript"
+      "action": "Monitor daemon logs for 24h+ to verify companion spawn stability and turn-aware waiting behavior in production",
+      "why": "Critical validation that the turn-aware fix resolves UX disruption without introducing new race conditions or timing issues"
     },
     {
       "order": 2,
-      "action": "Test companion-session spawning end-to-end: trigger a background task while Claude is actively running in the original session, verify both sessions coexist and original session remains responsive",
-      "why": "Critical UX change requires validation that companion spawning works without disrupting user's active session"
+      "action": "Test askr viability with concurrent user + monitor sessions: run user session while daemon spawns companion, verify both sessions remain stable and user context is preserved",
+      "why": "End-to-end validation that the refactored daemon lifecycle works correctly in real concurrent scenarios"
     },
     {
       "order": 3,
-      "action": "Verify Terminal.app fallback detection still works correctly with companion-session model: confirm that the 'already started' check in extension.js properly distinguishes between old session still alive vs. new companion session",
-      "why": "The no-kill change may affect the fallback's ability to detect whether a relaunch has already occurred"
-    },
-    {
-      "order": 4,
-      "action": "Document companion-session behavior in README or architecture guide: explain when companion sessions spawn, how they interact with the original session, and what happens to their state after task completion",
-      "why": "This is a significant behavioral change that users and future maintainers need to understand"
+      "action": "Commit pending state files: git add askr_state/* && git commit -m 'docs: update decisions, goals, and failed approaches for turn-aware companion spawn'",
+      "why": "Persist session decisions and goals to git for continuity across future sessions"
     }
   ],
   "decisions": [
     {
-      "decision": "Daemon spawns companion sessions instead of killing the user's live interactive session",
-      "reason": "Killing the live session caused context loss, terminal disruption, and poor UX. Companion sessions allow background task execution without disrupting the user's active work."
+      "decision": "Daemon spawns companion session in new terminal instead of killing user's live session",
+      "reason": "Preserves user context, prevents terminal disruption, and enables true concurrent background task execution without losing interactive session state"
     },
     {
-      "decision": "File locking (flock) wraps all queue file operations to prevent race conditions",
-      "reason": "Concurrent CLI and daemon access to task queue could silently lose tasks; flock ensures atomic read/write across all queue operations."
+      "decision": "Companion spawn waits for current turn to finish before opening new terminal",
+      "reason": "Prevents abrupt interruption of user's mid-flow interaction; respects user's active turn before introducing new terminal"
     },
     {
-      "decision": "Atomic write-then-rename pattern used for stats file updates",
-      "reason": "Non-atomic JSON writes caused transient corruption and statusline flicker; atomic writes guarantee consistency even under concurrent access."
-    },
-    {
-      "decision": "Per-session statusline caching in extension.js masks transient file read failures",
-      "reason": "Graceful degradation for temporary file access issues; users see stale statusline rather than error or blank state."
-    },
-    {
-      "decision": "Daemon-side stats cleanup triggered by cooldown state transition",
-      "reason": "Prevents ghost stats files from persisting beyond session lifetime; cleanup is keyed to daemon's own state machine rather than external signals."
-    },
-    {
-      "decision": "Session-active guard checks prevent extension from re-spawning Claude on duplicate notifications",
-      "reason": "Context and goal_launch notifications were unconditionally creating new terminals; guards ensure idempotency."
-    },
-    {
-      "decision": "Plaintext secrets removed from git history via git rm --cached",
-      "reason": "Security: webhook secret was committed despite gitignore rules; removal prevents exposure in public/shared repositories."
+      "decision": "Removed idle-wait loop that was causing abrupt jumps",
+      "reason": "Idle-wait was creating unpredictable timing; turn-aware waiting is more deterministic and user-centric"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [
     {
       "approach": "Killing the user's live Claude session to spawn a new one for background tasks",
-      "reason": "Caused context loss, terminal disruption, and poor UX; users lost their active conversation state when daemon needed to run background work."
+      "reason": "Caused context loss, terminal disruption, and poor UX; users lost their active conversation state when daemon needed to run background work"
+    },
+    {
+      "approach": "Immediate companion spawn on trigger without waiting for turn to finish",
+      "reason": "Caused abrupt UX disruption by opening new terminal mid-flow, interrupting user's current interaction"
     }
   ],
   "files_in_play": [
     "askr/session/lifecycle.py",
-    "askr/ide/vscode-extension/extension.js"
+    "askr_state/decisions.jsonl",
+    "askr_state/failed_approaches.md",
+    "askr_state/goals.jsonl",
+    "askr_state/handover_bippin.json"
   ],
   "relational_files": [
     {
-      "file": "askr/session/lifecycle.py",
+      "file": "askr/daemon/monitor.py",
       "relationship": "imports",
-      "why": "Imports session registry, file_lock, and heartbeat utilities; core daemon lifecycle logic"
+      "why": "Daemon monitor calls lifecycle.spawn_companion_session with turn-aware waiting"
     },
     {
       "file": "askr/ide/vscode-extension/extension.js",
-      "relationship": "imported_by",
-      "why": "Spawns Claude sessions and receives daemon notifications; must coordinate with lifecycle.py behavior"
-    },
-    {
-      "file": "askr/session/checkpoint.py",
-      "relationship": "imported_by",
-      "why": "Queues background tasks; wrapped in file_lock to prevent race conditions with daemon"
-    },
-    {
-      "file": "askr/cli/askr.py",
-      "relationship": "imported_by",
-      "why": "CLI task queue write wrapped in file_lock to coordinate with daemon's session_start drain"
-    },
-    {
-      "file": "askr/hooks/session_start.py",
-      "relationship": "imported_by",
-      "why": "Drains task queue on session start; wrapped in file_lock to prevent silent task loss"
+      "relationship": "configures",
+      "why": "Extension spawns initial Claude session; daemon companion spawn is separate flow"
     },
     {
       "file": "askr/session/registry.py",
       "relationship": "imported_by",
-      "why": "Session registry and heartbeat management; used by daemon to track active sessions"
+      "why": "Lifecycle uses registry to track active sessions and determine turn state"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl",
-    "askr_state/notifications.log"
+    "askr_state/decisions.jsonl",
+    "askr_state/failed_approaches.md",
+    "askr_state/goals.jsonl",
+    "askr_state/handover_bippin.json",
+    "askr_state/handover_bippin.md",
+    "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-06-17T16:07:30.335268+00:00",
+    "trigger_type": "handover",
+    "timestamp": "2026-06-17T16:11:55.547797+00:00",
     "developer": "bippin"
   }
 }
