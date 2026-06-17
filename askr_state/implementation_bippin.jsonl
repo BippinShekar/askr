@@ -112,3 +112,11 @@
 {"ts": "2026-06-17T13:36:00Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "sed -n '290,330p' /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py; echo \""}
 {"ts": "2026-06-17T13:36:07Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "git log --oneline -5 -- askr/session/registry.py && echo --- && git log -1 --for"}
 {"ts": "2026-06-17T13:36:16Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "ls askr_state/sessions/ 2>/dev/null; echo \"---\"; grep -n \"_TURN_COUNTER_PATH\\|de"}
+{"ts": "2026-06-17T14:07:10Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "tail -50 askr_state/notifications.log 2>/dev/null; echo \"===history===\"; tail -5"}
+{"ts": "2026-06-17T14:07:18Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "find /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0 -name \"*.js\" | xarg"}
+{"ts": "2026-06-17T14:07:36Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "find /Users/bippin/Desktop/askr -iname \"extension.js\" 2>/dev/null\necho \"---git l"}
+{"ts": "2026-06-17T14:07:42Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "diff /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js /Users/bi"}
+{"ts": "2026-06-17T14:07:55Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "grep -rn \"notification.json\\|write_notification\\|NOTIFICATION_PATH\" /Users/bippi"}
+{"ts": "2026-06-17T14:08:06Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "grep -n \"osascript\\|Terminal.app\\|6s\\|fallback\" /Users/bippin/Desktop/askr/askr/"}
+{"ts": "2026-06-17T14:08:51Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "grep -n \"stats\\|STATS\\|context_pct\\|_write_session_stats\\|reset\" /Users/bippin/D"}
+{"ts": "2026-06-17T14:09:29Z", "session_id": "ff87fe1a-d51e-4e08-8d10-32dce54bc783", "type": "command", "detail": "git show 2d863be --stat; echo \"---\"; git show 2d863be"}
