@@ -1,10 +1,11 @@
 # Handover: bippin
 
-Last updated: 2026-06-17 20:47
+Last updated: 2026-06-17 20:57
 
 ## Task
 
-right, that makes sense, now tell me if askr is ready to be inited in a different repo of mine, and for my co-founfer to get it, so we can work otgether on our startup?
+build this
+ What's solid: askr is built for multi-dev from the ground up â team.json registers members, and per-developer files (handover_<dev>, queue_<dev>, implementation_<dev>.jsonl) are namespaced so you and your co-founder won't clobber each other's session data. askr init in the new repo, your
 
 ## Status
 
