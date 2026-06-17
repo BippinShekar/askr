@@ -483,57 +483,43 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ## Phase 4 - Team Scale
 *Target: pre-launch*
+*Last audited against code: 2026-06-17*
 
-**Goal:** Multiple developers, shared state, concurrent sessions without conflicts. The state model was designed for teams — this phase makes it actually work under concurrent load.
+**Goal:** Multiple developers, shared state, concurrent sessions without conflicts.
 
-**Stage P4-0: Team directory structure** *(prerequisite for everything below)*
+**Note:** the team-scoped directory layout originally planned here (P4-0:
+`askr_state/teams/<team>/members/<dev>/...`) was superseded. Decision log
+(2026-06-14/15/16) shows the actual build went with a flatter layout —
+`askr_state/handover_<dev>.*`, `askr_state/tasks/queue_<dev>.jsonl` — plus
+git `merge=union` on every shared append-only file (`.gitattributes`). That
+gives conflict-free concurrent pushes without the team/member nesting, and
+is the right scope for a 2-person team. Revisit team-scoped directories only
+if/when headcount makes flat `askr_state/` unnavigable (~10+ devs).
 
-The current flat layout (`handover_<dev>.md` × N in one directory, shared `decisions.md` / `goals.md`) breaks at team scale: unnavigable at 50 devs, constant concurrent write conflicts on shared files.
-
-Target layout:
-```
-askr_state/
-  teams/<team>/
-    members/<dev>/
-      handover.json
-      current_task.md
-      tasks/queue.md
-    decisions.md        <- scoped to team
-    goals.md
-  shared/
-    decisions.md        <- org-wide only
-    architecture.md
-```
+**Stage P4-0: Team directory structure** — **Deferred, not needed at current scale.**
 
 | Feature | Status |
 |---|---|
-| New directory structure with team scoping | 🔲 Todo |
-| `askr init` updated to write into team-scoped paths | 🔲 Todo |
-| Reader/writer updated to resolve paths via team config | 🔲 Todo |
+| New directory structure with team scoping | ⏸ Deferred — flat layout + union-merge covers 2-person scale |
+| `askr init` updated to write into team-scoped paths | ⏸ Deferred |
+| Reader/writer updated to resolve paths via team config | ⏸ Deferred |
 
-**Stage P4-1: Task queue per developer**
+**Stage P4-1: Task queue per developer** — ✅ **Built**, but shipped ahead of its required gate.
 
-Anyone on the team can append a task to another developer's queue. `session_start` drains the queue in order before the session begins. Git-native: no new infrastructure, no server, no real-time connection required.
-
-Queue file: `askr_state/teams/<team>/members/<dev>/tasks/queue.md` — append-only, one task per line with author + timestamp. Drained (moved to a `queue_done.md` archive) at session start, not deleted, so there's an audit trail.
-
-Requires the approval gate (Phase 5) to be in place before this ships — queued tasks from another developer must not silently inherit the session owner's dangerous permissions.
+Implemented as `askr_state/tasks/queue_<dev>.jsonl`, drained at `session_start.py:281` and injected directly into session context (`session_start.py:331-335`). Verified in code, not just this doc.
 
 | Feature | Status |
 |---|---|
-| `askr task queue <dev> "..."` — append task to another developer's queue with author + timestamp | 🔲 Todo |
-| `session_start.py` — drain queue, inject tasks into session context before first prompt | 🔲 Todo |
-| Drained tasks archived to `queue_done.md` with completion timestamp | 🔲 Todo |
-| `askr task list [<dev>]` — show pending queue for a developer | 🔲 Todo |
-| Usable at 2–5 devs without P4-0; P4-0 required for 50-person use | 🔲 Todo |
+| `askr task queue <dev> "..."` — append task to another developer's queue (`askr.py:1268`) | ✅ Done |
+| `session_start.py` — drain queue, inject tasks into session context before first prompt | ✅ Done |
+| Drained tasks archived with completion timestamp (`_drain_task_queue`, `session_start.py:179`) | ✅ Done |
+| `askr task list [<dev>]` — show pending queue for a developer (`askr.py:1286`) | ✅ Done |
+| **Approval gate (Phase 5) in place before dangerous-permission sessions run queued tasks** | ❌ **Not done — this shipped without the gate it explicitly required. Treat as the top priority blocker for any cross-dev queuing while either session has skip-permissions on.** |
+| Drain-then-truncate sequence is race-free under concurrent queue writes | ❌ **Not done — found 2026-06-17: `_drain_task_queue` reads, archives, then truncates the queue file with no lock. A task queued in that window is silently destroyed, no error.** |
 
-**Stage P4-2: `askr team` CLI**
+**Stage P4-2: `askr team` CLI** — ✅ **Built** (`cmd_team()`, `askr.py:1305`). Shows all developer handovers, last-seen, next action, live context % in one view.
 
-| Feature | Status |
-|---|---|
-| `askr team` — show all developer handovers, sessions, goals in one view | 🔲 Todo |
-
-**Stage P4-3: Concurrency and role awareness**
+**Stage P4-3: Concurrency and role awareness** — not built, genuinely future work, low priority at 2-person scale.
 
 | Feature | Status |
 |---|---|
@@ -547,6 +533,7 @@ Requires the approval gate (Phase 5) to be in place before this ships — queued
 
 ## Phase 5 - Hardening
 *Target: 1–2 months post-launch*
+*Last audited against code: 2026-06-17*
 
 **Goal:** Zero misfires. Trust is the product. Works on any machine, any project type.
 
@@ -554,15 +541,15 @@ Requires the approval gate (Phase 5) to be in place before this ships — queued
 |---|---|
 | False positive audit (checkpoint never fires mid-write, mid-test) | 🔲 Todo |
 | Manual override: `askr pause` / `askr resume` | 🔲 Todo |
-| Per-project config file (thresholds, Discord webhook, context trigger %) | 🔲 Todo |
+| Per-project config file (thresholds, Discord webhook, context trigger %) | ✅ Done — `askr_state/config.json` (gitignored as of 2026-06-17; was briefly committed with a live webhook secret in history — rotate that webhook if not already done) |
 | Linux support (replace launchd with systemd) | 🔲 Todo |
 | Windows/WSL support | 🔲 Todo |
-| Test suite for all hook scripts | 🔲 Todo |
+| Test suite for all hook scripts | 🔲 Todo — 15 tests exist, thin coverage relative to daemon/hook surface area |
 | `askr doctor` — diagnose common setup issues (venv missing, hooks not firing, JSONL not found) | 🔲 Todo |
 
-**Approval Gate for Queued Tasks**
+**Approval Gate for Queued Tasks** — ❌ **Not built. This is the next thing to build, full stop** — Stage P4-1 above already ships the dangerous half (queue + auto-inject) without it.
 
-When another developer queues a task into your session (Phase 7), that task runs with whatever permissions your session already has — including permissions granted by Phase 3.8. Those were granted by you for your own work; they do not constitute authorization for someone else's task. `--dangerously-skip-permissions` bypasses Claude Code's own prompts entirely, so the gate must be an askr-level check, not a Claude Code permission check.
+When another developer queues a task into your session, that task runs with whatever permissions your session already has — including permissions granted by Phase 3.8. Those were granted by you for your own work; they do not constitute authorization for someone else's task. `--dangerously-skip-permissions` bypasses Claude Code's own prompts entirely, so the gate must be an askr-level check, not a Claude Code permission check.
 
 Trigger (any one condition is sufficient):
 - `--dangerously-skip-permissions` present in session launch args
