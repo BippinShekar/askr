@@ -208,15 +208,21 @@ def _drain_task_queue(developer: str) -> list[dict]:
         return []
 
 
-def _reset_stats_for_project():
+def _reset_stats_for_project(source: str = ""):
     """
-    Write a blank stats entry for the current project immediately on session start.
-    This makes the status bar snap to ctx:0% for the right project before any
-    message is sent, rather than showing stale stats from a different project.
-    Quota fields are preserved — they're per-account and still valid.
+    Write a stats entry for the current project immediately on session start.
+    Only a "startup" or "clear" source is a genuinely empty context — zero it
+    so the status bar snaps to ctx:0% for the right project rather than
+    showing stale stats from a different one.
+
+    "resume" and "compact" sessions already carry real context from the
+    existing transcript, so we compute the actual usage instead of zeroing it;
+    writing 0% there was misleading the status bar into showing an empty
+    context right after a resume/compact that still had real tokens loaded.
+    Quota fields are preserved either way — they're per-account and still valid.
     """
     try:
-        from askr.session.monitor import stats_path_for_project, find_project_root
+        from askr.session.monitor import stats_path_for_project, find_project_root, get_session_stats
         project_path = find_project_root()
         stats_path   = stats_path_for_project(project_path)
         existing = {}
@@ -225,24 +231,44 @@ def _reset_stats_for_project():
                 existing = json.load(f)
         except Exception:
             pass
+
+        context_pct    = 0.0
+        context_tokens = 0
+        output_tokens  = 0
+        context_window = 200000
+        turns          = 0
+        model          = existing.get("model", "")
+        session_id     = ""
+
+        if source in ("resume", "compact"):
+            stats = get_session_stats(project_path)
+            if stats:
+                context_pct    = stats.context_pct
+                context_tokens = stats.context_tokens
+                output_tokens  = stats.output_tokens
+                context_window = stats.context_window
+                turns          = stats.turns
+                model          = stats.model
+                session_id     = stats.session_id
+
         os.makedirs(os.path.dirname(stats_path), exist_ok=True)
         with open(stats_path, "w") as f:
             json.dump({
                 "project_path":    project_path,
-                "context_pct":     0.0,
-                "context_tokens":  0,
-                "output_tokens":   0,
-                "context_window":  200000,
+                "context_pct":     round(context_pct, 4),
+                "context_tokens":  context_tokens,
+                "output_tokens":   output_tokens,
+                "context_window":  context_window,
                 "context_label":   "ok",
-                "turns":           0,
+                "turns":           turns,
                 "next_trigger":    None,
                 # Preserve quota fields — they're API-sourced and still valid
                 "quota_pct":       existing.get("quota_pct"),
                 "quota_reset_at":  existing.get("quota_reset_at"),
                 "quota_7d_pct":    existing.get("quota_7d_pct"),
                 "quota_updated_at": existing.get("quota_updated_at"),
-                "model":           existing.get("model", ""),
-                "session_id":      "",
+                "model":           model,
+                "session_id":      session_id,
                 "updated_at":      datetime.now(timezone.utc).isoformat(),
             }, f)
     except Exception:
@@ -255,7 +281,7 @@ def main():
     except Exception:
         payload = {}
 
-    _reset_stats_for_project()
+    _reset_stats_for_project(payload.get("source", ""))
 
     pull_ok = True
     if os.path.isdir(get_state_dir()):
