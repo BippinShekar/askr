@@ -70,6 +70,7 @@ _LAUNCH_MODE_PATH      = os.path.expanduser("~/.config/askr/launch_mode.json")
 _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 _TRIGGER_STATE_PATH    = os.path.expanduser("~/.config/askr/trigger_state.json")
+_COMPANIONED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/companioned_sessions.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -1098,6 +1099,33 @@ def _save_trigger_state(state: dict):
         pass
 
 
+def _load_companioned_sessions() -> set:
+    """
+    Session-ids that have already had a companion session opened for them.
+
+    Without this, a session that crosses CONTEXT_TRIGGER and is never killed
+    (by design — see module docstring) stays above the threshold for as long
+    as it keeps running. The 300s cooldown is keyed by project_path, not
+    session_id, so it expires and fires again against the SAME still-running
+    session every cooldown window — spawning an unbounded number of companion
+    terminals for one source session instead of just one.
+    """
+    try:
+        with open(_COMPANIONED_SESSIONS_PATH) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _save_companioned_sessions(sessions: set):
+    try:
+        os.makedirs(os.path.dirname(_COMPANIONED_SESSIONS_PATH), exist_ok=True)
+        with open(_COMPANIONED_SESSIONS_PATH, "w") as f:
+            json.dump(list(sessions), f)
+    except Exception:
+        pass
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -1116,6 +1144,7 @@ def run_daemon():
 
     was_active = False
     last_trigger_at: dict = _load_trigger_state()  # project_path → epoch seconds, disk-backed (survives restarts)
+    companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1160,13 +1189,26 @@ def run_daemon():
 
                     proj_last = last_trigger_at.get(project_path, 0.0)
                     in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
+                    session_id = stats.get("session_id")
+                    already_companioned = bool(session_id) and session_id in companioned_sessions
 
-                    if in_cooldown:
+                    if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
+                        # This exact session already got a companion. Since we never kill
+                        # it, it stays above CONTEXT_TRIGGER for as long as it keeps
+                        # running — the per-project cooldown alone would just expire and
+                        # re-fire against this same session every 300s forever, stacking
+                        # up an unbounded number of companion terminals. One companion
+                        # per session, period, until that session actually ends.
+                        _log(f"session {session_id[:8]} already has a companion open — not spawning another (ctx={ctx_pct:.1%})")
+                    elif in_cooldown:
                         remaining = int(TRIGGER_COOLDOWN - (time.time() - proj_last))
                         _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} project={project_path}")
                     elif ctx_pct >= CONTEXT_TRIGGER:
                         _log(f"Trigger A: context={ctx_pct:.1%} — opening companion session [{project_path}] (existing session left running)")
-                        found = _open_companion_session_for_trigger(project_path, stats.get("session_id"))
+                        if session_id:
+                            companioned_sessions.add(session_id)
+                            _save_companioned_sessions(companioned_sessions)
+                        found = _open_companion_session_for_trigger(project_path, session_id)
                         if found:
                             # Full cooldown — companion opened alongside a live session
                             last_trigger_at[project_path] = time.time()

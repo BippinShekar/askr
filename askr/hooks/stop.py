@@ -473,6 +473,17 @@ def main():
                 os.remove(sp)
         except Exception:
             pass
+        # Clear this session from the "already got a companion" set — it's gone
+        # now, no point keeping it around (and it stops the set from growing
+        # forever across every session that ever crossed the context trigger).
+        try:
+            from askr.session.lifecycle import _load_companioned_sessions, _save_companioned_sessions
+            companioned = _load_companioned_sessions()
+            if session_id in companioned:
+                companioned.discard(session_id)
+                _save_companioned_sessions(companioned)
+        except Exception:
+            pass
 
     # Always run the authoritative stop checkpoint first — this is ground truth.
     # _write_relaunch_notification_if_pending uses its result but never replaces it.
