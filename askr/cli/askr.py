@@ -196,7 +196,7 @@ _CLAUDE_MD_GUARD_SECTION = """\
 ## Implementation Guard
 
 Before editing any file:
-1. Check `askr_state/decisions.md` for settled decisions that affect that file's domain.
+1. Check `askr_state/decisions.jsonl` for settled decisions that affect that file's domain.
 2. Check `askr_state/failed_approaches.md` for approaches already tried and rejected.
 3. If your planned change contradicts a settled decision or repeats a rejected approach, say so explicitly before implementing — do not proceed silently.
 <!-- askr:guard-end -->"""
@@ -328,11 +328,11 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
     ensure_state_dir()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # architecture.md and implementation_state.md get generated from the codebase
+    # architecture.md gets generated from the codebase; implementation log is
+    # per-developer JSONL, populated incrementally — neither uses a template.
     # only fall back to template if generation fails
     template_only_files = {
         f"handover_{developer}.md": "handover_template.md",
-        "decisions.md":             "decisions_template.md",
         "blockers.md":              "blockers_template.md",
     }
 
@@ -371,6 +371,12 @@ def _create_skeleton_files(developer: str) -> tuple[list, list]:
         open(goals_path, "w").close()
         created.append("goals.jsonl")
 
+    # Per-developer implementation log (JSONL — file/command actions, union-merge safe)
+    impl_path = state_path(f"implementation_{developer}.jsonl")
+    if not os.path.exists(impl_path):
+        open(impl_path, "w").close()
+        created.append(f"implementation_{developer}.jsonl")
+
     return created, skipped
 
 
@@ -388,7 +394,7 @@ def _generate_architecture_from_snapshot(developer: str):
 
         from askr.qa.context_loader import load_fast_context
         from askr.clients.claude import call_claude
-        from askr.state.writer import update_architecture, update_implementation_section
+        from askr.state.writer import update_architecture, append_implementation_entry
 
         fast_ctx = load_fast_context()
 
@@ -441,26 +447,16 @@ No placeholders. No speculation. Only what is in the code."""
         else:
             console.print("  [dim]- skipped architecture.md (already exists)[/dim]")
 
-        # Populate implementation_state.md with what is already built
-        impl_path = state_path("implementation_state.md")
-        if not os.path.exists(impl_path):
+        # Seed implementation_<dev>.jsonl with what's already built, as baseline entries
+        impl_path = state_path(f"implementation_{developer}.jsonl")
+        if not os.path.exists(impl_path) or os.path.getsize(impl_path) == 0:
             top_files = sorted(snapshot, key=lambda x: x.get("_score", 0), reverse=True)[:25]
-            completed_lines = [
-                f"- {e.get('file')} - {e.get('purpose', '')}"
-                for e in top_files
-                if e.get("file") and e.get("purpose")
-            ]
-            completed = "\n".join(completed_lines) if completed_lines else "[nothing yet]"
-
-            update_implementation_section(
-                f"### In Progress\n\n[nothing - session not started]\n\n"
-                f"### Completed\n\n{completed}\n\n"
-                f"### Files Owned\n\n[not assigned yet]",
-                developer
-            )
-            console.print("  [green]✓[/green] [dim]implementation_state.md - populated from snapshot[/dim]")
+            for e in top_files:
+                if e.get("file") and e.get("purpose"):
+                    append_implementation_entry("baseline", f"{e['file']} - {e['purpose']}", developer)
+            console.print(f"  [green]✓[/green] [dim]implementation_{developer}.jsonl - seeded from snapshot[/dim]")
         else:
-            console.print("  [dim]- skipped implementation_state.md (already exists)[/dim]")
+            console.print(f"  [dim]- skipped implementation_{developer}.jsonl (already exists)[/dim]")
 
         return True
 
@@ -475,7 +471,6 @@ def _create_fallback_generated_files(developer: str):
 
     for target, template in [
         ("architecture.md", "architecture_template.md"),
-        ("implementation_state.md", "implementation_state_template.md"),
     ]:
         target_path = state_path(target)
         if not os.path.exists(target_path):
@@ -486,6 +481,10 @@ def _create_fallback_generated_files(developer: str):
                 content = content.replace("{developer}", developer).replace("{timestamp}", timestamp)
                 with open(target_path, "w") as f:
                     f.write(content)
+
+    impl_path = state_path(f"implementation_{developer}.jsonl")
+    if not os.path.exists(impl_path):
+        open(impl_path, "w").close()
 
 
 def _update_gitignore():
@@ -514,6 +513,7 @@ def _install_gitattributes():
         "askr_state/failed_approaches.md merge=union",
         "askr_state/notifications.log  merge=union",
         "askr_state/tasks/queue_*.jsonl merge=union",
+        "askr_state/implementation_*.jsonl merge=union",
     ]
     ga_path = ".gitattributes"
     existing = ""
@@ -594,7 +594,7 @@ def cmd_init():
     except Exception:
         _init_log_mark = None
 
-    # Generate architecture.md and implementation_state.md from codebase snapshot
+    # Generate architecture.md and implementation_<dev>.jsonl from codebase snapshot
     if not os.path.exists(SNAPSHOT_PATH):
         console.print()
         with console.status("  indexing codebase...", spinner="dots"):
@@ -1086,39 +1086,49 @@ def cmd_launch(args: list):
     console.print()
 
 
-def cmd_uninstall():
+def cmd_uninstall(global_uninstall: bool = False):
     """
-    Remove all askr traces from this machine:
-      - Unload and delete the launchd plist
-      - Remove hooks and statusLine from .claude/settings.json
-      - Delete ~/.config/askr/ (daemon state, stats, logs)
-      - Optionally remove askr_state/ from the project
+    Default (project-scoped): undo askr's integration with THIS repo only —
+    hooks/statusLine in .claude/settings.json, and optionally askr_state/.
+    Leaves the daemon, ~/.config/askr/, and the IDE extension untouched,
+    since those are machine-wide and shared by every other askr project
+    on this machine.
+
+    --global: also tears down the machine-wide install (daemon, identity,
+    keys, IDE extension). Affects every askr project on this machine —
+    until askr ships via brew, this is the closest equivalent to
+    `brew uninstall askr`.
     """
     import shutil as _shutil
     import subprocess as _sp
 
     console.print()
-    console.rule("[bold red]askr uninstall[/]", style="red")
+    if global_uninstall:
+        console.rule("[bold red]askr uninstall --global[/]", style="red")
+        console.print("  [dim]removing the machine-wide install — affects every askr project on this machine[/dim]")
+    else:
+        console.rule("[bold red]askr uninstall[/]", style="red")
+        console.print("  [dim]removing askr from this repo only — use --global to remove it from this machine[/dim]")
     console.print()
 
-    # 1. Launchd daemon
-    plist_path = os.path.expanduser("~/Library/LaunchAgents/com.askr.daemon.plist")
-    if os.path.exists(plist_path):
-        _sp.run(["launchctl", "unload", plist_path], capture_output=True)
-        os.remove(plist_path)
-        console.print("  [green]✓[/green] launchd daemon unloaded and plist removed")
-    else:
-        console.print("  [dim]- launchd plist not found (already removed)[/dim]")
+    if global_uninstall:
+        # 1. Launchd daemon — machine-wide, watches every askr project
+        plist_path = os.path.expanduser("~/Library/LaunchAgents/com.askr.daemon.plist")
+        if os.path.exists(plist_path):
+            _sp.run(["launchctl", "unload", plist_path], capture_output=True)
+            os.remove(plist_path)
+            console.print("  [green]✓[/green] launchd daemon unloaded and plist removed")
+        else:
+            console.print("  [dim]- launchd plist not found (already removed)[/dim]")
 
-    # Kill daemon process if still running
-    try:
-        from askr.session.lifecycle import stop_daemon
-        if stop_daemon():
-            console.print("  [green]✓[/green] daemon process stopped")
-    except Exception:
-        pass
+        try:
+            from askr.session.lifecycle import stop_daemon
+            if stop_daemon():
+                console.print("  [green]✓[/green] daemon process stopped")
+        except Exception:
+            pass
 
-    # 2. Claude Code hooks + statusLine
+    # Claude Code hooks + statusLine — project-local, always safe to remove
     if os.path.exists(CLAUDE_SETTINGS):
         settings = _load_claude_settings()
         changed = False
@@ -1153,24 +1163,25 @@ def cmd_uninstall():
         else:
             console.print("  [dim]- no askr hooks found in .claude/settings.json[/dim]")
 
-    # 3. Askr config/state directory
-    askr_config = os.path.expanduser("~/.config/askr")
-    if os.path.isdir(askr_config):
-        _shutil.rmtree(askr_config)
-        console.print(f"  [green]✓[/green] removed ~/.config/askr/")
-    else:
-        console.print("  [dim]- ~/.config/askr/ not found[/dim]")
+    if global_uninstall:
+        # Askr config/state directory — identity, keys, cost history; shared machine-wide
+        askr_config = os.path.expanduser("~/.config/askr")
+        if os.path.isdir(askr_config):
+            _shutil.rmtree(askr_config)
+            console.print(f"  [green]✓[/green] removed ~/.config/askr/")
+        else:
+            console.print("  [dim]- ~/.config/askr/ not found[/dim]")
 
-    # 4. IDE extension
-    ext_name = "askr.askr-status-1.0.0"
-    for ext_base in [os.path.expanduser("~/.cursor/extensions"), os.path.expanduser("~/.vscode/extensions")]:
-        ext_path = os.path.join(ext_base, ext_name)
-        if os.path.isdir(ext_path):
-            _shutil.rmtree(ext_path)
-            ide = "Cursor" if "cursor" in ext_base else "VS Code"
-            console.print(f"  [green]✓[/green] removed IDE extension from {ide}")
+        # IDE extension — editor-wide install, not per-repo
+        ext_name = "askr.askr-status-1.0.0"
+        for ext_base in [os.path.expanduser("~/.cursor/extensions"), os.path.expanduser("~/.vscode/extensions")]:
+            ext_path = os.path.join(ext_base, ext_name)
+            if os.path.isdir(ext_path):
+                _shutil.rmtree(ext_path)
+                ide = "Cursor" if "cursor" in ext_base else "VS Code"
+                console.print(f"  [green]✓[/green] removed IDE extension from {ide}")
 
-    # 5. Optionally remove askr_state/
+    # Optionally remove askr_state/ — project-local, always prompted
     state_dir = get_state_dir()
     if os.path.isdir(state_dir):
         console.print()
@@ -1187,7 +1198,10 @@ def cmd_uninstall():
             console.print("  [dim]kept askr_state/ — remove manually if needed[/dim]")
 
     console.print()
-    console.print("  [green]done[/green] — askr fully removed\n")
+    if global_uninstall:
+        console.print("  [green]done[/green] — askr fully removed from this machine\n")
+    else:
+        console.print("  [green]done[/green] — askr removed from this repo [dim](daemon and global config left intact — use --global to remove those too)[/dim]\n")
 
 
 def _load_pending_tasks(dev: str) -> list:
@@ -1468,7 +1482,8 @@ def main():
         console.print("  [dim]askr launch              - show daemon status (always-on via launchd)[/dim]")
         console.print("  [dim]askr launch --stop       - stop daemon manually[/dim]")
         console.print("  [dim]askr launch --restart    - restart daemon now[/dim]")
-        console.print("  [dim]askr uninstall           - remove all askr traces from this machine[/dim]")
+        console.print("  [dim]askr uninstall           - remove askr from this repo only[/dim]")
+        console.print("  [dim]askr uninstall --global  - remove askr from this whole machine[/dim]")
         console.print("  [dim]askr report              - send morning/daily report to Discord[/dim]")
         console.print()
         sys.exit(0)
@@ -1487,7 +1502,7 @@ def main():
     elif cmd == "launch":
         cmd_launch(rest)
     elif cmd == "uninstall":
-        cmd_uninstall()
+        cmd_uninstall(global_uninstall="--global" in rest or "--everywhere" in rest)
     elif cmd == "report":
         cmd_report()
     elif cmd == "task":
