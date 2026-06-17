@@ -14,15 +14,19 @@ function projectHashPrefix() {
 
 function projectStatsPath() {
   // Per-session files ({hash}_{session_id}.json) are what post_tool_use writes.
-  // The legacy {hash}.json is reset to 0% on session start and never updated.
-  // Pick the most recently modified file that matches this project's prefix.
+  // The legacy {hash}.json is reset to 0% on every session start and never
+  // updated again — it must NEVER compete in the same mtime race as real
+  // per-session files. Any session starting (including askr's own companion
+  // sessions) touches it, making it momentarily "newest" and causing the
+  // status bar to flash 0% while a real session sits at high context. Only
+  // fall back to it when no per-session file exists at all (very first run).
   const hash = projectHashPrefix();
   try {
-    const files = fs.readdirSync(STATS_DIR).filter(f =>
-      f.endsWith('.json') && (f === hash + '.json' || f.startsWith(hash + '_'))
+    const sessionFiles = fs.readdirSync(STATS_DIR).filter(f =>
+      f.endsWith('.json') && f.startsWith(hash + '_')
     );
-    if (files.length > 0) {
-      const newest = files
+    if (sessionFiles.length > 0) {
+      const newest = sessionFiles
         .map(f => path.join(STATS_DIR, f))
         .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
       return newest;
