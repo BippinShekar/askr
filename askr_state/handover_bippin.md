@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-17 17:49
+Last updated: 2026-06-17 17:55
 
 ## Task
 
-brother askr uninstall in X repo, should take effect in said X repo only, not throughout the system, right. If they do want to do some sort of universall uninstall it must be like brew uninstall or soemthing, once I setup brew isntall that is.
+[Image: source: /Users/bippin/.claude/image-cache/0f794c6a-e98e-45af-b56f-dbd985a6392d/1.png]
 
 ## Status
 
