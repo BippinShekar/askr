@@ -139,6 +139,16 @@ function buildTooltip(s, ctxPct, isLive) {
   return md;
 }
 
+// Cache of the last successfully-read stats, keyed by nothing (single project per
+// window). A transient read failure — the Python side writes stats files with a
+// plain open()+json.dump (not atomic: temp file + rename), so the extension's 5s
+// poll can catch a half-written file mid-write and get a JSON parse error, or the
+// file can be deleted out from under it by the daemon's cleanup — must NOT blank
+// the status bar. It should keep showing the last known-good reading, greyed out,
+// until a fresh read succeeds. Hiding on every transient hiccup is what made the
+// indicator "vanish" for no reason.
+let _lastGoodResult = null;
+
 function readStats() {
   try {
     const statsPath = projectStatsPath();
@@ -146,7 +156,11 @@ function readStats() {
     const s       = JSON.parse(raw);
     const staleMs = Date.now() - fs.statSync(statsPath).mtimeMs;
 
-    if (staleMs > 7_200_000) return null;  // hide if > 2h stale
+    if (staleMs > 7_200_000) {
+      // Genuinely stale (no session in 2h+) — let it go, not a transient failure.
+      _lastGoodResult = null;
+      return null;
+    }
 
     const ctxPct       = Math.round((s.context_pct || 0) * 100);
     const ctxLabel     = s.context_label  || 'ok';
@@ -158,13 +172,16 @@ function readStats() {
     const maxPct = Math.max(ctxPct, quotaPct ?? 0);
     const color  = isLive ? severityColor(maxPct) : COLOR_IDLE;
 
-    return {
+    _lastGoodResult = {
       label:   buildLabel(ctxPct, quotaPct, quotaResetIso, isLive, ctxLabel),
       color,
       tooltip: buildTooltip(s, ctxPct, isLive),
     };
+    return _lastGoodResult;
   } catch {
-    return null;
+    // Transient read/parse failure (write race, file deleted mid-poll) — keep
+    // showing the last known-good reading instead of hiding the item.
+    return _lastGoodResult;
   }
 }
 

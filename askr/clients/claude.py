@@ -26,7 +26,9 @@ def _get_client():
 
 
 _MODE_MAX_TOKENS = {
-    "checkpoint": 2000,  # handover + Completed Goals section — 300 truncates mid-sentence
+    "checkpoint": 4000,  # handover + Completed Goals section — was 2000, observed truncating
+                         # mid-JSON on real sessions (usage.log: out=2000 exactly, json.loads
+                         # failed, fell back to the mechanical/generic handover)
     "guard":       500,  # JSON response: {"clean":..,"issues":[..],"summary":..} — 300 truncates
 }
 

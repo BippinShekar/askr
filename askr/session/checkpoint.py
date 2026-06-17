@@ -566,6 +566,54 @@ def _build_fallback_summary(entries: list) -> tuple[str, list]:
     return "\n\n".join(sections), tool_actions
 
 
+def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigger_type: str) -> dict:
+    """
+    Degraded handover when the LLM call fails or truncates — used instead of the
+    legacy string fallback so write_handover() still updates handover_<dev>.json.
+
+    The string fallback left the JSON untouched, so a stale next_actions list from
+    whatever the last successful LLM call wrote (potentially many sessions ago)
+    kept surfacing in _infer_direction's git-history walk — feeding completely
+    unrelated, ancient directions into later sessions' relaunch prompts.
+    """
+    md_summary, tool_actions = _build_fallback_summary(entries)
+    files_changed = sorted(set(
+        a.replace("Modified ", "") for a in tool_actions if a.startswith("Modified")
+    ))
+    uncommitted_files = _get_uncommitted_files()
+
+    task = ""
+    if "## Task\n\n" in md_summary:
+        task = md_summary.split("## Task\n\n", 1)[1].split("\n\n##", 1)[0].strip()
+
+    next_action = (
+        f"Inspect {files_changed[-1]} — last file modified this session "
+        "(handover generation failed/truncated — verify manually)"
+        if files_changed else
+        "Handover generation failed/truncated this session — review transcript manually before continuing"
+    )
+
+    base = dict(existing_handover) if isinstance(existing_handover, dict) else {}
+    base["task"] = task or base.get("task", "")
+    base["next_actions"] = [{"order": 1, "action": next_action, "why": "handover generation failed this session"}]
+    base["uncommitted_files"] = uncommitted_files
+    base.setdefault("in_progress", [])
+    base.setdefault("accomplishments", [])
+    base.setdefault("decisions", [])
+    base.setdefault("user_rejected_decisions", [])
+    base.setdefault("failed_approaches", [])
+    base.setdefault("files_in_play", files_changed)
+    base.setdefault("relational_files", [])
+    base.setdefault("blockers", [])
+    base.setdefault("completed_goals", [])
+    base["session_metadata"] = {
+        "trigger_type": trigger_type,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "degraded": True,
+    }
+    return base
+
+
 # ---------------------------------------------------------------------------
 # Git
 # ---------------------------------------------------------------------------
@@ -716,7 +764,8 @@ def create_checkpoint(
             summary = llm_summary
             tool_actions = _extract_tool_actions(entries)
         else:
-            summary, tool_actions = _build_fallback_summary(entries)
+            summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type)
+            tool_actions = _extract_tool_actions(entries)
 
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer)

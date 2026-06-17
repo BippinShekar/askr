@@ -105,8 +105,13 @@ def _write_session_stats():
             "session_id": stats.session_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        with open(stats_path, "w") as f:
+        # Write atomically — a plain open()+dump leaves a window where a concurrent
+        # reader (the IDE extension's 5s poll) can read a truncated/partial file
+        # and fail to parse it. os.replace is atomic on the same filesystem.
+        tmp_path = stats_path + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(payload, f, indent=2)
+        os.replace(tmp_path, stats_path)
     except Exception:
         pass
 

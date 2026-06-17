@@ -65,6 +65,7 @@ _LAUNCH_MODE_PATH      = os.path.expanduser("~/.config/askr/launch_mode.json")
 _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
 _CHECKPOINT_PENDING    = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
+_TRIGGER_STATE_PATH    = os.path.expanduser("~/.config/askr/trigger_state.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -377,12 +378,27 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
-def _clear_stats_for_pids(pids: list, project_path: str):
+def _clear_stats_for_pids(pids: list, project_path: str, known_session_id: str = None):
     """
     Delete per-session stats files for all PIDs about to be killed.
     Prevents the daemon from re-triggering on a dead session's stale high ctx%
     after the cooldown expires (cooldown=300s < stale window=600s).
+
+    known_session_id: the session_id from the stats entry that actually triggered
+    this kill. Deleted unconditionally, independent of the lsof-based pid→session_id
+    discovery below — that discovery can silently fail to match (wrong cwd encoding,
+    process already gone by the time lsof runs), leaving a ghost stats file that
+    re-triggers kills against unrelated live sessions for up to SESSION_STALE_SECS.
     """
+    if known_session_id:
+        try:
+            from askr.session.monitor import stats_path_for_session
+            sp = stats_path_for_session(project_path, known_session_id)
+            if os.path.exists(sp):
+                os.remove(sp)
+                _log(f"cleared stats for triggering session {known_session_id[:8]} (direct)")
+        except Exception:
+            pass
     try:
         from askr.session.monitor import stats_path_for_session
         claude_projects_dir = os.path.expanduser("~/.claude/projects")
@@ -409,7 +425,7 @@ def _clear_stats_for_pids(pids: list, project_path: str):
         pass
 
 
-def _kill_claude(project_path: str = ""):
+def _kill_claude(project_path: str = "", known_session_id: str = None):
     """Kill ALL claude sessions in this project directory."""
     pids = _find_all_claude_pids_by_project(project_path) if project_path else []
 
@@ -419,14 +435,14 @@ def _kill_claude(project_path: str = ""):
         if legacy:
             pids = [legacy]
 
-    if not pids:
+    if not pids and not known_session_id:
         _log("no tracked claude PIDs to kill — skipping")
         return []
 
     # Delete stats files before killing — prevents stale high-ctx% from
     # re-triggering the daemon after the cooldown expires.
     if project_path:
-        _clear_stats_for_pids(pids, project_path)
+        _clear_stats_for_pids(pids, project_path, known_session_id=known_session_id)
 
     _log(f"killing {len(pids)} claude session(s): {pids}")
     for pid in pids:
@@ -938,7 +954,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
     _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""))
-    _kill_claude(project_path)
+    _kill_claude(project_path, known_session_id=stats.get("session_id"))
 
     if trigger == "quota":
         reset_at = stats.get("quota_reset_at")
@@ -1077,9 +1093,18 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
+        from askr.session.monitor import _find_active_jsonl
         developer = load_developer()
         state_dir = os.path.join(project_path, "askr_state") if os.path.isdir(os.path.join(project_path, "askr_state")) else None
-        checkpoint_result = create_checkpoint(trigger_type="context", developer=developer, state_dir=state_dir)
+        # _find_active_jsonl picks by mtime, not liveness — still resolves the
+        # just-killed session's transcript. Without this, the fallback checkpoint
+        # was always blind to what the session actually did (read_transcript("")
+        # returns [] unconditionally), producing an empty/generic handover.
+        transcript_path = _find_active_jsonl(project_path) or ""
+        checkpoint_result = create_checkpoint(
+            trigger_type="context", developer=developer,
+            transcript_path=transcript_path, state_dir=state_dir,
+        )
         _log(f"daemon fallback checkpoint: {checkpoint_result.get('trigger')} at {checkpoint_result.get('timestamp','')[:19]}")
     except Exception as e:
         _log(f"daemon fallback checkpoint error: {e}")
@@ -1137,7 +1162,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
 
 
-def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
+def _wait_for_exchange_end_then_kill(project_path: str, session_id: str = None) -> bool:
     """
     Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
     the current exchange is done — kill Claude so the Stop hook fires and
@@ -1182,7 +1207,7 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
             if current_ctx >= 0.80:
                 _log(f"context at {current_ctx:.1%} — compaction imminent, killing now without waiting for idle")
                 _pre_kill_update_tools(project_path)
-                killed = _kill_claude(project_path)
+                killed = _kill_claude(project_path, known_session_id=session_id)
                 _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
                 return True
         except Exception:
@@ -1212,7 +1237,7 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
         elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
             _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
             _pre_kill_update_tools(project_path)
-            killed = _kill_claude(project_path)
+            killed = _kill_claude(project_path, known_session_id=session_id)
             _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
             return True
 
@@ -1234,6 +1259,30 @@ def _maybe_autolaunch(project_path: str):
     _start_claude(project_path)
 
 
+def _load_trigger_state() -> dict:
+    """
+    Disk-backed cooldown state — survives the source-watch self-restart.
+    Without this, any code change (including the daemon editing its own source
+    mid-session, or a co-founder's git pull landing a fix) wipes the in-memory
+    last_trigger_at dict, instantly defeating the 300s cooldown and causing
+    repeated kills against the same stale-stats-driven trigger.
+    """
+    try:
+        with open(_TRIGGER_STATE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_trigger_state(state: dict):
+    try:
+        os.makedirs(os.path.dirname(_TRIGGER_STATE_PATH), exist_ok=True)
+        with open(_TRIGGER_STATE_PATH, "w") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -1251,7 +1300,7 @@ def run_daemon():
     _log("daemon started")
 
     was_active = False
-    last_trigger_at: dict = {}  # project_path → epoch seconds, prevents re-firing per project
+    last_trigger_at: dict = _load_trigger_state()  # project_path → epoch seconds, disk-backed (survives restarts)
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1303,7 +1352,7 @@ def run_daemon():
                     elif ctx_pct >= CONTEXT_TRIGGER:
                         _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude [{project_path}]")
                         _write_checkpoint_pending(stats)
-                        killed = _wait_for_exchange_end_then_kill(project_path)
+                        killed = _wait_for_exchange_end_then_kill(project_path, stats.get("session_id"))
                         if killed:
                             # Full cooldown — kill was sent, new session is starting
                             last_trigger_at[project_path] = time.time()
@@ -1312,12 +1361,14 @@ def run_daemon():
                             # rather than waiting the full 5 minutes
                             last_trigger_at[project_path] = time.time() - TRIGGER_COOLDOWN + TRIGGER_MISS_COOLDOWN
                             _log(f"kill skipped (claude not found) — retry in {TRIGGER_MISS_COOLDOWN}s")
+                        _save_trigger_state(last_trigger_at)
                         triggered_this_cycle = True
                         break  # re-scan all projects next cycle after handling this one
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
                         _execute_trigger("quota", stats, project_path)
                         last_trigger_at[project_path] = time.time()
+                        _save_trigger_state(last_trigger_at)
                         triggered_this_cycle = True
                         break
                     else:
