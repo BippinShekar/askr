@@ -94,3 +94,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-16] Unknown — LLM handover unavailable, review transcript manually
 - [2026-06-16] Assuming per-dev handover JSON isolation is sufficient for multi-session safety — Handover JSONs are isolated, but shared .md files (goals.md, decisions.md, blockers.md) require explicit locking to prevent last-write-wins data loss
 - [2026-06-16] Relying on extension to auto-launch Claude without session-active checks — Caused duplicate Claude instances when daemon notifications fired while a session was already running; context cuts triggered re-spawn
+- [2026-06-17] Relying on session lifetime alone to clean up stats files — Ghost stats files persisted beyond session death because cleanup was not keyed to any persistent state; switching to trigger cooldown state provides reliable cleanup trigger
+- [2026-06-17] Blind fallback checkpoint on any stats write failure without logging — Silent fallback masked underlying I/O issues and made debugging harder; now logs failures and queues checkpoint explicitly

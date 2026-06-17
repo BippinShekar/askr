@@ -221,3 +221,45 @@
 {"ts": "2026-06-17T15:31:02Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "tail -40 ~/.config/askr/usage.log 2>/dev/null\necho \"=== around 15:1x-15:3x times"}
 {"ts": "2026-06-17T15:31:52Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"ctx\\|context_pct\\|Context at\\|pct_str\" /U"}
 {"ts": "2026-06-17T15:32:02Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -n \"projectStatsPath\\|function projectStatsPath\" -A 25 /Users/bippin/.curso"}
+{"ts": "2026-06-17T15:41:50Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngit log --oneline --all -- '*extension.js' | head "}
+{"ts": "2026-06-17T15:43:12Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"def.*write\\|json.dump\\|open(.*'w'\\|stats_"}
+{"ts": "2026-06-17T15:43:37Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\nsed -n '1,80p' askr/session/monitor.py | grep -n \""}
+{"ts": "2026-06-17T15:43:43Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -rn \"json.dump\" askr/hooks askr/session | gre"}
+{"ts": "2026-06-17T15:43:48Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -rln \"stats_path_for_session\\|stats_path_for_"}
+{"ts": "2026-06-17T15:43:52Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"with open\\|json.dump\\|def write_stats\\|de"}
+{"ts": "2026-06-17T15:44:26Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"_find_active_jsonl\\|_clear_stats_for_pids"}
+{"ts": "2026-06-17T15:44:36Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:44:45Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:44:53Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:00Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:07Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:14Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:19Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:26Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:35Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:41Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:45:46Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -n \"last_trigger_at\\[project_path\\] = \" askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:46:54Z", "session_id": "1c9fadb5-f9b2-4930-8c5d-f052f50e6685", "type": "command", "detail": "git diff askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:46:58Z", "session_id": "1c9fadb5-f9b2-4930-8c5d-f052f50e6685", "type": "command", "detail": "grep -n \"_save_trigger_state\\|last_trigger_at\\[\" askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:48:33Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\npython3 -c \"\nfrom askr.session.lifecycle import st"}
+{"ts": "2026-06-17T15:48:47Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "python3 --version; which python3\nls -la /Users/bippin/Desktop/askr/venv/bin/pyth"}
+{"ts": "2026-06-17T15:48:53Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "launchctl list | grep -i askr\nlaunchctl print system/com.askr.daemon 2>/dev/null"}
+{"ts": "2026-06-17T15:49:03Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cat /Users/bippin/Library/LaunchAgents/com.askr.daemon.plist"}
+{"ts": "2026-06-17T15:49:09Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "launchctl unload /Users/bippin/Library/LaunchAgents/com.askr.daemon.plist\nsleep "}
+{"ts": "2026-06-17T15:49:14Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"last_trigger_at\\[project_path\\] = \" askr/"}
+{"ts": "2026-06-17T15:49:30Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:49:41Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -n \"create_checkpoint(trigger_type=\\\"context\\\", developer=developer, state_"}
+{"ts": "2026-06-17T15:49:58Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-06-17T15:50:21Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/clients/claude.py"}
+{"ts": "2026-06-17T15:50:54Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/checkpoint.py"}
+{"ts": "2026-06-17T15:51:00Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -n \"summary, tool_actions = _build_fallback_summary(entries)\" /Users/bippin"}
+{"ts": "2026-06-17T15:51:11Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/checkpoint.py"}
+{"ts": "2026-06-17T15:51:21Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\nsource venv/bin/activate 2>/dev/null\nvenv/bin/pyth"}
+{"ts": "2026-06-17T15:51:36Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js"}
+{"ts": "2026-06-17T15:51:48Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py"}
+{"ts": "2026-06-17T15:51:52Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "head -15 /Users/bippin/Desktop/askr/askr/hooks/post_tool_use.py | grep -n \"^impo"}
+{"ts": "2026-06-17T15:51:59Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\nvenv/bin/python -c \"\nimport ast\nfor f in ['askr/se"}
+{"ts": "2026-06-17T15:52:07Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\nvenv/bin/python -c \"\nfrom askr.session import life"}
+{"ts": "2026-06-17T15:52:13Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngit add askr/session/lifecycle.py askr/session/che"}
+{"ts": "2026-06-17T15:52:27Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngit commit -m \"fix(daemon): persist trigger cooldo"}
+{"ts": "2026-06-17T15:52:51Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "pgrep -x claude 2>/dev/null | while read pid; do\n  cwd=$(lsof -a -p \"$pid\" -d cw"}
