@@ -26,20 +26,23 @@ The project has evolved from basic multi-session support to a production-hardene
 - [x] Verified file_lock implementation and tested lock-wrapped queue operations end-to-end with manual sanity tests
 - [x] Committed task queue race fix (c79fe13) with message 'fix(tasks): lock queue file across read/write to prevent silent task loss'
 - [x] Verified heartbeat logic task: confirmed register_session, update_heartbeat, _is_alive, and get_active_sessions already fully implemented
-- [x] Refactored daemon lifecycle to spawn companion sessions instead of killing live user sessions (commit 7a11a12)
-- [x] Implemented per-session statusline caching and race-safe daemon cleanup with cooldown state machine (commit 2d39e5d)
-- [x] Fixed abrupt-jump UX by implementing turn-aware waiting in lifecycle.py—daemon now waits for current exchange to finish before opening companion terminal (commit f258587)
-- [x] Documented daemon spawn refactor decision: companion session preserves user context and prevents terminal disruption
-- [x] Documented turn-aware waiting decision: prevents abrupt interruption of user's mid-flow interaction
-- [x] Documented removal of idle-wait loop: turn-aware waiting is more deterministic and user-centric
+- [x] Refactored daemon lifecycle to spawn companion sessions instead of killing user's live session (commit 7873841)
+- [x] Implemented per-session statusline caching and race-safe daemon cleanup with trigger cooldown (commit dd81a60)
+- [x] Fixed abrupt-jump UX by implementing turn-aware waiting in lifecycle.py before companion spawn (commit f258587)
+- [x] Re-enabled daemon for live monitoring after turn-aware companion spawn fix
+
+## In Progress
+- `askr_state/handover_bippin.json`: Monitoring daemon behavior with live context-token overflow trigger; companion session spawned successfully without killing user session
 
 ## Next Actions
-1. Monitor daemon logs for 24h+ to verify companion spawn stability and turn-aware waiting behavior in production
-   *Why: Critical validation that the turn-aware fix resolves UX disruption without introducing new race conditions or timing issues*
-2. Test askr viability with concurrent user + monitor sessions: run user session while daemon spawns companion, verify both sessions remain stable and user context is preserved
-   *Why: End-to-end validation that the refactored daemon lifecycle works correctly in real concurrent scenarios*
-3. Commit pending state files: git add askr_state/* && git commit -m 'docs: update decisions, goals, and failed approaches for turn-aware companion spawn'
-   *Why: Persist session decisions and goals to git for continuity across future sessions*
+1. Monitor daemon logs continuously for 24+ hours to verify companion spawn stability, turn-aware waiting behavior, and absence of race conditions under concurrent load
+   *Why: Live trigger just occurred (context 246039 tokens, 123% over budget); need empirical evidence that turn-aware waiting and companion spawn work reliably before declaring production-ready*
+2. Test askr viability with concurrent user + monitor sessions: run user session normally while daemon monitors in background, verify no terminal disruption, no task loss, no stats corruption
+   *Why: This is the real-world scenario the architecture was built for; need to confirm user experience is smooth and background monitoring doesn't interfere*
+3. If daemon monitoring reveals any race conditions or UX issues, capture logs and commit findings to failed_approaches.md before next session
+   *Why: Empirical data from live monitoring will inform next iteration; document failures to avoid repeating them*
+4. Once 24h+ monitoring confirms stability, commit all uncommitted state files (decisions.jsonl, failed_approaches.md, goals.jsonl, handover_bippin.json, etc.) with summary of monitoring results
+   *Why: Preserve monitoring findings and decision rationale in project state for future sessions*
 
 ## Decisions
 - Daemon spawns companion session in new terminal instead of killing user's live session — Preserves user context, prevents terminal disruption, and enables true concurrent background task execution without losing interactive session state
@@ -47,6 +50,8 @@ The project has evolved from basic multi-session support to a production-hardene
 - Removed idle-wait loop that was causing abrupt jumps — Idle-wait was creating unpredictable timing; turn-aware waiting is more deterministic and user-centric
 
 ## Failed Approaches
+- Relying on session lifetime alone to clean up stats files — Ghost stats files persisted beyond session death because cleanup was not keyed to any persistent state; switching to trigger cooldown state provides reliable cleanup trigger
+- Blind fallback checkpoint on any stats write failure without logging — Silent fallback masked underlying I/O issues and made debugging harder; now logs failures and queues checkpoint explicitly
 - Killing the user's live Claude session to spawn a new one for background tasks — Caused context loss, terminal disruption, and poor UX; users lost their active conversation state when daemon needed to run background work
 - Immediate companion spawn on trigger without waiting for turn to finish — Caused abrupt UX disruption by opening new terminal mid-flow, interrupting user's current interaction
 
@@ -58,9 +63,9 @@ The project has evolved from basic multi-session support to a production-hardene
 - `askr_state/handover_bippin.json`
 
 ## Relational Files
-- `askr/daemon/monitor.py` (imports): Daemon monitor calls lifecycle.spawn_companion_session with turn-aware waiting
-- `askr/ide/vscode-extension/extension.js` (configures): Extension spawns initial Claude session; daemon companion spawn is separate flow
-- `askr/session/registry.py` (imported_by): Lifecycle uses registry to track active sessions and determine turn state
+- `askr/daemon/monitor.py` (imports): Daemon calls lifecycle.spawn_companion_session() to open new terminal; turn-aware waiting logic is in lifecycle.py
+- `askr/session/checkpoint.py` (imported_by): Checkpoint is called by lifecycle.py before companion spawn to preserve current session state
+- `~/.config/askr/daemon.log` (configures): Live monitoring target; daemon logs all spawn decisions and turn-wait behavior here
 
 ## Uncommitted Files
 - `askr_state/decisions.jsonl`
