@@ -288,6 +288,61 @@ def _clear_claude_pid():
         pass
 
 
+def _terminal_app_fallback_worker(project_path: str, claude_bin: str, tools_flag: str,
+                                   safe_prompt: str, notif_path: str, delay: int = 20):
+    """
+    Runs in a detached subprocess. Waits `delay` seconds, then opens Terminal.app
+    and types the prompt — UNLESS the extension claimed the notification, or a
+    claude process for this project already exists by the time we wake up.
+
+    The second check matters: the original version only checked for an existing
+    claude process *before* sleeping (in the caller), not after. Electron/VS Code
+    renderer timers throttle when the window is backgrounded, so the extension's
+    5s poll can land well past this delay; without re-checking here, both the
+    extension and this fallback would open a terminal for the same notification.
+    """
+    import time as _time
+    _time.sleep(delay)
+    try:
+        with open(notif_path) as f:
+            if json.load(f).get("shown"):
+                return
+    except Exception:
+        pass
+    if _find_all_claude_pids_by_project(project_path):
+        return  # extension (or something else) already started a session — don't double up
+
+    start_cmd = f'cd {project_path} && {claude_bin}{tools_flag}'
+    open_script = 'tell application "Terminal"\n  do script "' + start_cmd + '"\n  activate\nend tell'
+    subprocess.run(["osascript", "-e", open_script], timeout=5,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _time.sleep(10)
+    type_script = ('tell application "Terminal"\n  tell front window\n'
+                    f'    keystroke {safe_prompt!r}\n    key code 36\n  end tell\nend tell')
+    subprocess.run(["osascript", "-e", type_script], timeout=5,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _spawn_terminal_app_fallback(project_path: str, claude_bin: str, tools_flag: str,
+                                  safe_prompt: str, notif_path: str):
+    """Spawn _terminal_app_fallback_worker in a detached process so it survives this process exiting."""
+    try:
+        code = (
+            f"import sys; sys.path.insert(0, {_ASKR_ROOT!r})\n"
+            f"from askr.session.lifecycle import _terminal_app_fallback_worker as w\n"
+            f"w({project_path!r}, {claude_bin!r}, {tools_flag!r}, {safe_prompt!r}, {notif_path!r})\n"
+        )
+        subprocess.Popen(
+            [sys.executable, "-c", code],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _log("fallback watcher spawned — Terminal.app fires in 20s if extension doesn't handle it")
+    except Exception as e:
+        _log(f"fallback watcher spawn failed: {e}")
+
+
 def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     """Find ALL running 'claude' processes whose cwd matches project_path."""
     pids = []
@@ -459,42 +514,12 @@ def _start_claude(project_path: str, initial_prompt: str = "") -> bool:
     except Exception as e:
         _log(f"notification write failed: {e}")
 
-    # Spawn a background process: after 6 seconds check if the extension marked the
-    # notification shown. If not (extension not loaded/reloaded), open Terminal.app.
-    # This way a reloaded extension gets sole control; an unloaded one gracefully
-    # falls back to Terminal.app without blocking the caller.
+    # Spawn a detached watcher: after a delay, check if the extension marked the
+    # notification shown AND re-check for a live claude process before falling
+    # back to Terminal.app — see _terminal_app_fallback_worker for why both checks
+    # happen after the wait, not before.
     safe_prompt = prompt_arg.replace("'", "").replace('"', "").replace("\\", "")
-    notif_path  = _NOTIFICATION_PATH
-    fallback_script = (
-        f"import time, json, os, subprocess\n"
-        f"time.sleep(6)\n"
-        f"try:\n"
-        f"    with open({repr(notif_path)}) as _f:\n"
-        f"        _d = json.load(_f)\n"
-        f"    if _d.get('shown'): exit(0)\n"
-        f"except Exception: pass\n"
-        f"# Step 1: open Terminal.app and start claude\n"
-        f"_start_cmd = 'cd {project_path} && {claude_bin}{tools_flag}'\n"
-        f"_open_script = 'tell application \"Terminal\"\\n  do script \"' + _start_cmd + '\"\\n  activate\\nend tell'\n"
-        f"subprocess.run(['osascript', '-e', _open_script], timeout=5, "
-        f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
-        f"# Step 2: wait for claude TUI to load then type and submit the prompt\n"
-        f"time.sleep(10)\n"
-        f"_type_script = 'tell application \"Terminal\"\\n  tell front window\\n"
-        f"    keystroke {repr(safe_prompt)}\\n    key code 36\\n  end tell\\nend tell'\n"
-        f"subprocess.run(['osascript', '-e', _type_script], timeout=5, "
-        f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
-    )
-    try:
-        subprocess.Popen(
-            [sys.executable, "-c", fallback_script],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        _log("fallback watcher spawned — Terminal.app fires in 6s if extension doesn't handle it")
-    except Exception as e:
-        _log(f"fallback watcher spawn failed: {e}")
+    _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
     return True
 
 
@@ -1101,45 +1126,15 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
     except Exception as e:
         _log(f"daemon fallback notification error: {e}")
 
-    # Spawn Terminal.app fallback — fires after 6s if extension doesn't claim the notification.
+    # Spawn Terminal.app fallback — see _terminal_app_fallback_worker; it re-checks
+    # both the 'shown' flag and for a live claude process after its own delay, so
+    # we don't need (and shouldn't rely on) an existing-process check here too.
     # Do NOT call _start_claude here: it would overwrite the direction-inferred context
     # notification we just wrote with a generic goal_launch notification and wrong prompt.
-    existing = _find_all_claude_pids_by_project(project_path)
-    if existing:
-        _log(f"Claude pid(s) {existing} already running for {project_path} — skipping Terminal.app fallback")
-    else:
-        claude_bin = shutil.which("claude") or "claude"
-        tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
-        safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
-        notif_path  = _NOTIFICATION_PATH
-        fallback_script = (
-            f"import time, json, os, subprocess\n"
-            f"time.sleep(6)\n"
-            f"try:\n"
-            f"    with open({repr(notif_path)}) as _f:\n"
-            f"        _d = json.load(_f)\n"
-            f"    if _d.get('shown'): exit(0)\n"
-            f"except Exception: pass\n"
-            f"_start_cmd = 'cd {project_path} && {claude_bin}{tools_flag}'\n"
-            f"_open_script = 'tell application \"Terminal\"\\n  do script \"' + _start_cmd + '\"\\n  activate\\nend tell'\n"
-            f"subprocess.run(['osascript', '-e', _open_script], timeout=5, "
-            f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
-            f"time.sleep(10)\n"
-            f"_type_script = 'tell application \"Terminal\"\\n  tell front window\\n"
-            f"    keystroke {repr(safe_prompt)}\\n    key code 36\\n  end tell\\nend tell'\n"
-            f"subprocess.run(['osascript', '-e', _type_script], timeout=5, "
-            f"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
-        )
-        try:
-            subprocess.Popen(
-                [sys.executable, "-c", fallback_script],
-                start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _log("fallback watcher spawned — Terminal.app fires in 6s if extension doesn't handle it")
-        except Exception as e:
-            _log(f"fallback watcher spawn failed: {e}")
+    claude_bin  = shutil.which("claude") or "claude"
+    tools_flag  = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
+    safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
+    _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
 
 
 def _wait_for_exchange_end_then_kill(project_path: str) -> bool:

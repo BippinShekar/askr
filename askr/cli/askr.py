@@ -44,15 +44,55 @@ HOOK_TIMEOUTS = {
     "PreToolUse":  10,
 }
 
+_STATUSLINE_SESSION_ID_CACHE = None
+
+
+def _statusline_session_id() -> str:
+    """
+    Claude Code invokes the statusLine command with a JSON payload on stdin
+    containing this session's own session_id. Read it so each session shows
+    ITS OWN stats — without this, _stats_path's mtime-heuristic fallback picks
+    whichever sibling session in the same project happened to fire PostToolUse
+    most recently, so the statusline shows another session's numbers instead
+    of this one's (looks like the line randomly resets/"collapses").
+
+    Memoized: stdin can only be drained once per process, and _stats_path()
+    is called more than once per invocation.
+    """
+    global _STATUSLINE_SESSION_ID_CACHE
+    if _STATUSLINE_SESSION_ID_CACHE is not None:
+        return _STATUSLINE_SESSION_ID_CACHE
+    session_id = ""
+    if not sys.stdin.isatty():
+        try:
+            raw = sys.stdin.read()
+            if raw:
+                session_id = json.loads(raw).get("session_id", "") or ""
+        except Exception:
+            session_id = ""
+    _STATUSLINE_SESSION_ID_CACHE = session_id
+    return session_id
+
+
 def _stats_path() -> str:
     """
-    Return the most-recently-modified stats file for the current project.
-    With per-session stats files each session owns its own file; the most
-    recent one belongs to whichever session fired PostToolUse last — which
-    is the session the user is actively working in.
+    Return this session's own stats file when Claude Code told us the
+    session_id via stdin. Falls back to "most-recently-modified stats file
+    for the project" only when that's unavailable (e.g. run manually from a
+    shell) — that heuristic is wrong whenever 2+ sessions share a project.
     """
-    from askr.session.monitor import find_project_root, find_project_stats_files, stats_path_for_project
+    from askr.session.monitor import (
+        find_project_root, find_project_stats_files,
+        stats_path_for_project, stats_path_for_session,
+    )
     project_path = find_project_root()
+
+    session_id = _statusline_session_id()
+    if session_id:
+        own_path = stats_path_for_session(project_path, session_id)
+        if os.path.exists(own_path):
+            return own_path
+
     candidates = find_project_stats_files(project_path)
     if candidates:
         return max(candidates, key=os.path.getmtime)

@@ -698,8 +698,16 @@ def create_checkpoint(
         for g in completed_goals:
             complete_goal(g)
         expire_auto_suggested_goals()
-    except Exception:
-        pass
+    except Exception as e:
+        # Goal completion depends on the LLM handover succeeding (summary must be
+        # the dict form with a completed_goals key — the mechanical fallback summary
+        # is a plain string and never closes goals). Log instead of swallowing
+        # silently so a real complete_goal() failure isn't invisible.
+        try:
+            with open(os.path.expanduser("~/.config/askr/checkpoint_error.log"), "a") as ef:
+                ef.write(f"{datetime.now(timezone.utc).isoformat()} goal completion failed: {e}\n")
+        except Exception:
+            pass
 
     session_duration = 0
     try:
