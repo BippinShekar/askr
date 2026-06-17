@@ -167,6 +167,8 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 "type": "quota",
                 "message": f"Quota at {pct_str} — state saved. Askr will resume after reset.",
                 "goal": next_goal,
+                "project_path": project_path,
+                "allowed_tools": allowed_tools,
                 "shown": False,
                 "timestamp": now,
             }
@@ -325,12 +327,14 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
             return
 
         from askr.state.config import load_developer
+        from askr.state.writer import file_lock
         developer = load_developer()
         decisions_path = os.path.join(state_dir, "decisions.jsonl")
         ts = __import__('datetime').datetime.now().strftime("%Y-%m-%d %H:%M")
-        with open(decisions_path, "a") as f:
-            for d in decisions:
-                f.write(json.dumps({"at": ts, "dev": developer, "decision": d, "reason": ""}) + "\n")
+        with file_lock(decisions_path):
+            with open(decisions_path, "a") as f:
+                for d in decisions:
+                    f.write(json.dumps({"at": ts, "dev": developer, "decision": d, "reason": ""}) + "\n")
     except Exception:
         pass
 

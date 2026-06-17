@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime, date, timezone
 from askr.state.config import state_path, ensure_state_dir
+from askr.state.writer import file_lock
 
 GOALS_FILE = "goals.jsonl"
 
@@ -42,8 +43,10 @@ def _read_all() -> list[dict]:
 
 def _append(entry: dict):
     ensure_state_dir()
-    with open(_path(), "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    path = _path()
+    with file_lock(path):
+        with open(path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 def add_goal(text: str, section: str = "today", auto_suggested: bool = False):

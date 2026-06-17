@@ -363,28 +363,31 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
             return
 
         path = os.path.join(state_dir, "decisions.jsonl")
-        existing_text = ""
-        if os.path.exists(path):
-            with open(path) as f:
-                existing_text = f.read().lower()
+        from askr.state.writer import file_lock
 
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        new_entries = []
-        for d in decisions:
-            text   = d.get("decision", "").strip()
-            reason = d.get("reason", "").strip()
-            if not text or len(text) < 10:
-                continue
-            if text.lower() in existing_text:
-                continue
-            new_entries.append(json.dumps({
-                "at": ts, "dev": developer,
-                "decision": text, "reason": reason,
-            }))
+        with file_lock(path):
+            existing_text = ""
+            if os.path.exists(path):
+                with open(path) as f:
+                    existing_text = f.read().lower()
 
-        if new_entries:
-            with open(path, "a") as f:
-                f.write("\n".join(new_entries) + "\n")
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            new_entries = []
+            for d in decisions:
+                text   = d.get("decision", "").strip()
+                reason = d.get("reason", "").strip()
+                if not text or len(text) < 10:
+                    continue
+                if text.lower() in existing_text:
+                    continue
+                new_entries.append(json.dumps({
+                    "at": ts, "dev": developer,
+                    "decision": text, "reason": reason,
+                }))
+
+            if new_entries:
+                with open(path, "a") as f:
+                    f.write("\n".join(new_entries) + "\n")
     except Exception:
         pass
 

@@ -840,6 +840,7 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
             "message": msg,
             "goal": goal,
             "handover_ready": handover_ready,
+            "project_path": project_path,
             "shown": False,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
@@ -1155,7 +1156,13 @@ def _wait_for_exchange_end_then_kill(project_path: str) -> bool:
     Returns True if a kill was sent, False if Claude was not found (caller
     uses this to decide whether to apply the full TRIGGER_COOLDOWN).
     """
-    IDLE_SECS = 20   # seconds of JSONL silence → exchange is done
+    # Must exceed a normal human read/reply gap in an interactive session —
+    # 20s was firing mid-conversation (user reading or typing counts as
+    # "JSONL silence" too, not just an actually-finished exchange) and killing
+    # live sessions out from under the user. The hard 80% override above still
+    # kills immediately regardless of idle state, so this only governs the
+    # soft 60% trigger's patience.
+    IDLE_SECS = 360  # seconds of JSONL silence → exchange is done
     POLL      = 5
 
     _log("waiting for exchange to finish before killing Claude...")
