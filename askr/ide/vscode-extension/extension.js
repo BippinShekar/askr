@@ -202,7 +202,7 @@ function checkNotification() {
 
     if (n.type === 'context') {
       const goal = n.goal ? ` Picking up: ${n.goal}` : '';
-      vscode.window.showInformationMessage(`Askr: Context saved — switching chats, no context lost.${goal}`);
+      vscode.window.showInformationMessage(`Askr: Context saved — opening a fresh companion session. Your current one keeps running.${goal}`);
       const termOpts = { name: 'askr — new session' };
       if (n.project_path) termOpts.cwd = n.project_path;
       const terminal = vscode.window.createTerminal(termOpts);

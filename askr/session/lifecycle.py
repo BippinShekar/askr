@@ -8,13 +8,19 @@ Session liveness: detected from ~/.config/askr/session_stats.json mtime.
   active = updated within last 10 minutes (Claude session running)
   idle   = stale or missing (no session)
 
-Trigger A — context >= 75%:
+Never kills or interrupts the user's live Claude session. It only ever opens a
+fresh companion session alongside the running one and lets the user decide when
+(or whether) to switch over — the old kill-then-relaunch design could yank a
+session out from under the user mid-task.
+
+Trigger A — context >= 60%:
   Read from session_stats.json (accurate: parsed from JSONL token counts)
-  safe_pause check → checkpoint → kill claude → start new claude immediately
+  safe_pause check → checkpoint (live transcript, no kill) → open companion session
 
 Trigger B — quota >= 90%:
   Read from session_stats.json (accurate: from Anthropic's /api/oauth/usage endpoint)
-  safe_pause check → checkpoint → kill claude → sleep until reset → start new claude
+  safe_pause check → checkpoint → sleep until reset → open companion session
+  (existing session, if still running, is left untouched throughout)
 """
 
 import os
@@ -59,11 +65,9 @@ from datetime import datetime, timezone
 
 _PID_PATH              = os.path.expanduser("~/.config/askr/daemon.pid")
 _CAFFEINATE_PID_PATH   = os.path.expanduser("~/.config/askr/caffeinate.pid")
-_CLAUDE_PID_PATH       = os.path.expanduser("~/.config/askr/claude_session.pid")
 _STATS_PATH            = os.path.expanduser("~/.config/askr/session_stats.json")
 _LAUNCH_MODE_PATH      = os.path.expanduser("~/.config/askr/launch_mode.json")
 _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
-_CHECKPOINT_PENDING    = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 _TRIGGER_STATE_PATH    = os.path.expanduser("~/.config/askr/trigger_state.json")
 
@@ -263,44 +267,22 @@ def _claude_cli_available() -> bool:
     return shutil.which("claude") is not None
 
 
-def _write_claude_pid(pid: int):
-    try:
-        os.makedirs(os.path.dirname(_CLAUDE_PID_PATH), exist_ok=True)
-        with open(_CLAUDE_PID_PATH, "w") as f:
-            f.write(str(pid))
-    except Exception:
-        pass
-
-
-def _read_claude_pid() -> int | None:
-    try:
-        with open(_CLAUDE_PID_PATH) as f:
-            pid = int(f.read().strip())
-        os.kill(pid, 0)
-        return pid
-    except Exception:
-        return None
-
-
-def _clear_claude_pid():
-    try:
-        os.remove(_CLAUDE_PID_PATH)
-    except Exception:
-        pass
-
-
 def _terminal_app_fallback_worker(project_path: str, claude_bin: str, tools_flag: str,
                                    safe_prompt: str, notif_path: str, delay: int = 20):
     """
     Runs in a detached subprocess. Waits `delay` seconds, then opens Terminal.app
-    and types the prompt — UNLESS the extension claimed the notification, or a
-    claude process for this project already exists by the time we wake up.
+    and types the prompt — UNLESS the extension already claimed the notification
+    (notif.shown == True, which it sets synchronously the moment it reads the file,
+    well before this delay elapses in the common case).
 
-    The second check matters: the original version only checked for an existing
-    claude process *before* sleeping (in the caller), not after. Electron/VS Code
-    renderer timers throttle when the window is backgrounded, so the extension's
-    5s poll can land well past this delay; without re-checking here, both the
-    extension and this fallback would open a terminal for the same notification.
+    Used to also skip if ANY claude process existed for this project — that was a
+    valid secondary guard back when askr killed the old session before relaunching
+    (a live pid meant "something already relaunched"). Now askr deliberately opens
+    a companion session ALONGSIDE the user's still-running one, so a live pid for
+    this project is the normal, expected state and says nothing about whether the
+    companion has been opened yet. Relying on that check would silently block this
+    fallback for any user not running the IDE extension. The `shown` flag above is
+    the only reliable signal now.
     """
     import time as _time
     _time.sleep(delay)
@@ -310,8 +292,6 @@ def _terminal_app_fallback_worker(project_path: str, claude_bin: str, tools_flag
                 return
     except Exception:
         pass
-    if _find_all_claude_pids_by_project(project_path):
-        return  # extension (or something else) already started a session — don't double up
 
     start_cmd = f'cd {project_path} && {claude_bin}{tools_flag}'
     open_script = 'tell application "Terminal"\n  do script "' + start_cmd + '"\n  activate\nend tell'
@@ -370,113 +350,6 @@ def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     return pids
 
 
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, OSError):
-        return False
-
-
-def _clear_stats_for_pids(pids: list, project_path: str, known_session_id: str = None):
-    """
-    Delete per-session stats files for all PIDs about to be killed.
-    Prevents the daemon from re-triggering on a dead session's stale high ctx%
-    after the cooldown expires (cooldown=300s < stale window=600s).
-
-    known_session_id: the session_id from the stats entry that actually triggered
-    this kill. Deleted unconditionally, independent of the lsof-based pid→session_id
-    discovery below — that discovery can silently fail to match (wrong cwd encoding,
-    process already gone by the time lsof runs), leaving a ghost stats file that
-    re-triggers kills against unrelated live sessions for up to SESSION_STALE_SECS.
-    """
-    if known_session_id:
-        try:
-            from askr.session.monitor import stats_path_for_session
-            sp = stats_path_for_session(project_path, known_session_id)
-            if os.path.exists(sp):
-                os.remove(sp)
-                _log(f"cleared stats for triggering session {known_session_id[:8]} (direct)")
-        except Exception:
-            pass
-    try:
-        from askr.session.monitor import stats_path_for_session
-        claude_projects_dir = os.path.expanduser("~/.claude/projects")
-        for pid in pids:
-            try:
-                result = subprocess.run(
-                    ["lsof", "-a", "-p", str(pid), "-F", "n"],
-                    capture_output=True, text=True, timeout=3,
-                )
-                for line in result.stdout.splitlines():
-                    if not line.startswith("n"):
-                        continue
-                    path = line[1:]
-                    if claude_projects_dir in path and path.endswith(".jsonl"):
-                        session_id = os.path.basename(path).replace(".jsonl", "")
-                        sp = stats_path_for_session(project_path, session_id)
-                        if os.path.exists(sp):
-                            os.remove(sp)
-                            _log(f"cleared stats for session {session_id[:8]} (pid {pid})")
-                        break
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-
-def _kill_claude(project_path: str = "", known_session_id: str = None):
-    """Kill ALL claude sessions in this project directory."""
-    pids = _find_all_claude_pids_by_project(project_path) if project_path else []
-
-    # Fall back to legacy single-PID file if no project path given
-    if not pids:
-        legacy = _read_claude_pid()
-        if legacy:
-            pids = [legacy]
-
-    if not pids and not known_session_id:
-        _log("no tracked claude PIDs to kill — skipping")
-        return []
-
-    # Delete stats files before killing — prevents stale high-ctx% from
-    # re-triggering the daemon after the cooldown expires.
-    if project_path:
-        _clear_stats_for_pids(pids, project_path, known_session_id=known_session_id)
-
-    _log(f"killing {len(pids)} claude session(s): {pids}")
-    for pid in pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-            _log(f"sent SIGTERM to claude pid {pid}")
-        except ProcessLookupError:
-            pass
-
-    # Give Claude 15s to run Stop hook and exit gracefully.
-    alive = list(pids)
-    for _ in range(15):
-        time.sleep(1)
-        still_alive = []
-        for pid in alive:
-            try:
-                os.kill(pid, 0)
-                still_alive.append(pid)
-            except ProcessLookupError:
-                _log(f"claude pid {pid} exited cleanly after SIGTERM")
-        alive = still_alive
-        if not alive:
-            break
-
-    for pid in alive:
-        try:
-            os.kill(pid, signal.SIGKILL)
-            _log(f"sent SIGKILL to claude pid {pid} (still alive after 15s)")
-        except ProcessLookupError:
-            pass
-    _clear_claude_pid()
-    return pids  # return so callers can pass to _wait_for_stop_hook_or_fallback
-
-
 def _load_allowed_tools(project_path: str) -> list:
     """Read allowedTools from the project's .claude/settings.json."""
     try:
@@ -489,16 +362,20 @@ def _load_allowed_tools(project_path: str) -> list:
     return []
 
 
-def _start_claude(project_path: str, initial_prompt: str = "") -> bool:
+def _start_claude(project_path: str, initial_prompt: str = "", force: bool = False) -> bool:
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
         return False
 
-    # Refuse to open a new session if Claude is already running for this project
-    existing = _find_all_claude_pids_by_project(project_path)
-    if existing:
-        _log(f"Claude pid(s) {existing} already running for {project_path} — skipping launch to prevent double-session")
-        return False
+    # Refuse to open a new session if Claude is already running for this project —
+    # UNLESS force=True, which trigger paths use deliberately: askr now opens a
+    # companion session alongside the user's live one instead of killing it first,
+    # so "already running" is expected, not a double-launch bug.
+    if not force:
+        existing = _find_all_claude_pids_by_project(project_path)
+        if existing:
+            _log(f"Claude pid(s) {existing} already running for {project_path} — skipping launch to prevent double-session")
+            return False
 
     claude_bin = shutil.which("claude") or "claude"
 
@@ -578,29 +455,6 @@ def _write_launch_mode(goal: str = ""):
         pass
 
 
-def _write_checkpoint_pending(stats: dict):
-    """
-    Signal the Stop hook to checkpoint after the current exchange completes.
-    The daemon never cuts in mid-exchange for context triggers — it just sets this flag.
-    """
-    try:
-        os.makedirs(os.path.dirname(_CHECKPOINT_PENDING), exist_ok=True)
-        with open(_CHECKPOINT_PENDING, "w") as f:
-            json.dump({
-                "trigger": "context",
-                "context_pct": stats.get("context_pct", 0),
-                "quota_pct": stats.get("quota_pct"),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, f)
-    except Exception:
-        pass
-
-
-def _clear_checkpoint_pending():
-    try:
-        os.remove(_CHECKPOINT_PENDING)
-    except Exception:
-        pass
 
 
 def _infer_direction(project_path: str = "") -> dict:
@@ -944,7 +798,9 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
         return
 
     _log("safe to pause — creating checkpoint")
-    result = create_checkpoint(trigger_type=trigger, developer=developer)
+    from askr.session.monitor import _find_active_jsonl
+    transcript_path = _find_active_jsonl(project_path) or ""
+    result = create_checkpoint(trigger_type=trigger, developer=developer, transcript_path=transcript_path)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
     next_goal = _get_next_goal()
@@ -954,7 +810,9 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
     _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""))
-    _kill_claude(project_path, known_session_id=stats.get("session_id"))
+    # Never kill the user's live session — just prepare a companion one. The old
+    # kill-then-relaunch design could yank a running session out from under the
+    # user mid-task; askr now only ever adds a fresh session, never removes theirs.
 
     if trigger == "quota":
         reset_at = stats.get("quota_reset_at")
@@ -963,8 +821,8 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
         else:
             time.sleep(300)
 
-    _log("starting new claude session")
-    launched = _start_claude(project_path)
+    _log("starting companion claude session (existing session, if any, left running)")
+    launched = _start_claude(project_path, force=True)
     if launched:
         _notify_discord_resumed(trigger, next_goal)
     try:
@@ -1050,78 +908,49 @@ def _pre_kill_update_tools(project_path: str):
         _log(f"pre-kill update error: {e}")
 
 
-def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None):
+def _open_companion_session(project_path: str, session_id: str = None):
     """
-    After killing Claude, wait up to 20s for the Stop hook to consume
-    checkpoint_pending.json AND write a fresh notification.json.
+    Checkpoint the live session's current state and open a fresh, low-context
+    companion session alongside it — WITHOUT touching the running one.
 
-    The Stop hook now only deletes checkpoint_pending AFTER successfully writing
-    the notification. So "checkpoint_pending gone" reliably means "notification
-    written and extension will handle the relaunch."
-
-    If checkpoint_pending persists after 20s, the Stop hook didn't fire (likely
-    SIGKILL) — run checkpoint + restart directly.
-
-    killed_pids: the specific PIDs we sent SIGTERM to. Only skip the fallback if
-    one of THOSE pids is still alive (kill genuinely failed). Unrelated Claude
-    sessions sharing the same CWD must not block the continuation.
+    Replaces the old kill-then-relaunch flow. askr used to SIGTERM the user's
+    live session before opening a new one — that could yank a session out from
+    under the user mid-task, which is bad UX regardless of how well-intentioned
+    the context-management reasoning is. Now askr only ever adds a session; the
+    existing one keeps running for as long as the user wants it, and the user
+    decides when (or whether) to switch over.
     """
-    WAIT = 20
-    for _ in range(WAIT):
-        time.sleep(1)
-        if not os.path.exists(_CHECKPOINT_PENDING):
-            _log("Stop hook consumed checkpoint_pending — restart delegated to extension")
-            return
-    # Stop hook didn't fire. Only skip if the specific session we killed is
-    # still alive — meaning the kill itself failed, not just that some other
-    # pre-existing Claude session happens to share this project's CWD.
-    if killed_pids:
-        still_alive = [p for p in killed_pids if _pid_alive(p)]
-        if still_alive:
-            _log(f"Claude pid(s) {still_alive} still alive after SIGTERM — kill failed, skipping fallback to avoid double-session")
-            _clear_checkpoint_pending()
-            return
+    _pre_kill_update_tools(project_path)  # sync allowedTools/permissions for the new session
 
-    # Distinguish: Stop hook ran but notification write failed vs Stop hook never ran.
-    _STOP_ERROR_LOG = os.path.expanduser("~/.config/askr/stop_hook_error.log")
-    if os.path.exists(_STOP_ERROR_LOG):
-        _log("Stop hook ran but notification write failed — check stop_hook_error.log; running daemon fallback")
-    else:
-        _log("Stop hook didn't fire after kill (SIGKILL?) — running checkpoint + restart directly")
-    _clear_checkpoint_pending()
-    checkpoint_result = {}
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
         from askr.session.monitor import _find_active_jsonl
         developer = load_developer()
         state_dir = os.path.join(project_path, "askr_state") if os.path.isdir(os.path.join(project_path, "askr_state")) else None
-        # _find_active_jsonl picks by mtime, not liveness — still resolves the
-        # just-killed session's transcript. Without this, the fallback checkpoint
-        # was always blind to what the session actually did (read_transcript("")
-        # returns [] unconditionally), producing an empty/generic handover.
+        # _find_active_jsonl picks by mtime, not liveness — reads the live
+        # session's transcript without needing to kill it first.
         transcript_path = _find_active_jsonl(project_path) or ""
         checkpoint_result = create_checkpoint(
             trigger_type="context", developer=developer,
             transcript_path=transcript_path, state_dir=state_dir,
         )
-        _log(f"daemon fallback checkpoint: {checkpoint_result.get('trigger')} at {checkpoint_result.get('timestamp','')[:19]}")
+        _log(f"checkpoint (companion session): {checkpoint_result.get('trigger')} at {checkpoint_result.get('timestamp','')[:19]}")
     except Exception as e:
-        _log(f"daemon fallback checkpoint error: {e}")
+        _log(f"companion checkpoint error: {e}")
+
     next_goal = _get_next_goal()
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
 
-    # Use direction inference for the same quality prompt the Stop hook would give.
-    # Falls back to generic "read handover" if inference fails — never blocks launch.
     daemon_prompt = ""
     try:
         direction = _infer_direction(project_path)
         if direction["confidence"] >= 0.70:
             daemon_prompt = (
-                f"Context was cut mid-session. Continue from where we left off: "
-                f"{direction['direction']}. Read the handover file for the full state. "
-                f"Resume the conversation or work — do not restart from scratch."
+                f"Continue work on: {direction['direction']}. Read the handover file "
+                f"for the full state. Your previous session is still running in another "
+                f"window — pick up from the handover, don't redo work already in flight there."
             )
     except Exception:
         pass
@@ -1134,7 +963,7 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
                 "type": "context",
-                "message": "Context limit — state saved to git. Opening new chat.",
+                "message": "Context high on your current session — a fresh companion session is ready. Your current one keeps running.",
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
@@ -1142,104 +971,34 @@ def _wait_for_stop_hook_or_fallback(project_path: str, killed_pids: list = None)
                 "shown": False,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
-        _log("daemon fallback: wrote notification.json — extension will open new terminal")
-        # Clear the error log now that we've recovered — next failure is a fresh incident.
-        try:
-            os.remove(_STOP_ERROR_LOG)
-        except Exception:
-            pass
+        _log("wrote notification.json — extension will open a NEW terminal; existing session left running")
     except Exception as e:
-        _log(f"daemon fallback notification error: {e}")
+        _log(f"companion notification error: {e}")
 
-    # Spawn Terminal.app fallback — see _terminal_app_fallback_worker; it re-checks
-    # both the 'shown' flag and for a live claude process after its own delay, so
-    # we don't need (and shouldn't rely on) an existing-process check here too.
-    # Do NOT call _start_claude here: it would overwrite the direction-inferred context
-    # notification we just wrote with a generic goal_launch notification and wrong prompt.
+    # Don't call _start_claude here — force=True bypasses its double-session guard,
+    # but that guard exists for the goal-autolaunch path which should still refuse
+    # when something's already running. Spawn the terminal directly instead.
     claude_bin  = shutil.which("claude") or "claude"
     tools_flag  = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
     safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
 
 
-def _wait_for_exchange_end_then_kill(project_path: str, session_id: str = None) -> bool:
+def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
     """
-    Poll the active JSONL file's mtime. Once it hasn't changed for IDLE_SECS,
-    the current exchange is done — kill Claude so the Stop hook fires and
-    consumes checkpoint_pending.json to run the checkpoint.
+    Context trigger fired — open a companion session immediately. No idle-wait
+    and no kill: since the live session is never interrupted, there's no need
+    to wait for "a safe moment" before acting.
 
-    No hard timeout: extended-thinking turns can run for 10+ minutes and must
-    not be killed mid-API-call. PreCompact is the backstop for sessions that
-    blow past the threshold in a single turn — it fires at a clean turn
-    boundary, never mid-thinking.
-
-    Returns True if a kill was sent, False if Claude was not found (caller
-    uses this to decide whether to apply the full TRIGGER_COOLDOWN).
+    Returns True if a live session was found for this project (full cooldown
+    applies), False if not (short retry — the project may just be between
+    sessions and this stats read is about to go stale on its own).
     """
-    # Must exceed a normal human read/reply gap in an interactive session —
-    # 20s was firing mid-conversation (user reading or typing counts as
-    # "JSONL silence" too, not just an actually-finished exchange) and killing
-    # live sessions out from under the user. The hard 80% override above still
-    # kills immediately regardless of idle state, so this only governs the
-    # soft 60% trigger's patience.
-    IDLE_SECS = 360  # seconds of JSONL silence → exchange is done
-    POLL      = 5
-
-    _log("waiting for exchange to finish before killing Claude...")
-    last_mtime = None
-    idle_since = None
-
-    while True:
-        time.sleep(POLL)
-
-        # If Claude is not traceable via PID file OR by scanning processes,
-        # it genuinely exited — nothing to kill.
-        if not _find_all_claude_pids_by_project(project_path):
-            _log("claude process not found during exchange wait — skipping kill")
-            return False
-
-        # Hard override: if ANY session for this project is within striking distance
-        # of auto-compact, kill immediately. Reads MAX across all per-session stats
-        # files so a high-context session is never masked by an idle low-context one.
-        try:
-            from askr.session.monitor import get_max_context_for_project
-            current_ctx = get_max_context_for_project(project_path)
-            if current_ctx >= 0.80:
-                _log(f"context at {current_ctx:.1%} — compaction imminent, killing now without waiting for idle")
-                _pre_kill_update_tools(project_path)
-                killed = _kill_claude(project_path, known_session_id=session_id)
-                _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
-                return True
-        except Exception:
-            pass
-
-        try:
-            sessions_dir = os.path.join(
-                os.path.expanduser("~/.claude/projects"),
-                project_path.replace("/", "-"),
-            )
-            files = [
-                os.path.join(sessions_dir, f)
-                for f in os.listdir(sessions_dir)
-                if f.endswith(".jsonl")
-            ] if os.path.isdir(sessions_dir) else []
-            jsonl = max(files, key=os.path.getmtime) if files else None
-            mtime = os.path.getmtime(jsonl) if jsonl else None
-        except Exception:
-            mtime = None
-
-        if mtime is None:
-            continue
-
-        if mtime != last_mtime:
-            last_mtime = mtime
-            idle_since  = time.time()
-        elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
-            _log(f"exchange idle for {IDLE_SECS}s — killing Claude to trigger Stop hook")
-            _pre_kill_update_tools(project_path)
-            killed = _kill_claude(project_path, known_session_id=session_id)
-            _wait_for_stop_hook_or_fallback(project_path, killed_pids=killed)
-            return True
+    found = bool(_find_all_claude_pids_by_project(project_path))
+    if not found:
+        _log("claude process not found for this project — opening companion session anyway")
+    _open_companion_session(project_path, session_id)
+    return found
 
 
 def _maybe_autolaunch(project_path: str):
@@ -1350,17 +1109,16 @@ def run_daemon():
                         remaining = int(TRIGGER_COOLDOWN - (time.time() - proj_last))
                         _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} project={project_path}")
                     elif ctx_pct >= CONTEXT_TRIGGER:
-                        _log(f"Trigger A: context={ctx_pct:.1%} — waiting for exchange to finish, then killing Claude [{project_path}]")
-                        _write_checkpoint_pending(stats)
-                        killed = _wait_for_exchange_end_then_kill(project_path, stats.get("session_id"))
-                        if killed:
-                            # Full cooldown — kill was sent, new session is starting
+                        _log(f"Trigger A: context={ctx_pct:.1%} — opening companion session [{project_path}] (existing session left running)")
+                        found = _open_companion_session_for_trigger(project_path, stats.get("session_id"))
+                        if found:
+                            # Full cooldown — companion opened alongside a live session
                             last_trigger_at[project_path] = time.time()
                         else:
-                            # Claude not found — short cooldown so we retry quickly
+                            # No live claude process — short cooldown so we retry quickly
                             # rather than waiting the full 5 minutes
                             last_trigger_at[project_path] = time.time() - TRIGGER_COOLDOWN + TRIGGER_MISS_COOLDOWN
-                            _log(f"kill skipped (claude not found) — retry in {TRIGGER_MISS_COOLDOWN}s")
+                            _log(f"no live session found — retry in {TRIGGER_MISS_COOLDOWN}s")
                         _save_trigger_state(last_trigger_at)
                         triggered_this_cycle = True
                         break  # re-scan all projects next cycle after handling this one
