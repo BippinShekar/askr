@@ -53,3 +53,18 @@
 {"ts": "2026-06-17T12:38:44Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git add -A && git status --short"}
 {"ts": "2026-06-17T12:38:51Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(security): stop tracking askr_state/config.json"}
 {"ts": "2026-06-17T12:38:54Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git status"}
+{"ts": "2026-06-17T12:46:23Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "find . -path ./venv -prune -o -iname \"*.py\" -print | xargs grep -ln \"statusLine\\"}
+{"ts": "2026-06-17T12:46:27Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rn \"ctx:\" askr/ | grep -v venv"}
+{"ts": "2026-06-17T12:46:36Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rn \"_stats_path\\|context_pct\" askr/ | grep -v venv"}
+{"ts": "2026-06-17T12:46:56Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "find . -path ./venv -prune -o -name \"settings.json\" -print -o -name \"settings.lo"}
+{"ts": "2026-06-17T12:47:10Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat askr/hooks/user_prompt_submit.py 2>/dev/null | head -80"}
+{"ts": "2026-06-17T12:47:22Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"source\\|def main\\|_reset_stats_for_project()\" askr/hooks/session_start."}
+{"ts": "2026-06-17T12:48:04Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"def stats_path_for_project\\|def stats_path_for_session\\|def find_projec"}
+{"ts": "2026-06-17T12:48:18Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rn '\"source\"\\|payload.get(\"source\"\\|\\[.source.\\]' askr/hooks/*.py"}
+{"ts": "2026-06-17T12:48:41Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/session_start.py"}
+{"ts": "2026-06-17T12:48:46Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/session_start.py"}
+{"ts": "2026-06-17T12:48:50Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "venv/bin/python -c \"\nimport sys, json\nsys.path.insert(0, '.')\nfrom askr.hooks im"}
+{"ts": "2026-06-17T12:48:54Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "find . -path ./venv -prune -o -iname \"*.py\" -print | xargs grep -l \"flock\\|fcntl"}
+{"ts": "2026-06-17T12:49:08Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rln \"decisions.jsonl\\|goals.jsonl\" askr/ | grep -v venv | grep -v test"}
+{"ts": "2026-06-17T12:49:11Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"decisions.jsonl\\|file_lock\\|open(.*'a'\\|open(.*\\\"a\\\"\" askr/state/goals."}
+{"ts": "2026-06-17T12:49:27Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"queue_path\\|queued_tasks\\|def queue_task\\|dangerously-skip\\|skip_permis"}
