@@ -68,3 +68,28 @@
 {"ts": "2026-06-17T12:49:08Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rln \"decisions.jsonl\\|goals.jsonl\" askr/ | grep -v venv | grep -v test"}
 {"ts": "2026-06-17T12:49:11Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"decisions.jsonl\\|file_lock\\|open(.*'a'\\|open(.*\\\"a\\\"\" askr/state/goals."}
 {"ts": "2026-06-17T12:49:27Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"queue_path\\|queued_tasks\\|def queue_task\\|dangerously-skip\\|skip_permis"}
+{"ts": "2026-06-17T12:53:05Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extension.js 2>/dev/"}
+{"ts": "2026-06-17T12:53:16Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "ls -la ~/.config/askr/stats/ 2>/dev/null | tail -20"}
+{"ts": "2026-06-17T12:53:24Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat ~/.config/askr/stats/Users-bippin-Desktop-askr_a958e87c-8c06-4397-be7f-08d35"}
+{"ts": "2026-06-17T13:23:34Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -i \"team\\|flat\\|queue\\|union\" askr_state/decisions.jsonl | tail -20"}
+{"ts": "2026-06-17T13:23:49Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"def cmd_task\\|def cmd_team\\|\\\"task\\\"\\|\\\"team\\\"\\|cmd_task\\|cmd_team\" ask"}
+{"ts": "2026-06-17T13:24:25Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "venv/bin/python askr/cli/askr.py status --line 2>&1"}
+{"ts": "2026-06-17T13:24:51Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git log --oneline -5 -- askr/ide/vscode-extension/extension.js"}
+{"ts": "2026-06-17T13:25:12Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "venv/bin/python askr/cli/askr.py status --line"}
+{"ts": "2026-06-17T13:26:43Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/roadmap.md"}
+{"ts": "2026-06-17T13:28:03Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/roadmap.md"}
+{"ts": "2026-06-17T13:28:28Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git add roadmap.md && git status --short"}
+{"ts": "2026-06-17T13:28:41Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\ndocs(roadmap): correct Phase 4/5 status against act"}
+{"ts": "2026-06-17T13:28:45Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git add askr/hooks/session_start.py && git status --short"}
+{"ts": "2026-06-17T13:28:52Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(statusline): don't zero context % on resume/com"}
+{"ts": "2026-06-17T13:29:10Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"_queue_task_for\\|_load_pending_tasks\" -A 20 askr/cli/askr.py | head -60"}
+{"ts": "2026-06-17T13:29:23Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/session_start.py"}
+{"ts": "2026-06-17T13:29:28Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/cli/askr.py"}
+{"ts": "2026-06-17T13:29:33Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "venv/bin/python -c \"\nimport sys; sys.path.insert(0,'.')\nfrom askr.hooks import s"}
+{"ts": "2026-06-17T13:30:46Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "git diff -- askr/cli/askr.py askr/hooks/session_start.py"}
+{"ts": "2026-06-17T13:30:54Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "cat /Users/bippin/Desktop/askr/askr_state/decisions.jsonl 2>/dev/null | tail -20"}
+{"ts": "2026-06-17T13:31:03Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "grep -rn \"queue_\" --include=\"*.py\" askr | grep -v \"\\.pyc\""}
+{"ts": "2026-06-17T13:31:23Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/checkpoint.py"}
+{"ts": "2026-06-17T13:31:29Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "python3 -m py_compile askr/cli/askr.py askr/hooks/session_start.py askr/session/"}
+{"ts": "2026-06-17T13:31:36Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "find . -path ./node_modules -prune -o -iname \"*test*\" -path \"*task*\" -print 2>/d"}
+{"ts": "2026-06-17T13:31:41Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "git diff --stat"}
