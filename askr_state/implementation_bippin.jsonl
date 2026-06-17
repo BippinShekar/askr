@@ -210,3 +210,14 @@
 {"ts": "2026-06-17T15:26:28Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/checkpoint.py"}
 {"ts": "2026-06-17T15:26:32Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "python3 -c \"from askr.session.checkpoint import git_commit_push, _log_push_failu"}
 {"ts": "2026-06-17T15:26:38Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "git add askr/session/checkpoint.py && git commit -m \"fix(checkpoint): pull-rebas"}
+{"ts": "2026-06-17T15:27:41Z", "session_id": "a7eb9153-25dc-42f8-8356-b85a90ddff80", "type": "command", "detail": "find /Users/bippin/Desktop/askr -iname \"*handover*\" -not -path \"*/node_modules/*"}
+{"ts": "2026-06-17T15:28:30Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "echo \"=== daemon.log tail ===\" ; tail -150 ~/.config/askr/daemon.log 2>/dev/null"}
+{"ts": "2026-06-17T15:29:10Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd ~/.config/askr/stats\nfor f in *.json; do echo \"--- $f ---\"; cat \"$f\"; echo; d"}
+{"ts": "2026-06-17T15:30:01Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -rn \"ctx:\" /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0/extensio"}
+{"ts": "2026-06-17T15:30:06Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "find /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0 -type f | head -30\n"}
+{"ts": "2026-06-17T15:30:13Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\necho \"=== blockers.md ===\"; cat askr_state/blocker"}
+{"ts": "2026-06-17T15:30:43Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\necho \"=== write_handover ===\"\ngrep -n \"def write_h"}
+{"ts": "2026-06-17T15:30:55Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\necho \"=== env key present? ===\"\ngrep -c \"ANTHROPIC"}
+{"ts": "2026-06-17T15:31:02Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "tail -40 ~/.config/askr/usage.log 2>/dev/null\necho \"=== around 15:1x-15:3x times"}
+{"ts": "2026-06-17T15:31:52Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngrep -n \"ctx\\|context_pct\\|Context at\\|pct_str\" /U"}
+{"ts": "2026-06-17T15:32:02Z", "session_id": "905ec011-a5e4-41fd-b4ce-89f1d9cf0442", "type": "command", "detail": "grep -n \"projectStatsPath\\|function projectStatsPath\" -A 25 /Users/bippin/.curso"}
