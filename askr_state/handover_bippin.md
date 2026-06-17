@@ -1,10 +1,10 @@
 # Handover: bippin
 
-Last updated: 2026-06-17 17:57
+Last updated: 2026-06-17 18:02
 
 ## Task
 
-[Image: source: /Users/bippin/Desktop/Screenshot 2026-06-17 at 5.54.20 PM.png]
+tell me if askr is ready for me to begin using it in other repositiories of mine, and to ensure my co-founder can install it and start using it so we can build leaps together.
 
 ## Status
 

@@ -23,3 +23,15 @@
 {"ts": "2026-06-17T12:25:55Z", "session_id": "0f794c6a-e98e-45af-b56f-dbd985a6392d", "type": "command", "detail": "cat /Users/bippin/Desktop/askr/askr/cli/askr.py | sed -n '790,840p'\necho \"=== mo"}
 {"ts": "2026-06-17T12:26:26Z", "session_id": "0f794c6a-e98e-45af-b56f-dbd985a6392d", "type": "command", "detail": "grep -n \"_install_launchd\\b\" /Users/bippin/Desktop/askr/askr/cli/askr.py"}
 {"ts": "2026-06-17T12:27:03Z", "session_id": "0f794c6a-e98e-45af-b56f-dbd985a6392d", "type": "command", "detail": "grep -n \"0.9\\|90\\|Trigger A\\|Trigger B\\|CONTEXT_TRIGGER\\|context_pct >=\" /Users/"}
+{"ts": "2026-06-17T12:30:39Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git log --oneline -30 && echo --- && git status && echo --- && ls -la"}
+{"ts": "2026-06-17T12:30:46Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat askr_state/decisions.jsonl 2>/dev/null | tail -20; echo ---FAILED---; cat as"}
+{"ts": "2026-06-17T12:30:46Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "python3 -m pytest tests/ -q 2>&1 | tail -50"}
+{"ts": "2026-06-17T12:30:50Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "source venv/bin/activate 2>/dev/null; venv/bin/python -m pytest tests/ -q 2>&1 |"}
+{"ts": "2026-06-17T12:30:50Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat README.md | head -150"}
+{"ts": "2026-06-17T12:30:57Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "git diff --stat; echo ---; git diff askr/session/guard.py | head -100"}
+{"ts": "2026-06-17T12:30:57Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat askr_state/config.json 2>/dev/null; echo ---; find . -iname \"env.py\" -not -p"}
+{"ts": "2026-06-17T12:31:02Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "cat .gitignore; echo ---TRACKED-CHECK---; git check-ignore -v askr_state/config."}
+{"ts": "2026-06-17T12:31:09Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rn \"config.json\" askr/ --include=*.py | grep -v venv"}
+{"ts": "2026-06-17T12:31:13Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -rln \"config.json\" askr/ 2>/dev/null"}
+{"ts": "2026-06-17T12:31:25Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"discord_webhook\\|save_project_config\\|load_project_config\" askr/cli/ask"}
+{"ts": "2026-06-17T12:31:33Z", "session_id": "a958e87c-8c06-4397-be7f-08d35f1e0756", "type": "command", "detail": "grep -n \"^##\\|Phase [0-9]\" roadmap.md | head -60"}
