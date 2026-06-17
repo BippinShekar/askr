@@ -460,8 +460,10 @@ Be conservative — only extract clear, explicit assignments, not vague mentions
                 "auto": True,
             })
             queue_path = os.path.join(tasks_dir, f"queue_{dev}.jsonl")
-            with open(queue_path, "a") as f:
-                f.write(entry + "\n")
+            from askr.state.writer import file_lock
+            with file_lock(queue_path):
+                with open(queue_path, "a") as f:
+                    f.write(entry + "\n")
             queued.append((dev, task))
 
         if queued:

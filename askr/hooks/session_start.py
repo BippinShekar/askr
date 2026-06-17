@@ -171,10 +171,15 @@ def _drain_task_queue(developer: str) -> list[dict]:
     Read pending tasks from askr_state/tasks/queue_<developer>.jsonl.
     Archive to done_<developer>.jsonl, clear the queue.
     Returns list of task dicts. Never blocks session start.
+
+    Locked against the same .lock sidecar `askr task queue` appends under
+    (askr/state/writer.py:file_lock) — without it, a task appended between
+    this read and the truncate below gets silently wiped, no error, no trace.
     """
     try:
         import json as _json
         from askr.state.config import get_state_dir
+        from askr.state.writer import file_lock
         tasks_dir  = os.path.join(get_state_dir(), "tasks")
         queue_path = os.path.join(tasks_dir, f"queue_{developer}.jsonl")
         done_path  = os.path.join(tasks_dir, f"done_{developer}.jsonl")
@@ -182,27 +187,28 @@ def _drain_task_queue(developer: str) -> list[dict]:
         if not os.path.exists(queue_path):
             return []
 
-        tasks = []
-        with open(queue_path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        tasks.append(_json.loads(line))
-                    except Exception:
-                        pass
+        with file_lock(queue_path):
+            tasks = []
+            with open(queue_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            tasks.append(_json.loads(line))
+                        except Exception:
+                            pass
 
-        if not tasks:
-            return []
+            if not tasks:
+                return []
 
-        drain_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        with open(done_path, "a") as f:
-            for t in tasks:
-                t["drained_at"] = drain_ts
-                f.write(_json.dumps(t) + "\n")
+            drain_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            with open(done_path, "a") as f:
+                for t in tasks:
+                    t["drained_at"] = drain_ts
+                    f.write(_json.dumps(t) + "\n")
 
-        # Clear queue
-        open(queue_path, "w").close()
+            # Clear queue
+            open(queue_path, "w").close()
         return tasks
     except Exception:
         return []

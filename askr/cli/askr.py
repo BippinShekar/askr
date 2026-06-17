@@ -1239,8 +1239,10 @@ def _queue_task_for(target_dev: str, description: str, from_dev: str, push: bool
         "from": from_dev,
         "at":   datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
-    with open(queue_path, "a") as f:
-        f.write(entry + "\n")
+    from askr.state.writer import file_lock
+    with file_lock(queue_path):
+        with open(queue_path, "a") as f:
+            f.write(entry + "\n")
 
     if not push:
         return True
