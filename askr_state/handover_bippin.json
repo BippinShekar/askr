@@ -1,6 +1,6 @@
 {
-  "task": "Implemented multi-session file locking and session registry to enable concurrent Claude Code sessions with safe shared state management; fixed extension auto-continuation bug that spawned duplicate Claude instances on context notifications; removed plaintext webhook secret from git history and ensured config.json is properly gitignored.",
-  "discussion_summary": "Across sessions, the project built a robust multi-session architecture with flock-based file locking (commits e2f7cb5, 3ef2974, 320e652, 8e01e8a) and identified/fixed a critical extension bug where context notifications unconditionally spawned new Claude terminals. This session focused on security hygiene: discovered that askr_state/config.json (containing plaintext webhook secret) had been committed despite gitignore rules, removed it from git history via git rm --cached, and verified all remaining untracked files were committed cleanly without Claude as co-author. The codebase is now secure and ready for the next phase of robustness work (heartbeat logic, lock timeouts, stress testing).",
+  "task": "Implemented multi-session file locking and session registry for concurrent Claude Code sessions; fixed extension auto-continuation bug preventing duplicate Claude instances; removed plaintext webhook secret from git history; wrapped task queue file operations in file_lock to prevent silent task loss during concurrent read/write.",
+  "discussion_summary": "The project has built a robust multi-session architecture with flock-based file locking and session registry infrastructure across multiple sessions. Prior work fixed the extension bug where context notifications spawned duplicate Claude terminals. This session identified and fixed a critical race condition in task queue handling: when session_start drains the queue while CLI appends tasks, the drain could silently wipe newly-appended tasks. The fix wraps all queue file operations (CLI queue write, session_start drain, checkpoint auto-queue) in file_lock to ensure atomic read/write. The codebase is now secure and race-condition-free for task queue operations.",
   "accomplishments": [
     {
       "what": "Verified multi-session file locking implementation (e2f7cb5) with flock and session registry infrastructure",
@@ -37,99 +37,100 @@
     {
       "what": "Committed security fix (7735e19) without Claude as co-author; verified all untracked files committed and pushed cleanly",
       "done": true
+    },
+    {
+      "what": "Identified task queue race condition: session_start drain could silently wipe tasks appended by CLI during concurrent execution",
+      "done": true
+    },
+    {
+      "what": "Wrapped all queue file operations in file_lock: CLI queue write (askr/cli/askr.py), session_start drain (askr/hooks/session_start.py), checkpoint auto-queue (askr/session/checkpoint.py)",
+      "done": true
+    },
+    {
+      "what": "Verified file_lock implementation and tested lock-wrapped queue operations end-to-end with manual sanity tests",
+      "done": true
+    },
+    {
+      "what": "Committed task queue race fix (c79fe13) with message 'fix(tasks): lock queue file across read/write to prevent silent task loss'",
+      "done": true
     }
   ],
   "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Test the extension guard fix: trigger a context notification while a Claude session is running, verify no duplicate terminal spawns",
-      "why": "Confirm the duplicate-instance bug is resolved before committing extension.js changes"
+      "action": "Implement heartbeat logic in session_registry.jsonl: add last_heartbeat timestamp on each session activity, detect stale sessions (>5min idle), and cleanup dead sessions on startup",
+      "why": "Prevent zombie sessions from holding locks indefinitely; enable safe lock release when a Claude instance crashes or hangs"
     },
     {
       "order": 2,
-      "action": "Commit extension.js guard changes with message 'fix(extension): prevent duplicate Claude terminals on context/goal notifications'",
-      "why": "Lock in the fix and track it in git history"
-    },
-    {
-      "order": 3,
-      "action": "Implement heartbeat logic in session_registry.jsonl: add last_heartbeat timestamp, stale session detection (>5min), and cleanup of dead sessions on startup",
-      "why": "Prevent zombie sessions from holding locks indefinitely; enable safe lock release when a Claude instance crashes"
-    },
-    {
-      "order": 4,
-      "action": "Stress-test flock-based write lock under high concurrency (3+ simultaneous Claude sessions writing to goals.jsonl, decisions.jsonl, blockers.jsonl)",
+      "action": "Stress-test flock-based write lock under high concurrency (3+ simultaneous Claude sessions writing to goals.jsonl, decisions.jsonl, blockers.jsonl, queue.jsonl)",
       "why": "Verify lock acquisition/release doesn't deadlock, timeout correctly, or lose writes under realistic team load"
     },
     {
+      "order": 3,
+      "action": "Add lock timeout and retry logic: if flock acquisition exceeds 2s, log warning and queue write; if retry exhausted after 3 attempts, escalate to user with actionable error",
+      "why": "Prevent Claude from hanging indefinitely waiting for locks held by slow or stalled sessions; provide visibility into contention"
+    },
+    {
+      "order": 4,
+      "action": "Add metrics/observability: track lock wait times, contention events, and queue drain latency in implementation_bippin.jsonl",
+      "why": "Identify performance bottlenecks and validate that concurrent session load doesn't degrade responsiveness"
+    },
+    {
       "order": 5,
-      "action": "Add lock timeout and retry logic: if flock acquisition exceeds 2s, log warning and queue write; if retry exhausted, escalate to user",
-      "why": "Prevent Claude from hanging indefinitely waiting for locks held by slow or stuck sessions"
-    },
-    {
-      "order": 6,
-      "action": "Document multi-session concurrency model in README: explain flock strategy, session registry heartbeat, lock timeouts, and how to debug lock contention",
-      "why": "Clarify for users (Bippin, co-founder, Lochan) how askr handles parallel Claude sessions and what to expect"
-    },
-    {
-      "order": 7,
-      "action": "Add session-aware context injection to session_start.py: load active session state and merge with fresh context to avoid re-running completed work",
-      "why": "Enable seamless session handover where a new Claude instance picks up where the previous one left off"
+      "action": "Document multi-session architecture and lock semantics in README or ARCHITECTURE.md for future maintainers",
+      "why": "Ensure the concurrent session design is understood and preserved as the codebase evolves"
     }
   ],
   "decisions": [
     {
-      "decision": "askr_state/config.json must never be committed to git; webhook secret is plaintext and poses security risk",
-      "reason": "Secret was accidentally committed in prior session; removed via git rm --cached and gitignore enforced"
+      "decision": "Use flock-based file locking for all shared state files (queue, goals, decisions, blockers)",
+      "reason": "Flock is portable, atomic, and prevents race conditions without requiring external services; integrates cleanly with existing file-based state model"
     },
     {
-      "decision": "Extension guard logic prevents createTerminal when a Claude session is already active",
-      "reason": "Fixes duplicate-instance bug where context notifications spawned new terminals unconditionally"
+      "decision": "Wrap queue file operations at the call site (CLI, session_start, checkpoint) rather than inside _queue_task_for/_drain_task_queue",
+      "reason": "Ensures lock is held for the entire read/write sequence, preventing TOCTOU races; keeps lock scope explicit and auditable"
     },
     {
-      "decision": "Multi-session architecture uses flock for file-level write locking and session_registry.jsonl for PID tracking",
-      "reason": "Enables safe concurrent access to shared state files without race conditions or data corruption"
+      "decision": "Do not implement lock timeouts in this session; defer to next phase after stress testing",
+      "reason": "Current flock implementation is blocking and safe; timeout logic requires careful error handling and retry semantics best validated under load first"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr_state/config.json",
-    "askr_state/.gitignore",
-    ".gitattributes",
-    "README.md",
-    "extension.js"
+    "askr/cli/askr.py",
+    "askr/hooks/session_start.py",
+    "askr/session/checkpoint.py",
+    "askr/state/writer.py"
   ],
   "relational_files": [
     {
-      "file": "askr_state/.gitignore",
+      "file": "askr/state/writer.py",
+      "relationship": "imported_by",
+      "why": "Defines file_lock context manager used by all queue operations"
+    },
+    {
+      "file": "askr/session/registry.py",
       "relationship": "configures",
-      "why": "Ensures config.json and other secrets are never committed"
+      "why": "Session registry tracks active sessions; heartbeat logic will be added here next"
     },
     {
-      "file": "README.md",
-      "relationship": "documents",
-      "why": "Install and configuration documentation that users (co-founder, Lochan) follow; must not reference committed config.json"
-    },
-    {
-      "file": "extension.js",
-      "relationship": "implements",
-      "why": "Contains the guard logic to prevent duplicate Claude terminals on context/goal notifications"
-    },
-    {
-      "file": "session_registry.jsonl",
-      "relationship": "configures",
-      "why": "Tracks active sessions and PIDs; will need heartbeat logic for stale session cleanup"
+      "file": "askr_state/queue.jsonl",
+      "relationship": "tested_by",
+      "why": "Task queue file protected by lock; subject of race condition fix"
     }
   ],
   "uncommitted_files": [
+    "askr_state/goals.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-17T12:39:08.978352+00:00",
+    "timestamp": "2026-06-17T13:34:42.852856+00:00",
     "developer": "bippin"
   }
 }

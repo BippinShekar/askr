@@ -93,3 +93,17 @@
 {"ts": "2026-06-17T13:31:29Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "python3 -m py_compile askr/cli/askr.py askr/hooks/session_start.py askr/session/"}
 {"ts": "2026-06-17T13:31:36Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "find . -path ./node_modules -prune -o -iname \"*test*\" -path \"*task*\" -print 2>/d"}
 {"ts": "2026-06-17T13:31:41Z", "session_id": "548a6586-d46d-4c27-bf4c-3171c620f5b0", "type": "command", "detail": "git diff --stat"}
+{"ts": "2026-06-17T13:32:35Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "find . -iname \"*handover*\" -not -path \"*/node_modules/*\" 2>/dev/null"}
+{"ts": "2026-06-17T13:32:45Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git diff askr/cli/askr.py askr/hooks/session_start.py askr/session/checkpoint.py"}
+{"ts": "2026-06-17T13:32:53Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "grep -n \"def file_lock\" -A 20 askr/state/writer.py"}
+{"ts": "2026-06-17T13:33:00Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "grep -rn \"queue_path\\|queue_.*\\.jsonl\" askr/ --include=\"*.py\" | grep -v \"\\.pyc\""}
+{"ts": "2026-06-17T13:33:26Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "python -m pytest tests/ -k \"queue or checkpoint or session_start or lock\" -q 2>&"}
+{"ts": "2026-06-17T13:33:31Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "which python3; python3 -m pytest --version 2>&1; ls .venv 2>&1 | head -1"}
+{"ts": "2026-06-17T13:33:37Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "find / -maxdepth 4 -iname \"pytest\" -type f 2>/dev/null; pip3 show pytest 2>&1 | "}
+{"ts": "2026-06-17T13:33:45Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "ls -la /opt/homebrew/opt/python@3.11/bin/ 2>&1 | head; /opt/homebrew/opt/python@"}
+{"ts": "2026-06-17T13:33:52Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "/opt/homebrew/opt/python@3.11/bin/python3.11 -c \"\nimport ast\nfor f in ['askr/cli"}
+{"ts": "2026-06-17T13:34:00Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "cd /tmp && rm -rf askr_locktest && mkdir askr_locktest && cd askr_locktest && /o"}
+{"ts": "2026-06-17T13:34:19Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "rm -rf /tmp/askr_e2e && mkdir -p /tmp/askr_e2e/tasks && /opt/homebrew/opt/python"}
+{"ts": "2026-06-17T13:34:26Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git add askr/cli/askr.py askr/hooks/session_start.py askr/session/checkpoint.py "}
+{"ts": "2026-06-17T13:34:31Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(tasks): lock queue file across read/write to pr"}
+{"ts": "2026-06-17T13:34:37Z", "session_id": "f75219eb-2495-4601-875c-43efd12b2aef", "type": "command", "detail": "git push"}
