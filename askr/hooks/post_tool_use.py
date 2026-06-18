@@ -48,13 +48,13 @@ def _quota_needs_refresh(existing: dict) -> bool:
         return True
 
 
-def _write_session_stats():
+def _write_session_stats(session_id: str = ""):
     try:
         from askr.session.monitor import get_session_stats, stats_path_for_session, find_project_root
         from askr.session.forecast import get_forecast
 
         project_path = find_project_root()
-        stats = get_session_stats(project_path)
+        stats = get_session_stats(project_path, session_id or None)
         if not stats:
             return
 
@@ -306,7 +306,7 @@ def main():
         from askr.state.writer import append_implementation_entry
         append_implementation_entry(entry_type, detail, dev, session_id)
 
-    _write_session_stats()
+    _write_session_stats(session_id)
     _maybe_refresh_constraints()
 
     # Heartbeat: update session registry every 5 tool uses

@@ -119,10 +119,21 @@ def _project_hash(project_path: str) -> str:
     return project_path.replace("/", "-")
 
 
-def _find_active_jsonl(project_path: str) -> Optional[str]:
+def _find_active_jsonl(project_path: str, session_id: str = None) -> Optional[str]:
     sessions_dir = os.path.join(CLAUDE_PROJECTS_DIR, _project_hash(project_path))
     if not os.path.isdir(sessions_dir):
         return None
+
+    # If the caller already knows which session it cares about (e.g. a hook
+    # payload carries the real session_id), read that file directly — don't
+    # guess. Newest-mtime guessing picks the wrong file whenever multiple
+    # jsonl files in the same project get touched within moments of each
+    # other (companion session handoff, parallel sessions), silently
+    # misattributing a stale session's peak usage to the live one.
+    if session_id:
+        exact = os.path.join(sessions_dir, f"{session_id}.jsonl")
+        return exact if os.path.exists(exact) else None
+
     jsonl_files = [
         os.path.join(sessions_dir, f)
         for f in os.listdir(sessions_dir)
@@ -148,8 +159,8 @@ def _total_context_tokens(usage: dict) -> int:
     )
 
 
-def get_session_stats(project_path: str) -> Optional[SessionStats]:
-    jsonl_path = _find_active_jsonl(project_path)
+def get_session_stats(project_path: str, session_id: str = None) -> Optional[SessionStats]:
+    jsonl_path = _find_active_jsonl(project_path, session_id)
     if not jsonl_path:
         return None
 
@@ -192,6 +203,10 @@ def get_session_stats(project_path: str) -> Optional[SessionStats]:
     context_tokens = tokens_per_turn[-1] if tokens_per_turn else 0
     context_window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
     context_pct    = context_tokens / context_window if context_window > 0 else 0.0
+    # Backstop only — a real single session can't exceed its own context
+    # window (the API enforces that). If this ever fires, something upstream
+    # misattributed a different session's usage; don't let it show >100%.
+    context_pct    = min(context_pct, 1.0)
 
     return SessionStats(
         session_id=session_id,

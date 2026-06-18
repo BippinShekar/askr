@@ -254,7 +254,7 @@ def _reset_stats_for_project(source: str = "", session_id: str = ""):
         model          = existing.get("model", "")
 
         if source in ("resume", "compact"):
-            stats = get_session_stats(project_path)
+            stats = get_session_stats(project_path, session_id)
             if stats:
                 context_pct    = stats.context_pct
                 context_tokens = stats.context_tokens
