@@ -502,3 +502,5 @@
 {"ts": "2026-06-18T14:49:27Z", "session_id": "879a4e0d-f09f-4a55-93aa-400b41bc09bb", "type": "command", "detail": "git status && echo \"---DIFF---\" && git diff .askr_history | head -100"}
 {"ts": "2026-06-18T14:49:35Z", "session_id": "879a4e0d-f09f-4a55-93aa-400b41bc09bb", "type": "command", "detail": "git diff askr_state/implementation_bippin.jsonl; echo \"---\"; git log --oneline -"}
 {"ts": "2026-06-18T14:49:36Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "sed -n '220,260p' askr/hooks/session_start.py"}
+{"ts": "2026-06-18T14:51:24Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"daemon started\\|Trigger A\\|already has a companion\\|received SIGTERM\" ~"}
+{"ts": "2026-06-18T14:51:45Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "cat askr_state/handover_bippin.json | python3 -m json.tool 2>/dev/null | head -6"}
