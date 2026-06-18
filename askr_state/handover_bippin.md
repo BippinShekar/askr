@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-18 19:27
+Last updated: 2026-06-18 19:31
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Refined investor outreach strategy for Leaps by evaluating KAE Capital's investment thesis, rejecting hiring-infrastructure messaging as unmarketable, identifying need for problem-first positioning, discovering core insight that AI automation has failed to penetrate the one domain where people actually need it, drafting direct emails to KAE Capital contacts (Shivam and Gaurav) with authentic problem-statement subject lines, and preparing PI Ventures outreach using YC subject line and email body. Fixed repo-isolation and handover schema quality in the askr daemon codebase by threading state_dir through checkpoint.py, lifecycle.py, and writer.py to eliminate ambient-cwd fallback, and corrected LLM prompt constraints to forbid self-referential handover file references and invented session_metadata keys.
+Refined investor outreach strategy for Leaps by evaluating KAE Capital's investment thesis, rejecting hiring-infrastructure messaging as unmarketable, identifying need for problem-first positioning, discovering core insight that AI automation has failed to penetrate the one domain where people actually need it, drafting direct emails to KAE Capital contacts (Shivam and Gaurav) with authentic problem-statement subject lines, and preparing PI Ventures outreach using YC subject line and email body. Fixed repo-isolation and handover schema quality in the askr daemon codebase by threading state_dir through checkpoint.py, lifecycle.py, and writer.py to eliminate ambient-cwd fallback, corrected LLM prompt constraints to forbid self-referential handover file references and invented session_metadata keys, and hardened in_progress.file schema to reject handover/state files as work-in-progress targets.
 
 ## Discussion
-User is in active fundraising mode with outreach to Together Fund, KAE Capital, and PI Ventures. Prior sessions completed KAE Capital email drafts by rejecting all hiring-infrastructure framing as fundamentally misaligned with investor conviction. Critical realization: the authentic problem Leaps solves is 'AI replaced effort everywhere except the one place people actually need it'—a thesis about where automation has failed to penetrate. This session shifted focus to the askr daemon codebase, addressing multi-project state isolation and handover document schema correctness. Fixed git operations to use explicit cwd parameter, threaded state_dir through all checkpoint/writer calls, and hardened LLM prompt rules to prevent in_progress.file from pointing at handover/state files and session_metadata from containing invented keys.
+User is in active fundraising mode with outreach to Together Fund, KAE Capital, and PI Ventures. Prior sessions completed KAE Capital email drafts by rejecting all hiring-infrastructure framing as fundamentally misaligned with investor conviction. Critical realization: the authentic problem Leaps solves is 'AI replaced effort everywhere except the one place people actually need it'—a thesis about where automation has failed to penetrate. This session completed the multi-project state isolation fix by discovering and patching two missed call sites in checkpoint.py (_generate_project_brief → load_open_goals) and lifecycle.py (_get_next_goal), both reading goals via ambient cwd in daemon context. Also hardened LLM handover prompt to forbid in_progress.file from pointing at handover/state files and session_metadata from containing invented keys beyond trigger_type and timestamp.
 
 ## Accomplishments
 - [x] Researched KAE Capital's investment thesis and historical portfolio (Porter, Zetwerk, InMobi) to inform messaging strategy
@@ -23,33 +23,54 @@ User is in active fundraising mode with outreach to Together Fund, KAE Capital, 
 - [x] Drafted short, direct emails to Shivam (Analyst) and Gaurav (GP) at KAE Capital with contrast-based subject line ('AI writes your emails now. It still can't get you hired.') leading with authentic problem statement, fit-scoring mechanism, and deck link
 - [x] Confirmed PI Ventures outreach strategy using YC subject line and email body for info@piventures.in
 - [x] Fixed repo-isolation in checkpoint.py by threading state_dir through git_commit_push() and create_checkpoint() to eliminate ambient-cwd fallback in multi-project daemon context
-- [x] Hardened LLM handover prompt to forbid in_progress.file from pointing at handover_*.json, handover_*.md, or askr_state/* files (output artifacts, not work in progress)
-- [x] Corrected LLM prompt to enforce session_metadata containing ONLY trigger_type and timestamp, forbidding invented keys like session_end_reason
-- [x] Added explicit cwd parameter to all subprocess.run() calls in git_commit_push() to ensure correct working directory in multi-project daemon
-- [x] Verified syntax correctness of checkpoint.py after all edits via py_compile
+- [x] Hardened LLM handover prompt to forbid in_progress.file from pointing at handover_*.json, handover_*.md, or askr_state/* files—those are outputs, not work-in-progress targets
+- [x] Corrected LLM prompt to forbid session_metadata from containing invented keys beyond trigger_type and timestamp
+- [x] Discovered and fixed missed state_dir threading in checkpoint.py:_generate_project_brief() → load_open_goals() call (line 1002)
+- [x] Discovered and fixed missed state_dir threading in lifecycle.py:_get_next_goal() function (line 812 and call sites at 929, 950) to eliminate ambient-cwd goal file reads
+- [x] Refactored lifecycle.py:_get_next_goal() to compute state_dir outside try block to avoid NameError risk on exception
+- [x] Verified all git operations in checkpoint.py:git_commit_push() now use explicit cwd parameter (add, status, commit, pull, rebase, push)
+- [x] Ran full test suite (pytest) to confirm all checkpoint and goal-related tests pass after state_dir threading fixes
+
+## In Progress
+- `askr/session/checkpoint.py` (line 1002): Verify remaining state_dir threading completeness and test git_commit_push() with multi-project daemon scenario
+- `askr/session/lifecycle.py` (line 929): Verify _get_next_goal() state_dir threading is complete and test with multi-project daemon scenario
+- `None`: Send KAE Capital emails to Shivam and Gaurav with problem-first positioning (drafted, awaiting user send decision)
+- `None`: Research PI Ventures partners and send YC-themed outreach email (strategy confirmed, awaiting user send decision)
 
 ## Next Actions
-1. Send drafted KAE Capital emails to shivam@kae-capital.com and gaurav@kae-capital.com with subject 'AI writes your emails now. It still can't get you hired.' and body emphasizing stateless vs. compound fit-scoring automation
-   *Why: Emails are drafted and ready; timing is critical for investor outreach during active fundraising window*
-2. Research PI Ventures partner names and send email to named contact (or info@piventures.in if individual names unavailable) using YC subject line and email body
-   *Why: PI Ventures is third priority investor; outreach strategy confirmed and ready to execute*
-3. Commit checkpoint.py changes to git with message 'fix(checkpoint): repo isolation and handover schema correctness'
-   *Why: Multi-project daemon fixes are complete and tested; should be committed before next session*
+1. Commit checkpoint.py and lifecycle.py changes with message 'fix(daemon): thread state_dir through _generate_project_brief and _get_next_goal to eliminate ambient-cwd goal reads'
+   *Why: Complete the multi-project state isolation fix; these are the final two missed call sites in the daemon path*
+2. Review askr/state/goals.py and askr/state/writer.py for any remaining ambient-cwd fallbacks in goal/state file operations
+   *Why: Ensure complete repo isolation across all state-reading functions in daemon context*
+3. Send KAE Capital emails to Shivam (shivam@kaecapital.com) and Gaurav (gaurav@kaecapital.com) with subject 'AI writes your emails now. It still can't get you hired.' and problem-first body
+   *Why: Execute the refined investor outreach strategy with authentic problem positioning*
+4. Send PI Ventures outreach to info@piventures.in with YC-themed subject and email body
+   *Why: Complete the three-fund outreach sequence (Together Fund rejected, KAE Capital and PI Ventures active)*
+5. Monitor KAE Capital and PI Ventures responses; prepare follow-up messaging if needed
+   *Why: Fundraising requires active engagement and rapid iteration on investor feedback*
 
 ## Decisions
-- Reject all hiring-infrastructure positioning for investor outreach — User explicitly stated 'I don't think anyone is moved with hiring tech/ai bullshit'—this framing is fundamentally misaligned with investor conviction, not a messaging optimization problem
-- Lead with authentic problem statement ('AI replaced effort everywhere except the one place people actually need it') rather than self-promotional product positioning — Problem-first framing resonates with KAE Capital's investment thesis in overlooked infrastructure and intelligent automation; contrast-based subject lines create cognitive hook without self-promotion
-- Target KAE Capital with direct emails to named individuals (Shivam, Gaurav) rather than spray-and-pray to deals@together.fund — KAE Capital's portfolio (Porter, Zetwerk, InMobi) and investment thesis are better aligned with Leaps' actual problem domain; direct outreach to decision-makers reduces noise
-- Thread state_dir explicitly through all git operations in checkpoint.py rather than relying on ambient cwd — Multi-project daemon context requires explicit working directory specification to avoid git operations running in wrong repo; ambient cwd fallback is unsafe
-- Forbid in_progress.file from pointing at handover or askr_state files in LLM prompt — Handover documents are output artifacts of the checkpoint process, not work in progress; allowing self-referential file pointers creates circular dependencies and schema corruption
-- Enforce session_metadata to contain ONLY trigger_type and timestamp, forbidding invented keys — LLM was fabricating keys like session_end_reason that contradicted trigger_type; strict schema prevents hallucination and maintains document integrity
+- Rejected hiring-infrastructure messaging for KAE Capital outreach — Does not align with KAE's actual investment thesis (B2B supply chains, intelligent automation, overlooked infrastructure sectors); messaging must be problem-first, not self-promotional
+- Rejected spray-and-pray outreach to Together Fund (deals@together.fund) — Timing risk and weak signal; focused effort on KAE Capital and PI Ventures instead
+- Adopted 'AI replaced effort everywhere except the one place people actually need it' as core problem statement — Authentic, differentiating, and grounded in real market gap rather than hiring-tech positioning
+- Hardened LLM handover prompt to forbid in_progress.file from pointing at handover/state files — Those files are outputs of the handover process, not work-in-progress targets; prevents schema confusion and self-referential loops
+- Restricted session_metadata to only trigger_type and timestamp keys — Prevents LLM from inventing fields like session_end_reason that contradict the actual trigger_type; maintains schema integrity
+- Threaded state_dir through all goal-reading functions in daemon context (checkpoint.py, lifecycle.py) — Eliminates ambient-cwd fallback that breaks multi-project isolation; ensures each daemon session reads goals from correct project state_dir
 
 ## Files In Play
 - `askr/session/checkpoint.py`
-- `askr/state/goals.py`
+- `askr/session/lifecycle.py`
 
 ## Relational Files
-- `askr/session/lifecycle.py` (imports): Calls checkpoint.py functions; state_dir threading affects lifecycle management
-- `askr/state/writer.py` (imported_by): Receives state_dir from checkpoint.py; must use explicit paths for multi-project isolation
-- `askr/state/config.py` (imported_by): Provides get_state_dir() fallback; checkpoint.py now threads state_dir explicitly to avoid relying on this
-- `askr/session/analytics.py` (configures): Records session analytics to global ~/.config/askr/analytics.json; intentionally kept outside repo state_dir by design
+- `askr/state/goals.py` (imported_by): load_open_goals() is called from checkpoint.py; needs state_dir threading verification
+- `askr/state/writer.py` (imported_by): State file writing operations; may have ambient-cwd fallbacks that need fixing
+- `askr/state/config.py` (imported_by): Provides _get_state_dir() fallback; used in create_checkpoint() when state_dir is None
+- `tests/` (tested_by): Full test suite passes; confirms checkpoint and goal-reading functions work correctly after state_dir threading
+
+## Uncommitted Files
+- `askr/session/checkpoint.py`
+- `askr/session/lifecycle.py`
+- `askr/state/goals.py`
+- `askr/state/writer.py`
+- `askr_state/goals.jsonl`
+- `askr_state/implementation_bippin.jsonl`
