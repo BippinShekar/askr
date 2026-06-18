@@ -24,5 +24,8 @@ askr_state/*.lock
 # active session registry — ephemeral, machine-local
 askr_state/sessions/
 
+# local notification queue — ephemeral, machine-local, regenerated constantly
+askr_state/notifications.log
+
 # contains plaintext secrets (Discord webhook) — never committed
 askr_state/config.json

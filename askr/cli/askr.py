@@ -549,6 +549,7 @@ def _update_gitignore():
         ".askr_log",
         "askr_state/architecture.md",
         "askr_state/project_brief.md",
+        "askr_state/notifications.log",
     ]
     existing = ""
     if os.path.exists(gitignore):
@@ -566,7 +567,6 @@ def _install_gitattributes():
         "askr_state/decisions.jsonl    merge=union",
         "askr_state/goals.jsonl        merge=union",
         "askr_state/failed_approaches.md merge=union",
-        "askr_state/notifications.log  merge=union",
         "askr_state/tasks/queue_*.jsonl merge=union",
         "askr_state/implementation_*.jsonl merge=union",
     ]
