@@ -1442,12 +1442,9 @@ def cmd_team():
             console.print(blocker_str)
 
         # Pending tasks in queue
-        queue_path = os.path.join(state_dir, "tasks", f"queue_{dev}.md")
-        if os.path.exists(queue_path):
-            with open(queue_path) as f:
-                pending = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-            if pending:
-                console.print(f"  [yellow]  {len(pending)} queued task(s)[/yellow]")
+        pending = _load_pending_tasks(dev)
+        if pending:
+            console.print(f"  [yellow]  {len(pending)} queued task(s)[/yellow]")
 
         console.print()
 
