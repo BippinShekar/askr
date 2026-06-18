@@ -342,6 +342,21 @@ def _install_launchd() -> tuple[bool, str]:
 </plist>"""
 
     try:
+        # Idempotent: skip the unload/load cycle entirely when nothing changed
+        # and the daemon is already running. Every `askr init` run used to
+        # reload unconditionally — repeated runs (e.g. while iterating on
+        # `askr init` itself) restarted a perfectly healthy daemon every time,
+        # wiping its in-memory trigger/dedup state for no reason.
+        existing_plist = ""
+        if os.path.exists(plist_path):
+            with open(plist_path) as f:
+                existing_plist = f.read()
+
+        if existing_plist == plist:
+            from askr.session.lifecycle import daemon_is_running
+            if daemon_is_running():
+                return True, plist_path
+
         os.makedirs(os.path.dirname(plist_path), exist_ok=True)
         with open(plist_path, "w") as f:
             f.write(plist)
