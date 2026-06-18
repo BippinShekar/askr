@@ -99,3 +99,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-17] Killing the user's live Claude session to spawn a new one for background tasks — Caused context loss, terminal disruption, and poor UX; users lost their active conversation state when daemon needed to run background work.
 - [2026-06-17] Immediate companion spawn on trigger without waiting for turn to finish — Caused abrupt UX disruption by opening new terminal mid-flow, interrupting user's current interaction
 - [2026-06-18] Attempted to continue KAE Capital email drafting in this session — API overload errors (529 Overloaded) prevented substantive progress; session ended prematurely without completing next-phase work
+- [2026-06-18] Grep-based investigation of state_dir without reading full function definitions — Grep results were truncated or incomplete; needed full file reads to understand control flow
