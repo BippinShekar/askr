@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-18 20:03
+Last updated: 2026-06-18 20:18
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Built askr, a Claude session checkpoint and resume system for developers, completing 4 implementation stages (blockers aggregation, state isolation, checkpoint merging, and observability hardening) with 37 passing tests and discovered a regression in the VS Code extension's context percentage display showing 0% despite active session work.
+Refined investor outreach strategy for Leaps by evaluating KAE Capital's investment thesis, rejecting hiring-infrastructure messaging as unmarketable, identifying need for problem-first positioning, discovering core insight that AI automation has failed to penetrate the one domain where people actually need it, drafting direct emails to KAE Capital contacts (Shivam and Gaurav) with authentic problem-statement subject lines, and preparing PI Ventures outreach using YC subject line and email body. This session investigated askr daemon behavior around context-triggered companion terminal spawning and session initialization state.
 
 ## Discussion
-This session focused on shipping the final 4 stages of askr's core infrastructure: Stage 1 wired blockers aggregation from per-dev handover files instead of a dead shared file, Stage 2 isolated goals state per developer, Stage 3 merged checkpoint decisions and failed approaches, and Stage 4 hardened observability by stopping exception swallowing. All 37 tests pass. User then discovered a regression where the VS Code extension displays 0% context usage despite active work, triggering investigation into stats file reading and context percentage calculation in the extension. Investigation began by examining stats file paths, timestamps, and extension.js context_pct calculation logic but root cause remains unidentified.
+User is in active fundraising mode with outreach to Together Fund, KAE Capital, and PI Ventures. Prior sessions completed KAE Capital email drafts by rejecting all hiring-infrastructure framing as fundamentally misaligned with investor conviction. Critical realization: the authentic problem Leaps solves is 'AI replaced effort everywhere except the one place people actually need it'—a thesis about where automation has failed to penetrate. Session produced draft emails for Shivam (Analyst) and Gaurav (GP) at KAE Capital with contrast-based subject line ('AI writes your emails now. It still can't get you hired.') that lead with real problem, not self-promotion. This session pivoted to investigating askr's daemon behavior: user observed that newly spawned companion terminals appear at 0% context despite auto-starting from handover, which contradicts expected behavior. Investigation examined session lifecycle, signal handling, and terminal initialization logic but did not identify root cause.
 
 ## Accomplishments
 - [x] Researched KAE Capital's investment thesis and historical portfolio (Porter, Zetwerk, InMobi) to inform messaging strategy
@@ -22,63 +22,33 @@ This session focused on shipping the final 4 stages of askr's core infrastructur
 - [x] Rejected multiple subject line options ('Why does only one side of hiring have infrastructure?', 'The candidate side of hiring has no Eightfold', '$35B hiring market') as self-promotional rather than problem-centric
 - [x] Drafted short, direct emails to Shivam (Analyst) and Gaurav (GP) at KAE Capital with contrast-based subject line ('AI writes your emails now. It still can't get you hired.') leading with authentic problem statement, fit-scoring mechanism, and deck link
 - [x] Confirmed PI Ventures outreach strategy using YC subject line and email body for info@piventures.in
-- [x] Implemented Stage 1: wired load_blockers() and _infer_direction Signal 2 to aggregate per-dev handover_<dev>.json blockers instead of dead shared blockers.md file, eliminating write race condition
-- [x] Implemented Stage 2: isolated goals state per developer by threading state_dir through goal lifecycle call sites
-- [x] Implemented Stage 3: merged checkpoint decisions and failed approaches from handover documents
-- [x] Implemented Stage 4: hardened observability by stopping exception swallowing in failure paths
-- [x] Added comprehensive test coverage: test_goals.py, test_blockers.py, test_checkpoint_merge.py bringing total test suite from 15 to 37 passing tests
-- [x] Committed all 4 stages and pushed to git with clean test suite
-- [x] Investigated VS Code extension context percentage regression by examining stats file paths, timestamps, and extension.js context_pct calculation logic
+- [x] Investigated askr daemon behavior around context-triggered companion terminal spawning and session initialization state
 
 ## In Progress
-- `askr/ide/vscode-extension/extension.js`: Debug context_pct calculation and verify stats file path resolution for context percentage display showing 0% despite active session work
-- `None`: Validate stats file write timing and format in ~/.config/askr/stats/ directory to determine if stats are being written correctly during active sessions
+- `None`: Diagnose why newly spawned companion terminals appear at 0% context despite auto-starting from handover state; investigate session lifecycle, signal handling, and terminal initialization logic
 
 ## Next Actions
-1. Examine extension.js context_pct calculation logic: trace how it reads stats file, parses context usage, and computes percentage display
-   *Why: Root cause of 0% display regression is unknown; need to verify calculation logic is not broken and stats file is being read correctly*
-2. Verify stats file write path and timing: confirm ~/.config/askr/stats/ files are being written during active sessions and contain valid context usage data
-   *Why: If stats files are not being written or are stale, extension will display 0% regardless of calculation logic*
-3. Check if any Stage 1-4 changes inadvertently modified stats file path resolution or stats writing logic
-   *Why: User confirmed no direct changes to status display code, but need to verify no indirect side effects from blockers/goals/checkpoint refactoring*
-4. Add debug logging to extension.js to trace stats file read, parse, and context_pct calculation during active session
-   *Why: Will pinpoint exact failure point: missing file, parse error, or calculation bug*
-5. Once root cause identified, fix regression and add test coverage to prevent recurrence
-   *Why: Critical user-facing feature; regression must be resolved and protected*
+1. Send drafted KAE Capital emails to shivam@kae-capital.com and gaurav@kae-capital.com with subject 'AI writes your emails now. It still can't get you hired.' and body emphasizing stateless vs. compound fit-scoring automation
+   *Why: Emails are drafted and ready; timing is critical for investor outreach during active fundraising window*
+2. Research PI Ventures partner names and send email to named contact (or info@piventures.in if individual names unavailable) using YC subject line and email body
+   *Why: PI Ventures is third priority investor; outreach strategy is prepared and ready to execute*
+3. Examine askr/session/lifecycle.py signal handling and askr/cli/askr.py terminal spawning logic to identify why companion terminals initialize at 0% context instead of inheriting handover state
+   *Why: User observation indicates companion terminals are not properly loading checkpoint state on spawn; this breaks the core daemon guarantee of continuous work resumption*
+4. Verify that new companion terminal sessions are reading from correct handover file path and that state_dir is threaded through session initialization
+   *Why: Prior commits (019150e, 7149ac3) fixed state_dir threading in goals/lifecycle; companion spawn may have missed this fix*
 
 ## Decisions
-- Rejected spray-and-pray outreach approach (deals@together.fund email) for KAE Capital — Timing and signal risk too high; requires targeted, problem-first positioning to specific decision-makers
-- Rejected all hiring-tech subject line variants for KAE Capital outreach — Fundamentally misaligned with investor conviction in overlooked infrastructure sectors; messaging optimization cannot fix conviction mismatch
-- Aggregated blockers from per-dev handover_<dev>.json files instead of shared blockers.md — Eliminates write race condition and aligns with per-developer state isolation pattern
-- Threaded state_dir through goal lifecycle to isolate goals state per developer — Prevents cross-developer goal contamination and enables per-dev checkpoint/resume semantics
-- Hardened observability by stopping exception swallowing in failure paths — Exceptions must propagate to enable proper debugging and prevent silent failures
+- Rejected all hiring-infrastructure positioning for KAE Capital outreach — User explicitly stated 'I don't think anyone is moved with hiring tech/ai bullshit'—this framing is fundamentally misaligned with investor conviction, not a messaging optimization problem
+- Adopted problem-first, contrast-based subject line ('AI writes your emails now. It still can't get you hired.') for KAE Capital emails — Leads with authentic problem statement (where AI automation has failed to penetrate) rather than self-promotion; aligns with user's core messaging principle and investor's actual investment thesis
+- Rejected spray-and-pray outreach to Together Fund deals@ address — Timing risk and signal cost too high; KAE Capital and PI Ventures are higher-conviction targets with clearer fit
 
 ## Failed Approaches
-- Spray-and-pray outreach to deals@together.fund for KAE Capital — Wrong signal; KAE Capital requires targeted problem-first positioning to specific decision-makers, not generic investor email
-- Hiring-infrastructure messaging variants for KAE Capital — Conviction mismatch; KAE Capital invests in overlooked infrastructure sectors and B2B supply chains, not hiring tech
-
-## Files In Play
-- `askr/ide/vscode-extension/extension.js`
-- `askr/cli/askr.py`
-- `askr/checkpoint.py`
-- `askr/lifecycle.py`
-- `askr/goals.py`
-- `askr/writer.py`
-- `askr/reader.py`
-- `askr/logger.py`
+- Hiring-infrastructure messaging variants ('Why does only one side of hiring have infrastructure?', 'The candidate side of hiring has no Eightfold', '$35B hiring market') — All variants were self-promotional rather than problem-centric; user rejected the entire hiring-tech positioning as unmarketable to investors
 
 ## Relational Files
-- `askr/cli/askr.py` (configures): Contains _statusline_text() and stats file path resolution logic that feeds context percentage to extension
-- `askr/checkpoint.py` (imported_by): Stage 3 merged checkpoint decisions and failed approaches; may affect stats file writing
-- `askr/lifecycle.py` (imported_by): Stage 2 isolated goals state per developer; may affect stats file path resolution
-- `askr/goals.py` (imported_by): Stage 2 isolated goals state per developer; may affect stats file writing
-- `askr/writer.py` (imported_by): Writes stats files; Stage 1-4 changes may have affected stats file write logic
-- `askr/reader.py` (imported_by): Reads stats files; Stage 1-4 changes may have affected stats file read logic
-
-## Uncommitted Files
-- `.askr_history`
-- `askr_state/goals.jsonl`
-- `askr_state/implementation_bippin.jsonl`
+- `askr/session/lifecycle.py` (imported_by): Signal handling and session termination logic may affect companion terminal spawning behavior
+- `askr/cli/askr.py` (imported_by): Main entry point and terminal spawning logic; _statusline_text() and companion terminal initialization live here
+- `askr/ide/vscode-extension/extension.js` (configures): VS Code extension may influence how companion terminals are spawned or initialized
 
 ## Blockers
-- VS Code extension context percentage displays 0% despite active session work; root cause unknown (stats file path, write timing, or calculation logic)
+- Companion terminals spawning at 0% context despite auto-starting from handover state; root cause not yet identified
