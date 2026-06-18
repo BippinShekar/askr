@@ -464,15 +464,6 @@ def main():
             deregister_session(session_id)
         except Exception:
             pass
-        # Delete per-session stats file immediately — prevents the daemon from
-        # re-triggering on the now-dead session's stale high ctx% after cooldown.
-        try:
-            from askr.session.monitor import stats_path_for_session, find_project_root
-            sp = stats_path_for_session(find_project_root(), session_id)
-            if os.path.exists(sp):
-                os.remove(sp)
-        except Exception:
-            pass
         # Clear this session from the "already got a companion" set — it's gone
         # now, no point keeping it around (and it stops the set from growing
         # forever across every session that ever crossed the context trigger).
