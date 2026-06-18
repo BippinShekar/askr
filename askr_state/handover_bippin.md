@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-18 19:58
+Last updated: 2026-06-18 20:01
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Refined investor outreach strategy for Leaps by evaluating KAE Capital's investment thesis, rejecting hiring-infrastructure messaging as unmarketable, identifying need for problem-first positioning, discovering core insight that AI automation has failed to penetrate the one domain where people actually need it, drafting direct emails to KAE Capital contacts (Shivam and Gaurav) with authentic problem-statement subject lines, and preparing PI Ventures outreach using YC subject line and email body. Hardened askr daemon codebase by threading state_dir through checkpoint.py, lifecycle.py, goals.py, and writer.py to eliminate ambient-cwd fallback in multi-project contexts. Reinforced in_progress.file schema to reject handover/state files as work-in-progress targets. Completed four-stage test coverage expansion: added logging to silent failure paths in lifecycle.py and checkpoint.py, wrote comprehensive test suites for goals state isolation (test_goals.py), blockers aggregation logic (test_blockers.py), and checkpoint merge logic (test_checkpoint_merge.py), bringing test suite from 15 to 37 passing tests with zero regressions.
+Built askr, a Claude session checkpoint and resume system for developers, completing 4 implementation stages (blockers aggregation, state isolation, checkpoint merging, and observability hardening) with 37 passing tests and identified a regression in the VS Code extension's context percentage display showing 0% despite active session work.
 
 ## Discussion
-User is in active fundraising mode with outreach to Together Fund, KAE Capital, and PI Ventures. Prior sessions completed KAE Capital email drafts by rejecting all hiring-infrastructure framing as fundamentally misaligned with investor conviction. Critical realization: the authentic problem Leaps solves is 'AI replaced effort everywhere except the one place people actually need it'—a thesis about where automation has failed to penetrate. This session completed the multi-project state isolation fix by discovering and patching two missed call sites in checkpoint.py (_generate_project_brief → load_open_goals) and lifecycle.py (_get_next_goal), both reading goals via ambient cwd in daemon context. Also hardened LLM handover prompt to forbid in_progress.file from pointing at handover/state files and session_metadata from containing invented keys beyond trigger_type and timestamp. This session then executed a four-stage test coverage expansion: Stage 1 added logging to silent failure paths in lifecycle.py (_save_trigger_state, _save_companioned_sessions) and checkpoint.py to prevent reintroduction of duplicate-companion-spawn bugs; Stage 2 wrote test_goals.py covering state isolation and _infer_direction Signal 2 logic; Stage 3 wrote test_blockers.py covering load_blockers() and blocker aggregation; Stage 4 wrote test_checkpoint_merge.py covering _write_decisions_from_handover and _append_failed_approaches merge logic. All 37 tests pass with zero regressions.
+This session focused on shipping the final 4 stages of askr's core infrastructure: Stage 1 wired blockers aggregation from per-dev handover files instead of a dead shared file, Stage 2 isolated goals state per developer, Stage 3 merged checkpoint decisions and failed approaches, and Stage 4 hardened observability by stopping exception swallowing. All 37 tests pass. User then discovered a regression where the VS Code extension displays 0% context usage despite active work, triggering investigation into stats file reading and context percentage calculation in the extension.
 
 ## Accomplishments
 - [x] Researched KAE Capital's investment thesis and historical portfolio (Porter, Zetwerk, InMobi) to inform messaging strategy
@@ -22,59 +22,59 @@ User is in active fundraising mode with outreach to Together Fund, KAE Capital, 
 - [x] Rejected multiple subject line options ('Why does only one side of hiring have infrastructure?', 'The candidate side of hiring has no Eightfold', '$35B hiring market') as self-promotional rather than problem-centric
 - [x] Drafted short, direct emails to Shivam (Analyst) and Gaurav (GP) at KAE Capital with contrast-based subject line ('AI writes your emails now. It still can't get you hired.') leading with authentic problem statement, fit-scoring mechanism, and deck link
 - [x] Confirmed PI Ventures outreach strategy using YC subject line and email body for info@piventures.in
-- [x] Fixed remaining multi-project state isolation bugs by threading state_dir through checkpoint.py (_generate_project_brief → load_open_goals) and lifecycle.py (_get_next_goal) to eliminate ambient-cwd fallback in daemon context
-- [x] Hardened LLM handover prompt to forbid in_progress.file from pointing at handover/state files and session_metadata from containing invented keys beyond trigger_type and timestamp
-- [x] Added logging to silent failure paths in lifecycle.py (_save_trigger_state, _save_companioned_sessions) and checkpoint.py to prevent reintroduction of duplicate-companion-spawn bugs
-- [x] Wrote test_goals.py covering goals state isolation, _infer_direction Signal 2 logic, and load_open_goals with explicit state_dir threading
-- [x] Wrote test_blockers.py covering load_blockers() aggregation logic, per-dev handover blocker merging, and shared file deprecation
-- [x] Wrote test_checkpoint_merge.py covering _write_decisions_from_handover and _append_failed_approaches merge logic with decision deduplication and failed-approach accumulation
-- [x] Expanded test suite from 15 to 37 passing tests with zero regressions across all new and existing test modules
+- [x] Implemented Stage 1: wired load_blockers() and _infer_direction Signal 2 to aggregate per-dev handover_<dev>.json blockers instead of dead shared blockers.md file, eliminating write race condition
+- [x] Implemented Stage 2: isolated goals state per developer by threading state_dir through goal lifecycle call sites
+- [x] Implemented Stage 3: merged checkpoint decisions and failed approaches from handover documents
+- [x] Implemented Stage 4: hardened observability by stopping exception swallowing in failure paths
+- [x] Added comprehensive test coverage: test_goals.py, test_blockers.py, test_checkpoint_merge.py bringing total test suite from 15 to 37 passing tests
+- [x] Committed all 4 stages and pushed to git with clean test suite
+- [x] Investigated VS Code extension context percentage display showing 0% despite active session work by searching for context_pct, session_stats, and stats file reading logic
+
+## In Progress
+- `askr/ide/vscode-extension/extension.js`: Debugging context percentage display regression showing 0% despite active session work; investigating stats file reading, context_pct calculation, and session_stats path resolution
 
 ## Next Actions
-1. Commit Stage 4 test coverage expansion (test_goals.py, test_blockers.py, test_checkpoint_merge.py) with message 'test: add coverage for goals state isolation, blockers aggregation, decision/failed-approach merge'
-   *Why: All 37 tests pass; uncommitted test files are ready to land and complete the four-stage hardening cycle*
-2. Send KAE Capital emails to Shivam and Gaurav with subject 'AI writes your emails now. It still can't get you hired.' and problem-first positioning
-   *Why: Outreach strategy is complete and validated; timing is critical for investor engagement*
-3. Send PI Ventures outreach to info@piventures.in using YC subject line and email body
-   *Why: Secondary outreach channel confirmed and ready to deploy*
-4. Review roadmap.md blockers.md section to confirm per-dev blocker aggregation is now the canonical pattern and shared file is deprecated
-   *Why: Roadmap was updated this session to reflect new blocker handling; need to verify documentation is consistent with implementation*
+1. Examine askr/ide/vscode-extension/extension.js to locate context_pct calculation and session_stats file reading logic; check if stats file path is correctly resolved or if stats are being read before they're written
+   *Why: User reported 0% context display despite active work; this is a regression introduced in recent changes and blocks accurate session monitoring in the IDE*
+2. Check ~/.config/askr/stats/ directory structure and verify that stats files are being written with correct format and timing relative to extension reads
+   *Why: Stats file may not exist, be malformed, or be read before write completes; need to confirm file I/O contract*
+3. Review recent changes to stats file writing or path handling in askr/cli or askr/checkpoint modules to identify what broke context percentage calculation
+   *Why: Regression was introduced in this session's changes; need to identify which stage (1-4) or prior commit caused the issue*
+4. Send drafted KAE Capital emails to shivam@kae-capital.com and gaurav@kae-capital.com with subject 'AI writes your emails now. It still can't get you hired.' and body emphasizing stateless vs. compound fit-scoring automation
+   *Why: Emails are drafted and ready; timing is critical for investor outreach during active fundraising window*
+5. Research PI Ventures partner names and send email to named contact (or info@piventures.in if names unavailable) using YC subject line and email body
+   *Why: PI Ventures outreach strategy confirmed; need to execute with personalized contact if possible*
 
 ## Decisions
-- Rejected hiring-infrastructure messaging as fundamentally misaligned with KAE Capital's investment thesis — KAE Capital invests in overlooked infrastructure sectors and B2B supply chains, not hiring-tech; messaging must reflect authentic problem (AI automation gap) not product category
-- Rejected spray-and-pray outreach to deals@together.fund — Timing risk and weak signal; direct outreach to named contacts (Shivam, Gaurav) is higher-conviction approach
-- Adopted problem-first positioning over self-promotional subject lines — User's core conviction: authentic problem statement ('AI replaced effort everywhere except the one place people actually need it') is more compelling than product-centric framing
-- Deprecated shared blockers.md file in favor of per-dev handover blocker aggregation — Shared file is a coordination bottleneck in multi-session context; per-dev handover blockers with last-write-wins semantics is more resilient
-- Forbade in_progress.file from pointing at handover/state files — Handover and state files are outputs of the checkpoint process, not work-in-progress targets; conflating them breaks the semantic boundary between work and metadata
-- Forbade session_metadata from containing invented keys beyond trigger_type and timestamp — Prevents LLM from inventing new metadata fields that break downstream parsing; strict schema ensures handover documents are machine-readable
+- Rejected hiring-infrastructure messaging entirely as fundamentally misaligned with investor conviction — User stated 'I don't think anyone is moved with hiring tech/ai bullshit' — signals complete pivot away from hiring market positioning
+- Adopted problem-first positioning: 'AI replaced effort everywhere except the one place people actually need it' — Authentic problem statement that resonates with investor thesis about where automation has failed to penetrate
+- Rejected spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach to KAE Capital and PI Ventures with problem-centric messaging
+- Used contrast-based subject line for KAE Capital: 'AI writes your emails now. It still can't get you hired.' — Leads with real problem, not self-promotion; aligns with KAE's investment thesis in overlooked infrastructure sectors
+- Implemented blockers aggregation from per-dev handover files instead of shared blockers.md — Eliminates write race condition and provides per-developer isolation of blocker state
+- Threaded state_dir through goal lifecycle to isolate goals state per developer — Prevents cross-developer state pollution and enables proper checkpoint/resume semantics
+
+## User-Rejected Approaches
+- **Multiple hiring-tech subject lines: 'Why does only one side of hiring have infrastructure?', 'The candidate side of hiring has no Eightfold', '$35B hiring market'** — "All rejected as self-promotional rather than problem-centric; user stated 'I don't think anyone is moved with hiring tech/ai bullshit'" (domain: investor outreach messaging)
 
 ## Failed Approaches
-- Attempted to use shared blockers.md file as canonical blocker store across sessions — Shared file is a coordination bottleneck; per-dev handover blocker aggregation with last-write-wins semantics is more resilient in multi-session context
-- Attempted to infer state_dir from ambient cwd in checkpoint.py and lifecycle.py daemon context — Ambient cwd fallback breaks in multi-project contexts; state_dir must be threaded explicitly through all call sites
+- Spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach with problem-centric messaging
+- Shared blockers.md file for aggregating blocker state across developers — Write race condition and lack of per-developer isolation; replaced with per-dev handover_<dev>.json aggregation
 
 ## Files In Play
-- `askr/state/reader.py`
-- `askr/session/lifecycle.py`
-- `askr/session/checkpoint.py`
-- `askr/state/goals.py`
-- `askr/utils/logger.py`
+- `askr/ide/vscode-extension/extension.js`
 - `tests/test_goals.py`
 - `tests/test_blockers.py`
 - `tests/test_checkpoint_merge.py`
-- `roadmap.md`
-- `install.sh`
+- `askr/checkpoint.py`
+- `askr/cli/ask.py`
 
 ## Relational Files
-- `askr/state/reader.py` (imported_by): load_blockers() is called by lifecycle.py to aggregate per-dev handover blockers; updated this session to support new blocker aggregation pattern
-- `askr/session/checkpoint.py` (imports): Calls load_open_goals with explicit state_dir; fixed this session to eliminate ambient-cwd fallback
-- `askr/state/goals.py` (imported_by): load_open_goals is called by checkpoint.py; updated this session to accept state_dir parameter
-- `askr/utils/logger.py` (imported_by): Used by lifecycle.py and checkpoint.py to log silent failures; enhanced this session with _log() calls on failure paths
-- `tests/test_goals.py` (tested_by): New test suite covering goals state isolation and _infer_direction Signal 2 logic; added this session
-- `tests/test_blockers.py` (tested_by): New test suite covering load_blockers() aggregation and per-dev handover blocker merging; added this session
-- `tests/test_checkpoint_merge.py` (tested_by): New test suite covering _write_decisions_from_handover and _append_failed_approaches merge logic; added this session
-- `roadmap.md` (configures): Documents blockers.md as shared, last-write-wins pattern; updated this session to reflect per-dev blocker aggregation as canonical
+- `askr_state/handover_bippin.json` (imported_by): Per-dev handover file used for blockers aggregation and state isolation
+- `~/.config/askr/stats/` (configures): Stats directory where session stats are written and read by VS Code extension; context percentage regression points to this path
+- `askr/checkpoint.py` (imports): Core checkpoint logic for merging decisions and failed approaches from handover documents
+- `tests/test_goals.py` (tested_by): Tests goals state isolation per developer
+- `tests/test_blockers.py` (tested_by): Tests blockers aggregation logic from per-dev handover files
+- `tests/test_checkpoint_merge.py` (tested_by): Tests checkpoint merge of decisions and failed approaches
 
-## Uncommitted Files
-- `.askr_history`
-- `askr_state/implementation_bippin.jsonl`
-- `askr_state/notifications.log`
+## Blockers
+- VS Code extension displays 0% context usage despite active session work; regression introduced in this session's changes; need to identify root cause in stats file reading or context_pct calculation

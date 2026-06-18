@@ -105,3 +105,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-18] Allowing LLM to invent session_metadata keys beyond trigger_type and timestamp — Breaks schema validation and makes handover parsing fragile; LLM should not extend the schema without explicit instruction
 - [2026-06-18] Attempted to use shared blockers.md file as canonical blocker store across sessions — Shared file is a coordination bottleneck; per-dev handover blocker aggregation with last-write-wins semantics is more resilient in multi-session context
 - [2026-06-18] Attempted to infer state_dir from ambient cwd in checkpoint.py and lifecycle.py daemon context — Ambient cwd fallback breaks in multi-project contexts; state_dir must be threaded explicitly through all call sites
+- [2026-06-18] Spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach with problem-centric messaging
+- [2026-06-18] Shared blockers.md file for aggregating blocker state across developers — Write race condition and lack of per-developer isolation; replaced with per-dev handover_<dev>.json aggregation
