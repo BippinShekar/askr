@@ -1008,13 +1008,21 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
     """
     Context trigger fired. Never kills the live session — but popping a new
     terminal and stealing focus mid-turn is its own kind of disruptive, even
-    without killing anything. Wait for the current exchange to go idle first,
-    then open the companion session, so the user finishes what they're doing
-    and gets directed to the fresh session afterward, not interrupted mid-turn.
+    without killing anything. Wait for the current turn to actually finish,
+    then open the companion session, so the user sees their answer before
+    getting redirected, not interrupted mid-generation.
 
-    Hard override: if context is critically high (>=80%, Claude's own
-    auto-compact is imminent), skip the wait — being ready before that happens
-    matters more than turn-boundary courtesy at that point.
+    "The turn finished" is read directly off the Stop hook's own behavior
+    (stop.py:main deletes this session's per-session stats file on every
+    Stop event) rather than guessed from JSONL-mtime silence — silence can't
+    tell a finished turn apart from Claude just thinking for a while.
+
+    No percentage-based early-exit override here on purpose: Claude's own
+    native auto-compact is independently guarded by the PreCompact hook
+    (pre_compact.py), which kills the session outright rather than let a
+    lossy compaction happen. That's the real safety net for a single turn
+    that runs away past the context budget — this wait doesn't need to
+    duplicate it, so it can afford to just wait for the turn to end.
 
     Returns True if a live session was found for this project (full cooldown
     applies), False if not (short retry — the project may just be between
@@ -1025,52 +1033,30 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
         _open_companion_session(project_path, session_id)
         return False
 
-    IDLE_SECS = 360  # seconds of JSONL silence → current exchange is done
-    POLL      = 5
+    POLL          = 5
+    MAX_WAIT_SECS = 1800  # defensive cap only — should never be hit if Stop fires normally
 
-    _log("waiting for the current exchange to finish before opening companion session...")
-    last_mtime = None
-    idle_since = None
+    _log("waiting for the current turn to finish before opening companion session...")
+    from askr.session.monitor import stats_path_for_session
+    own_stats_path = stats_path_for_session(project_path, session_id) if session_id else None
+    waited = 0
 
     while True:
         time.sleep(POLL)
+        waited += POLL
 
         if not _find_all_claude_pids_by_project(project_path):
             _log("claude session ended on its own while waiting — opening companion session")
             break
 
-        try:
-            from askr.session.monitor import get_max_context_for_project
-            current_ctx = get_max_context_for_project(project_path)
-            if current_ctx >= 0.80:
-                _log(f"context at {current_ctx:.1%} — compaction imminent, opening companion now without waiting for idle")
-                break
-        except Exception:
-            pass
+        # Stop hook deletes this session's stats file on every turn end — its
+        # absence is the authoritative "turn just finished" signal.
+        if own_stats_path and not os.path.exists(own_stats_path):
+            _log("turn finished (Stop hook ran) — opening companion session")
+            break
 
-        try:
-            sessions_dir = os.path.join(
-                os.path.expanduser("~/.claude/projects"),
-                project_path.replace("/", "-"),
-            )
-            files = [
-                os.path.join(sessions_dir, f)
-                for f in os.listdir(sessions_dir)
-                if f.endswith(".jsonl")
-            ] if os.path.isdir(sessions_dir) else []
-            jsonl = max(files, key=os.path.getmtime) if files else None
-            mtime = os.path.getmtime(jsonl) if jsonl else None
-        except Exception:
-            mtime = None
-
-        if mtime is None:
-            continue
-
-        if mtime != last_mtime:
-            last_mtime = mtime
-            idle_since = time.time()
-        elif idle_since and (time.time() - idle_since) >= IDLE_SECS:
-            _log(f"exchange idle for {IDLE_SECS}s — opening companion session")
+        if waited >= MAX_WAIT_SECS:
+            _log(f"WARN: waited {MAX_WAIT_SECS}s with no Stop event — opening companion session anyway")
             break
 
     _open_companion_session(project_path, session_id)
