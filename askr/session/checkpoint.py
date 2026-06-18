@@ -261,6 +261,12 @@ session ended.
 
 Rules:
 - This is a PROJECT STATE document, not a session diary. It accumulates across sessions.
+- This document is about the CODEBASE in THIS repository only. If the conversation also covered
+  topics unrelated to this codebase (business strategy, fundraising, an unrelated product or
+  project, etc.), EXCLUDE that content entirely from task/discussion_summary/accomplishments/
+  in_progress/next_actions/decisions/failed_approaches — do not summarize it, do not soften it,
+  just leave it out. Off-topic content that gets merged in here never gets cleaned up automatically
+  and keeps reappearing in every future session's context.
 - MERGE, do not replace: keep relevant items from EXISTING PROJECT STATE; update or remove items this session resolved.
 - in_progress: REMOVE items this session completed. KEEP still-relevant items from existing state. ADD new in-progress from this session.
 - in_progress.file: only set this to a real source file this session was actively editing. Never set it to
