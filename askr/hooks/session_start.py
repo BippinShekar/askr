@@ -214,9 +214,9 @@ def _drain_task_queue(developer: str) -> list[dict]:
         return []
 
 
-def _reset_stats_for_project(source: str = ""):
+def _reset_stats_for_project(source: str = "", session_id: str = ""):
     """
-    Write a stats entry for the current project immediately on session start.
+    Write a stats entry for the new session immediately on session start.
     Only a "startup" or "clear" source is a genuinely empty context — zero it
     so the status bar snaps to ctx:0% for the right project rather than
     showing stale stats from a different one.
@@ -226,11 +226,19 @@ def _reset_stats_for_project(source: str = ""):
     writing 0% there was misleading the status bar into showing an empty
     context right after a resume/compact that still had real tokens loaded.
     Quota fields are preserved either way — they're per-account and still valid.
+
+    Written to this session's own per-session stats file, not a shared
+    per-project one — a shared file gets touched by every session start
+    (including askr's own companion sessions) and stays at 0% forever since
+    nothing updates it again after this, permanently haunting any code that
+    scans all stats files for a project as a second, phantom 0% session.
     """
+    if not session_id:
+        return
     try:
-        from askr.session.monitor import stats_path_for_project, find_project_root, get_session_stats
+        from askr.session.monitor import stats_path_for_session, find_project_root, get_session_stats
         project_path = find_project_root()
-        stats_path   = stats_path_for_project(project_path)
+        stats_path   = stats_path_for_session(project_path, session_id)
         existing = {}
         try:
             with open(stats_path) as f:
@@ -244,7 +252,6 @@ def _reset_stats_for_project(source: str = ""):
         context_window = 200000
         turns          = 0
         model          = existing.get("model", "")
-        session_id     = ""
 
         if source in ("resume", "compact"):
             stats = get_session_stats(project_path)
@@ -287,7 +294,7 @@ def main():
     except Exception:
         payload = {}
 
-    _reset_stats_for_project(payload.get("source", ""))
+    _reset_stats_for_project(payload.get("source", ""), payload.get("session_id", ""))
 
     pull_ok = True
     if os.path.isdir(get_state_dir()):

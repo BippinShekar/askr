@@ -22,7 +22,6 @@ _MODEL_RATES: dict[str, tuple[float, float]] = {
 }
 _DEFAULT_RATES = (3.00, 15.00)  # fall back to Sonnet pricing
 
-_STATS_PATH = None  # legacy; use stats_path_for_project() instead
 _COST_HISTORY_PATH = os.path.expanduser("~/.config/askr/cost_history.json")
 
 
@@ -39,12 +38,15 @@ def tokens_to_usd(input_tokens: int, output_tokens: int, model: str = "claude-so
 
 
 def _load_stats(project_path: str = "") -> dict:
+    """Most recently updated per-session stats file for this project."""
     try:
-        from askr.session.monitor import stats_path_for_project
-        p = stats_path_for_project(project_path or os.getcwd())
-        if os.path.exists(p):
-            with open(p) as f:
-                return json.load(f)
+        from askr.session.monitor import find_project_stats_files
+        candidates = find_project_stats_files(project_path or os.getcwd())
+        if not candidates:
+            return {}
+        p = max(candidates, key=os.path.getmtime)
+        with open(p) as f:
+            return json.load(f)
     except Exception:
         pass
     return {}

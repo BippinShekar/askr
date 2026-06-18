@@ -30,7 +30,11 @@ def find_project_root(start_dir: str = None) -> str:
 
 
 def stats_path_for_project(project_path: str) -> str:
-    """Legacy per-project stats file. Used as 0% baseline by session_start reset."""
+    """
+    Deterministic placeholder path for "no session data exists yet" — nothing
+    writes to this anymore (see session_start.py); callers only use it to get
+    a path that is guaranteed not to exist so they can show an empty/idle state.
+    """
     hash_ = project_path.replace("/", "-").lstrip("-")
     return os.path.join(_STATS_DIR, hash_ + ".json")
 
@@ -43,7 +47,13 @@ def stats_path_for_session(project_path: str, session_id: str) -> str:
 
 def find_project_stats_files(project_path: str) -> list[str]:
     """
-    Return all stats files (legacy or per-session) that belong to this project.
+    Return all per-session stats files that belong to this project. Only
+    matches {hash}_{session_id}.json — never the legacy {hash}.json (no
+    session suffix). That file used to be reset to 0% on every SessionStart
+    and never updated again, so it permanently haunted every consumer of
+    this list as a second, phantom 0%-context "session" for the same
+    project. Nothing writes it anymore (see session_start.py); this
+    exclusion also covers any such file left over from before that fix.
     Uses exact prefix + separator check to avoid matching sibling projects
     (e.g. 'askr' must not match 'askr-v2').
     """
@@ -53,7 +63,7 @@ def find_project_stats_files(project_path: str) -> list[str]:
         for f in os.listdir(_STATS_DIR):
             if not f.endswith(".json"):
                 continue
-            if f == f"{hash_}.json" or f.startswith(f"{hash_}_"):
+            if f.startswith(f"{hash_}_"):
                 result.append(os.path.join(_STATS_DIR, f))
     except Exception:
         pass
