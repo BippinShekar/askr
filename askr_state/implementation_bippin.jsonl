@@ -504,3 +504,10 @@
 {"ts": "2026-06-18T14:49:36Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "sed -n '220,260p' askr/hooks/session_start.py"}
 {"ts": "2026-06-18T14:51:24Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"daemon started\\|Trigger A\\|already has a companion\\|received SIGTERM\" ~"}
 {"ts": "2026-06-18T14:51:45Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "cat askr_state/handover_bippin.json | python3 -m json.tool 2>/dev/null | head -6"}
+{"ts": "2026-06-18T14:54:48Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "find ~ -maxdepth 5 -iname \"daemon.log*\" 2>/dev/null; echo \"---launchd plist---\";"}
+{"ts": "2026-06-18T14:54:58Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"daemon started\\|WARN\\|Trigger A\\|already has a companion\\|received SIGT"}
+{"ts": "2026-06-18T14:55:32Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -c \"daemon started\" ~/.config/askr/daemon.log\necho \"--- crash evidence near"}
+{"ts": "2026-06-18T14:55:47Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"_install_launchd\" -A 30 askr/cli/askr.py | head -45\necho \"---plist Keep"}
+{"ts": "2026-06-18T14:56:33Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -rn \"_install_launchd\\|launchctl\\|RunAtLoad\" askr/ --include=\"*.py\" | grep "}
+{"ts": "2026-06-18T14:57:03Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"_load_companioned_sessions\\|_save_companioned_sessions\\|companioned_ses"}
+{"ts": "2026-06-18T14:57:30Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"RunAtLoad\\|launchctl unload\\|launchctl load\" -B3 askr/cli/askr.py | sed"}
