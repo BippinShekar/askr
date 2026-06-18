@@ -114,3 +114,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-18] Using context_pct >= CONTEXT_TRIGGER as signal for companion-open in lifecycle.py — Heuristic was unreliable and context-dependent; caused premature relaunch loops when context filled up mid-session
 - [2026-06-18] Maintaining per-project stats files alongside session-scoped cost tracking — Created fragmented state, stale files, and confusion about which file was source of truth; consolidated to single session-scoped approach
 - [2026-06-18] Allowing off-topic business content in handover documents — Content never gets cleaned up automatically and reappears in every future session, polluting context and violating project state document purpose
+- [2026-06-18] Using context_pct >= CONTEXT_TRIGGER heuristic to trigger companion-open — Context% is unreliable and context-dependent; caused premature relaunch loops when context climbed during long sessions
