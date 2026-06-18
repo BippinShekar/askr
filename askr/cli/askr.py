@@ -869,7 +869,12 @@ def _statusline_text() -> str:
         quota_pct = s.get("quota_pct")
         reset_at  = s.get("quota_reset_at", "")
 
-        ctx_part   = f"ctx:{ctx_pct}%"
+        # session_start.py writes this file immediately on startup with
+        # turns=0 so a same-session fallback never lands on a stale sibling
+        # session's stats — but that means "ctx:0%" before the first message
+        # looks like a measured reading instead of "no usage data yet".
+        # Distinguish the two.
+        ctx_part   = f"ctx:{ctx_pct}%" if s.get("turns", 0) > 0 else "ctx:–"
         quota_part = f"quota:{quota_pct:.0f}%" if quota_pct is not None else ""
         reset_part = _reset_countdown(reset_at) if reset_at else ""
 

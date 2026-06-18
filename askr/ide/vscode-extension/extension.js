@@ -7,32 +7,21 @@ const STATS_DIR         = path.join(os.homedir(), '.config', 'askr', 'stats');
 const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
 
-function projectHashPrefix() {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || '';
-  return root.replace(/\//g, '-').replace(/^-/, '');
-}
-
-function projectStatsPath() {
-  // Per-session files ({hash}_{session_id}.json) are what post_tool_use writes.
-  // The legacy {hash}.json is reset to 0% on every session start and never
-  // updated again — it must NEVER compete in the same mtime race as real
-  // per-session files. Any session starting (including askr's own companion
-  // sessions) touches it, making it momentarily "newest" and causing the
-  // status bar to flash 0% while a real session sits at high context. Only
-  // fall back to it when no per-session file exists at all (very first run).
-  const hash = projectHashPrefix();
+function latestStatsPath() {
+  // No way to know which session_id belongs to "the chat the user is looking
+  // at" from a VS Code status bar item — there's no per-terminal hook here,
+  // unlike the CLI statusLine (which Claude Code feeds a real session_id on
+  // stdin). So this just shows whichever session wrote most recently,
+  // project-agnostic, the way it worked before per-project scoping was added.
   try {
-    const sessionFiles = fs.readdirSync(STATS_DIR).filter(f =>
-      f.endsWith('.json') && f.startsWith(hash + '_')
-    );
-    if (sessionFiles.length > 0) {
-      const newest = sessionFiles
-        .map(f => path.join(STATS_DIR, f))
-        .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
-      return newest;
-    }
-  } catch {}
-  return path.join(STATS_DIR, hash + '.json');
+    const files = fs.readdirSync(STATS_DIR).filter(f => f.endsWith('.json'));
+    if (files.length === 0) return null;
+    return files
+      .map(f => path.join(STATS_DIR, f))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+  } catch {
+    return null;
+  }
 }
 
 // Colours — applied to the entire status bar item
@@ -155,7 +144,8 @@ let _lastGoodResult = null;
 
 function readStats() {
   try {
-    const statsPath = projectStatsPath();
+    const statsPath = latestStatsPath();
+    if (!statsPath) return _lastGoodResult;
     const raw     = fs.readFileSync(statsPath, 'utf8');
     const s       = JSON.parse(raw);
     const staleMs = Date.now() - fs.statSync(statsPath).mtimeMs;
@@ -352,13 +342,9 @@ function activate(context) {
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
 
   try {
-    const hash = projectHashPrefix();
     if (!fs.existsSync(STATS_DIR)) fs.mkdirSync(STATS_DIR, { recursive: true });
     const watcher = fs.watch(STATS_DIR, (_, filename) => {
-      // Trigger on the legacy file OR any per-session file for this project
-      if (filename && (filename === hash + '.json' || filename.startsWith(hash + '_'))) {
-        refresh();
-      }
+      if (filename && filename.endsWith('.json')) refresh();
     });
     context.subscriptions.push({ dispose: () => watcher.close() });
   } catch {}
