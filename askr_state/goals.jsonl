@@ -118,3 +118,7 @@
 {"id": "53443af5", "text": "Document complete session lifecycle flow in README with diagrams", "status": "open", "date": "2026-06-18", "added": "2026-06-18T03:59:39Z", "auto_suggested": true, "done_at": null}
 {"id": "b6fdb788", "text": "Add metrics logging for companion spawn events to daemon.log", "status": "discarded", "date": "2026-06-18", "added": "2026-06-18T03:59:39Z", "auto_suggested": true, "done_at": "2026-06-18T08:44:59Z"}
 {"id": "53443af5", "text": "Document complete session lifecycle flow in README with diagrams", "status": "discarded", "date": "2026-06-18", "added": "2026-06-18T03:59:39Z", "auto_suggested": true, "done_at": "2026-06-18T08:44:59Z"}
+{"id": "cc5dd22f", "text": "Add metrics logging for companion spawn events to daemon.log", "status": "open", "date": "2026-06-18", "added": "2026-06-18T08:57:12Z", "auto_suggested": true, "done_at": null}
+{"id": "21880335", "text": "Document session lifecycle and pre-compact hook integration in ARCHITECTURE.md", "status": "open", "date": "2026-06-18", "added": "2026-06-18T08:57:12Z", "auto_suggested": true, "done_at": null}
+{"id": "cc5dd22f", "text": "Add metrics logging for companion spawn events to daemon.log", "status": "discarded", "date": "2026-06-18", "added": "2026-06-18T08:57:12Z", "auto_suggested": true, "done_at": "2026-06-18T08:57:52Z"}
+{"id": "21880335", "text": "Document session lifecycle and pre-compact hook integration in ARCHITECTURE.md", "status": "discarded", "date": "2026-06-18", "added": "2026-06-18T08:57:12Z", "auto_suggested": true, "done_at": "2026-06-18T08:57:52Z"}
