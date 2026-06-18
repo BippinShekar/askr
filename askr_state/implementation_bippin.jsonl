@@ -511,3 +511,7 @@
 {"ts": "2026-06-18T14:56:33Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -rn \"_install_launchd\\|launchctl\\|RunAtLoad\" askr/ --include=\"*.py\" | grep "}
 {"ts": "2026-06-18T14:57:03Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"_load_companioned_sessions\\|_save_companioned_sessions\\|companioned_ses"}
 {"ts": "2026-06-18T14:57:30Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "grep -n \"RunAtLoad\\|launchctl unload\\|launchctl load\" -B3 askr/cli/askr.py | sed"}
+{"ts": "2026-06-18T19:02:49Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "cat .gitignore; echo \"---is .askr_history tracked/ignored?---\"; git check-ignore"}
+{"ts": "2026-06-18T19:03:35Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "comm -12 <(git ls-files | sort) <(git status --ignored --porcelain=v1 2>/dev/nul"}
+{"ts": "2026-06-18T19:03:43Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "git ls-files | grep -E \"askr_history|notifications.log|implementation_bippin\"\nec"}
+{"ts": "2026-06-18T19:03:56Z", "session_id": "ce6422d0-17ac-416d-914e-97d3c9df38a1", "type": "command", "detail": "git show 1297cbc --stat | head -10\necho \"---commit message full---\"\ngit log -1 -"}
