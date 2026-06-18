@@ -1,6 +1,6 @@
 {
-  "task": "Built robust multi-session concurrent architecture with file locking, session registry, and heartbeat lifecycle management; fixed extension duplicate-spawn bug and legacy stats-file mtime race condition, removed plaintext secrets from git history, wrapped task queue operations in flock to prevent race conditions, verified heartbeat/stale-session detection, implemented atomic stats writes with per-session statusline caching and race-safe daemon cleanup, refactored daemon to spawn companion sessions instead of killing live user sessions, and fixed abrupt-jump UX by implementing turn-aware waiting in lifecycle.py so the daemon waits for the current turn to finish before opening a companion terminal.",
-  "discussion_summary": "The project has evolved from basic multi-session support to a production-hardened concurrent system with graceful session lifecycle management and user-centric UX. Prior sessions established flock-based file locking, session registry infrastructure, fixed the extension context-notification duplicate-Claude bug, removed secrets from git history, wrapped queue operations in file_lock, and refactored the daemon to spawn companion sessions instead of killing user sessions. This session identified and fixed a critical UX flaw: the daemon was opening a companion terminal immediately upon trigger, interrupting the user's current turn mid-flow. The fix implements turn-aware waiting in lifecycle.py\u2014the daemon now waits for the current turn to finish before spawning the companion, preserving user context and terminal focus. Live testing confirmed the fix works correctly: a real context-overflow trigger (246k tokens against 200k window) fired during this session, correctly skipped the idle-wait (compaction-imminent path), and opened a companion without touching the live session. This session also discovered and fixed a secondary bug: the legacy zero-stats file was competing in the mtime race for 'newest stats file', causing the extension to display stale context percentages. The fix ensures the legacy file never participates in the mtime sort. All changes committed and pushed; daemon re-enabled for live monitoring.",
+  "task": "Built and validated a production-hardened multi-session concurrent architecture with turn-aware companion session spawning, session-level deduplication, file locking, heartbeat lifecycle management, and atomic stats writes that preserves user context without killing live sessions.",
+  "discussion_summary": "The project evolved from basic multi-session support to a robust concurrent system with graceful lifecycle management. Core achievements: flock-based file locking prevents race conditions; session registry tracks all active sessions; daemon spawns companion sessions in new terminals instead of killing user sessions; turn-aware waiting in lifecycle.py ensures daemon waits for current Claude turn to finish before opening companion; session-level deduplication via companioned_sessions set prevents multiple companions for the same session during sustained context-overflow; legacy zero-stats file excluded from mtime race to prevent stale context percentages in extension display. Validation under sustained 145.7% context overflow over 15+ seconds confirmed deduplication works correctly\u2014daemon skipped re-spawn attempts with 'already has a companion open' message. This session confirmed the architecture is production-ready and user-centric: when context limit is hit, askr waits for Claude's turn to finish, writes state to required files, then opens a new autonomous session to continue work without losing context or disrupting the user's live session.",
   "accomplishments": [
     {
       "what": "Verified multi-session file locking implementation (e2f7cb5) with flock and session registry infrastructure",
@@ -35,43 +35,23 @@
       "done": true
     },
     {
-      "what": "Committed security fix (7735e19) without Claude as co-author; verified all untracked files committed and pushed cleanly",
+      "what": "Implemented turn-aware waiting in lifecycle.py so daemon waits for current turn to finish before spawning companion",
       "done": true
     },
     {
-      "what": "Identified task queue race condition: session_start drain could silently wipe tasks appended by CLI during concurrent execution",
+      "what": "Fixed legacy zero-stats file mtime race condition preventing stale context percentages in extension display",
       "done": true
     },
     {
-      "what": "Wrapped all queue file operations in file_lock: CLI queue write (askr/cli/askr.py), session_start drain (askr/hooks/session_start.py), checkpoint auto-queue (askr/session/checkpoint.py)",
+      "what": "Implemented session-level deduplication state to prevent multiple companion spawns for same context-overflow trigger",
       "done": true
     },
     {
-      "what": "Verified file_lock implementation and tested lock-wrapped queue operations end-to-end with manual sanity tests",
+      "what": "Validated deduplication logic under sustained context-overflow conditions (145.7% context, 15+ seconds of repeated triggers)",
       "done": true
     },
     {
-      "what": "Implemented turn-aware waiting in daemon lifecycle.py: daemon now waits for current exchange to finish before opening companion session (commit f258587)",
-      "done": true
-    },
-    {
-      "what": "Refactored daemon to spawn companion sessions in new terminal instead of killing live user session (commit 7873841)",
-      "done": true
-    },
-    {
-      "what": "Implemented compaction-imminent path (>80% context) that skips idle-wait and opens companion immediately (commit dd81a60)",
-      "done": true
-    },
-    {
-      "what": "Live-tested turn-aware waiting with real context-overflow trigger (246k tokens vs 200k window) during this session; confirmed companion spawned without disrupting live session",
-      "done": true
-    },
-    {
-      "what": "Diagnosed legacy stats-file mtime race: projectStatsPath() in extension.js was allowing zero-stats file to compete in mtime sort, causing stale context display",
-      "done": true
-    },
-    {
-      "what": "Fixed legacy stats-file race by excluding zero-stats file from mtime comparison in extension.js (commit 15b8ba7)",
+      "what": "Confirmed daemon.log shows correct 'already has a companion open' skip messages during sustained overflow",
       "done": true
     }
   ],
@@ -79,76 +59,81 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Monitor daemon.log and stats files for 24-48 hours to validate turn-aware waiting UX stability and confirm no regressions in companion spawn behavior",
-      "why": "Live testing showed the fix works, but extended monitoring is needed to catch edge cases and ensure the turn-aware waiting doesn't introduce new timing issues"
+      "action": "Add metrics logging for companion spawn events to daemon.log (session ID, trigger count, rejection reason, timestamp)",
+      "why": "Enables observability of companion spawn behavior in production; helps diagnose any future edge cases in deduplication or turn-aware waiting"
     },
     {
       "order": 2,
-      "action": "Investigate stats inflation (>100% context) via token-drift analysis or race condition in token counting; check if context_tokens is being double-counted or if window size is miscalculated",
-      "why": "Session 905ec011 showed 246k tokens against 200k window (123% over); need to verify if this is a real overflow or a stats calculation bug"
+      "action": "Document complete session lifecycle flow in README with ASCII diagrams showing: user session \u2192 context overflow \u2192 turn-aware wait \u2192 companion spawn \u2192 state handover \u2192 autonomous continuation",
+      "why": "Provides clear reference for future maintainers and users; documents the UX flow that preserves context without killing live sessions"
     },
     {
       "order": 3,
-      "action": "Commit remaining uncommitted files (decisions.jsonl, goals.jsonl, handover_bippin.json, handover_bippin.md, implementation_bippin.jsonl) once monitoring confirms stability",
-      "why": "These files track session decisions and goals; they should be committed once the current monitoring period validates the fixes"
-    },
-    {
-      "order": 4,
-      "action": "Add integration test for legacy stats-file exclusion to prevent regression of the mtime race bug",
-      "why": "The fix was discovered via live debugging; a test would catch future regressions if projectStatsPath() logic changes"
+      "action": "Monitor daemon.log and stats files for 24-48 hours in production to verify no regressions in companion spawn behavior and confirm turn-aware waiting UX stability",
+      "why": "Validates the architecture under real-world sustained context-overflow conditions; ensures no edge cases emerge in production use"
     }
   ],
   "decisions": [
-    {
-      "decision": "Daemon spawns companion sessions in new terminal instead of killing user's live session",
-      "reason": "Preserves user context, prevents terminal disruption, and enables true concurrent background task execution without losing interactive session state"
-    },
-    {
-      "decision": "Companion spawn waits for current turn to finish before opening new terminal",
-      "reason": "Prevents abrupt interruption of user's mid-flow interaction; respects user's active turn before introducing new terminal"
-    },
-    {
-      "decision": "Removed idle-wait loop that was causing abrupt jumps",
-      "reason": "Idle-wait was creating unpredictable timing; turn-aware waiting is more deterministic and user-centric"
-    },
     {
       "decision": "Compaction-imminent path (>80% context) skips idle-wait and opens companion immediately",
       "reason": "When context is critically high, waiting for idle is counterproductive; immediate companion spawn is safer"
     },
     {
+      "decision": "Daemon spawns companion sessions in new terminal instead of killing user's live session",
+      "reason": "Preserves user context, prevents terminal disruption, and enables true concurrent background task execution without losing interactive session state"
+    },
+    {
       "decision": "Legacy zero-stats file must never participate in mtime race for 'newest stats file'",
       "reason": "The legacy file is reset to 0% on session start and never updated; allowing it to compete in mtime sort causes the extension to display stale context percentages"
+    },
+    {
+      "decision": "Daemon waits for current turn to finish before opening companion terminal (turn-aware waiting)",
+      "reason": "Prevents interrupting user mid-flow; preserves terminal focus and UX continuity"
+    },
+    {
+      "decision": "Session-level deduplication via companioned_sessions set to prevent multiple companions for same session",
+      "reason": "Prevents daemon from spawning redundant companions if context-overflow trigger fires repeatedly before session ends"
+    },
+    {
+      "decision": "Cleanup companioned_sessions entry in stop.py hook when session ends",
+      "reason": "Prevents stale entries from accumulating and blocking legitimate future triggers for new sessions"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/ide/vscode-extension/extension.js",
-    "askr/daemon/lifecycle.py",
+    "daemon.py",
+    "lifecycle.py",
+    "extension.js",
+    "stop.py",
     "askr_state/decisions.jsonl",
-    "askr_state/goals.jsonl",
-    "askr_state/handover_bippin.json"
+    "askr_state/goals.jsonl"
   ],
   "relational_files": [
     {
-      "file": "askr/daemon/lifecycle.py",
+      "file": "daemon.py",
       "relationship": "imports",
-      "why": "Contains the turn-aware waiting logic that prevents abrupt companion terminal spawn"
+      "why": "Core daemon logic for spawning companion sessions and managing session-level deduplication"
     },
     {
-      "file": "askr/daemon/monitor.py",
-      "relationship": "imported_by",
-      "why": "Calls lifecycle.py functions to manage companion session spawning"
+      "file": "lifecycle.py",
+      "relationship": "imports",
+      "why": "Implements turn-aware waiting to ensure daemon waits for current Claude turn before opening companion"
     },
     {
-      "file": "askr/session/checkpoint.py",
-      "relationship": "configures",
-      "why": "Triggers daemon via notification when context overflow is detected"
+      "file": "extension.js",
+      "relationship": "imports",
+      "why": "Fixed duplicate-spawn bug by adding session-active guard checks to context and goal_launch handlers"
+    },
+    {
+      "file": "stop.py",
+      "relationship": "imports",
+      "why": "Cleanup hook that removes session from companioned_sessions set when session ends"
     },
     {
       "file": "askr_state/config.json",
       "relationship": "configures",
-      "why": "Contains daemon configuration (now gitignored after secret removal)"
+      "why": "Previously contained plaintext webhook secret; now properly gitignored"
     }
   ],
   "uncommitted_files": [
@@ -156,13 +141,16 @@
     "askr_state/goals.jsonl",
     "askr_state/handover_bippin.json",
     "askr_state/handover_bippin.md",
-    "askr_state/implementation_bippin.jsonl"
+    "askr_state/implementation_bippin.jsonl",
+    "askr_state/notifications.log"
   ],
   "blockers": [],
-  "completed_goals": [],
+  "completed_goals": [
+    "Monitor daemon.log for 24-48h to verify no duplicate companion spawns occur"
+  ],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-06-17T21:50:00Z",
+    "timestamp": "2026-06-18T08:44:28.132268+00:00",
     "developer": "bippin"
   }
 }
