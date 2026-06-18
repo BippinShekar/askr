@@ -1,107 +1,110 @@
 {
-  "task": "Identified critical structural bugs in askr daemon behavior around companion terminal spawning and concurrent session auto-open race conditions, diagnosed root cause of triple-companion spawning via launchd RunAtLoad persistence and missing deduplication logic, and clarified that the UX issue requires post-hook session handover rather than daemon-side deduplication.",
-  "discussion_summary": "This session investigated askr daemon behavior: user provided visual evidence that newly spawned companion terminals appear at 0% context despite auto-start mechanism, and that new sessions auto-open while current sessions are still running. Investigation confirmed these are pre-existing structural bugs in session lifecycle and daemon trigger logic. Root cause analysis identified that launchd RunAtLoad persistence combined with missing companion-session deduplication logic causes multiple Trigger A events to spawn duplicate companions. User clarified that the triple-companion issue was actually three separate legitimate spawns (user-initiated, first auto-run, second session overflow), and the real UX problem is that new sessions should auto-open via post-hook handover after current session completes, not during active work.",
+  "task": "Built and deployed 5 critical daemon stability fixes (companion-open deferral, idempotent init, stats file consolidation, handover cleanup, git tracking) to resolve context-overflow and relaunch-loop issues in the askr daemon lifecycle.",
+  "discussion_summary": "This session focused entirely on codebase stability and daemon reliability. User identified and fixed a cascade of issues: companion-open was triggering prematurely on context% heuristics rather than actual turn-end signals, causing relaunch loops; askr init was non-idempotent and reloading launchd unnecessarily; stats tracking was fragmented across per-project files creating stale state; and handover documents were accumulating off-topic business content (Leaps fundraising details) that never got cleaned up. All 5 fixes were implemented, tested, committed, and pushed. The session also added prevention rules to checkpoint.py to block future off-topic content accumulation.",
   "accomplishments": [
     {
-      "what": "Investigated askr daemon behavior around context-triggered companion terminal spawning and session initialization state",
+      "what": "Diagnosed and fixed companion-open premature trigger: changed from context_pct >= CONTEXT_TRIGGER heuristic to waiting for actual Stop-hook turn-end signal in lifecycle.py",
       "done": true
     },
     {
-      "what": "Examined session lifecycle, signal handling, terminal initialization logic, and handover state propagation to identify root cause of 0% context ghost entries",
+      "what": "Made askr init idempotent: _install_launchd now checks daemon health before reloading, skipping unnecessary launchd restarts",
       "done": true
     },
     {
-      "what": "Confirmed via daemon logs that triple-companion spawning was three separate legitimate events (user-initiated, first auto-run, second session overflow), not a deduplication bug",
+      "what": "Consolidated stats tracking: removed legacy per-project stats files, unified to single session-scoped cost tracking in cost.py",
       "done": true
     },
     {
-      "what": "Clarified that the real UX issue is session handover timing: new sessions should auto-open via post-hook after current session completes, not during active work",
+      "what": "Purged stale off-topic content from handover_bippin.json (Leaps fundraising details, KAE Capital outreach, PI Ventures strategy) that had accumulated from prior sessions",
       "done": true
     },
     {
-      "what": "Identified idempotency as a required fix alongside post-hook session handover to prevent duplicate spawns",
+      "what": "Added git tracking rules to .gitignore for .askr_history and notifications.log to prevent log pollution",
+      "done": true
+    },
+    {
+      "what": "Added prevention rule to checkpoint.py to block future off-topic content accumulation in handover documents",
       "done": true
     }
   ],
-  "in_progress": [
-    {
-      "file": "askr/cli/askr.py",
-      "what": "Implement post-hook session handover mechanism to auto-open new sessions after current session completes, and add idempotency guards to prevent duplicate companion spawns",
-      "last_line": 0
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Implement post-hook session handover in askr/cli/askr.py: after session checkpoint/stop, trigger new session auto-open via handover state rather than daemon Trigger A during active work",
-      "why": "User clarified this is the correct UX fix\u2014new sessions should open after current session ends, not interrupt active work. This is the root cause of the confusing multi-terminal behavior."
+      "action": "Monitor daemon.log for relaunch-loop recurrence after the 5 fixes; if companion-open still triggers unexpectedly, add debug logging to lifecycle.py _execute_trigger() to trace signal flow",
+      "why": "Fixes are deployed but real-world daemon behavior under load needs validation; context-overflow symptoms may have secondary causes"
     },
     {
       "order": 2,
-      "action": "Add idempotency guards to companion session spawning logic to prevent duplicate companions for the same session_id even if multiple Trigger A events fire",
-      "why": "Prevents edge cases where launchd RunAtLoad or concurrent session initialization could spawn multiple companions for a single session."
+      "action": "Review session_start.py _reset_stats_for_project() to confirm it no longer references deleted per-project stats files",
+      "why": "Stats consolidation removed files but callers may still reference them, causing silent failures"
     },
     {
       "order": 3,
-      "action": "Test post-hook handover with multiple sequential sessions to verify new sessions open cleanly after prior session completes, without context loss or ghost entries",
-      "why": "Validates that the UX fix resolves the original complaint about confusing terminal spawning and 0% context entries."
-    },
-    {
-      "order": 4,
-      "action": "Commit post-hook handover and idempotency fixes with clear message explaining the UX rationale",
-      "why": "Closes the askr daemon bug investigation and enables clean session transitions for users."
+      "action": "Add integration test for askr init idempotency: verify daemon stays healthy and launchd is not reloaded on second init call",
+      "why": "Idempotency fix is critical for CI/CD and user re-runs; needs automated coverage"
     }
   ],
   "decisions": [
     {
-      "decision": "Triple-companion spawning is not a deduplication bug but a UX timing issue",
-      "reason": "User clarified the three terminals were legitimate separate events; the real problem is that new sessions should auto-open via post-hook after current session completes, not during active work"
-    }
-  ],
-  "user_rejected_decisions": [
+      "decision": "Removed all Leaps/fundraising/KAE Capital/PI Ventures content from project state documents",
+      "reason": "Off-topic business strategy content does not belong in codebase handover; it accumulates and pollutes future sessions' context"
+    },
     {
-      "what_was_proposed": "Triple-companion spawning is a daemon-side deduplication bug requiring launchd RunAtLoad fixes and companion-session dedup logic",
-      "user_signal": "The first one was opened by me, the second one opened by askr's first run, and second one opened by askr's second session being overflow, that wasn't the issue. The issue was in this session\u2014we need to open new session once we are done with this session's turn after post hook, as that would be the best UX.",
-      "domain": "askr/cli/askr.py",
-      "confidence": 0.95
+      "decision": "Consolidated stats tracking to single session-scoped file instead of per-project files",
+      "reason": "Per-project stats files created stale state and fragmented cost tracking; session-scoped approach is simpler and matches daemon lifecycle"
+    },
+    {
+      "decision": "Changed companion-open trigger from context% heuristic to actual Stop-hook signal",
+      "reason": "Context% is unreliable and context-dependent; Stop-hook provides definitive turn-end signal that prevents premature relaunch"
     }
   ],
+  "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Investigated triple-companion spawning as a daemon-side deduplication bug requiring RunAtLoad and companion-session dedup logic fixes",
-      "reason": "User clarified the three terminals were legitimate separate events (user-initiated, first auto-run, second session overflow). The real UX issue is timing: new sessions should auto-open via post-hook after current session completes, not interrupt active work."
+      "approach": "Using context_pct >= CONTEXT_TRIGGER as signal for companion-open in lifecycle.py",
+      "reason": "Heuristic was unreliable and context-dependent; caused premature relaunch loops when context filled up mid-session"
+    },
+    {
+      "approach": "Maintaining per-project stats files alongside session-scoped cost tracking",
+      "reason": "Created fragmented state, stale files, and confusion about which file was source of truth; consolidated to single session-scoped approach"
+    },
+    {
+      "approach": "Allowing off-topic business content in handover documents",
+      "reason": "Content never gets cleaned up automatically and reappears in every future session, polluting context and violating project state document purpose"
     }
   ],
   "files_in_play": [
-    "askr/cli/askr.py"
+    "askr/session/lifecycle.py",
+    "askr/cli/askr.py",
+    "askr/hooks/session_start.py",
+    "askr/session/checkpoint.py",
+    "askr/session/cost.py",
+    ".gitignore"
   ],
   "relational_files": [
     {
-      "file": "askr/daemon.py",
+      "file": "askr/hooks/stop.py",
       "relationship": "imported_by",
-      "why": "Daemon trigger logic and session lifecycle management relevant to post-hook handover implementation"
+      "why": "Provides Stop-hook signal that lifecycle.py now waits for instead of context% heuristic"
     },
     {
-      "file": "askr/state.py",
-      "relationship": "imported_by",
-      "why": "Session state and handover state propagation required for post-hook session auto-open"
-    },
-    {
-      "file": ".askr_history",
+      "file": "askr/ide/vscode-extension/extension.js",
       "relationship": "configures",
-      "why": "Session history tracking and state persistence for handover mechanism"
+      "why": "Calls get_session_cost_summary(); needs to reference consolidated cost.py, not deleted per-project stats files"
+    },
+    {
+      "file": "askr/hooks/pre_compact.py",
+      "relationship": "imported_by",
+      "why": "Checkpoint logic that now includes prevention rule for off-topic content"
     }
   ],
-  "uncommitted_files": [
-    ".askr_history",
-    "askr_state/implementation_bippin.jsonl",
-    "askr_state/notifications.log"
-  ],
+  "uncommitted_files": [],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-06-18T20:29:00.000000+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-06-18T19:46:55.045788+00:00",
     "developer": "bippin"
   }
 }
