@@ -238,7 +238,7 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
   "task": "one sentence PAST-TENSE summary of what the project accomplished across all recent sessions",
   "discussion_summary": "key context, reasoning, and accumulated understanding — 2-4 sentences synthesising all known sessions",
   "accomplishments": [{{"what": "concrete thing completed", "done": true}}],
-  "in_progress": [{{"file": "exact/path.py", "what": "what is being done here", "last_line": 0}}],
+  "in_progress": [{{"file": "exact/path.py or null if this is not code work", "what": "what is being done here", "last_line": 0}}],
   "next_actions": [
     {{"order": 1, "action": "specific immediately actionable instruction", "why": "why this is next"}},
     {{"order": 2, "action": "...", "why": "..."}}
@@ -254,10 +254,19 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
   "session_metadata": {{"trigger_type": "{trigger_type}", "timestamp": "{now_iso}"}}
 }}
 
+session_metadata must contain ONLY trigger_type and timestamp, exactly as given above —
+do not add other keys (no "session_end_reason" or similar invented fields), and do not
+write anything elsewhere in the document that contradicts trigger_type as the reason this
+session ended.
+
 Rules:
 - This is a PROJECT STATE document, not a session diary. It accumulates across sessions.
 - MERGE, do not replace: keep relevant items from EXISTING PROJECT STATE; update or remove items this session resolved.
 - in_progress: REMOVE items this session completed. KEEP still-relevant items from existing state. ADD new in-progress from this session.
+- in_progress.file: only set this to a real source file this session was actively editing. Never set it to
+  the handover/state files themselves (handover_*.json, handover_*.md, askr_state/*) — those are the output
+  of this process, not work in progress. If the session's work has no associated file (e.g. research,
+  planning, non-code work), use null.
 - next_actions: REMOVE actions this session completed (check git log). KEEP still-valid ones. ADD new ones.
 - decisions: KEEP all existing decisions. APPEND new ones from this session. Never lose prior decisions.
 - failed_approaches: KEEP all existing. APPEND new ones from this session.
@@ -631,11 +640,12 @@ def _log_push_failure(developer: str, detail: str):
 
 
 def git_commit_push(state_dir: str, developer: str, trigger_type: str):
+    cwd = os.path.dirname(os.path.normpath(state_dir))
     try:
-        subprocess.run(["git", "add", state_dir], capture_output=True)
+        subprocess.run(["git", "add", state_dir], capture_output=True, cwd=cwd)
         result = subprocess.run(
             ["git", "status", "--porcelain", state_dir],
-            capture_output=True, text=True,
+            capture_output=True, text=True, cwd=cwd,
         )
         if not result.stdout.strip():
             return
@@ -643,7 +653,7 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
         label = "checkpoint" if trigger_type in ("context", "quota", "manual") else trigger_type
         subprocess.run(
             ["git", "commit", "-m", f"askr: {label} [{developer}] {ts}"],
-            capture_output=True,
+            capture_output=True, cwd=cwd,
         )
 
         # Concurrent sessions (multi-dev) can push between our commit and our push.
@@ -653,17 +663,17 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
         for attempt in range(2):
             pull = subprocess.run(
                 ["git", "pull", "--rebase", "--autostash", "--quiet"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=30, cwd=cwd,
             )
             if pull.returncode != 0:
                 # Rebase conflict or other failure — abort to avoid leaving the repo
                 # mid-rebase. Our local commit is preserved; next checkpoint retries.
-                subprocess.run(["git", "rebase", "--abort"], capture_output=True, timeout=10)
+                subprocess.run(["git", "rebase", "--abort"], capture_output=True, timeout=10, cwd=cwd)
                 last_err = pull.stderr or pull.stdout
                 break
 
             push = subprocess.run(
-                ["git", "push", "--quiet"], capture_output=True, text=True, timeout=30,
+                ["git", "push", "--quiet"], capture_output=True, text=True, timeout=30, cwd=cwd,
             )
             if push.returncode == 0:
                 return
@@ -693,6 +703,10 @@ def create_checkpoint(
     from askr.state.config import get_state_dir as _get_state_dir
     if state_dir is None:
         state_dir = _get_state_dir()
+    # state_dir is always <project_root>/askr_state by convention (config.py,
+    # lifecycle.py) — derive the project root from it so git/LLM context below
+    # is read from the right repo, not the calling process's ambient cwd.
+    project_path = os.path.dirname(os.path.normpath(state_dir))
 
     entries = read_transcript(transcript_path)
 
@@ -714,7 +728,7 @@ def create_checkpoint(
         try:
             diff_result = subprocess.run(
                 ["git", "diff", "HEAD"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, timeout=10, cwd=project_path,
             )
             git_diff = diff_result.stdout.strip()
             if git_diff:
@@ -726,7 +740,7 @@ def create_checkpoint(
         try:
             log_result = subprocess.run(
                 ["git", "log", "--oneline", "-15"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, timeout=10, cwd=project_path,
             )
             git_log = log_result.stdout.strip()
             if git_log:
@@ -738,7 +752,7 @@ def create_checkpoint(
         open_goals = []
         try:
             from askr.state.goals import load_today_goals, load_open_goals
-            open_goals = load_today_goals() or load_open_goals() or []
+            open_goals = load_today_goals(state_dir) or load_open_goals(state_dir) or []
         except Exception:
             pass
 
@@ -768,12 +782,12 @@ def create_checkpoint(
             tool_actions = _extract_tool_actions(entries)
 
     from askr.state.writer import write_handover
-    handover_path = write_handover(summary, developer)
+    handover_path = write_handover(summary, developer, state_dir=state_dir)
 
     _generate_project_brief(state_dir, developer)
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
-    _regenerate_architecture_md(os.getcwd(), state_dir)
+    _regenerate_architecture_md(project_path, state_dir)
     _infer_and_queue_tasks(transcript_text, state_dir, developer)
 
     completed_goals = []
@@ -781,8 +795,8 @@ def create_checkpoint(
         from askr.state.goals import complete_goal, expire_auto_suggested_goals
         completed_goals = _parse_completed_goals_from_handover(summary, open_goals)
         for g in completed_goals:
-            complete_goal(g)
-        expire_auto_suggested_goals()
+            complete_goal(g, state_dir)
+        expire_auto_suggested_goals(state_dir)
     except Exception as e:
         # Goal completion depends on the LLM handover succeeding (summary must be
         # the dict form with a completed_goals key — the mechanical fallback summary
@@ -810,7 +824,7 @@ def create_checkpoint(
         "developer": developer,
         "completed_goals": completed_goals,
         "duration_seconds": session_duration,
-        "project_path": os.getcwd(),
+        "project_path": project_path,
     }
 
     _clear_edit_cursor(session_id)
@@ -986,7 +1000,7 @@ def _generate_project_brief(state_dir: str, developer: str):
             handover = _read(md_handover_path)
 
         from askr.state.goals import load_open_goals
-        open_goals = "\n".join(f"- {g}" for g in (load_open_goals() or []))
+        open_goals = "\n".join(f"- {g}" for g in (load_open_goals(state_dir) or []))
 
         if not any([decisions, arch, handover]):
             return

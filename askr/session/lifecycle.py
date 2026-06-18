@@ -432,13 +432,13 @@ def _wait_for_reset(reset_at_iso: str):
         time.sleep(300)
 
 
-def _get_next_goal() -> str:
+def _get_next_goal(state_dir: str = None) -> str:
     try:
         from askr.state.goals import load_today_goals, load_open_goals
-        today = load_today_goals()
+        today = load_today_goals(state_dir)
         if today:
             return today[0]
-        return (load_open_goals() or [""])[0]
+        return (load_open_goals(state_dir) or [""])[0]
     except Exception:
         return ""
 
@@ -500,8 +500,7 @@ def _infer_direction(project_path: str = "") -> dict:
 
     # Signal 2: blockers.md non-empty — something is explicitly stuck
     try:
-        from askr.state.config import get_state_dir
-        blockers_path = os.path.join(get_state_dir(), "blockers.md")
+        blockers_path = os.path.join(cwd, "askr_state", "blockers.md")
         if os.path.exists(blockers_path):
             content = open(blockers_path).read().strip()
             _skip = {"none noted", "[none]", "none"}
@@ -798,13 +797,19 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
         _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping this cycle")
         return
 
+    state_dir = os.path.join(project_path, "askr_state")
+    if not os.path.isdir(state_dir):
+        _log(f"WARN: no askr_state/ in {project_path} — skipping checkpoint (run 'askr init' there first)")
+        return
+
     _log("safe to pause — creating checkpoint")
     from askr.session.monitor import _find_active_jsonl
     transcript_path = _find_active_jsonl(project_path) or ""
-    result = create_checkpoint(trigger_type=trigger, developer=developer, transcript_path=transcript_path)
+    result = create_checkpoint(trigger_type=trigger, developer=developer,
+                                transcript_path=transcript_path, state_dir=state_dir)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
-    next_goal = _get_next_goal()
+    next_goal = _get_next_goal(state_dir)
     _write_launch_mode(next_goal)
     pct = stats.get("context_pct", 0.0) if trigger == "context" else stats.get("quota_pct", 0.0)
     handover_path = result.get("handover_path", "")
@@ -923,12 +928,14 @@ def _open_companion_session(project_path: str, session_id: str = None):
     """
     _pre_kill_update_tools(project_path)  # sync allowedTools/permissions for the new session
 
+    state_dir = os.path.join(project_path, "askr_state")
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
         from askr.session.monitor import _find_active_jsonl
         developer = load_developer()
-        state_dir = os.path.join(project_path, "askr_state") if os.path.isdir(os.path.join(project_path, "askr_state")) else None
+        if not os.path.isdir(state_dir):
+            raise RuntimeError(f"no askr_state/ in {project_path} — run 'askr init' there first")
         # _find_active_jsonl picks by mtime, not liveness — reads the live
         # session's transcript without needing to kill it first.
         transcript_path = _find_active_jsonl(project_path) or ""
@@ -940,7 +947,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
     except Exception as e:
         _log(f"companion checkpoint error: {e}")
 
-    next_goal = _get_next_goal()
+    next_goal = _get_next_goal(state_dir)
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
 

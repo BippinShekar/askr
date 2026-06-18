@@ -16,13 +16,13 @@ def _today() -> str:
     return date.today().strftime("%Y-%m-%d")
 
 
-def _path() -> str:
-    return state_path(GOALS_FILE)
+def _path(state_dir: str = None) -> str:
+    return os.path.join(state_dir, GOALS_FILE) if state_dir else state_path(GOALS_FILE)
 
 
-def _read_all() -> list[dict]:
+def _read_all(state_dir: str = None) -> list[dict]:
     """Read goals from JSONL. Last entry per ID wins (append-only update pattern)."""
-    p = _path()
+    p = _path(state_dir)
     if not os.path.exists(p):
         return []
     by_id: dict[str, dict] = {}
@@ -41,9 +41,12 @@ def _read_all() -> list[dict]:
     return list(by_id.values())
 
 
-def _append(entry: dict):
-    ensure_state_dir()
-    path = _path()
+def _append(entry: dict, state_dir: str = None):
+    path = _path(state_dir)
+    if state_dir:
+        os.makedirs(state_dir, exist_ok=True)
+    else:
+        ensure_state_dir()
     with file_lock(path):
         with open(path, "a") as f:
             f.write(json.dumps(entry) + "\n")
@@ -61,10 +64,10 @@ def add_goal(text: str, section: str = "today", auto_suggested: bool = False):
     })
 
 
-def complete_goal(text: str) -> bool:
-    for g in _read_all():
+def complete_goal(text: str, state_dir: str = None) -> bool:
+    for g in _read_all(state_dir):
         if g.get("text", "").strip() == text.strip() and g.get("status") in ("open", "backlog"):
-            _append({**g, "status": "done", "done_at": _now_iso()})
+            _append({**g, "status": "done", "done_at": _now_iso()}, state_dir)
             return True
     return False
 
@@ -77,14 +80,14 @@ def discard_goal(text: str) -> bool:
     return False
 
 
-def load_open_goals() -> list[str]:
-    return [g["text"] for g in _read_all() if g.get("status") in ("open", "backlog")]
+def load_open_goals(state_dir: str = None) -> list[str]:
+    return [g["text"] for g in _read_all(state_dir) if g.get("status") in ("open", "backlog")]
 
 
-def load_today_goals() -> list[str]:
+def load_today_goals(state_dir: str = None) -> list[str]:
     today = _today()
     return [
-        g["text"] for g in _read_all()
+        g["text"] for g in _read_all(state_dir)
         if g.get("status") == "open" and g.get("date") == today
     ]
 
@@ -108,11 +111,11 @@ def get_stale_goals(hours: int = 6) -> list[tuple[str, str, float]]:
     return stale
 
 
-def expire_auto_suggested_goals() -> int:
+def expire_auto_suggested_goals(state_dir: str = None) -> int:
     count = 0
-    for g in _read_all():
+    for g in _read_all(state_dir):
         if g.get("auto_suggested") and g.get("status") in ("open", "backlog"):
-            _append({**g, "status": "discarded", "done_at": _now_iso()})
+            _append({**g, "status": "discarded", "done_at": _now_iso()}, state_dir)
             count += 1
     return count
 

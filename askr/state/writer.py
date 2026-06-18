@@ -117,25 +117,30 @@ def _handover_json_to_md(data: dict, developer: str = "") -> str:
     return "\n\n".join(lines) + "\n"
 
 
-def write_handover(content, developer: str = None) -> str:
+def write_handover(content, developer: str = None, state_dir: str = None) -> str:
     dev = developer or load_developer()
-    ensure_state_dir()
+    if state_dir:
+        os.makedirs(state_dir, exist_ok=True)
+        _path = lambda name: os.path.join(state_dir, name)
+    else:
+        ensure_state_dir()
+        _path = state_path
 
     if isinstance(content, dict):
         content.setdefault("session_metadata", {})["developer"] = dev
 
-        json_path = state_path(f"handover_{dev}.json")
+        json_path = _path(f"handover_{dev}.json")
         with open(json_path, "w") as f:
             _json.dump(content, f, indent=2)
 
-        md_path = state_path(f"handover_{dev}.md")
+        md_path = _path(f"handover_{dev}.md")
         with open(md_path, "w") as f:
             f.write(_handover_json_to_md(content, dev))
 
         return json_path
     else:
         # Fallback: legacy markdown path
-        path = state_path(f"handover_{dev}.md")
+        path = _path(f"handover_{dev}.md")
         _write(path, f"# Handover: {dev}\n\nLast updated: {_now()}\n\n{str(content).strip()}\n")
         return path
 
