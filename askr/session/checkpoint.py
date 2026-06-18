@@ -297,15 +297,19 @@ Rules:
 
         return json.loads(cleaned)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        from askr.utils.logger import log_error
         try:
             match = re.search(r'\{[\s\S]*\}', raw)
             if match:
                 return json.loads(match.group())
         except Exception:
             pass
+        log_error("checkpoint._generate_handover_with_llm", f"unparseable JSON, falling back to mechanical summary: {e}")
         return None
-    except Exception:
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._generate_handover_with_llm", str(e))
         return None
 
 
@@ -358,8 +362,9 @@ def _append_failed_approaches(handover, state_dir: str):
             if header:
                 f.write(header)
             f.write("\n".join(new_entries) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._append_failed_approaches", str(e))
 
 
 def _write_decisions_from_handover(handover, state_dir: str, developer: str):
@@ -397,8 +402,9 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
             if new_entries:
                 with open(path, "a") as f:
                     f.write("\n".join(new_entries) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._write_decisions_from_handover", str(e))
 
 
 def _infer_and_queue_tasks(transcript_text: str, state_dir: str, developer: str):
@@ -486,8 +492,9 @@ Be conservative — only extract clear, explicit assignments, not vague mentions
             _sp.run(["git", "commit", "-m", msg], capture_output=True)
             _sp.run(["git", "push", "--quiet"], capture_output=True, timeout=30)
 
-    except Exception:
-        pass
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._infer_and_queue_tasks", str(e))
 
 
 def _parse_completed_goals_from_handover(handover, open_goals: list) -> list:
@@ -802,11 +809,8 @@ def create_checkpoint(
         # the dict form with a completed_goals key — the mechanical fallback summary
         # is a plain string and never closes goals). Log instead of swallowing
         # silently so a real complete_goal() failure isn't invisible.
-        try:
-            with open(os.path.expanduser("~/.config/askr/checkpoint_error.log"), "a") as ef:
-                ef.write(f"{datetime.now(timezone.utc).isoformat()} goal completion failed: {e}\n")
-        except Exception:
-            pass
+        from askr.utils.logger import log_error
+        log_error("checkpoint.complete_goal", str(e))
 
     session_duration = 0
     try:
@@ -949,8 +953,9 @@ Be specific with file paths. Keep it under 400 words. No generic filler."""
             arch_path = os.path.join(state_dir, "architecture.md")
             with open(arch_path, "w") as f:
                 f.write(f"# Architecture\n\n*Auto-generated at checkpoint — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n\n{result}\n")
-    except Exception:
-        pass
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._regenerate_architecture_md", str(e))
 
 
 def _generate_project_brief(state_dir: str, developer: str):
@@ -1049,8 +1054,9 @@ Keep it tight. A person should be able to read this in 90 seconds."""
         with open(brief_path, "w") as f:
             f.write(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{brief}")
 
-    except Exception:
-        pass
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._generate_project_brief", str(e))
 
 
 def _notify_discord_goals_completed(goals: list):

@@ -4,6 +4,7 @@ import time
 from datetime import datetime, date
 
 LOG_PATH = os.path.join(os.path.expanduser("~/.config/askr"), "usage.log")
+ERROR_LOG_PATH = os.path.join(os.path.expanduser("~/.config/askr"), "error.log")
 
 COST_TABLE = {
     "claude-haiku-4-5-20251001": {"input": 1.00,  "output":  5.00},
@@ -62,6 +63,25 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
         f.write(json.dumps(entry) + "\n")
 
     return cost
+
+
+def log_error(component: str, detail: str):
+    """Append a one-line error record for a swallowed exception.
+
+    For failures that are safe to degrade gracefully from (a feature that
+    falls back to [] or "" rather than crashing the session) but where
+    silence would otherwise leave no trace if something is actually broken
+    (e.g. a bad API key making every LLM call fail) — see askr's own
+    failed_approaches.md, which cites silent `except: pass` blocks as the
+    root cause of several real, hard-to-diagnose bugs.
+    """
+    try:
+        os.makedirs(os.path.dirname(ERROR_LOG_PATH), exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(ERROR_LOG_PATH, "a") as f:
+            f.write(f"[{ts}] {component}: {detail.strip()[:500]}\n")
+    except Exception:
+        pass
 
 
 def log_line_mark() -> int:

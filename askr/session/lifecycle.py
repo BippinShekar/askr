@@ -1114,8 +1114,10 @@ def _save_trigger_state(state: dict):
         os.makedirs(os.path.dirname(_TRIGGER_STATE_PATH), exist_ok=True)
         with open(_TRIGGER_STATE_PATH, "w") as f:
             json.dump(state, f)
-    except Exception:
-        pass
+    except Exception as e:
+        # Silent failure here defeats the per-project cooldown — the same
+        # trigger would re-fire every poll instead of respecting TRIGGER_COOLDOWN.
+        _log(f"WARN: failed to persist trigger state: {e}")
 
 
 def _load_companioned_sessions() -> set:
@@ -1141,8 +1143,10 @@ def _save_companioned_sessions(sessions: set):
         os.makedirs(os.path.dirname(_COMPANIONED_SESSIONS_PATH), exist_ok=True)
         with open(_COMPANIONED_SESSIONS_PATH, "w") as f:
             json.dump(list(sessions), f)
-    except Exception:
-        pass
+    except Exception as e:
+        # Silent failure here reintroduces the unbounded-companion-spawn bug
+        # this set exists to prevent (see docstring above).
+        _log(f"WARN: failed to persist companioned sessions: {e}")
 
 
 def run_daemon():

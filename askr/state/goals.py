@@ -226,7 +226,9 @@ If the handover is empty or unclear, return []."""
             return []
         return [str(g).strip()[:80] for g in suggested[:2] if g and str(g).strip()]
 
-    except Exception:
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("goals.suggest_goals_from_handover", str(e))
         return []
 
 
@@ -264,5 +266,7 @@ Only include goals where the activity clearly shows completion. Be conservative.
         completed = _json.loads(result)
         return [g for g in completed if g in goals]
 
-    except Exception:
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("goals.infer_completed_from_activity", str(e))
         return []
