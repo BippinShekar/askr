@@ -56,6 +56,7 @@ def _patch_path():
 _patch_path()
 
 import json
+import glob
 import time
 import signal
 import shlex
@@ -498,26 +499,37 @@ def _infer_direction(project_path: str = "") -> dict:
     except Exception:
         pass
 
-    # Signal 2: blockers.md non-empty — something is explicitly stuck
+    # Signal 2: an active blocker — either auto-recorded in a per-dev handover
+    # JSON (race-free, no shared file) or manually noted in blockers.md.
     try:
+        entries = []
+        for path in glob.glob(os.path.join(cwd, "askr_state", "handover_*.json")):
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+            entries.extend(data.get("blockers") or [])
+
         blockers_path = os.path.join(cwd, "askr_state", "blockers.md")
         if os.path.exists(blockers_path):
             content = open(blockers_path).read().strip()
             _skip = {"none noted", "[none]", "none"}
-            entries = [
+            entries.extend(
                 l.strip() for l in content.splitlines()
                 if l.strip()
                 and not l.startswith("#")
                 and not l.lower().startswith("last updated")
                 and l.strip().lower() not in _skip
-            ]
-            if entries:
-                return {
-                    "direction": f"resolve blocker: {entries[0][:120]}",
-                    "confidence": 0.90,
-                    "signal_source": "blockers_md",
-                    "details": entries,
-                }
+            )
+
+        if entries:
+            return {
+                "direction": f"resolve blocker: {entries[0][:120]}",
+                "confidence": 0.90,
+                "signal_source": "blockers",
+                "details": entries,
+            }
     except Exception:
         pass
 

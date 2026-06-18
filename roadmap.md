@@ -45,7 +45,7 @@ Restructured into a proper Python package ready for Phase 1 expansion.
 | `decisions.md` | Append-only, timestamped lines | None |
 | `implementation_state.md` | Fenced sections per developer | Minimal |
 | `architecture.md` | Shared, last-write-wins | Occasional, easy to resolve |
-| `blockers.md` | Shared, last-write-wins | Occasional, easy to resolve |
+| `blockers.md` | Manual-only notes; auto-detected blockers live in per-dev `handover_<dev>.json` (`blockers[]`), aggregated read-side | None on the automated path; manual edits rare, easy to resolve |
 | `goals.md` | Shared, Done section append-only | Minimal |
 
 **Stage P1-1: State file templates + developer config** ✅

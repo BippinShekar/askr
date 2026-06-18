@@ -176,8 +176,29 @@ def load_architecture() -> str:
     return _read(state_path("architecture.md"))
 
 
-def load_blockers() -> str:
-    return _read(state_path("blockers.md"))
+def load_blockers(developer: str = None) -> str:
+    """Aggregate active blockers across all devs' handover JSON (race-free,
+    one file per dev) plus the manually-edited blockers.md (rare, human-authored)."""
+    dev = developer or load_developer()
+    parts = []
+
+    for path in sorted(glob.glob(state_path("handover_*.json"))):
+        other_dev = os.path.basename(path).replace("handover_", "").replace(".json", "")
+        try:
+            with open(path) as f:
+                data = _json.load(f)
+        except Exception:
+            continue
+        blockers = data.get("blockers") or []
+        if blockers:
+            who = "you" if other_dev == dev else other_dev
+            parts.append(f"- ({who}) " + "; ".join(blockers))
+
+    manual = _read(state_path("blockers.md"))
+    if manual:
+        parts.append(manual)
+
+    return "\n".join(parts)
 
 
 def build_context_injection(developer: str = None) -> str:
@@ -187,7 +208,7 @@ def build_context_injection(developer: str = None) -> str:
     team_handovers = load_team_handovers(dev)
     decisions = load_decisions()
     architecture = load_architecture()
-    blockers = load_blockers()
+    blockers = load_blockers(dev)
 
     sections = []
 
