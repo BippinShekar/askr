@@ -670,3 +670,18 @@
 {"ts": "2026-06-18T21:44:12Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "grep -n \"def get_session_stats\\|def stats_path_for_session\\|def stats_path_for_p"}
 {"ts": "2026-06-18T21:44:16Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "grep -n \"get_session_stats\\|stats_path_for_session\\|write\\|json.dump\" askr/hooks"}
 {"ts": "2026-06-18T21:44:27Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "find /Users/bippin/.cursor/extensions/askr.askr-status-1.0.0 -type f | grep -v n"}
+{"ts": "2026-06-18T22:05:41Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "git log --oneline --all -- .askr/extension.js askr/cli/askr-status* 2>/dev/null;"}
+{"ts": "2026-06-18T22:05:46Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "git show a1c15e2 -- askr/ide/vscode-extension/extension.js | head -150"}
+{"ts": "2026-06-18T22:05:51Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "git show 453f3ef:askr/ide/vscode-extension/extension.js 2>/dev/null | head -60"}
+{"ts": "2026-06-18T22:05:55Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "grep -n \"_LEGACY_STATS_PATH\" askr/hooks/post_tool_use.py askr/session/monitor.py"}
+{"ts": "2026-06-18T22:06:31Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "grep -n \"stats\\|context_pct\\|session_stats\" askr/hooks/session_start.py | head -"}
+{"ts": "2026-06-18T22:07:30Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js"}
+{"ts": "2026-06-18T22:07:33Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js"}
+{"ts": "2026-06-18T22:07:39Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js"}
+{"ts": "2026-06-18T22:07:43Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "grep -n \"projectHashPrefix\\|projectStatsPath\\|workspaceFolders\" askr/ide/vscode-"}
+{"ts": "2026-06-18T22:07:49Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "diff /Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js /Users/bi"}
+{"ts": "2026-06-18T22:08:08Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/cli/askr.py"}
+{"ts": "2026-06-18T22:08:12Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -15"}
+{"ts": "2026-06-18T22:08:16Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "venv/bin/python -c \"\nimport sys; sys.path.insert(0,'.')\nfrom askr.cli.askr impor"}
+{"ts": "2026-06-18T22:08:19Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "git add askr/ide/vscode-extension/extension.js askr/cli/askr.py && git status --"}
+{"ts": "2026-06-18T22:08:25Z", "session_id": "65d03555-23f0-426d-a47a-dc15005ecec4", "type": "command", "detail": "git commit -m \"fix(statusline): stop guessing repo/session in IDE status bar, st"}
