@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-18 20:01
+Last updated: 2026-06-18 20:03
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Built askr, a Claude session checkpoint and resume system for developers, completing 4 implementation stages (blockers aggregation, state isolation, checkpoint merging, and observability hardening) with 37 passing tests and identified a regression in the VS Code extension's context percentage display showing 0% despite active session work.
+Built askr, a Claude session checkpoint and resume system for developers, completing 4 implementation stages (blockers aggregation, state isolation, checkpoint merging, and observability hardening) with 37 passing tests and discovered a regression in the VS Code extension's context percentage display showing 0% despite active session work.
 
 ## Discussion
-This session focused on shipping the final 4 stages of askr's core infrastructure: Stage 1 wired blockers aggregation from per-dev handover files instead of a dead shared file, Stage 2 isolated goals state per developer, Stage 3 merged checkpoint decisions and failed approaches, and Stage 4 hardened observability by stopping exception swallowing. All 37 tests pass. User then discovered a regression where the VS Code extension displays 0% context usage despite active work, triggering investigation into stats file reading and context percentage calculation in the extension.
+This session focused on shipping the final 4 stages of askr's core infrastructure: Stage 1 wired blockers aggregation from per-dev handover files instead of a dead shared file, Stage 2 isolated goals state per developer, Stage 3 merged checkpoint decisions and failed approaches, and Stage 4 hardened observability by stopping exception swallowing. All 37 tests pass. User then discovered a regression where the VS Code extension displays 0% context usage despite active work, triggering investigation into stats file reading and context percentage calculation in the extension. Investigation began by examining stats file paths, timestamps, and extension.js context_pct calculation logic but root cause remains unidentified.
 
 ## Accomplishments
 - [x] Researched KAE Capital's investment thesis and historical portfolio (Porter, Zetwerk, InMobi) to inform messaging strategy
@@ -28,53 +28,57 @@ This session focused on shipping the final 4 stages of askr's core infrastructur
 - [x] Implemented Stage 4: hardened observability by stopping exception swallowing in failure paths
 - [x] Added comprehensive test coverage: test_goals.py, test_blockers.py, test_checkpoint_merge.py bringing total test suite from 15 to 37 passing tests
 - [x] Committed all 4 stages and pushed to git with clean test suite
-- [x] Investigated VS Code extension context percentage display showing 0% despite active session work by searching for context_pct, session_stats, and stats file reading logic
+- [x] Investigated VS Code extension context percentage regression by examining stats file paths, timestamps, and extension.js context_pct calculation logic
 
 ## In Progress
-- `askr/ide/vscode-extension/extension.js`: Debugging context percentage display regression showing 0% despite active session work; investigating stats file reading, context_pct calculation, and session_stats path resolution
+- `askr/ide/vscode-extension/extension.js`: Debug context_pct calculation and verify stats file path resolution for context percentage display showing 0% despite active session work
+- `None`: Validate stats file write timing and format in ~/.config/askr/stats/ directory to determine if stats are being written correctly during active sessions
 
 ## Next Actions
-1. Examine askr/ide/vscode-extension/extension.js to locate context_pct calculation and session_stats file reading logic; check if stats file path is correctly resolved or if stats are being read before they're written
-   *Why: User reported 0% context display despite active work; this is a regression introduced in recent changes and blocks accurate session monitoring in the IDE*
-2. Check ~/.config/askr/stats/ directory structure and verify that stats files are being written with correct format and timing relative to extension reads
-   *Why: Stats file may not exist, be malformed, or be read before write completes; need to confirm file I/O contract*
-3. Review recent changes to stats file writing or path handling in askr/cli or askr/checkpoint modules to identify what broke context percentage calculation
-   *Why: Regression was introduced in this session's changes; need to identify which stage (1-4) or prior commit caused the issue*
-4. Send drafted KAE Capital emails to shivam@kae-capital.com and gaurav@kae-capital.com with subject 'AI writes your emails now. It still can't get you hired.' and body emphasizing stateless vs. compound fit-scoring automation
-   *Why: Emails are drafted and ready; timing is critical for investor outreach during active fundraising window*
-5. Research PI Ventures partner names and send email to named contact (or info@piventures.in if names unavailable) using YC subject line and email body
-   *Why: PI Ventures outreach strategy confirmed; need to execute with personalized contact if possible*
+1. Examine extension.js context_pct calculation logic: trace how it reads stats file, parses context usage, and computes percentage display
+   *Why: Root cause of 0% display regression is unknown; need to verify calculation logic is not broken and stats file is being read correctly*
+2. Verify stats file write path and timing: confirm ~/.config/askr/stats/ files are being written during active sessions and contain valid context usage data
+   *Why: If stats files are not being written or are stale, extension will display 0% regardless of calculation logic*
+3. Check if any Stage 1-4 changes inadvertently modified stats file path resolution or stats writing logic
+   *Why: User confirmed no direct changes to status display code, but need to verify no indirect side effects from blockers/goals/checkpoint refactoring*
+4. Add debug logging to extension.js to trace stats file read, parse, and context_pct calculation during active session
+   *Why: Will pinpoint exact failure point: missing file, parse error, or calculation bug*
+5. Once root cause identified, fix regression and add test coverage to prevent recurrence
+   *Why: Critical user-facing feature; regression must be resolved and protected*
 
 ## Decisions
-- Rejected hiring-infrastructure messaging entirely as fundamentally misaligned with investor conviction — User stated 'I don't think anyone is moved with hiring tech/ai bullshit' — signals complete pivot away from hiring market positioning
-- Adopted problem-first positioning: 'AI replaced effort everywhere except the one place people actually need it' — Authentic problem statement that resonates with investor thesis about where automation has failed to penetrate
-- Rejected spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach to KAE Capital and PI Ventures with problem-centric messaging
-- Used contrast-based subject line for KAE Capital: 'AI writes your emails now. It still can't get you hired.' — Leads with real problem, not self-promotion; aligns with KAE's investment thesis in overlooked infrastructure sectors
-- Implemented blockers aggregation from per-dev handover files instead of shared blockers.md — Eliminates write race condition and provides per-developer isolation of blocker state
-- Threaded state_dir through goal lifecycle to isolate goals state per developer — Prevents cross-developer state pollution and enables proper checkpoint/resume semantics
-
-## User-Rejected Approaches
-- **Multiple hiring-tech subject lines: 'Why does only one side of hiring have infrastructure?', 'The candidate side of hiring has no Eightfold', '$35B hiring market'** — "All rejected as self-promotional rather than problem-centric; user stated 'I don't think anyone is moved with hiring tech/ai bullshit'" (domain: investor outreach messaging)
+- Rejected spray-and-pray outreach approach (deals@together.fund email) for KAE Capital — Timing and signal risk too high; requires targeted, problem-first positioning to specific decision-makers
+- Rejected all hiring-tech subject line variants for KAE Capital outreach — Fundamentally misaligned with investor conviction in overlooked infrastructure sectors; messaging optimization cannot fix conviction mismatch
+- Aggregated blockers from per-dev handover_<dev>.json files instead of shared blockers.md — Eliminates write race condition and aligns with per-developer state isolation pattern
+- Threaded state_dir through goal lifecycle to isolate goals state per developer — Prevents cross-developer goal contamination and enables per-dev checkpoint/resume semantics
+- Hardened observability by stopping exception swallowing in failure paths — Exceptions must propagate to enable proper debugging and prevent silent failures
 
 ## Failed Approaches
-- Spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach with problem-centric messaging
-- Shared blockers.md file for aggregating blocker state across developers — Write race condition and lack of per-developer isolation; replaced with per-dev handover_<dev>.json aggregation
+- Spray-and-pray outreach to deals@together.fund for KAE Capital — Wrong signal; KAE Capital requires targeted problem-first positioning to specific decision-makers, not generic investor email
+- Hiring-infrastructure messaging variants for KAE Capital — Conviction mismatch; KAE Capital invests in overlooked infrastructure sectors and B2B supply chains, not hiring tech
 
 ## Files In Play
 - `askr/ide/vscode-extension/extension.js`
-- `tests/test_goals.py`
-- `tests/test_blockers.py`
-- `tests/test_checkpoint_merge.py`
+- `askr/cli/askr.py`
 - `askr/checkpoint.py`
-- `askr/cli/ask.py`
+- `askr/lifecycle.py`
+- `askr/goals.py`
+- `askr/writer.py`
+- `askr/reader.py`
+- `askr/logger.py`
 
 ## Relational Files
-- `askr_state/handover_bippin.json` (imported_by): Per-dev handover file used for blockers aggregation and state isolation
-- `~/.config/askr/stats/` (configures): Stats directory where session stats are written and read by VS Code extension; context percentage regression points to this path
-- `askr/checkpoint.py` (imports): Core checkpoint logic for merging decisions and failed approaches from handover documents
-- `tests/test_goals.py` (tested_by): Tests goals state isolation per developer
-- `tests/test_blockers.py` (tested_by): Tests blockers aggregation logic from per-dev handover files
-- `tests/test_checkpoint_merge.py` (tested_by): Tests checkpoint merge of decisions and failed approaches
+- `askr/cli/askr.py` (configures): Contains _statusline_text() and stats file path resolution logic that feeds context percentage to extension
+- `askr/checkpoint.py` (imported_by): Stage 3 merged checkpoint decisions and failed approaches; may affect stats file writing
+- `askr/lifecycle.py` (imported_by): Stage 2 isolated goals state per developer; may affect stats file path resolution
+- `askr/goals.py` (imported_by): Stage 2 isolated goals state per developer; may affect stats file writing
+- `askr/writer.py` (imported_by): Writes stats files; Stage 1-4 changes may have affected stats file write logic
+- `askr/reader.py` (imported_by): Reads stats files; Stage 1-4 changes may have affected stats file read logic
+
+## Uncommitted Files
+- `.askr_history`
+- `askr_state/goals.jsonl`
+- `askr_state/implementation_bippin.jsonl`
 
 ## Blockers
-- VS Code extension displays 0% context usage despite active session work; regression introduced in this session's changes; need to identify root cause in stats file reading or context_pct calculation
+- VS Code extension context percentage displays 0% despite active session work; root cause unknown (stats file path, write timing, or calculation logic)

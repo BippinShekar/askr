@@ -107,3 +107,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-06-18] Attempted to infer state_dir from ambient cwd in checkpoint.py and lifecycle.py daemon context — Ambient cwd fallback breaks in multi-project contexts; state_dir must be threaded explicitly through all call sites
 - [2026-06-18] Spray-and-pray outreach to Together Fund deals@together.fund — Timing and signal risk; better to focus on targeted outreach with problem-centric messaging
 - [2026-06-18] Shared blockers.md file for aggregating blocker state across developers — Write race condition and lack of per-developer isolation; replaced with per-dev handover_<dev>.json aggregation
+- [2026-06-18] Spray-and-pray outreach to deals@together.fund for KAE Capital — Wrong signal; KAE Capital requires targeted problem-first positioning to specific decision-makers, not generic investor email
+- [2026-06-18] Hiring-infrastructure messaging variants for KAE Capital — Conviction mismatch; KAE Capital invests in overlooked infrastructure sectors and B2B supply chains, not hiring tech
