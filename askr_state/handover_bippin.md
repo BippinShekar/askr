@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-19 12:46
+Last updated: 2026-06-19 12:49
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Built and deployed 5 critical daemon stability fixes, resolved session-stats tracking to use explicit session_id instead of mtime-based guessing, fixed cmd_team() display to read from correct queue_<dev>.jsonl format, validated daemon stability and task-queue delivery mechanism, investigated state file architecture, added integration test coverage for askr init launchd idempotency, diagnosed and resolved recurring stats-indicator error in Cursor status-line extension by removing per-project hash filtering and reverting to global newest-stats-file lookup, fixed terminal statusline 0% display issue, removed erroneous stats file deletion in stop.py that was clearing session state on every turn-end, conducted codebase audit to assess team-management feature scope and test coverage, reviewed team-management initialization flow and co-founder collaboration readiness, confirmed solo-developer initialization is production-ready with 41/41 tests passing and clean idempotent askr init flow, and verified context-percentage display accuracy in cost tracking.
+Built and deployed 5 critical daemon stability fixes, resolved session-stats tracking to use explicit session_id instead of mtime-based guessing, fixed cmd_team() display to read from correct queue_<dev>.jsonl format, validated daemon stability and task-queue delivery mechanism, investigated state file architecture, added integration test coverage for askr init launchd idempotency, diagnosed and resolved recurring stats-indicator error in Cursor status-line extension by removing per-project hash filtering and reverting to global newest-stats-file lookup, fixed terminal statusline 0% display issue, removed erroneous stats file deletion in stop.py that was clearing session state on every turn-end, conducted codebase audit to assess team-management feature scope and test coverage, reviewed team-management initialization flow and co-founder collaboration readiness, confirmed solo-developer initialization is production-ready with 41/41 tests passing and clean idempotent askr init flow, verified context-percentage display accuracy in cost tracking, and investigated context-window cutoff threshold for companion-open triggering.
 
 ## Discussion
-Solo-developer initialization is production-ready: 41/41 tests pass, askr init flow is clean with proper fallbacks at every LLM-call boundary, and daemon stability has been validated. Co-founder collaboration features are not yet fully implemented—team-add flow exists but lacks integration tests and multi-dev state synchronization. This session clarified that full-file reads of large modules (checkpoint.py 1182 lines) consuming 41% of context budget was a deliberate choice for ground-truth verification rather than a system error or instruction gap—neither claude.md nor handover documents forbid full-file reads, and the context-percentage display itself is accurate. Future sessions should continue using targeted grep/offset patterns for efficiency, but full-file reads remain valid when verification depth is prioritized over token conservation.
+Solo-developer initialization is production-ready: 41/41 tests pass, askr init flow is clean with proper fallbacks at every LLM-call boundary, and daemon stability has been validated. Co-founder collaboration features are not yet fully implemented—team-add flow exists but lacks integration tests and multi-dev state synchronization. This session clarified that full-file reads of large modules (checkpoint.py 1182 lines) consuming 41% of context budget was a deliberate choice for ground-truth verification rather than a system error or instruction gap—neither claude.md nor handover documents forbid full-file reads, and the context-percentage display itself is accurate. User confirmed 60% context-window cutoff threshold may be too strict and warrants investigation into 65% threshold and consensus on context degradation in long conversations.
 
 ## Accomplishments
 - [x] Diagnosed and fixed companion-open premature trigger: changed from context_pct >= CONTEXT_TRIGGER heuristic to waiting for actual Stop-hook turn-end signal in lifecycle.py
@@ -22,33 +22,36 @@ Solo-developer initialization is production-ready: 41/41 tests pass, askr init f
 - [x] Reviewed lifecycle.py companion-open logic and companioned_sessions dedup tracking; confirmed design is correct and working as intended
 - [x] Reviewed team-management initialization flow and co-founder collaboration readiness; confirmed solo-developer path is production-ready, team-add flow exists but lacks integration test coverage
 - [x] Verified context-percentage display accuracy in cost tracking; confirmed 41% figure was correct and reflected deliberate full-file reads for ground-truth verification rather than system error
+- [x] Clarified that full-file reads are valid strategy when verification depth is prioritized over token conservation; neither claude.md nor handover documents forbid them
+
+## In Progress
+- `askr/monitor.py`: Investigate context-window cutoff threshold: evaluate whether 60% CONTEXT_TRIGGER is too strict, research consensus on context degradation in long conversations, and determine if 65% threshold would be more appropriate for practical usability
 
 ## Next Actions
-1. Add integration test coverage for team-add flow and multi-developer state synchronization to validate co-founder collaboration path
-   *Why: Team-management features exist but lack test coverage; solo-dev path is production-ready but team features need validation before deployment*
-2. Audit and document context-efficiency patterns (grep-first, offset-read, fork-for-consistency) in claude.md to guide future sessions on token conservation strategies
-   *Why: Prior session identified context-efficiency as a concern; explicit patterns will help future sessions balance verification depth with budget constraints*
-3. Monitor daemon stability over next 3-5 sessions to confirm the 5 fixes have eliminated relaunch-loop recurrence
-   *Why: Daemon has been stable since fixes, but longer observation period needed to confirm permanent resolution*
+1. Research context degradation consensus: web search for best practices on context-window cutoff thresholds in long-running LLM conversations and performance degradation curves
+   *Why: User flagged 60% cutoff as potentially too strict; need data-driven threshold to optimize companion-open triggering without sacrificing response quality*
+2. If research supports higher threshold, update CONTEXT_TRIGGER in monitor.py from 0.6 to 0.65 and validate against daemon logs to ensure companion-open still triggers appropriately
+   *Why: Threshold adjustment could improve usability by allowing longer single-chat sessions before forking*
+3. Implement per-chat context tracking: investigate whether Claude API provides per-conversation context usage metrics and design mechanism to expose this in askr's cost tracking alongside global session metrics
+   *Why: User noted Claude tracks per-chat context; exposing this would enable more granular cost visibility and better threshold tuning*
+4. Add integration tests for team-add flow and multi-dev state synchronization to move co-founder collaboration features toward production readiness
+   *Why: Team-management initialization flow exists but lacks test coverage; this is the remaining blocker for full collaboration feature parity*
 
 ## Decisions
-- Full-file reads are acceptable when ground-truth verification is prioritized over token conservation — Context-percentage display is accurate; neither claude.md nor handover documents forbid full-file reads; deliberate choice for audit depth is valid
-- Solo-developer initialization path is production-ready and can be deployed — 41/41 tests pass, askr init flow is clean with proper fallbacks, daemon stability validated
-- Co-founder collaboration features require additional integration test coverage before production deployment — Team-add flow exists but lacks test coverage and multi-dev state synchronization validation
-
-## Failed Approaches
-- Using Explore tool for cross-file consistency checks and structural audits — Explore's own description explicitly excludes this use case; fork-based analysis is more appropriate for multi-file structural work
+- Full-file reads are valid when verification depth is prioritized over token conservation — Neither claude.md nor handover documents forbid full-file reads; ground-truth verification of large modules (e.g., checkpoint.py 1182 lines) is legitimate strategy despite context cost
+- Context-percentage display in cost tracking is accurate and not a bug — Calculation reads literal input_tokens + cache_read_input_tokens + cache_creation_input_tokens from assistant turn usage field; 41% figure was correct
+- 60% context-window cutoff threshold warrants re-evaluation — User feedback indicates threshold may be too strict for practical usability; 65% threshold and consensus research needed to optimize companion-open triggering
 
 ## Files In Play
-- `askr/lifecycle.py`
-- `askr/cost.py`
-- `askr/checkpoint.py`
-- `askr/hooks/guard_runner.py`
-- `askr/hooks/pre_tool_use.py`
-- `askr/session/guard.py`
+- `askr/monitor.py`
+- `askr/hooks/lifecycle.py`
+- `askr/session/cost.py`
+- `askr/cli/askr.py`
 
 ## Relational Files
-- `askr/lifecycle.py` (imports): Contains companion-open trigger logic and companioned_sessions dedup tracking
-- `askr/cost.py` (configures): Unified session-scoped cost tracking and context-percentage display
-- `askr/checkpoint.py` (configures): Prevention rule to block off-topic content accumulation in handover documents
-- `.gitignore` (configures): Git tracking rules for .askr_history and notifications.log
+- `askr/hooks/lifecycle.py` (imports|configures): Contains companion-open trigger logic and companioned_sessions dedup tracking; directly affected by CONTEXT_TRIGGER threshold
+- `askr/session/cost.py` (imported_by): Unified session-scoped cost tracking; provides context-percentage display that user verified as accurate
+- `askr/checkpoint.py` (configures): Contains prevention rule to block off-topic content accumulation in handover documents
+
+## Uncommitted Files
+- `askr_state/implementation_bippin.jsonl`

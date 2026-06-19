@@ -703,3 +703,4 @@
 {"ts": "2026-06-18T22:22:24Z", "session_id": "d65b0437-d178-43f9-959f-cb15978239b7", "type": "command", "detail": "grep -n \"def cmd_init\\|def init\" askr/cli/askr.py | head; sed -n '1,80p' askr/cl"}
 {"ts": "2026-06-18T22:22:35Z", "session_id": "d65b0437-d178-43f9-959f-cb15978239b7", "type": "command", "detail": "cat askr_state/failed_approaches.md 2>/dev/null | tail -60; echo \"===DECISIONS C"}
 {"ts": "2026-06-18T22:23:05Z", "session_id": "d65b0437-d178-43f9-959f-cb15978239b7", "type": "command", "detail": "wc -l askr/hooks/guard_runner.py askr/hooks/pre_tool_use.py askr/session/guard.p"}
+{"ts": "2026-06-19T07:18:40Z", "session_id": "d65b0437-d178-43f9-959f-cb15978239b7", "type": "command", "detail": "grep -n \"CONTEXT_TRIGGER\\|context_trigger\\|0\\.6\\|0\\.65\\|0\\.9\\|90\\b\" /Users/bippi"}
