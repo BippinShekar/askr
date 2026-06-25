@@ -800,3 +800,6 @@
 {"ts": "2026-06-25T21:23:33Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "git -C /Users/bippin/Desktop/askr status --short"}
 {"ts": "2026-06-25T21:23:36Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "git -C /Users/bippin/Desktop/askr log --oneline -3"}
 {"ts": "2026-06-25T21:23:41Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "git add askr/hooks/user_prompt_submit.py askr/session/monitor.py askr_state/impl"}
+{"ts": "2026-06-25T21:37:01Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/askr_state/decisions.jsonl 2>/dev/null || echo \""}
+{"ts": "2026-06-25T21:37:02Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "ls /Users/bippin/Desktop/leaps/website/e2e/ 2>/dev/null || echo \"DIR MISSING\""}
+{"ts": "2026-06-25T21:37:10Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "grep -i \"userDataDir\\|chrome profile\\|cookie\\|password.*removed\\|test-config\" /U"}
