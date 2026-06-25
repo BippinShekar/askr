@@ -37,7 +37,13 @@ def main():
     cleaned = _strip_tags(raw)
 
     if cleaned and cleaned != raw:
-        print(json.dumps({"decision": "approve", "hookSpecificOutput": {"updatedPrompt": cleaned}}))
+        print(json.dumps({
+            "decision": "approve",
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "updatedPrompt": cleaned,
+            },
+        }))
     else:
         print(json.dumps({"decision": "approve"}))
 

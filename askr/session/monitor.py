@@ -18,7 +18,23 @@ _STATS_DIR           = os.path.expanduser("~/.config/askr/stats")
 
 
 def find_project_root(start_dir: str = None) -> str:
-    """Walk up from start_dir to find the project root (.claude or .askr_history present)."""
+    """Walk up from start_dir to find the project root.
+
+    Prefers askr_state/ as the root marker — it's a stronger signal than
+    .claude alone. Subdirectories like leaps/backend may have their own
+    .claude for allowedTools but share the parent's askr_state, so stopping
+    at the first .claude would return the wrong root if the cwd drifted into
+    a subdirectory (e.g. via a Bash `cd` command during a session).
+    """
+    d = start_dir or os.getcwd()
+    while True:
+        if os.path.exists(os.path.join(d, "askr_state")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    # Fallback for projects that have .claude but no askr_state yet
     d = start_dir or os.getcwd()
     while True:
         if os.path.exists(os.path.join(d, ".claude")) or os.path.exists(os.path.join(d, ".askr_history")):
