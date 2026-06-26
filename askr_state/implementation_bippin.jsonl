@@ -803,3 +803,12 @@
 {"ts": "2026-06-25T21:37:01Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/askr_state/decisions.jsonl 2>/dev/null || echo \""}
 {"ts": "2026-06-25T21:37:02Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "ls /Users/bippin/Desktop/leaps/website/e2e/ 2>/dev/null || echo \"DIR MISSING\""}
 {"ts": "2026-06-25T21:37:10Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "grep -i \"userDataDir\\|chrome profile\\|cookie\\|password.*removed\\|test-config\" /U"}
+{"ts": "2026-06-26T10:17:37Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "find /Users/bippin/Desktop/askr/askr -name \"*.py\" | sort"}
+{"ts": "2026-06-26T10:17:38Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "grep -r \"Guard\\|guard\\|hallucin\\|block\" /Users/bippin/Desktop/askr/askr --includ"}
+{"ts": "2026-06-26T10:18:29Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "tail -35 /Users/bippin/Desktop/leaps/askr_state/decisions.jsonl | python3 -c \"\ni"}
+{"ts": "2026-06-26T10:18:29Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat ~/.config/askr/guard_session.json 2>/dev/null && echo \"---\" && cat ~/.config"}
+{"ts": "2026-06-26T10:18:30Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/askr_state/guard_log.md 2>/dev/null | tail -60"}
+{"ts": "2026-06-26T10:19:30Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/askr_state/architecture.md | head -80"}
+{"ts": "2026-06-26T10:19:30Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "wc -l /Users/bippin/Desktop/leaps/askr_state/decisions.jsonl && wc -l /Users/bip"}
+{"ts": "2026-06-26T10:19:58Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/CLAUDE.md 2>/dev/null | head -60"}
+{"ts": "2026-06-26T10:19:59Z", "session_id": "0c8d7492-4864-45de-87c2-a7ee8ca27bb5", "type": "command", "detail": "cat /Users/bippin/Desktop/leaps/askr_state/failed_approaches.md 2>/dev/null | he"}
