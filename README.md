@@ -124,6 +124,23 @@ Discord webhook notifications for checkpoints, session resumes, and goal complet
 
 ## Install
 
+### Homebrew
+
+```bash
+# one-liner (tap + install in one shot)
+brew install BippinShekar/askr/askr
+
+# or tap once, then install/upgrade by name from then on
+brew tap BippinShekar/askr
+brew install askr
+```
+
+Bare `brew install askr` (no tap) only works for formulas in `homebrew-core`,
+which requires a notability review Askr doesn't qualify for yet. One of the
+two commands above is the real install path for now.
+
+### From source
+
 ```bash
 git clone https://github.com/BippinShekar/askr.git
 cd askr
@@ -317,7 +334,7 @@ askr_state/                  # project state data (committed to git)
 - Until both land, non-blocking guard warnings have no visible surface — only the blocking guard path (Phase 3.5, shipped) alerts a developer today
 
 ### Phase 4 — Public Launch
-- `brew install askr` — `v0.1.0` is tagged and published on GitHub, and `Formula/askr.rb` installs the full package with a real pinned `sha256`/`url`
+- Homebrew install shipped (see [Install](#install)) — `v0.1.0` tagged, `BippinShekar/homebrew-askr` tap live, real pinned `sha256`/`url`
 - Polished README with GIF of status bar + morning report
 - Twitter/X launch thread
 
