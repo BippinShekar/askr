@@ -613,6 +613,26 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 
 ---
 
+## Phase 7.1 — Pre-Launch Audit (2026-07-02)
+
+**Context:** Repo is already public on GitHub. Audit found a live secret leak and confirmed several roadmap-flagged gaps are still open in code, not just doc. Full items also filed as backlog goals so they survive regardless of handover summarization.
+
+| Severity | Finding | Status |
+|---|---|---|
+| P0 | Discord webhook committed in plaintext at `50eba93`, still in `origin/main` history on the **public** repo — untracked going forward (`7735e19`) but never scrubbed from history | Webhook rotated 2026-07-02; history scrub (git filter-repo + force-push) still pending, needs explicit go-ahead per push safety policy |
+| P0 | `Formula/askr.rb` cannot install askr: placeholder sha256, tag `v1.0.0` doesn't exist, only copies root `*.py` (misses entire `askr/` package), never creates `bin/askr` | Open — see backlog goal |
+| P1 | Zero gate anywhere in `askr/` on `--dangerously-skip-permissions` sessions — confirmed via full-repo grep, matches roadmap Phase 5 claim | Open — Phase 5 approval gate, unbuilt |
+| P1 | `pre_tool_use.py` cross-repo boundary check (fixed 2026-07-01) only covers Write/Edit/MultiEdit — Bash tool calls can still cross repo boundaries undetected | Open |
+| P1 | PreCompact emergency handover still hardcoded boilerplate, doesn't route through LLM handover path (roadmap Phase 3.16, confirmed still true in code) | Open |
+| P1 | `pre_tool_use.py`/`guard_runner.py` — zero test coverage on the guard, the most security-critical path in the hook system | Open |
+| P1 | README.md describes Phase 3 (notifications) and Phase 3.5 (guard) as "Coming Next" — both are built and running; misleads new external readers | Open |
+| Verified fixed | P4-1 `_drain_task_queue` race (read-archive-truncate with no lock, found 2026-06-17) | Confirmed fixed — now wrapped in `file_lock()` |
+| Verified fixed | Handover generation could bleed sibling-repo work into this repo's `askr_state/` (found + fixed 2026-07-01) | Fixed in `checkpoint.py` — `project_path` now passed explicitly into the LLM prompt |
+
+All P0/P1 items above also live in `askr_state/goals.jsonl` backlog (`askr goal add ... --backlog`) so they don't depend on next_actions[]'s 3-5 item summarization cap to survive into the next session.
+
+---
+
 ## Decisions Log
 
 **2026-06-02 - Planning session**
