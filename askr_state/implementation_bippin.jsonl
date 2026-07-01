@@ -1020,3 +1020,11 @@
 {"ts": "2026-07-01T19:48:58Z", "session_id": "d8b135b8-a835-4e59-9610-e873469da351", "type": "command", "detail": "brew uninstall askr 2>&1 | tail -5"}
 {"ts": "2026-07-01T19:49:06Z", "session_id": "d8b135b8-a835-4e59-9610-e873469da351", "type": "command", "detail": "tail -1 /Users/bippin/Desktop/askr/askr_state/decisions.jsonl"}
 {"ts": "2026-07-01T19:49:13Z", "session_id": "d8b135b8-a835-4e59-9610-e873469da351", "type": "command", "detail": "printf '%s\\n' '{\"at\": \"2026-07-02 01:35\", \"dev\": \"bippin\", \"decision\": \"Tagged a"}
+{"ts": "2026-07-01T19:50:51Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd /Users/bippin/Desktop/askr && git status && git log --oneline -8 && echo \"---"}
+{"ts": "2026-07-01T19:51:08Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "git show bd0bca1 --stat | head -20"}
+{"ts": "2026-07-01T19:51:20Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd /Users/bippin/Desktop/askr && tail -3 askr_state/decisions.jsonl; echo \"---\";"}
+{"ts": "2026-07-01T19:51:31Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "git log --oneline --all -S \"qa_bank\" -- askr_state/decisions.jsonl | head -5; gi"}
+{"ts": "2026-07-01T19:51:43Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "grep -n \"def _extract_and_save_decisions\" -A 60 askr/hooks/stop.py | head -70"}
+{"ts": "2026-07-01T19:51:58Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "grep -n \"source.*checkpoint\\|def.*decision\\|decisions.jsonl\" askr/session/checkp"}
+{"ts": "2026-07-01T19:52:31Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd /Users/bippin/Desktop/askr\ngit cherry-pick -x b027c12 2>&1\necho \"=== after RE"}
+{"ts": "2026-07-01T19:52:35Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "git diff askr_state/implementation_bippin.jsonl | head -20"}
