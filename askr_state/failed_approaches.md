@@ -140,3 +140,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-07-01] Using full location string for LinkedIn location combobox field — Full location strings do not trigger city autocomplete dropdown; city name extraction required
 - [2026-07-01] Inline retry of spam-flagged Ashby applications with scroll-and-resubmit — Browser fingerprinting persists across retries in same session; spam_warning recurs immediately, wasting session time
 - [2026-07-01] Using JSONL idle heuristic to trigger companion sessions — Idle detection is unreliable; switched to Stop hook signal for deterministic session lifecycle
+- [2026-07-01] Inline retry of spam-flagged jobs during session execution — Increased session complexity and made it difficult to track which applications succeeded vs. were flagged; deferred approach is cleaner.
