@@ -1,6 +1,6 @@
 {
-  "task": "Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, and verified end-to-end installation via homebrew-askr tap.",
-  "discussion_summary": "Askr has progressed through three major phases: Phase 3 (notifications) and Phase 3.5 (permission guard) are fully implemented and tested; Phase 4 (approval workflow) is wired into the Cursor extension. This session completed the v0.1.0 release cycle by computing the real tarball sha256, fixing the Homebrew formula to reference the correct GitHub release artifact, creating the homebrew-askr tap repository, and verifying end-to-end installation. Critical gap remains: guard_warning notification type is not wired into Cursor extension.js type whitelist, so Phase 3.5 IDE popups do not render despite being marked Done in roadmap. README.md still lists Phase 3 and 3.5 as 'Coming Next' and requires update to reflect completion.",
+  "task": "Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, verified end-to-end installation via homebrew-askr tap, and identified that Homebrew tap installation requires full namespace (brew install BippinShekar/askr/askr) rather than simple brew install askr.",
+  "discussion_summary": "Askr has progressed through three major phases: Phase 3 (notifications) and Phase 3.5 (permission guard) are fully implemented and tested; Phase 4 (approval workflow) is wired into the Cursor extension. The v0.1.0 release cycle was completed by computing the real tarball sha256, fixing the Homebrew formula to reference the correct GitHub release artifact, creating the homebrew-askr tap repository, and verifying end-to-end installation. This session confirmed the tap works but revealed that users must use the full namespace `brew install BippinShekar/askr/askr` rather than the simpler `brew install askr` \u2014 the latter would require submitting the formula to Homebrew's core tap, which is a separate process. Critical gap remains: guard_warning notification type is not wired into Cursor extension.js type whitelist, so Phase 3.5 IDE popups do not render despite being marked Done in roadmap. README.md still lists Phase 3 and 3.5 as 'Coming Next' and requires update to reflect completion.",
   "accomplishments": [
     {
       "what": "LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern",
@@ -75,31 +75,31 @@
       "done": true
     },
     {
-      "what": "Auto-completed 'dangerously-skip-permissions sessions before queued' goal via Stop-hook inference",
+      "what": "Auto-completed 'dangerously-skip-permissions sessions before queued' goal via permission gate implementation",
       "done": true
     },
     {
-      "what": "Computed real tarball sha256 for v0.1.0 release and updated Homebrew formula",
+      "what": "Tagged v0.1.0 release and created GitHub Release artifact",
       "done": true
     },
     {
-      "what": "Fixed Homebrew formula URL to reference v0.1.0 GitHub release artifact",
+      "what": "Computed real sha256 of v0.1.0 tarball and updated Homebrew formula",
       "done": true
     },
     {
-      "what": "Created homebrew-askr tap repository with Formula/askr.rb and pushed to GitHub",
+      "what": "Created homebrew-askr tap repository with Formula/askr.rb",
       "done": true
     },
     {
-      "what": "Fixed brew audit lint issues in formula test block",
+      "what": "Fixed Homebrew formula lint issues in test block and verified brew audit passes",
       "done": true
     },
     {
-      "what": "Verified end-to-end Homebrew installation: brew tap, brew install, and binary execution all successful",
+      "what": "Verified end-to-end installation via homebrew-askr tap (brew install BippinShekar/askr/askr)",
       "done": true
     },
     {
-      "what": "Logged v0.1.0 release and homebrew-askr tap decision to decisions.jsonl",
+      "what": "Confirmed both ask and askr binaries execute correctly post-installation",
       "done": true
     }
   ],
@@ -107,71 +107,83 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Wire guard_warning notification type into Cursor extension.js type whitelist (add to NOTIFICATION_TYPES or equivalent) so Phase 3.5 IDE popups actually render",
-      "why": "guard_warning is marked Done in roadmap but does not display in IDE because extension does not recognize the type; this is a critical gap blocking Phase 3.5 user-facing functionality"
+      "action": "Wire guard_warning notification type into Cursor extension.js type whitelist so Phase 3.5 permission guard IDE popups render when dangerous permissions are detected",
+      "why": "Phase 3.5 is marked complete in roadmap but guard_warning popups do not appear in IDE; this is the final blocker for Phase 3.5 user-facing functionality"
     },
     {
       "order": 2,
-      "action": "Update README.md: change Phase 3 (notifications) and Phase 3.5 (guard) from 'Coming Next' to 'Completed' or 'In Production', and add v0.1.0 release notes with Homebrew installation instructions",
-      "why": "README is stale and misleads users about feature availability; v0.1.0 is now released and installable via Homebrew"
+      "action": "Update README.md to reflect that Phase 3 (notifications) and Phase 3.5 (permission guard) are complete and deployed, not 'Coming Next'",
+      "why": "Documentation is out of sync with implementation; users and contributors need accurate status"
     },
     {
       "order": 3,
       "action": "Extend pre_tool_use.py cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit operations",
-      "why": "currently only file edits are guarded against cross-repo violations; Bash commands can also escape the repository boundary and should be checked"
+      "why": "Currently only file edits are checked for cross-repo violations; Bash commands can also reference foreign repositories and should be guarded"
     },
     {
       "order": 4,
-      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)",
-      "why": "emergency handovers currently use static text instead of generating proper context; this reduces handover quality when sessions hit token limits"
+      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py create_checkpoint (trigger_type==emergency branch)",
+      "why": "Emergency handovers currently use static boilerplate instead of generating proper context; this reduces handover quality when sessions are interrupted"
+    },
+    {
+      "order": 5,
+      "action": "Document Homebrew installation process: users must use full namespace (brew install BippinShekar/askr/askr) or submit formula to Homebrew core tap for simple brew install askr",
+      "why": "User asked about simpler installation; clarifying the trade-off between tap-based installation (works now) vs core tap submission (requires Homebrew review process)"
     }
   ],
   "decisions": [
     {
-      "decision": "Created separate homebrew-askr tap repository (BippinShekar/homebrew-askr) instead of submitting to Homebrew core",
-      "reason": "Homebrew core requires stable upstream releases and extensive testing; a custom tap allows rapid iteration and updates without core review overhead"
+      "decision": "Homebrew installation via custom tap (BippinShekar/askr) rather than submitting to Homebrew core tap",
+      "reason": "Custom tap allows immediate distribution without Homebrew review process; users can install with brew tap + brew install; core tap submission is deferred to later when project maturity warrants it"
     }
   ],
-  "user_rejected_decisions": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Users install askr via brew install BippinShekar/askr/askr (full namespace)",
+      "user_signal": "so now people have to do brew install BippinShekar/askr/askr who does that shit? can't I just make it like brew install askr?",
+      "domain": "Formula/askr.rb, Homebrew distribution",
+      "confidence": 0.95
+    }
+  ],
   "failed_approaches": [],
   "files_in_play": [
     "Formula/askr.rb"
   ],
   "relational_files": [
     {
-      "file": "src/permission_gate.py",
-      "relationship": "imported_by",
-      "why": "core guard logic for detecting dangerous permissions; wired into session_start.py"
+      "file": "askr_state/implementation_bippin.jsonl",
+      "relationship": "logs",
+      "why": "Session decisions and release milestones logged here"
     },
     {
-      "file": "src/session_start.py",
-      "relationship": "imports",
-      "why": "calls permission_gate.py to hold queued tasks in dangerous sessions"
-    },
-    {
-      "file": "tests/test_permission_gate.py",
-      "relationship": "tested_by",
-      "why": "13 passing tests covering all dangerous permission detection scenarios"
-    },
-    {
-      "file": "tests/test_task_approval_gate.py",
-      "relationship": "tested_by",
-      "why": "full coverage for approval gate workflow"
-    },
-    {
-      "file": "cursor_extension/extension.js",
-      "relationship": "configures",
-      "why": "notification type whitelist must include guard_warning and task_approval_pending for IDE popups to render"
-    },
-    {
-      "file": "roadmap.md",
-      "relationship": "configures",
-      "why": "tracks Phase 3.5 (guard) and Phase 4 (approval) completion status"
+      "file": "askr_state/decisions.jsonl",
+      "relationship": "logs",
+      "why": "Architectural decisions recorded here"
     },
     {
       "file": "README.md",
-      "relationship": "configures",
-      "why": "needs update to reflect Phase 3 and 3.5 completion and v0.1.0 release"
+      "relationship": "documents",
+      "why": "Needs update to reflect Phase 3 and 3.5 completion status"
+    },
+    {
+      "file": "roadmap.md",
+      "relationship": "documents",
+      "why": "Already updated to reflect Phase 3.5 and Phase 4 status"
+    },
+    {
+      "file": "askr/hooks/permission_gate.py",
+      "relationship": "implements",
+      "why": "Permission gate logic for dangerous session detection"
+    },
+    {
+      "file": "askr/session/session_start.py",
+      "relationship": "implements",
+      "why": "Task holding logic when dangerous permissions detected"
+    },
+    {
+      "file": "askr/extensions/cursor/extension.js",
+      "relationship": "needs_update",
+      "why": "guard_warning notification type not in whitelist; blocks Phase 3.5 IDE popups"
     }
   ],
   "uncommitted_files": [
@@ -179,14 +191,12 @@
     ".claude/"
   ],
   "blockers": [
-    "guard_warning notification type not wired into Cursor extension.js type whitelist \u2014 Phase 3.5 IDE popups do not render despite being marked Done"
+    "guard_warning notification type not wired into Cursor extension.js type whitelist \u2014 Phase 3.5 IDE popups do not render despite being marked complete"
   ],
-  "completed_goals": [
-    "Wire task_approval_pending notification type into Cursor extension.js for IDE popup rendering - also audit whether guard_warning (Phase 3.5) actually renders, since it is not in the extension type whitelist either"
-  ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-01T19:49:22.997077+00:00",
+    "timestamp": "2026-07-01T19:52:18.311770+00:00",
     "developer": "bippin"
   }
 }
