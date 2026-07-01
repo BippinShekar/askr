@@ -143,3 +143,4 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-07-01] Inline retry of spam-flagged jobs during session execution — Increased session complexity and made it difficult to track which applications succeeded vs. were flagged; deferred approach is cleaner.
 - [2026-07-01] LinkedIn location field: passing full location string directly to combobox field — Full location strings (e.g., 'San Francisco, CA, United States') do not trigger city autocomplete dropdown; requires extraction of city name only
 - [2026-07-01] Ramp spam_warning recovery: inline retry with immediate resubmit — Spam-flagged applications require different handling strategies (overlay banner vs form replacement); deferring to end of session reduces complexity and improves UX
+- [2026-07-01] Inline spam recovery with immediate retry during application flow — Caused browser state thrashing and unclear session completion semantics; deferred recovery to end-of-session is cleaner

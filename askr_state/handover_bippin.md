@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 01:36
+Last updated: 2026-07-02 01:37
 
 *Source of truth: `handover_bippin.json`*
 
@@ -27,30 +27,44 @@ Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.
 - [x] Implemented permission_gate.py to detect dangerous permissions (skip-permissions, unrestricted Bash, rm in allow list)
 - [x] Implemented session_start.py to hold queued tasks instead of auto-injecting when dangerous permissions detected
 - [x] Wired task_approval_pending notification type into Cursor extension.js for IDE popup rendering
-- [x] Extended cross-repo boundary checks to Bash tool calls in guard_runner.py
-- [x] Updated README.md with real Homebrew install commands: one-liner tap-and-install and explanation of homebrew-core notability review requirement
-- [x] Rebased and merged parallel work from another agent session cleanly onto main
+- [x] Rebased parallel work from another agent session onto main branch cleanly
+- [x] Updated README.md to document real Homebrew install commands (one-liner and tap-then-install with explanation)
+- [x] Merged Bash-boundary guard extension work (cross-repo boundary checks for Bash tool calls)
+- [x] Added 64 new tests for guard_runner.py and pre_tool_use.py achieving 122/122 passing tests
 
 ## Next Actions
 1. Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py create_checkpoint function (trigger_type==emergency branch)
-   *Why: Known gap: emergency checkpoints currently use template text instead of invoking actual LLM handover mechanism, reducing handover quality in critical scenarios*
-2. Activate guard_warning dead code path: trace why pre_tool_use.py never invokes notification.json with type: guard_warning despite extension.js whitelist support, then either wire it into HOOK_MAP or remove the dead code
-   *Why: Known gap: non-blocking guard warnings are wired into extension.js but unreachable from Python guard subsystem, leaving Phase 3.5 IDE popup feature incomplete*
-3. Audit all remaining test coverage gaps in apply agent, browser automation, and PDF generation subsystems
-   *Why: Guard subsystem now has 122/122 passing tests; other core modules may have lower coverage and should be brought to parity*
+   *Why: Emergency handover currently uses static text instead of invoking actual LLM-based handover, breaking continuity for critical failures*
+2. Activate guard_warning notification type by invoking it from pre_tool_use.py when non-blocking guard conditions are detected, wiring through HOOK_MAP and .claude/settings.json
+   *Why: guard_warning is dead code today—wired into extension.js but never fired from backend, so IDE popups for non-blocking guard warnings cannot render*
+3. Review and document the circular dependency pattern in Homebrew notability review (stars required to get stars) for future reference on package distribution friction
+   *Why: Useful context for understanding distribution challenges if askr grows beyond current tap-based installation*
 
 ## Decisions
-- Homebrew formula will not be submitted to homebrew-core; instead, users install via tap: brew install BippinShekar/askr/askr — homebrew-core requires notability review and GitHub stars; tap provides immediate distribution without gatekeeping while maintaining professional installation UX
-- README.md documents both one-liner and tap-then-install forms with explanation of why bare brew install askr does not work — Transparency about Homebrew's notability requirement prevents user confusion and sets realistic expectations for installation friction
+- Homebrew installation routed through homebrew-askr tap (BippinShekar/askr) rather than homebrew-core merge — Avoids notability review bottleneck; tap-based installation is production-ready and documented in README
+- Permission gate system blocks dangerous task injection at session_start.py rather than at individual tool invocation — Prevents queue poisoning and allows human review before any dangerous operations execute
+- Spam recovery deferred to end of session rather than inline retry — Reduces browser state thrashing and allows cleaner session completion semantics
 
 ## User-Rejected Approaches
-- **Post on social media about Homebrew support shipping and brew install being available** — "nobody knows I am building yet, and that tweet makes it look like I am ready to launch and enable brew install" (domain: external communication / marketing)
+- **Post about Homebrew brew install support and sha256 verification as a product update** — "nobody knows I am building yet, and that tweet makes it look like I am ready to launch" (domain: public communication / marketing)
+
+## Failed Approaches
+- Inline spam recovery with immediate retry during application flow — Caused browser state thrashing and unclear session completion semantics; deferred recovery to end-of-session is cleaner
 
 ## Files In Play
 - `README.md`
+- `guard_runner.py`
+- `pre_tool_use.py`
+- `checkpoint.py`
 
 ## Relational Files
-- `guard_runner.py` (tested_by): 64 new tests added this session; cross-repo boundary checks extended to Bash tool calls
-- `pre_tool_use.py` (tested_by): 64 new tests added this session; guard_warning dead code path identified but not yet activated
-- `checkpoint.py` (configures): Emergency handover path (trigger_type==emergency) uses hardcoded boilerplate instead of real LLM handover; identified as next priority
-- `extension.js` (imported_by): Whitelists guard_warning notification type but pre_tool_use.py never invokes it; dead code path
+- `extension.js` (configures): Wires notification types including task_approval_pending and guard_warning for IDE popup rendering
+- `.claude/settings.json` (configures): Defines HOOK_MAP and notification routing for guard subsystem
+- `permission_gate.py` (imported_by): Called from session_start.py to detect dangerous permissions before task injection
+- `session_start.py` (imports): Holds queued tasks when dangerous permissions detected via permission_gate.py
+- `test_guard_runner.py` (tested_by): 64 new tests covering guard_runner.py behavior and edge cases
+- `test_pre_tool_use.py` (tested_by): 64 new tests covering pre_tool_use.py behavior and edge cases
+
+## Blockers
+- guard_warning notification type is dead code—never invoked from pre_tool_use.py, blocking non-blocking guard warning IDE popups
+- PreCompact emergency handover uses hardcoded boilerplate instead of real LLM handover path, breaking continuity for critical failures
