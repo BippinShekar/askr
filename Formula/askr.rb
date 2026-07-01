@@ -1,7 +1,7 @@
 class Askr < Formula
   desc "Context-aware codebase Q&A and session orchestration for Claude Code"
   homepage "https://github.com/BippinShekar/askr"
-  url "https://github.com/BippinShekar/askr/archive/refs/tags/v1.0.0.tar.gz"
+  url "https://github.com/BippinShekar/askr/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "REPLACE_WITH_SHA256_AFTER_RELEASE"
   license "MIT"
 
