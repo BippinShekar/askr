@@ -1,6 +1,6 @@
 {
-  "task": "askr is a multi-agent session management system for Claude Code; prior sessions fixed handover document generation to scope file paths to the askr repository only, preventing cross-repo contamination in project state tracking. This session explored voice notification and platform-specific features during initialization but did not commit code changes.",
-  "discussion_summary": "Previous sessions fixed companion session opening, guard system boundary validation, and handover document scoping to prevent foreign-repo context pollution. This session investigated adding voice/TTS notifications during askr init to inform users about state switching and session limits, searching for existing discord/notification/voice infrastructure and platform detection logic (macOS/Linux). No implementation was completed; session ended with exploration phase incomplete.",
+  "task": "askr is a multi-agent session management system for Claude Code; prior sessions fixed handover document generation, guard system boundary validation, and companion session lifecycle. This session discovered a critical security vulnerability (live Discord webhook in public GitHub history) and initiated a launch-readiness audit to identify all blockers before public release.",
+  "discussion_summary": "Previous sessions resolved cross-repo contamination, guard hallucination, and session handoff synchronization. This session pivoted to launch readiness after user expressed commitment to public availability (brew install target). A critical finding emerged: the public GitHub repository contains a plaintext Discord webhook URL in committed history (commit 50eba93 on origin/main), requiring immediate remediation. User requested a comprehensive audit of all launch blockers, test coverage, dependencies, and deployment readiness before public announcement.",
   "accomplishments": [
     {
       "what": "Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention",
@@ -13,35 +13,53 @@
     {
       "what": "Fixed handover document generation to scope file paths to askr repository only, preventing cross-repo contamination in project state",
       "done": true
+    },
+    {
+      "what": "Discovered critical security vulnerability: live Discord webhook URL exposed in plaintext in public GitHub repository history (commit 50eba93, origin/main)",
+      "done": true
+    },
+    {
+      "what": "Initiated comprehensive launch-readiness audit: identified need to assess test coverage, dependencies, documentation, deployment scripts, and all TODO/FIXME markers",
+      "done": true
     }
   ],
   "in_progress": [
     {
       "file": null,
-      "what": "Exploring voice notification feature for askr init: user wants option to enable voice updates (TTS) to notify about task completion and state switching; investigating existing notification infrastructure and platform-specific audio capabilities",
+      "what": "Launch-readiness audit in progress: running test suite validation, TODO/FIXME/XXX marker inventory, dependency verification, and deployment readiness assessment. Audit results pending.",
       "last_line": 0
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Test companion session handoff at 60% quota threshold to verify new window opens after reply completes without context loss",
-      "why": "Lifecycle fix was committed in prior session; needs validation that the Stop hook signal properly synchronizes session transfer"
+      "action": "URGENT: Rotate Discord webhook URL immediately. Remove plaintext webhook from git history using git-filter-branch or BFG Repo-Cleaner, force-push to origin/main, and regenerate webhook in Discord settings.",
+      "why": "Live webhook URL is publicly exposed in GitHub history; any actor can post to askr's Discord channel. This is a critical security vulnerability blocking public release."
     },
     {
       "order": 2,
-      "action": "Monitor guard system for false positives after tightening rules; verify that legitimate operations are no longer blocked by inferred constraints",
-      "why": "Guard system was over-blocking based on absence of mention; recent fixes should eliminate hallucination loops but need validation in live operation"
+      "action": "Complete launch-readiness audit: review all TODO/FIXME/XXX markers, test coverage gaps, missing documentation, deployment script validation, and dependency lock files. Produce prioritized blockers list.",
+      "why": "User committed to public release (brew install) and is telling people it will be live in a week. Audit must identify all gaps before announcement."
     },
     {
       "order": 3,
-      "action": "Verify handover document scoping is working correctly by checking that next session's context contains only askr-repo files",
-      "why": "Checkpoint fix was committed; ensures project state remains clean and doesn't accumulate foreign-repo paths in future sessions"
+      "action": "Validate test suite passes end-to-end: confirm pytest runs cleanly, all imports resolve, and critical paths (session init, handoff, guard system) are covered.",
+      "why": "Public release requires confidence that core functionality is tested and reproducible."
     },
     {
       "order": 4,
-      "action": "Design voice notification feature: determine TTS library (pyttsx3 for cross-platform, or platform-specific say/espeak), integration point in askr init, and user opt-in flow",
-      "why": "User requested voice updates during init to notify about task completion and session limits; requires architecture decision on library choice and init flow modification"
+      "action": "Review and finalize Homebrew formula (Formula/*.rb): ensure all dependencies are declared, installation paths are correct, and post-install hooks work on macOS.",
+      "why": "User's public commitment is 'brew install askr'; formula must be production-ready."
+    },
+    {
+      "order": 5,
+      "action": "Test companion session handoff at 60% quota threshold to verify new window opens after reply completes without context loss",
+      "why": "Lifecycle fix was committed in prior session; needs validation that the Stop hook signal properly synchronizes session transfer."
+    },
+    {
+      "order": 6,
+      "action": "Monitor guard system for false positives after tightening rules; verify that legitimate operations are no longer blocked by inferred constraints",
+      "why": "Guard system was over-blocking based on absence of mention; recent fixes should eliminate hallucination loops but need validation in live operation."
     }
   ],
   "decisions": [
@@ -54,31 +72,56 @@
       "reason": "Multi-agent system must be confined to its own codebase to prevent unintended modifications to external projects"
     },
     {
-      "decision": "Retry state must preserve original operation type (read/write/create) across retries to avoid false 'creating new file' labels",
-      "reason": "Retries on existing files were being mislabeled as creates, causing false guard blocks on legitimate retry operations"
+      "decision": "Retry state must preserve original operation type (read/write/create) across retries to avoid false 'creating' classifications",
+      "reason": "Guard system was misclassifying retried operations; operation type must be immutable across retry boundaries"
     },
     {
-      "decision": "Guard-inferred signals (phrases like 'do NOT write this to decisions.jsonl') must be filtered before writing to decisions.jsonl",
-      "reason": "Prevents guard rationale from polluting the architectural decision record and creating false constraints in future sessions"
-    },
-    {
-      "decision": "Companion session opening must wait for Stop hook to signal completion before firing, not watch for file deletion",
-      "reason": "Prevents mid-reply session switches that cause context loss and force manual pinning; Stop hook is the authoritative signal"
+      "decision": "Public GitHub repository requires all secrets (Discord webhooks, API keys, tokens) to be rotated and removed from history before launch",
+      "reason": "Plaintext secrets in public git history are permanently compromised; rotation and history rewrite are mandatory for security"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [],
-  "relational_files": [],
+  "relational_files": [
+    {
+      "file": "askr/session/checkpoint.py",
+      "relationship": "configures",
+      "why": "Handover document generation; prior session fixed scoping to askr repo only"
+    },
+    {
+      "file": "askr/guard/pre_tool_use.py",
+      "relationship": "configures",
+      "why": "Cross-repo boundary enforcement; prior session fixed 8 hallucination issues"
+    },
+    {
+      "file": "Formula/*.rb",
+      "relationship": "configures",
+      "why": "Homebrew installation formula; critical for public release via brew install"
+    },
+    {
+      "file": "requirements.txt",
+      "relationship": "configures",
+      "why": "Python dependencies; must be validated for public release"
+    },
+    {
+      "file": "tests/*.py",
+      "relationship": "tested_by",
+      "why": "Test suite validation required before public announcement"
+    }
+  ],
   "uncommitted_files": [
-    "askr_state/goals.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
-  "blockers": [],
+  "blockers": [
+    "CRITICAL: Live Discord webhook URL exposed in public GitHub repository history (commit 50eba93, origin/main) \u2014 must be rotated and removed from history before any public announcement",
+    "Launch-readiness audit incomplete \u2014 full inventory of TODO/FIXME/XXX markers, test coverage gaps, and deployment readiness not yet assessed",
+    "Homebrew formula validation pending \u2014 Formula/*.rb must be tested on macOS before public release"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-01T18:27:13.004134+00:00",
+    "timestamp": "2026-07-01T18:28:19.417535+00:00",
     "developer": "bippin"
   }
 }
