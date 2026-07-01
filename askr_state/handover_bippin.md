@@ -1,12 +1,12 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 01:32
+Last updated: 2026-07-02 01:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, verified end-to-end installation via homebrew-askr tap, extended cross-repo boundary checks to Bash tool calls, and documented real Homebrew installation paths (one-liner and tap-then-install) in the main Install section of README.md.
+Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, verified end-to-end installation via homebrew-askr tap, extended cross-repo boundary checks to Bash tool calls, documented real Homebrew installation paths (one-liner and tap-then-install) in the main Install section of README.md, and rebased parallel work from another agent session.
 
 ## Discussion
 Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.5 (permission guard), and Phase 4 (approval workflow) are fully implemented, tested, and documented. The v0.1.0 release cycle was completed with correct tarball sha256, fixed Homebrew formula, and homebrew-askr tap verification. This session rebased and merged parallel work from another agent branch, updating README.md to document the real Homebrew install commands (one-liner `brew install BippinShekar/askr/askr` and tap-then-install form) with a note explaining why bare `brew install askr` doesn't work without homebrew-core inclusion. All 58 tests pass. Two known gaps remain: guard_warning notification type (non-blocking guard warnings) is dead code—never invoked from pre_tool_use.py despite being wired into extension.js—and PreCompact emergency handover still routes through hardcoded boilerplate instead of real LLM handover path.
@@ -28,29 +28,32 @@ Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.
 - [x] Implemented session_start.py to hold queued tasks instead of auto-injecting when dangerous permissions detected
 - [x] Wired task_approval_pending notification type into Cursor extension.js for IDE popup rendering
 - [x] Extended cross-repo boundary checks to Bash tool calls in guard_runner.py
-- [x] Documented real Homebrew installation paths in README.md (one-liner tap command and tap-then-install form)
-- [x] Rebased and merged parallel agent branch work on README documentation with Bash-boundary hardening commits
+- [x] Documented real Homebrew installation paths in README.md main Install section (one-liner and tap-then-install form with explanation of homebrew-core requirement)
+- [x] Rebased and merged parallel work from another agent session onto main branch
 
 ## Next Actions
-1. Implement guard_warning invocation path in pre_tool_use.py to fire non-blocking guard warnings (type: guard_warning) for permission violations that do not require blocking, enabling Phase 3.5's IDE popup for non-blocking warnings
-   *Why: guard_warning notification type is wired into extension.js but dead code—never invoked from pre_tool_use.py, making non-blocking guard warnings unreachable today*
-2. Fix PreCompact emergency handover in checkpoint.py (create_checkpoint function, trigger_type==emergency branch) to route through real LLM handover path instead of hardcoded boilerplate
-   *Why: Emergency handovers currently bypass the proper LLM handover mechanism, reducing context quality and consistency*
+1. Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py create_checkpoint function (trigger_type==emergency branch)
+   *Why: Emergency handover currently uses static text instead of invoking the real LLM handover mechanism; this is a known architectural gap blocking proper session continuity*
+2. Activate guard_warning dead code path: trace why non-blocking guard warnings from guard_runner.py are never invoked from pre_tool_use.py despite being wired into extension.js, and either invoke them or remove the dead code
+   *Why: Phase 3.5's IDE popup for non-blocking guard warnings cannot fire today; either the notification path needs to be triggered or the wiring needs to be removed to reduce confusion*
 
 ## Decisions
-- Homebrew installation requires users to either run one-liner `brew install BippinShekar/askr/askr` or manually add tap then install; bare `brew install askr` is not documented as viable path — Bare `brew install askr` requires homebrew-core inclusion, which is not realistic for new projects; documented paths reflect actual working installation methods
+- Homebrew installation documented via homebrew-askr tap (BippinShekar/askr/askr) rather than homebrew-core merge — homebrew-core inclusion requires notability review and stars; tap-based installation is immediately available and documented with one-liner and tap-then-install forms in README
+- Task approval workflow holds queued tasks instead of auto-injecting when dangerous permissions detected — Prevents silent task injection in unrestricted sessions; user must explicitly approve dangerous tasks via IDE notification popup
+- Cross-repo boundary checks extended to Bash tool calls in guard_runner.py — Prevents Bash commands from escaping repository boundaries, closing a security gap in the permission gate system
 
 ## User-Rejected Approaches
-- **Post about Homebrew support going live with engagement language (e.g., 'brew tap now live 🎉')** — "brother nobody knows I am building yet, and that tweet makes it look like I am ready to launch and enable brew install" (domain: X platform engagement strategy)
+- **Post about brew install support and Homebrew tap availability** — "nobody knows I am building yet, and that tweet makes it look like I am ready to launch; skip it" (domain: README.md, public communication)
 
 ## Files In Play
 - `README.md`
 
 ## Relational Files
-- `pre_tool_use.py` (imports): Contains HOOK_MAP and guard invocation logic; guard_warning type needs to be invoked here
-- `guard_runner.py` (imported_by): Implements guard_warning notification path that is currently dead code
-- `extension.js` (configures): Whitelist for guard_warning notification type is already in place; waiting for pre_tool_use.py to invoke it
-- `checkpoint.py` (configures): Contains create_checkpoint function with hardcoded emergency handover boilerplate that needs real LLM path
+- `permission_gate.py` (imported_by): Core security gate detecting dangerous permissions; imported by session_start.py
+- `session_start.py` (imports): Holds queued tasks when dangerous permissions detected; calls permission_gate.py
+- `guard_runner.py` (configures): Extended with cross-repo boundary checks for Bash tool calls; wires guard_warning notification type
+- `extension.js` (configures): Cursor IDE extension; renders task_approval_pending and guard_warning notification popups
+- `checkpoint.py` (configures): PreCompact emergency handover still uses hardcoded boilerplate instead of real LLM path (known gap)
 
 ## Uncommitted Files
 - `.claude/`
