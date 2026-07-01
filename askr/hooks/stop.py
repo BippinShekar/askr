@@ -10,6 +10,7 @@ import sys
 import os
 import json
 import subprocess
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -17,6 +18,26 @@ from askr.state.config import get_state_dir, load_developer
 
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
+_TURN_STOP_DIR      = os.path.expanduser("~/.config/askr/turn_stops")
+
+
+def _signal_turn_stopped(session_id: str):
+    """
+    Mark that this session's current turn has genuinely finished — the Stop hook
+    firing is the only authoritative "reply is done" signal Claude Code gives us.
+    lifecycle.py's companion-session trigger polls this marker's mtime instead of
+    guessing from JSONL write-silence, which false-positives during any long-running
+    tool call (e.g. a multi-minute git-filter-repo run) that just happens to pause
+    writes for >30s mid-turn.
+    """
+    if not session_id:
+        return
+    try:
+        os.makedirs(_TURN_STOP_DIR, exist_ok=True)
+        with open(os.path.join(_TURN_STOP_DIR, f"{session_id}.json"), "w") as f:
+            json.dump({"stopped_at": datetime.utcnow().isoformat() + "Z"}, f)
+    except Exception:
+        pass
 
 
 def _update_allowed_tools(transcript_path: str):
@@ -505,6 +526,10 @@ def main():
 
     completed_goals = result.get("completed_goals", [])
     duration_seconds = result.get("duration_seconds", 0)
+
+    # Authoritative "this turn is done" signal — checked by lifecycle.py before
+    # opening a companion session, instead of guessing from JSONL idle time.
+    _signal_turn_stopped(session_id)
 
     # If daemon flagged a pending checkpoint, write the re-launch notification now.
     # Return early so we don't also send a session-end card — the new session handles continuity.

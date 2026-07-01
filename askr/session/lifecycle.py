@@ -1004,18 +1004,30 @@ def _open_companion_session(project_path: str, session_id: str = None):
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
 
 
+_TURN_STOP_DIR = os.path.expanduser("~/.config/askr/turn_stops")
+
+
+def _turn_stopped_since(session_id: str, since_ts: float) -> bool:
+    """True once stop.py has signaled turn completion for this session_id after since_ts."""
+    if not session_id:
+        return False
+    marker = os.path.join(_TURN_STOP_DIR, f"{session_id}.json")
+    return os.path.exists(marker) and os.path.getmtime(marker) >= since_ts
+
+
 def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
     """
     Context trigger fired. Wait for the current Claude reply to finish before
     opening the companion session — the user must always get their complete reply
     before a second window appears.
 
-    "Reply finished" is detected via JSONL write silence: Claude Code streams
-    tokens into the session JSONL continuously while generating; when it stops
-    writing for IDLE_THRESHOLD seconds the reply is done. This is more reliable
-    than watching the stats file (which is not deleted between turns — only at
-    session end) or detecting process death via lsof (which fails for IDE-embedded
-    terminals where pgrep can't match by cwd).
+    "Reply finished" is detected via the Stop hook's own completion signal
+    (askr/hooks/stop.py writes ~/.config/askr/turn_stops/<session_id>.json when it
+    finishes processing a turn) — not JSONL write-silence. The old idle-time
+    heuristic false-positived whenever a tool call ran long enough to pause JSONL
+    writes for IDLE_THRESHOLD seconds (e.g. a multi-minute git-filter-repo run),
+    opening a companion session while the original turn was still very much in
+    progress. The Stop hook firing is the only authoritative "turn is done" signal.
 
     Returns True if a live session was found (full cooldown applies), False if
     no live process was detected (short retry).
@@ -1025,14 +1037,12 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
         _open_companion_session(project_path, session_id)
         return False
 
-    POLL           = 5    # polling interval (seconds)
-    IDLE_THRESHOLD = 30   # JSONL silence (seconds) that signals reply is done
-    MAX_WAIT_SECS  = 600  # hard cap; only hit if JSONL is written continuously (runaway turn)
+    POLL          = 5    # polling interval (seconds)
+    MAX_WAIT_SECS = 600  # hard cap; only hit if the Stop hook never fires (runaway turn)
 
-    _log("waiting for current reply to finish (watching JSONL idle)...")
+    _log("waiting for current reply to finish (watching for Stop hook signal)...")
 
-    from askr.session.monitor import _find_active_jsonl
-    jsonl_path = _find_active_jsonl(project_path, session_id)
+    wait_start = time.time()
     waited = 0
 
     while True:
@@ -1043,17 +1053,12 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
             _log("claude session ended while waiting — opening companion session")
             break
 
-        if jsonl_path and os.path.exists(jsonl_path):
-            idle_secs = time.time() - os.path.getmtime(jsonl_path)
-            if idle_secs >= IDLE_THRESHOLD:
-                _log(f"reply finished (JSONL idle {idle_secs:.0f}s) — opening companion session")
-                break
-        elif waited >= POLL * 2:
-            _log("JSONL path not found after initial wait — opening companion session")
+        if _turn_stopped_since(session_id, wait_start):
+            _log("Stop hook fired — reply finished, opening companion session")
             break
 
         if waited >= MAX_WAIT_SECS:
-            _log(f"WARN: waited {MAX_WAIT_SECS}s, JSONL never went quiet — opening companion session anyway")
+            _log(f"WARN: waited {MAX_WAIT_SECS}s, Stop hook never fired — opening companion session anyway")
             break
 
     _open_companion_session(project_path, session_id)
