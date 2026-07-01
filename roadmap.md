@@ -547,7 +547,7 @@ Implemented as `askr_state/tasks/queue_<dev>.jsonl`, drained at `session_start.p
 | Test suite for all hook scripts | 🔲 Todo — 15 tests exist, thin coverage relative to daemon/hook surface area |
 | `askr doctor` — diagnose common setup issues (venv missing, hooks not firing, JSONL not found) | 🔲 Todo |
 
-**Approval Gate for Queued Tasks** — ❌ **Not built. This is the next thing to build, full stop** — Stage P4-1 above already ships the dangerous half (queue + auto-inject) without it.
+**Approval Gate for Queued Tasks** — ✅ **Core enforcement built 2026-07-02.** Stage P4-1 above shipped the dangerous half (queue + auto-inject) without it; that gap is now closed at the enforcement layer. IDE popup rendering is still open (see below).
 
 When another developer queues a task into your session, that task runs with whatever permissions your session already has — including permissions granted by Phase 3.8. Those were granted by you for your own work; they do not constitute authorization for someone else's task. `--dangerously-skip-permissions` bypasses Claude Code's own prompts entirely, so the gate must be an askr-level check, not a Claude Code permission check.
 
@@ -560,11 +560,12 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 
 | Feature | Status |
 |---|---|
-| `session_start.py` — detect dangerous permission state from launch args + settings | 🔲 Todo |
-| Block queued task execution when dangerous permissions + unconfirmed queue | 🔲 Todo |
-| IDE `behavior_confirm` popup listing queued tasks + current permission state | 🔲 Todo |
-| Headless path: Discord notification with task list + "approve / discard" instructions | 🔲 Todo |
-| Non-dangerous sessions: queued tasks auto-run without gate (by design) | 🔲 Todo |
+| `askr/session/permission_gate.py` — detect dangerous permission state from launch args + settings | ✅ Done |
+| Block queued task execution when dangerous permissions + unconfirmed queue (`session_start.py` peeks instead of drains) | ✅ Done |
+| `askr task approve` / `askr task discard` — resolve held tasks; approve is one-shot, doesn't disable the gate permanently | ✅ Done |
+| Headless path: Discord notification (`task_approval_pending`) with task list + approve/discard instructions | ✅ Done |
+| Non-dangerous sessions: queued tasks auto-run without gate (by design) | ✅ Done — unchanged existing path |
+| IDE popup listing queued tasks + current permission state | 🔲 Todo — `notification.json` type `task_approval_pending` is written correctly, but the Cursor extension (`extension.js`) whitelists known notification types and doesn't render this one yet. Note: `guard_warning` (Phase 3.5) has the same gap — it isn't in the extension's type whitelist either, so that IDE popup may not actually be rendering today. Worth auditing together. |
 
 ---
 
