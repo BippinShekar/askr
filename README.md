@@ -111,6 +111,15 @@ ask "quick: what does buildContextInjection return?"
 
 Fast (~$0.001/query), grounded in your codebase snapshot, works from any directory.
 
+### Notifications + Morning Report (Phase 3 ✅)
+
+Discord webhook notifications for checkpoints, session resumes, and goal completions — see **Discord Notifications** below for setup. `askr report` sends a PNG morning report card (sessions run, time saved, goals completed) and prints a summary to stdout.
+
+### Implementation Guard (Phase 3.5 — partial)
+
+- **Blocking path (real, running):** `pre_tool_use.py` runs a synchronous check before significant `Write`/`Edit`/`MultiEdit` calls — first new file, 3rd file edit in a session, or an edit to a file flagged as a shared interface in `architecture.md`. On a real architectural issue it blocks the tool call, sends a Discord alert, and appends to `askr_state/guard_log.md`, forcing Claude to self-correct before the write goes through.
+- **Non-blocking IDE popup: not wired up.** `guard_runner.py` writes a `guard_warning` entry meant for the IDE status bar to render as a soft warning, but nothing invokes it — it's not in `HOOK_MAP` (`askr/cli/askr.py`), not in `.claude/settings.json`, not spawned as a subprocess anywhere. It's dead code today. Even if it were wired up, the Cursor/VS Code extension doesn't whitelist the `guard_warning` notification type yet, so the popup still wouldn't render. Only the blocking path above is currently visible to a developer.
+
 ---
 
 ## Install
@@ -263,7 +272,7 @@ askr/                        # Python package
     post_tool_use.py         # track activity + write session stats
     stop.py                  # generate handover, commit, push
     pre_compact.py           # emergency checkpoint fallback
-    notification.py          # HITL stub (Discord in Phase 3)
+    notification.py          # HITL forwarding — logs + Discord alert on WARNING/ERROR
   session/                   # session orchestration
     monitor.py               # read JSONL → context%, session start time
     forecast.py              # context label (ok/high/near limit/checkpoint)
@@ -302,22 +311,15 @@ askr_state/                  # project state data (committed to git)
 
 ## Coming Next
 
-### Phase 3 — Notifications + Morning Report
-- Discord webhook notifications (checkpoint done, session resumed, goal completed)
-- Morning report (sessions run, time saved, decisions made, goals completed)
-- Time-saved analytics
-
-### Phase 3.5 — Implementation Guard
-- Pre-tool-use hook detects when Claude is about to start a significant implementation
-- Haiku cross-checks the proposed approach against `architecture.md` and `handover.md`
-- Flags architectural holes, missing dependencies, API mismatches — before the first file is touched
-- Non-blocking: surfaces as an IDE popup and Discord warning, developer decides whether to proceed
-- `guard_log.md` tracks every warning raised and what the developer chose to do
+### Implementation Guard — non-blocking warnings (known gap)
+- `guard_runner.py`'s `guard_warning` notification path is dead code — never invoked from `pre_tool_use.py`, `HOOK_MAP`, or `.claude/settings.json`
+- Extension whitelist needs a `guard_warning` (and `task_approval_pending`) entry before any popup can render
+- Until both land, non-blocking guard warnings have no visible surface — only the blocking guard path (Phase 3.5, shipped) alerts a developer today
 
 ### Phase 4 — Public Launch
-- `brew install askr`
+- `brew install askr` — `v0.1.0` is tagged and published on GitHub, and `Formula/askr.rb` installs the full package with a real pinned `sha256`/`url`
 - Polished README with GIF of status bar + morning report
-- GitHub release + Twitter/X launch thread
+- Twitter/X launch thread
 
 ---
 
