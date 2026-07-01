@@ -11,6 +11,7 @@ Returns a structured result: clean, or a list of specific issues.
 
 import os
 import json
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -28,6 +29,15 @@ def _read(path: str, limit: int = 2000) -> str:
         return ""
 
 
+_GUARD_SIGNAL_PHRASES = (
+    "guard blocked", "write blocked", "awaiting claude correction",
+    "must be documented", "requires explicit", "outside backend",
+    "outside website", "file ownership rules", "merge conflicts",
+    "requires approval", "must be approved", "prior to implementation",
+    "before implementation", "not documented in architecture",
+)
+
+
 def _load_recent_decisions(state_dir: str, limit_lines: int = 30) -> str:
     path = os.path.join(state_dir, "decisions.jsonl")
     if not os.path.exists(path):
@@ -40,21 +50,86 @@ def _load_recent_decisions(state_dir: str, limit_lines: int = 30) -> str:
                 continue
             try:
                 d = json.loads(raw_line)
-                text = f"[{d.get('at', '')}] [{d.get('dev', '')}] {d.get('decision', '')}"
+                # Missing source means it was written without explicit tagging — treat
+                # as unknown (soft), not user_approved. All authoritative decisions
+                # written by checkpoint.py carry source="checkpoint" explicitly.
+                source = d.get("source", "unknown")
+                decision_text = d.get("decision", "")
+
+                # Skip decisions that smell like guard-rationalized operational events.
+                # These are self-reinforcing: guard blocks → Claude or stop hook writes a
+                # "constraint" decision → guard reads it → blocks again.
+                text_lower = decision_text.lower()
+                if any(sig in text_lower for sig in _GUARD_SIGNAL_PHRASES):
+                    continue
+
+                text = f"[{d.get('at', '')}] [{d.get('dev', '')}] {decision_text}"
                 if d.get("reason"):
                     text += f". Reason: {d['reason']}"
+                # All non-user-approved sources are soft context only
+                if source != "user_approved":
+                    text = f"[soft/inferred] {text}"
                 lines.append(text)
             except Exception:
                 pass
     return "\n".join(lines[-limit_lines:])
 
 
+_CODE_KEYWORDS = (
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java",
+    "function", "class ", "import ", "export ", "endpoint", "route",
+    "component", "controller", "service", "api", "schema", "model",
+    "database", "migration", "hook", "middleware", "handler",
+)
+
+_ARCH_STALE_HOURS = 2
+
+
+def _load_failed_approaches(state_dir: str) -> str:
+    """Load failed_approaches.md filtered to code-relevant entries only."""
+    path = os.path.join(state_dir, "failed_approaches.md")
+    if not os.path.exists(path):
+        return ""
+    lines = []
+    try:
+        with open(path) as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                lower = stripped.lower()
+                if any(kw in lower for kw in _CODE_KEYWORDS):
+                    lines.append(stripped)
+    except Exception:
+        return ""
+    return "\n".join(lines[-20:])
+
+
+def _load_architecture(state_dir: str) -> str:
+    """Load architecture.md and append a staleness warning if it's older than 2 hours."""
+    path = os.path.join(state_dir, "architecture.md")
+    content = _read(path)
+    if not content:
+        return ""
+    try:
+        age_hours = (time.time() - os.path.getmtime(path)) / 3600
+        if age_hours > _ARCH_STALE_HOURS:
+            content += (
+                f"\n\n[NOTE: This architecture snapshot is {age_hours:.0f}h old — "
+                f"new directories or files added since then are NOT documented here. "
+                f"Absence of a path does NOT mean it is prohibited.]"
+            )
+    except Exception:
+        pass
+    return content
+
+
 def _load_context(developer: str, state_dir: str) -> dict:
     return {
-        "architecture":      _read(os.path.join(state_dir, "architecture.md")),
+        "architecture":      _load_architecture(state_dir),
         "handover":          _read(os.path.join(state_dir, f"handover_{developer}.md")),
         "decisions":         _load_recent_decisions(state_dir),
-        "failed_approaches": _read(os.path.join(state_dir, "failed_approaches.md"), limit=1500),
+        "failed_approaches": _load_failed_approaches(state_dir),
     }
 
 
@@ -72,11 +147,18 @@ def run_guard_check(trigger: dict, developer: str, state_dir: str) -> dict:
     tool      = trigger.get("tool", "")
     file_path = trigger.get("file_path", "")
 
-    reason_label = {
-        "new_file":        f"Claude is creating a new file: {file_path}",
-        "batch_writes":    f"Claude has made multiple file edits this session (batch implementation detected). Latest: {file_path}",
-        "shared_interface": f"Claude is editing a shared/core interface: {file_path}",
-    }.get(reason, f"Claude is modifying: {file_path}")
+    if reason == "new_file":
+        if os.path.exists(file_path):
+            # File was new when first blocked but now exists (retry after block)
+            reason_label = f"Claude is modifying an existing file (flagged when first created): {file_path}"
+        else:
+            reason_label = f"Claude is creating a new file: {file_path}"
+    elif reason == "batch_writes":
+        reason_label = f"Claude has made multiple file edits this session (batch implementation detected). Latest: {file_path}"
+    elif reason == "shared_interface":
+        reason_label = f"Claude is editing a shared/core interface: {file_path}"
+    else:
+        reason_label = f"Claude is modifying: {file_path}"
 
     prompt = f"""An AI coding agent is about to make a significant change to a codebase. Your job is to check whether this change contradicts the known architecture, repeats a previously-rejected approach, or conflicts with settled decisions.
 
@@ -86,7 +168,7 @@ TRIGGER:
 ARCHITECTURE:
 {context['architecture'] or 'Not available.'}
 
-SETTLED DECISIONS:
+SETTLED DECISIONS (decisions marked [soft/inferred] are checkpoint-generated context, not hard constraints — weight them lightly):
 {context['decisions'] or 'Not available.'}
 
 PREVIOUSLY REJECTED APPROACHES (do not repeat these):
@@ -104,9 +186,12 @@ Answer in this exact JSON format — no other text:
 
 Rules:
 - Only flag REAL contradictions with the documented architecture. Do not invent issues.
+- CRITICAL: Absence of a file, directory, or pattern in the architecture docs does NOT mean it is prohibited. Only block if architecture or a settled decision EXPLICITLY forbids the approach. "Not mentioned" is NOT a contradiction.
 - If architecture context is sparse, lean toward clean=true.
+- Do not treat location-based concerns (file is outside backend/ or website/) as a block unless the architecture explicitly states that directory is off-limits.
+- Guard-inferred constraints from prior session blocks (e.g. "must be documented first", "requires explicit approval") are soft context only — do not use them as hard blocks.
 - issues array must be empty if clean=true.
-- Each issue must be a concrete, specific statement — not a generic warning."""
+- Each issue must cite the specific line or decision text that is contradicted — not a generic warning."""
 
     try:
         from askr.clients.claude import call_claude

@@ -24,9 +24,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 _GUARD_SESSION_PATH  = os.path.expanduser("~/.config/askr/guard_session.json")
 _GUARD_BLOCKS_PATH   = os.path.expanduser("~/.config/askr/guard_blocks.json")
-_GUARD_COOLDOWN_SECS = 300  # don't re-trigger within 5 minutes
-_BATCH_THRESHOLD     = 3    # N file edits before a batch trigger fires
-_ESCAPE_HATCH_COUNT  = 2    # allow through + escalate after this many consecutive blocks
+_GUARD_COOLDOWN_SECS = 300   # don't re-trigger within 5 minutes
+_BLOCK_TTL_SECS      = 86400 # expire block entries after 24 hours
+_BATCH_THRESHOLD     = 3     # N file edits before a batch trigger fires
+_ESCAPE_HATCH_COUNT  = 2     # allow through + escalate after this many consecutive blocks
 
 
 def _load_session() -> dict:
@@ -96,10 +97,32 @@ def _load_blocks() -> dict:
     try:
         if os.path.exists(_GUARD_BLOCKS_PATH):
             with open(_GUARD_BLOCKS_PATH) as f:
-                return json.load(f)
+                blocks = json.load(f)
+            # Expire stale entries — a block older than 24h is no longer actionable
+            now = datetime.now(timezone.utc)
+            expired = [
+                path for path, entry in blocks.items()
+                if _block_is_expired(entry, now)
+            ]
+            if expired:
+                for path in expired:
+                    del blocks[path]
+                _save_blocks(blocks)
+            return blocks
     except Exception:
         pass
     return {}
+
+
+def _block_is_expired(entry: dict, now: datetime) -> bool:
+    last_blocked = entry.get("last_blocked")
+    if not last_blocked:
+        return False
+    try:
+        age = (now - datetime.fromisoformat(last_blocked)).total_seconds()
+        return age > _BLOCK_TTL_SECS
+    except Exception:
+        return False
 
 
 def _save_blocks(blocks: dict):
@@ -142,6 +165,22 @@ def main():
     # Skip askr's own state files — guard is for project code, not state artifacts
     if "askr_state" in file_path or ".claude" in file_path:
         sys.exit(0)
+
+    # Cross-repo boundary check: block writes to paths outside the current project root.
+    # Prevents a session in repo A from silently modifying repo B via handover continuation.
+    try:
+        from askr.state.config import get_state_dir as _gsd
+        project_root = os.path.dirname(os.path.normpath(_gsd()))
+        abs_file = os.path.realpath(os.path.abspath(file_path))
+        abs_root = os.path.realpath(project_root)
+        if abs_file and abs_root and not abs_file.startswith(abs_root + os.sep) and abs_file != abs_root:
+            _block_tool(
+                f"Cross-repo write blocked: {file_path} is outside the current project root "
+                f"({project_root}). This session is scoped to that project. "
+                f"Open a session in the target repository to make changes there."
+            )
+    except Exception:
+        pass
 
     session = _load_session()
     blocks  = _load_blocks()
@@ -235,6 +274,7 @@ def _on_block(result: dict, file_path: str, trigger_reason: str):
         f"Guard blocked: {summary}"
         + (f"\n\n{issues_text}" if issues_text else "")
         + "\n\nRevise your approach to address these architectural concerns before proceeding."
+        + "\n\nIMPORTANT: Do NOT write any entry to decisions.jsonl or failed_approaches.md based on this guard block. Guard blocks are operational events, not architectural decisions. Writing guard concerns as decisions creates a self-reinforcing loop."
     )
 
     _send_discord_block_alert(file_path, reason_label, summary, issues)

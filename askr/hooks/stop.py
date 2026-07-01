@@ -280,6 +280,17 @@ _DECISION_RE = __import__('re').compile(
     r")\b"
 )
 
+# Phrases that indicate guard-rationalized operational constraints, not real decisions.
+# If extracted text matches any of these, skip it — writing it creates a self-reinforcing
+# block loop: guard blocks → Claude writes a "constraint" → guard reads it → blocks again.
+_GUARD_SIGNAL_PHRASES = (
+    "guard blocked", "write blocked", "awaiting claude correction",
+    "must be documented", "requires explicit", "outside backend",
+    "outside website", "file ownership rules", "merge conflicts",
+    "requires approval", "must be approved", "prior to implementation",
+    "before implementation", "not documented in architecture",
+)
+
 
 def _extract_and_save_decisions(transcript_path: str, state_dir: str):
     """Keyword-detect settled decisions in Claude's last response and append to decisions.jsonl."""
@@ -319,7 +330,9 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
         for s in sentences:
             s = re.sub(r'\*+', '', s).strip()
             if 20 < len(s) < 250 and _DECISION_RE.search(s):
-                decisions.append(s)
+                s_lower = s.lower()
+                if not any(sig in s_lower for sig in _GUARD_SIGNAL_PHRASES):
+                    decisions.append(s)
             if len(decisions) >= 5:
                 break
 
@@ -334,7 +347,11 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
         with file_lock(decisions_path):
             with open(decisions_path, "a") as f:
                 for d in decisions:
-                    f.write(json.dumps({"at": ts, "dev": developer, "decision": d, "reason": ""}) + "\n")
+                    f.write(json.dumps({
+                        "at": ts, "dev": developer,
+                        "decision": d, "reason": "",
+                        "source": "transcript_extracted",
+                    }) + "\n")
     except Exception:
         pass
 

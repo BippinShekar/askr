@@ -274,7 +274,7 @@ Rules:
   of this process, not work in progress. If the session's work has no associated file (e.g. research,
   planning, non-code work), use null.
 - next_actions: REMOVE actions this session completed (check git log). KEEP still-valid ones. ADD new ones.
-- decisions: KEEP all existing decisions. APPEND new ones from this session. Never lose prior decisions.
+- decisions: KEEP all existing decisions. APPEND new ones from this session. Never lose prior decisions. CRITICAL: guard blocks from the askr PreToolUse hook ("Guard blocked:", "Write blocked", "awaiting Claude correction") are NOT architectural decisions — they are operational events. Never add guard-inferred or guard-rationalized constraints to the decisions array. Only record decisions the developers explicitly made about product or architecture choices.
 - failed_approaches: KEEP all existing. APPEND new ones from this session.
 - task: PAST TENSE. Describes the overall project state, not just this session's work.
 - in_progress.last_line: USE values from TRACKED FILE EDITS — they are exact. Estimate only for unlisted files.
@@ -392,6 +392,12 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
                     existing_text = f.read().lower()
 
             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            _guard_signals = (
+                "guard blocked", "write blocked", "awaiting claude correction",
+                "must be documented", "requires explicit", "outside backend",
+                "outside website", "file ownership rules", "merge conflicts",
+            )
+
             new_entries = []
             for d in decisions:
                 text   = d.get("decision", "").strip()
@@ -400,9 +406,14 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
                     continue
                 if text.lower() in existing_text:
                     continue
+                # Skip decisions that are guard-rationalized operational events
+                text_lower = text.lower()
+                if any(sig in text_lower for sig in _guard_signals):
+                    continue
                 new_entries.append(json.dumps({
                     "at": ts, "dev": developer,
                     "decision": text, "reason": reason,
+                    "source": "checkpoint",
                 }))
 
             if new_entries:
