@@ -60,7 +60,7 @@ class Askr < Formula
   end
 
   test do
-    assert_match "askr", shell_output("#{bin}/ask 2>&1", 0)
-    assert_match "askr", shell_output("#{bin}/askr 2>&1", 0)
+    assert_match "askr", shell_output("#{bin}/ask 2>&1")
+    assert_match "askr", shell_output("#{bin}/askr 2>&1")
   end
 end
