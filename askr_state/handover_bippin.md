@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 01:37
+Last updated: 2026-07-02 01:38
 
 *Source of truth: `handover_bippin.json`*
 
@@ -27,44 +27,18 @@ Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.
 - [x] Implemented permission_gate.py to detect dangerous permissions (skip-permissions, unrestricted Bash, rm in allow list)
 - [x] Implemented session_start.py to hold queued tasks instead of auto-injecting when dangerous permissions detected
 - [x] Wired task_approval_pending notification type into Cursor extension.js for IDE popup rendering
-- [x] Rebased parallel work from another agent session onto main branch cleanly
-- [x] Updated README.md to document real Homebrew install commands (one-liner and tap-then-install with explanation)
-- [x] Merged Bash-boundary guard extension work (cross-repo boundary checks for Bash tool calls)
-- [x] Added 64 new tests for guard_runner.py and pre_tool_use.py achieving 122/122 passing tests
+- [x] Rebased parallel agent work onto main branch cleanly
+- [x] Pushed rebased main branch to origin
 
 ## Next Actions
-1. Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py create_checkpoint function (trigger_type==emergency branch)
-   *Why: Emergency handover currently uses static text instead of invoking actual LLM-based handover, breaking continuity for critical failures*
-2. Activate guard_warning notification type by invoking it from pre_tool_use.py when non-blocking guard conditions are detected, wiring through HOOK_MAP and .claude/settings.json
-   *Why: guard_warning is dead code today—wired into extension.js but never fired from backend, so IDE popups for non-blocking guard warnings cannot render*
-3. Review and document the circular dependency pattern in Homebrew notability review (stars required to get stars) for future reference on package distribution friction
-   *Why: Useful context for understanding distribution challenges if askr grows beyond current tap-based installation*
+1. Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)
+   *Why: Known gap: emergency handover currently uses static text instead of invoking actual LLM handover mechanism, reducing handover quality in critical failure scenarios*
+2. Remove dead code path: guard_warning notification type in guard_runner.py and pre_tool_use.py (non-blocking guard warnings never invoked despite extension.js whitelist)
+   *Why: Known gap: guard_warning is wired into extension.js but never triggered from Python guard subsystem, creating dead code and confusing maintenance surface*
 
 ## Decisions
-- Homebrew installation routed through homebrew-askr tap (BippinShekar/askr) rather than homebrew-core merge — Avoids notability review bottleneck; tap-based installation is production-ready and documented in README
-- Permission gate system blocks dangerous task injection at session_start.py rather than at individual tool invocation — Prevents queue poisoning and allows human review before any dangerous operations execute
-- Spam recovery deferred to end of session rather than inline retry — Reduces browser state thrashing and allows cleaner session completion semantics
+- Skip social media post about Homebrew notability review requirement — User signal: post would reveal project is real enough to install, breaking the vague 'building with Claude' narrative of prior posts and giving away more than intended
 
 ## User-Rejected Approaches
-- **Post about Homebrew brew install support and sha256 verification as a product update** — "nobody knows I am building yet, and that tweet makes it look like I am ready to launch" (domain: public communication / marketing)
-
-## Failed Approaches
-- Inline spam recovery with immediate retry during application flow — Caused browser state thrashing and unclear session completion semantics; deferred recovery to end-of-session is cleaner
-
-## Files In Play
-- `README.md`
-- `guard_runner.py`
-- `pre_tool_use.py`
-- `checkpoint.py`
-
-## Relational Files
-- `extension.js` (configures): Wires notification types including task_approval_pending and guard_warning for IDE popup rendering
-- `.claude/settings.json` (configures): Defines HOOK_MAP and notification routing for guard subsystem
-- `permission_gate.py` (imported_by): Called from session_start.py to detect dangerous permissions before task injection
-- `session_start.py` (imports): Holds queued tasks when dangerous permissions detected via permission_gate.py
-- `test_guard_runner.py` (tested_by): 64 new tests covering guard_runner.py behavior and edge cases
-- `test_pre_tool_use.py` (tested_by): 64 new tests covering pre_tool_use.py behavior and edge cases
-
-## Blockers
-- guard_warning notification type is dead code—never invoked from pre_tool_use.py, blocking non-blocking guard warning IDE popups
-- PreCompact emergency handover uses hardcoded boilerplate instead of real LLM handover path, breaking continuity for critical failures
+- **Post about brew tap/sha256 and Homebrew support going live** — "brother nobody knows I am building yet, and that tweet makes it look like I am ready to launch and enable brew install" (domain: social media strategy (off-topic to codebase))
+- **Post text: 'always thought `brew install` was smooth sail. turns out it wants a notability review. stars, basically. to get stars, you need stars.'** — "this just reads weird th... (rejected the phrasing, exploring alternatives)" (domain: social media copy (off-topic to codebase))
