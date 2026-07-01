@@ -138,3 +138,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-07-01] Including all file paths from checkpoint.py's file discovery in handover documents without filtering by repository boundary — Caused cross-repo contamination (Claude memory paths, system directories) to pollute project state; scoping to askr root path required
 - [2026-07-01] Inline retry of spam-flagged jobs during active application session — Triggered cascade abort when Ashby spam detection persisted; browser fingerprinting-based detection requires session reset
 - [2026-07-01] Using full location string for LinkedIn location combobox field — Full location strings do not trigger city autocomplete dropdown; city name extraction required
+- [2026-07-01] Inline retry of spam-flagged Ashby applications with scroll-and-resubmit — Browser fingerprinting persists across retries in same session; spam_warning recurs immediately, wasting session time
+- [2026-07-01] Using JSONL idle heuristic to trigger companion sessions — Idle detection is unreliable; switched to Stop hook signal for deterministic session lifecycle
