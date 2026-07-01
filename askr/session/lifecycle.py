@@ -1006,39 +1006,33 @@ def _open_companion_session(project_path: str, session_id: str = None):
 
 def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
     """
-    Context trigger fired. Never kills the live session — but popping a new
-    terminal and stealing focus mid-turn is its own kind of disruptive, even
-    without killing anything. Wait for the current turn to actually finish,
-    then open the companion session, so the user sees their answer before
-    getting redirected, not interrupted mid-generation.
+    Context trigger fired. Wait for the current Claude reply to finish before
+    opening the companion session — the user must always get their complete reply
+    before a second window appears.
 
-    "The turn finished" is read directly off the Stop hook's own behavior
-    (stop.py:main deletes this session's per-session stats file on every
-    Stop event) rather than guessed from JSONL-mtime silence — silence can't
-    tell a finished turn apart from Claude just thinking for a while.
+    "Reply finished" is detected via JSONL write silence: Claude Code streams
+    tokens into the session JSONL continuously while generating; when it stops
+    writing for IDLE_THRESHOLD seconds the reply is done. This is more reliable
+    than watching the stats file (which is not deleted between turns — only at
+    session end) or detecting process death via lsof (which fails for IDE-embedded
+    terminals where pgrep can't match by cwd).
 
-    No percentage-based early-exit override here on purpose: Claude's own
-    native auto-compact is independently guarded by the PreCompact hook
-    (pre_compact.py), which kills the session outright rather than let a
-    lossy compaction happen. That's the real safety net for a single turn
-    that runs away past the context budget — this wait doesn't need to
-    duplicate it, so it can afford to just wait for the turn to end.
-
-    Returns True if a live session was found for this project (full cooldown
-    applies), False if not (short retry — the project may just be between
-    sessions and this stats read is about to go stale on its own).
+    Returns True if a live session was found (full cooldown applies), False if
+    no live process was detected (short retry).
     """
     if not _find_all_claude_pids_by_project(project_path):
         _log("claude process not found for this project — opening companion session anyway")
         _open_companion_session(project_path, session_id)
         return False
 
-    POLL          = 5
-    MAX_WAIT_SECS = 1800  # defensive cap only — should never be hit if Stop fires normally
+    POLL           = 5    # polling interval (seconds)
+    IDLE_THRESHOLD = 30   # JSONL silence (seconds) that signals reply is done
+    MAX_WAIT_SECS  = 600  # hard cap; only hit if JSONL is written continuously (runaway turn)
 
-    _log("waiting for the current turn to finish before opening companion session...")
-    from askr.session.monitor import stats_path_for_session
-    own_stats_path = stats_path_for_session(project_path, session_id) if session_id else None
+    _log("waiting for current reply to finish (watching JSONL idle)...")
+
+    from askr.session.monitor import _find_active_jsonl
+    jsonl_path = _find_active_jsonl(project_path, session_id)
     waited = 0
 
     while True:
@@ -1046,17 +1040,20 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
         waited += POLL
 
         if not _find_all_claude_pids_by_project(project_path):
-            _log("claude session ended on its own while waiting — opening companion session")
+            _log("claude session ended while waiting — opening companion session")
             break
 
-        # Stop hook deletes this session's stats file on every turn end — its
-        # absence is the authoritative "turn just finished" signal.
-        if own_stats_path and not os.path.exists(own_stats_path):
-            _log("turn finished (Stop hook ran) — opening companion session")
+        if jsonl_path and os.path.exists(jsonl_path):
+            idle_secs = time.time() - os.path.getmtime(jsonl_path)
+            if idle_secs >= IDLE_THRESHOLD:
+                _log(f"reply finished (JSONL idle {idle_secs:.0f}s) — opening companion session")
+                break
+        elif waited >= POLL * 2:
+            _log("JSONL path not found after initial wait — opening companion session")
             break
 
         if waited >= MAX_WAIT_SECS:
-            _log(f"WARN: waited {MAX_WAIT_SECS}s with no Stop event — opening companion session anyway")
+            _log(f"WARN: waited {MAX_WAIT_SECS}s, JSONL never went quiet — opening companion session anyway")
             break
 
     _open_companion_session(project_path, session_id)
