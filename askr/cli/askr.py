@@ -1327,10 +1327,60 @@ def _queue_task_for(target_dev: str, description: str, from_dev: str, push: bool
         return False
 
 
+def _approve_held_tasks(dev: str) -> bool:
+    """Write the one-shot flag session_start.py checks — lets the next
+    SessionStart drain the queue even though the session is still dangerous.
+    Doesn't touch the queue file itself; draining happens at session start."""
+    tasks_dir = os.path.join(get_state_dir(), "tasks")
+    os.makedirs(tasks_dir, exist_ok=True)
+    flag_path = os.path.join(tasks_dir, f"approved_{dev}.flag")
+    with open(flag_path, "w") as f:
+        f.write(datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
+    return True
+
+
+def _discard_held_tasks(dev: str) -> int:
+    """Drain the queue straight to discarded_<dev>.jsonl without ever
+    injecting it into a session. Same lock as the queue writer/drainer —
+    without it a task appended mid-discard would be silently lost."""
+    from askr.state.writer import file_lock
+
+    tasks_dir     = os.path.join(get_state_dir(), "tasks")
+    queue_path    = os.path.join(tasks_dir, f"queue_{dev}.jsonl")
+    discard_path  = os.path.join(tasks_dir, f"discarded_{dev}.jsonl")
+
+    if not os.path.exists(queue_path):
+        return 0
+
+    with file_lock(queue_path):
+        tasks = []
+        with open(queue_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        tasks.append(json.loads(line))
+                    except Exception:
+                        pass
+        if not tasks:
+            return 0
+
+        ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(discard_path, "a") as f:
+            for t in tasks:
+                t["discarded_at"] = ts
+                f.write(json.dumps(t) + "\n")
+
+        open(queue_path, "w").close()
+    return len(tasks)
+
+
 def cmd_task(args: list):
     """
     askr task queue <dev> "description"  — add a task to a developer's queue
     askr task list [<dev>]               — show pending tasks for a developer
+    askr task approve <dev>              — release tasks held by the permission gate
+    askr task discard <dev>              — drop tasks held by the permission gate
     """
     import subprocess as _sp
     import uuid as _uuid
@@ -1353,15 +1403,42 @@ def cmd_task(args: list):
             console.print(f"\n  [dim]{target_dev}: no pending tasks[/dim]\n")
             return
 
+        held = False
+        if target_dev == load_developer():
+            try:
+                from askr.session.permission_gate import is_dangerous_session
+                held, reasons = is_dangerous_session(os.path.dirname(get_state_dir()))
+            except Exception:
+                held, reasons = False, []
+
         console.print(f"\n  [bold]{target_dev}[/bold] — {len(tasks)} pending task(s):\n")
         for t in tasks:
             console.print(f"  • [{t.get('from','?')}] {t['desc']}")
+        if held:
+            console.print(f"\n  [yellow]held[/yellow] — session has {'; '.join(reasons)}")
+            console.print(f"  [dim]askr task approve {target_dev}[/dim]  or  [dim]askr task discard {target_dev}[/dim]")
         console.print()
+
+    elif sub == "approve":
+        target_dev = args[1] if len(args) > 1 else load_developer()
+        tasks = _load_pending_tasks(target_dev)
+        _approve_held_tasks(target_dev)
+        console.print(f"\n  [green]✓[/green] approved — {len(tasks)} task(s) for [bold]{target_dev}[/bold] will load at next session start\n")
+
+    elif sub == "discard":
+        target_dev = args[1] if len(args) > 1 else load_developer()
+        n = _discard_held_tasks(target_dev)
+        if n:
+            console.print(f"\n  [green]✓[/green] discarded {n} task(s) for [bold]{target_dev}[/bold]\n")
+        else:
+            console.print(f"\n  [dim]{target_dev}: no pending tasks to discard[/dim]\n")
 
     else:
         console.print("\n  usage:")
         console.print("    [bold]askr task queue <dev> \"description\"[/bold]  — queue a task for a developer")
-        console.print("    [bold]askr task list [<dev>][/bold]               — show pending tasks\n")
+        console.print("    [bold]askr task list [<dev>][/bold]               — show pending tasks")
+        console.print("    [bold]askr task approve [<dev>][/bold]            — release tasks held by the permission gate")
+        console.print("    [bold]askr task discard [<dev>][/bold]            — drop tasks held by the permission gate\n")
 
 
 def cmd_team():
