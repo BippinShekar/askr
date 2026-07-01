@@ -26,6 +26,7 @@ from askr.state.config import get_state_dir, load_developer
 
 _LAUNCH_MODE_PATH  = os.path.expanduser("~/.config/askr/launch_mode.json")
 _SESSIONS_DIR      = os.path.expanduser("~/.config/askr")
+_NOTIFICATION_PATH = os.path.expanduser("~/.config/askr/notification.json")
 
 
 def _sessions_path(developer: str) -> str:
@@ -214,6 +215,74 @@ def _drain_task_queue(developer: str) -> list[dict]:
         return []
 
 
+def _peek_task_queue(developer: str) -> list[dict]:
+    """Read pending tasks without draining/truncating — used when the session
+    is in a dangerous-permission state and tasks must stay queued (held, not
+    dropped) until approved via `askr task approve`."""
+    try:
+        import json as _json
+        tasks_dir  = os.path.join(get_state_dir(), "tasks")
+        queue_path = os.path.join(tasks_dir, f"queue_{developer}.jsonl")
+        if not os.path.exists(queue_path):
+            return []
+        tasks = []
+        with open(queue_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        tasks.append(_json.loads(line))
+                    except Exception:
+                        pass
+        return tasks
+    except Exception:
+        return []
+
+
+def _consume_approval_flag(developer: str) -> bool:
+    """One-shot bypass written by `askr task approve <dev>`. Consuming it here
+    (not a permanent setting) means each held batch needs its own explicit
+    approval — approving once doesn't silently authorize every future batch."""
+    flag_path = os.path.join(get_state_dir(), "tasks", f"approved_{developer}.flag")
+    if os.path.exists(flag_path):
+        try:
+            os.remove(flag_path)
+        except Exception:
+            pass
+        return True
+    return False
+
+
+def _notify_tasks_held(developer: str, tasks: list[dict], reasons: list[str]):
+    task_list   = "\n".join(f"- [{t.get('from','?')}] {t.get('desc','')}" for t in tasks)
+    reason_text = "; ".join(reasons)
+    message = (
+        f"{len(tasks)} queued task(s) held for {developer} — this session has {reason_text}, "
+        f"so askr did not run them automatically. "
+        f"Run `askr task approve {developer}` to release them, or `askr task discard {developer}` to drop them.\n\n{task_list}"
+    )
+    try:
+        payload = {
+            "type": "task_approval_pending",
+            "message": message,
+            "developer": developer,
+            "tasks": tasks,
+            "reasons": reasons,
+            "shown": False,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump(payload, f)
+    except Exception:
+        pass
+    try:
+        from askr.clients.discord import send_message
+        send_message(f"🛑 **[askr] Tasks held — approval needed**\n{message}")
+    except Exception:
+        pass
+
+
 def _reset_stats_for_project(source: str = "", session_id: str = ""):
     """
     Write a stats entry for the new session immediately on session start.
@@ -317,7 +386,22 @@ def main():
         except Exception:
             pass
 
-    queued_tasks = _drain_task_queue(developer)
+    queued_tasks = []
+    held_tasks = []
+    held_reasons = []
+    try:
+        from askr.session.permission_gate import is_dangerous_session
+        dangerous, held_reasons = is_dangerous_session(os.path.dirname(get_state_dir()))
+    except Exception:
+        dangerous = False
+
+    if dangerous and not _consume_approval_flag(developer):
+        held_tasks = _peek_task_queue(developer)
+        if held_tasks:
+            _notify_tasks_held(developer, held_tasks, held_reasons)
+    else:
+        queued_tasks = _drain_task_queue(developer)
+
     _archive_stale_goals()
     _notify_stale_goals()
     suggested_goals = _maybe_suggest_goals(developer)
@@ -348,6 +432,15 @@ def main():
             f"Your teammates queued {len(queued_tasks)} task(s) for this session. "
             f"Work through them after completing any in-progress work from the handover above:\n\n"
             f"{task_list}"
+        )
+
+    if held_tasks:
+        parts.append(
+            f"## Tasks Held — Pending Confirmation\n\n"
+            f"{len(held_tasks)} teammate-queued task(s) exist but were NOT loaded into this session: "
+            f"{'; '.join(held_reasons)}. "
+            f"Do not attempt them. The developer can run `askr task approve {developer}` to release them "
+            f"or `askr task discard {developer}` to drop them."
         )
 
     if launch_mode.get("goal"):
