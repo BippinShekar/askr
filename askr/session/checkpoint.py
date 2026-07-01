@@ -169,7 +169,11 @@ def _get_uncommitted_files() -> list:
             ["git", "status", "--short", "--porcelain"],
             capture_output=True, text=True, timeout=5,
         )
-        return [line[3:].strip() for line in result.stdout.splitlines() if len(line) > 3]
+        paths = [line[3:].strip() for line in result.stdout.splitlines() if len(line) > 3]
+        # .claude/ is harness config/scratch (gitignored settings, fork worktrees) —
+        # never meaningful pending work, but git collapses it to one untracked
+        # entry that would otherwise be copied verbatim into the handover.
+        return [p for p in paths if not p.startswith(".claude/")]
     except Exception:
         return []
 
