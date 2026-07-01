@@ -18,6 +18,7 @@ guard detects a real architectural contradiction. Exits 0 (allow) otherwise.
 import sys
 import os
 import json
+import shlex
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -140,6 +141,110 @@ def _block_tool(reason: str):
     sys.exit(2)
 
 
+def extract_bash_paths(command: str) -> list:
+    """Extract high-confidence filesystem path candidates from a shell command string.
+
+    Conservative by design (see roadmap.md "Conservative detection" principle —
+    only fire when confidence is high, stay silent if ambiguous): we do NOT
+    attempt to parse shell syntax. We only return tokens that are unambiguous:
+      - absolute paths (start with "/")
+      - home-relative paths (start with "~")
+      - explicit parent-dir escapes (start with "..")
+
+    Tokens that look like flags ("-rf", "--output=x"), env-var assignments
+    ("FOO=/bar"), URLs ("https://..."), or plain relative/bare words (which
+    could be in-repo paths, package names, branch names, etc.) are skipped —
+    a false positive here directly blocks a real Bash call, so we err toward
+    letting ambiguous tokens through.
+    """
+    if not command:
+        return []
+
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        # Unbalanced quotes or similar — fall back to a naive split rather
+        # than fail; still conservative since we only match unambiguous tokens.
+        tokens = command.split()
+
+    candidates = []
+    for tok in tokens:
+        if not tok:
+            continue
+        if tok.startswith("-"):
+            # Option/flag, e.g. -rf, --output=/tmp/x — not a bare path
+            continue
+        if "://" in tok:
+            # URL, e.g. https://example.com/path
+            continue
+        head = tok.split("/", 1)[0]
+        if "=" in head:
+            # Env-var assignment, e.g. FOO=/bar cmd — ambiguous, skip
+            continue
+        if tok.startswith("/") or tok.startswith("~") or tok.startswith(".."):
+            candidates.append(tok)
+
+    return candidates
+
+
+def _resolve_bash_path(candidate: str) -> str:
+    """Resolve a candidate path token to an absolute, symlink-resolved path."""
+    expanded = os.path.expanduser(candidate)
+    return os.path.realpath(os.path.abspath(expanded))
+
+
+def find_cross_repo_bash_path(command: str, project_root: str):
+    """Return the first candidate path in `command` that resolves outside
+    `project_root`, or None if the command is clean (or unparseable).
+
+    Fails open: any exception during resolution is treated as "not a match"
+    for that candidate rather than aborting the whole check.
+    """
+    try:
+        abs_root = os.path.realpath(project_root)
+    except Exception:
+        return None
+
+    for candidate in extract_bash_paths(command):
+        if "askr_state" in candidate or ".claude" in candidate:
+            continue
+        try:
+            abs_candidate = _resolve_bash_path(candidate)
+        except Exception:
+            continue
+        if abs_candidate and abs_candidate != abs_root and not abs_candidate.startswith(abs_root + os.sep):
+            return candidate
+
+    return None
+
+
+def _handle_bash(tool_input: dict):
+    """Cross-repo boundary check for Bash commands.
+
+    Bash's tool_input carries an opaque shell command string rather than a
+    file_path, so it bypasses the Write/Edit file_path check entirely. This
+    mirrors that check's logic (same project_root computation, same
+    askr_state/.claude skip, same block message style) but operates on paths
+    extracted from the command string. Wrapped in try/except and fails open,
+    matching the existing cross-repo check's style exactly.
+    """
+    try:
+        from askr.state.config import get_state_dir as _gsd
+        if not os.path.isdir(_gsd()):
+            return
+        project_root = os.path.dirname(os.path.normpath(_gsd()))
+        command = tool_input.get("command", "")
+        offending = find_cross_repo_bash_path(command, project_root)
+        if offending:
+            _block_tool(
+                f"Cross-repo write blocked: {offending} is outside the current project root "
+                f"({project_root}). This session is scoped to that project. "
+                f"Open a session in the target repository to make changes there."
+            )
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -148,6 +253,13 @@ def main():
 
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
+
+    # Bash gets only the cross-repo boundary check, then exits immediately —
+    # the write_count/batch/shared-interface trigger pipeline below is
+    # Write/Edit-specific and doesn't apply conceptually to shell commands.
+    if tool_name == "Bash":
+        _handle_bash(tool_input)
+        sys.exit(0)
 
     # Only care about write/edit operations
     if tool_name not in ("Write", "Edit", "MultiEdit"):
