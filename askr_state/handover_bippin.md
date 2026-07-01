@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-06-26 19:06
+Last updated: 2026-07-01 22:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-askr is a multi-agent session management system for Claude Code; this session diagnosed root causes of guard hallucination and blocking behavior, identifying a self-reinforcing loop where guard blocks trigger false decision logging that then constrains future decisions, and implemented fixes to prevent guard-inferred constraints from polluting the architectural decision record.
+askr is a multi-agent session management system for Claude Code; this session completed fixes for 8 hallucination and boundary issues in the guard system, including cross-repo boundary validation, retry state tracking, and guard rule tightening, and committed all changes to main.
 
 ## Discussion
-The user requested a comprehensive audit of the guard system's behavior, specifically why it hallucinates, blocks legitimate processes, and stops real work. This session performed a systematic investigation by examining all guard-related code, decision logs, and architecture documentation. The audit identified the root cause: a self-reinforcing hallucination loop where guard blocks (operational events) are incorrectly logged as architectural decisions, which then become hard constraints in future guard evaluations. The session implemented fixes in checkpoint.py and guard.py to filter guard-inferred signals from the decisions array, mark soft/inferred context explicitly, and tighten guard rules to require explicit architectural prohibition before blocking (not just absence of mention).
+This session inherited partial fixes from the previous session (issues 1, 2, 4 in pre_tool_use.py and checkpoint.py) and completed the remaining 5 issues (3, 5, 6, 7, 8) across pre_tool_use.py, stop.py, and guard.py. The work focused on eliminating false guard blocks by: adding cross-repo boundary checks to prevent tool use outside askr, fixing retry state tracking to avoid false "creating new file" labels, tightening guard rules to require explicit architectural prohibition before blocking, and filtering guard-inferred signals from the decision record. All changes were tested for syntax correctness and committed to main.
 
 ## Accomplishments
 - [x] Located and reviewed all guard-related code across askr codebase (guard.py, guard_context.py, guard_decision.py, etc.)
@@ -23,6 +23,14 @@ The user requested a comprehensive audit of the guard system's behavior, specifi
 - [x] Implemented guard-signal filtering in checkpoint.py to prevent guard-inferred constraints from polluting decisions.jsonl
 - [x] Updated guard.py to mark checkpoint-sourced decisions as [soft/inferred] and tightened blocking rules to require explicit architectural prohibition
 - [x] Added critical rule to guard: absence of a file/directory/pattern in architecture does NOT mean it is prohibited; only explicit forbiddance triggers blocks
+- [x] Implemented Issue 3: added cross-repo boundary check in pre_tool_use.py to prevent tool use outside askr repository
+- [x] Implemented Issue 5: fixed retry state tracking in guard.py to preserve original operation type across retries
+- [x] Implemented Issue 6: corrected false 'creating new file' label on retries by checking file existence before operation
+- [x] Implemented Issue 7: added explicit architectural prohibition check in guard.py to require forbiddance before blocking
+- [x] Implemented Issue 8: added cross-repo boundary validation to prevent tool use outside askr project root
+- [x] Verified all code changes for syntax correctness using Python AST parser
+- [x] Committed all guard fixes (pre_tool_use.py, stop.py, checkpoint.py, guard.py) with message explaining hallucination loop fix and new guard rules
+- [x] Pushed committed changes to main branch
 
 ## In Progress
 - `None`: Test askr hooks in leaps repo after commit to verify end-to-end hook processing works correctly with the fixed find_project_root() and hookEventName output
@@ -30,39 +38,31 @@ The user requested a comprehensive audit of the guard system's behavior, specifi
 - `None`: Permission model to ensure one teammate's tasks don't overwrite another's, respecting Claude permissions per user
 
 ## Next Actions
-1. Commit guard fixes (checkpoint.py and guard.py) with message explaining the hallucination loop fix and new guard rules
-   *Why: Changes are complete and tested; committing unblocks downstream testing and prevents guard from re-poisoning decisions.jsonl with false constraints*
-2. Test askr hooks in leaps repo after commit to verify end-to-end hook processing works correctly with the fixed find_project_root() and hookEventName output
-   *Why: Confirm that the root cause fix prevents future cwd-drift-induced stats file anomalies and that hook event identification works downstream*
-3. Resume queue drain system implementation for multi-developer task sequencing
-   *Why: Core multi-agent feature still pending; unblocked by guard fixes*
-4. Implement permission model to prevent task overwrites across teammates
-   *Why: Required for safe multi-developer operation*
+1. Test askr hooks in leaps repo to verify end-to-end hook processing works correctly with the fixed guard system, cross-repo boundary checks, and retry state tracking
+   *Why: Guard fixes are committed but untested in real hook execution; need to confirm no regressions and that boundary checks work as intended*
+2. Implement queue drain system for proper task sequencing across teammates (queued → claimed → executing → archived lifecycle)
+   *Why: Multi-agent coordination requires explicit task state transitions to prevent race conditions and task loss*
+3. Implement permission model to ensure one teammate's tasks don't overwrite another's, respecting Claude permissions per user
+   *Why: Multi-agent system needs isolation guarantees to prevent concurrent agents from corrupting each other's work*
 
 ## Decisions
-- Guard-inferred constraints (e.g., 'must be documented first', 'requires explicit approval') are operational events, not architectural decisions, and must be filtered from decisions.jsonl — Guard blocks create a self-reinforcing hallucination loop: blocks are logged as decisions, then become hard constraints in future evaluations, causing false positives and blocking legitimate work
-- Checkpoint-sourced decisions must be marked [soft/inferred] in guard context to distinguish them from developer-approved architectural decisions — Prevents guard from treating inferred context as hard constraints; allows guard to weight soft context lightly and avoid false blocks
-- Guard blocking rule: absence of a file, directory, or pattern in architecture does NOT constitute a prohibition; only explicit architectural forbiddance triggers blocks — Prevents guard from inventing constraints based on what is not mentioned; reduces hallucination and false positives
-- Guard blocking rule: location-based concerns (file outside backend/ or website/) are not blocks unless architecture explicitly states that directory is off-limits — Prevents guard from blocking legitimate cross-repo changes based on implicit assumptions about directory ownership
-
-## User-Rejected Approaches
-- **Guard autonomously making changes from leaps repo to askr repo without explicit user permission** — "how and why did this autonomously start turning from the leaps repo and how is that allowed to make changes from the leaps repo in askr repo? I mean if i give permission then yes, but i clearly havent" (domain: cross-repo permissions and guard autonomy)
-
-## Failed Approaches
-- Treating all decisions.jsonl entries equally in guard context without distinguishing guard-inferred from developer-approved decisions — Created self-reinforcing hallucination loop where guard blocks became hard constraints, causing false positives and blocking legitimate work
-- Using absence of mention in architecture as a blocking signal — Caused guard to invent constraints and block legitimate patterns that were simply not documented
+- Guard blocks (operational events from PreToolUse hook) are NOT architectural decisions and must be filtered from decisions.jsonl to prevent self-reinforcing hallucination loops — Guard blocks were being logged as architectural constraints, creating false prohibitions that constrained future decisions; only explicit developer choices should be recorded as decisions
+- Absence of a file/directory/pattern in architecture.md does NOT mean it is prohibited; only explicit forbiddance in CLAUDE.md or architecture.md triggers guard blocks — Guard was over-blocking legitimate operations based on absence of mention; explicit prohibition is required to block
+- Cross-repo boundary checks must be enforced in pre_tool_use.py to prevent tool use outside the askr repository — Multi-agent system must be confined to its own codebase to prevent unintended modifications to external projects
+- Retry state must preserve original operation type (read/write/create) across retries to avoid false 'creating new file' labels — Retries on existing files were being mislabeled as creates, causing false guard blocks on legitimate retry operations
 
 ## Files In Play
+- `askr/hooks/pre_tool_use.py`
+- `askr/hooks/stop.py`
 - `askr/session/checkpoint.py`
 - `askr/session/guard.py`
 
 ## Relational Files
-- `askr/session/guard_context.py` (imported_by): Loads decisions and architecture context that guard.py uses for blocking decisions
-- `askr/session/guard_decision.py` (imported_by): Evaluates guard blocking logic based on context provided by guard.py
-- `askr/clients/claude.py` (imported_by): Called by guard.py to evaluate architectural contradictions
-- `leaps/askr_state/decisions.jsonl` (configures): Source of truth for settled architectural decisions that guard uses; now filtered to exclude guard-inferred constraints
-- `leaps/askr_state/architecture.md` (configures): Architectural specification that guard uses to detect contradictions; now requires explicit prohibition to trigger blocks
+- `askr/session/guard_context.py` (imported_by): Guard context is used by guard.py to evaluate blocking rules
+- `askr/session/guard_decision.py` (imported_by): Guard decision tracking is used by guard.py to log guard evaluations
+- `CLAUDE.md` (configures): Project-level constraints that guard rules must respect
+- `architecture.md` (configures): Architectural decisions that guard uses to evaluate blocking rules
+- `askr_state/decisions.jsonl` (tested_by): Guard filtering prevents guard-inferred signals from polluting this decision record
 
 ## Uncommitted Files
-- `askr/session/checkpoint.py`
-- `askr/session/guard.py`
+- `askr_state/implementation_bippin.jsonl`
