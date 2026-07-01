@@ -3,54 +3,6 @@
   "discussion_summary": "User reported that companion session opening was firing mid-reply when crossing 60% quota threshold, causing context loss and requiring manual pinning. Root cause was lifecycle.py watching for stats file deletion (which never happens between turns) instead of waiting for Stop hook's authoritative completion signal. This session fixed the detection mechanism to properly synchronize session handoff with reply completion, ensuring new window opens after Claude's message finishes rather than interrupting it.",
   "accomplishments": [
     {
-      "what": "LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern",
-      "done": true
-    },
-    {
-      "what": "Identified root cause of LinkedIn location field failures: full location strings do not trigger city autocomplete dropdown",
-      "done": true
-    },
-    {
-      "what": "Implemented two-part fix: prompt instructs extraction of city name from full location string, with retry on failure",
-      "done": true
-    },
-    {
-      "what": "Killed orphaned uvicorn process blocking backend logs",
-      "done": true
-    },
-    {
-      "what": "Conducted comprehensive security audit of apply agent code generation paths with four hardening fixes against prompt injection attacks",
-      "done": true
-    },
-    {
-      "what": "Fixed resume PDF portfolio URL lookup from qa_bank.portfolio_url to application_prefill.answers.portfolio_url",
-      "done": true
-    },
-    {
-      "what": "Updated PDF generator to render 'Portfolio' as link label instead of domain URL",
-      "done": true
-    },
-    {
-      "what": "Diagnosed Ramp application failure as Ashby spam_warning state (browser fingerprinting-based anti-bot detection)",
-      "done": true
-    },
-    {
-      "what": "Implemented spam_warning recovery with 'Learn more' probe to locate submit/submit-again button",
-      "done": true
-    },
-    {
-      "what": "Extended spam_warning handling to distinguish overlay banner (resubmit after scroll) vs form replacement (hard refresh required)",
-      "done": true
-    },
-    {
-      "what": "Refactored spam recovery strategy to defer spam-flagged jobs to end of session instead of inline retry",
-      "done": true
-    },
-    {
-      "what": "Investigated queue drain architecture and browser_stream replay buffer lifecycle",
-      "done": true
-    },
-    {
       "what": "Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention",
       "done": true
     },
@@ -59,26 +11,15 @@
       "done": true
     }
   ],
-  "in_progress": [
-    {
-      "file": null,
-      "what": "Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry",
-      "last_line": 0
-    }
-  ],
+  "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Implement stateful retry mechanism that captures failure context (screenshots, error reasoning, form state) before deferring spam-flagged or failed jobs to end-of-session queue",
-      "why": "User proposed enriching failed job retry logic with contextual information to enable learning-based retry instead of blind resubmission; this is the next architectural enhancement after fixing queue orchestration"
-    },
-    {
-      "order": 2,
       "action": "Test companion session handoff at 60% quota threshold to verify new window opens after reply completes without context loss",
       "why": "Lifecycle fix was just committed; needs validation that the Stop hook signal properly synchronizes session transfer"
     },
     {
-      "order": 3,
+      "order": 2,
       "action": "Monitor guard system for false positives after tightening rules; verify that legitimate operations are no longer blocked by inferred constraints",
       "why": "Guard system was over-blocking based on absence of mention; recent fixes should eliminate hallucination loops but need validation in live operation"
     }

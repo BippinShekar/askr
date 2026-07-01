@@ -180,6 +180,7 @@ def _generate_handover_with_llm(
     open_goals: list = None,
     session_id: str = "",
     existing_handover: dict = None,
+    project_path: str = "",
 ) -> Optional[dict]:
     """
     Call Haiku to update the project state document from this session's transcript.
@@ -222,6 +223,8 @@ EXISTING PROJECT STATE (accumulated from prior sessions — update this, do not 
                 pass
 
         prompt = f"""A Claude Code session just ended. Update the project state document to reflect what this session accomplished.
+
+THIS REPOSITORY'S ROOT PATH: {project_path or "(unknown)"}
 {existing_state_section}
 SESSION TRANSCRIPT (this session only):
 {transcript_text}
@@ -261,12 +264,16 @@ session ended.
 
 Rules:
 - This is a PROJECT STATE document, not a session diary. It accumulates across sessions.
-- This document is about the CODEBASE in THIS repository only. If the conversation also covered
-  topics unrelated to this codebase (business strategy, fundraising, an unrelated product or
-  project, etc.), EXCLUDE that content entirely from task/discussion_summary/accomplishments/
-  in_progress/next_actions/decisions/failed_approaches — do not summarize it, do not soften it,
-  just leave it out. Off-topic content that gets merged in here never gets cleaned up automatically
-  and keeps reappearing in every future session's context.
+- This document is about the CODEBASE in THIS repository only — root path given above as
+  THIS REPOSITORY'S ROOT PATH. If the transcript also covers topics unrelated to this codebase
+  (business strategy, fundraising, an unrelated product, etc.) OR real engineering work in a
+  DIFFERENT repository (a sibling project the session also touched — check every "TOOL:" line's
+  file path against the root path above; a path that does not start with it belongs to another
+  repo even if the work looks legitimate and on-topic), EXCLUDE that content entirely from
+  task/discussion_summary/accomplishments/in_progress/next_actions/decisions/failed_approaches —
+  do not summarize it, do not soften it, just leave it out. Off-topic or foreign-repo content that
+  gets merged in here never gets cleaned up automatically and keeps reappearing in every future
+  session's context, including in a completely unrelated codebase.
 - MERGE, do not replace: keep relevant items from EXISTING PROJECT STATE; update or remove items this session resolved.
 - in_progress: REMOVE items this session completed. KEEP still-relevant items from existing state. ADD new in-progress from this session.
 - in_progress.file: only set this to a real source file this session was actively editing. Never set it to
@@ -797,6 +804,7 @@ def create_checkpoint(
             open_goals=open_goals,
             session_id=session_id,
             existing_handover=existing_handover,
+            project_path=project_path,
         )
         if llm_summary:
             summary = llm_summary

@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-07-01 22:59
+Last updated: 2026-07-01 23:51
 
 *Source of truth: `handover_bippin.json`*
 
@@ -12,30 +12,13 @@ askr is a multi-agent session management system for Claude Code; this session fi
 User reported that companion session opening was firing mid-reply when crossing 60% quota threshold, causing context loss and requiring manual pinning. Root cause was lifecycle.py watching for stats file deletion (which never happens between turns) instead of waiting for Stop hook's authoritative completion signal. This session fixed the detection mechanism to properly synchronize session handoff with reply completion, ensuring new window opens after Claude's message finishes rather than interrupting it.
 
 ## Accomplishments
-- [x] LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern
-- [x] Identified root cause of LinkedIn location field failures: full location strings do not trigger city autocomplete dropdown
-- [x] Implemented two-part fix: prompt instructs extraction of city name from full location string, with retry on failure
-- [x] Killed orphaned uvicorn process blocking backend logs
-- [x] Conducted comprehensive security audit of apply agent code generation paths with four hardening fixes against prompt injection attacks
-- [x] Fixed resume PDF portfolio URL lookup from qa_bank.portfolio_url to application_prefill.answers.portfolio_url
-- [x] Updated PDF generator to render 'Portfolio' as link label instead of domain URL
-- [x] Diagnosed Ramp application failure as Ashby spam_warning state (browser fingerprinting-based anti-bot detection)
-- [x] Implemented spam_warning recovery with 'Learn more' probe to locate submit/submit-again button
-- [x] Extended spam_warning handling to distinguish overlay banner (resubmit after scroll) vs form replacement (hard refresh required)
-- [x] Refactored spam recovery strategy to defer spam-flagged jobs to end of session instead of inline retry
-- [x] Investigated queue drain architecture and browser_stream replay buffer lifecycle
 - [x] Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention
 - [x] Fixed companion session opening to wait for Stop hook completion signal instead of watching for stats file deletion
 
-## In Progress
-- `None`: Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry
-
 ## Next Actions
-1. Implement stateful retry mechanism that captures failure context (screenshots, error reasoning, form state) before deferring spam-flagged or failed jobs to end-of-session queue
-   *Why: User proposed enriching failed job retry logic with contextual information to enable learning-based retry instead of blind resubmission; this is the next architectural enhancement after fixing queue orchestration*
-2. Test companion session handoff at 60% quota threshold to verify new window opens after reply completes without context loss
+1. Test companion session handoff at 60% quota threshold to verify new window opens after reply completes without context loss
    *Why: Lifecycle fix was just committed; needs validation that the Stop hook signal properly synchronizes session transfer*
-3. Monitor guard system for false positives after tightening rules; verify that legitimate operations are no longer blocked by inferred constraints
+2. Monitor guard system for false positives after tightening rules; verify that legitimate operations are no longer blocked by inferred constraints
    *Why: Guard system was over-blocking based on absence of mention; recent fixes should eliminate hallucination loops but need validation in live operation*
 
 ## Decisions
