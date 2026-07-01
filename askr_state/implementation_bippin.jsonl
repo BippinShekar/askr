@@ -1078,3 +1078,5 @@
 {"ts": "2026-07-01T20:03:05Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd \"$HOME/Desktop/askr\" && pwd && git fetch origin -q && git log --oneline origi"}
 {"ts": "2026-07-01T20:03:17Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd \"$HOME/Desktop/askr\" && git cherry-pick -x 3c1bfbc 2>&1"}
 {"ts": "2026-07-01T20:03:24Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd \"$HOME/Desktop/askr\" && source venv/bin/activate && python -m pytest tests/ -"}
+{"ts": "2026-07-01T20:03:30Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd \"$HOME/Desktop/askr\"\ngit push 2>&1 | tail -5\ngit worktree remove .claude/work"}
+{"ts": "2026-07-01T20:03:38Z", "session_id": "8536fbfa-628e-49d7-a0a9-d87fa3a413b6", "type": "command", "detail": "cd \"$HOME/Desktop/askr\" && git log --oneline -6 && git status"}

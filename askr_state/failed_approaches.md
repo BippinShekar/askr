@@ -141,3 +141,5 @@ Cumulative cross-session log. Never overwritten — append only.
 - [2026-07-01] Inline retry of spam-flagged Ashby applications with scroll-and-resubmit — Browser fingerprinting persists across retries in same session; spam_warning recurs immediately, wasting session time
 - [2026-07-01] Using JSONL idle heuristic to trigger companion sessions — Idle detection is unreliable; switched to Stop hook signal for deterministic session lifecycle
 - [2026-07-01] Inline retry of spam-flagged jobs during session execution — Increased session complexity and made it difficult to track which applications succeeded vs. were flagged; deferred approach is cleaner.
+- [2026-07-01] LinkedIn location field: passing full location string directly to combobox field — Full location strings (e.g., 'San Francisco, CA, United States') do not trigger city autocomplete dropdown; requires extraction of city name only
+- [2026-07-01] Ramp spam_warning recovery: inline retry with immediate resubmit — Spam-flagged applications require different handling strategies (overlay banner vs form replacement); deferring to end of session reduces complexity and improves UX

@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 01:33
+Last updated: 2026-07-02 01:34
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, verified end-to-end installation via homebrew-askr tap, extended cross-repo boundary checks to Bash tool calls, documented real Homebrew installation paths (one-liner and tap-then-install) in the main Install section of README.md, and rebased parallel work from another agent session.
+Built and deployed a four-stage permission gate system to prevent dangerous task injection in unrestricted sessions, added task approval workflow with notification integration, completed Phase 3.5 security hardening with full test coverage, cut first tagged release (v0.1.0) with Homebrew formula and GitHub release, verified end-to-end installation via homebrew-askr tap, extended cross-repo boundary checks to Bash tool calls, documented real Homebrew installation paths in README.md, rebased parallel work from another agent session, and added 64 new tests for guard_runner.py and pre_tool_use.py achieving 122/122 passing tests.
 
 ## Discussion
-Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.5 (permission guard), and Phase 4 (approval workflow) are fully implemented, tested, and documented. The v0.1.0 release cycle was completed with correct tarball sha256, fixed Homebrew formula, and homebrew-askr tap verification. This session rebased and merged parallel work from another agent branch, updating README.md to document the real Homebrew install commands (one-liner `brew install BippinShekar/askr/askr` and tap-then-install form) with a note explaining why bare `brew install askr` doesn't work without homebrew-core inclusion. All 58 tests pass. Two known gaps remain: guard_warning notification type (non-blocking guard warnings) is dead code—never invoked from pre_tool_use.py despite being wired into extension.js—and PreCompact emergency handover still routes through hardcoded boilerplate instead of real LLM handover path.
+Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.5 (permission guard), and Phase 4 (approval workflow) are fully implemented, tested, and documented. The v0.1.0 release cycle was completed with correct tarball sha256, fixed Homebrew formula, and homebrew-askr tap verification. This session rebased and merged parallel work from another agent branch, updated README.md to document real Homebrew install commands, merged Bash-boundary guard extension work, and integrated comprehensive test coverage for guard subsystem (64 new tests). All 122 tests pass. Two known gaps remain: guard_warning notification type (non-blocking guard warnings) is dead code—never invoked from pre_tool_use.py despite being wired into extension.js—and PreCompact emergency handover still routes through hardcoded boilerplate instead of real LLM handover path.
 
 ## Accomplishments
 - [x] LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern
@@ -28,32 +28,41 @@ Askr has progressed through four major phases: Phase 3 (notifications), Phase 3.
 - [x] Implemented session_start.py to hold queued tasks instead of auto-injecting when dangerous permissions detected
 - [x] Wired task_approval_pending notification type into Cursor extension.js for IDE popup rendering
 - [x] Extended cross-repo boundary checks to Bash tool calls in guard_runner.py
-- [x] Documented real Homebrew installation paths in README.md main Install section (one-liner and tap-then-install form with explanation of homebrew-core requirement)
+- [x] Documented real Homebrew installation paths (one-liner and tap-then-install) in README.md Install section
 - [x] Rebased and merged parallel work from another agent session onto main branch
+- [x] Added 64 new tests for pre_tool_use.py and guard_runner.py guard subsystem coverage
+- [x] Achieved 122/122 passing tests in full test suite after guard test integration
 
 ## Next Actions
 1. Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py create_checkpoint function (trigger_type==emergency branch)
-   *Why: Emergency handover currently uses static text instead of invoking the real LLM handover mechanism; this is a known architectural gap blocking proper session continuity*
-2. Activate guard_warning dead code path: trace why non-blocking guard warnings from guard_runner.py are never invoked from pre_tool_use.py despite being wired into extension.js, and either invoke them or remove the dead code
-   *Why: Phase 3.5's IDE popup for non-blocking guard warnings cannot fire today; either the notification path needs to be triggered or the wiring needs to be removed to reduce confusion*
+   *Why: Known architectural gap: emergency handover currently uses static boilerplate instead of invoking actual LLM handover mechanism, reducing handover quality in critical failure scenarios*
+2. Activate guard_warning notification type by invoking it from pre_tool_use.py when non-blocking guard conditions are detected, wiring it through HOOK_MAP and .claude/settings.json to enable IDE popup rendering
+   *Why: guard_warning is currently dead code despite being fully wired into extension.js; activating it completes Phase 3.5 non-blocking guard warning feature*
+3. Investigate and document the worktree-to-parent-repo absolute path boundary check false positive (navigating from worktree back to its own parent repo via absolute path gets blocked)
+   *Why: Rough edge in guard extension: worktree isn't recognized as 'the same project' when accessed via absolute path, causing unnecessary guard blocks in legitimate development workflows*
 
 ## Decisions
-- Homebrew installation documented via homebrew-askr tap (BippinShekar/askr/askr) rather than homebrew-core merge — homebrew-core inclusion requires notability review and stars; tap-based installation is immediately available and documented with one-liner and tap-then-install forms in README
-- Task approval workflow holds queued tasks instead of auto-injecting when dangerous permissions detected — Prevents silent task injection in unrestricted sessions; user must explicitly approve dangerous tasks via IDE notification popup
-- Cross-repo boundary checks extended to Bash tool calls in guard_runner.py — Prevents Bash commands from escaping repository boundaries, closing a security gap in the permission gate system
+- Homebrew formula published to homebrew-askr tap instead of homebrew-core — Faster iteration cycle and full control over formula updates without waiting for homebrew-core review process; users install via `brew install BippinShekar/askr/askr` or tap-then-install pattern
+- Defer spam-flagged jobs to end of session instead of inline retry — Reduces session complexity and retry loops; allows user to review spam-flagged applications separately after main job batch completes
+- Extend guard boundary checks to Bash tool calls in addition to Python imports — Closes security gap where Bash scripts could access files outside project boundary; maintains consistent cross-repo protection across all tool types
 
-## User-Rejected Approaches
-- **Post about brew install support and Homebrew tap availability** — "nobody knows I am building yet, and that tweet makes it look like I am ready to launch; skip it" (domain: README.md, public communication)
+## Failed Approaches
+- LinkedIn location field: passing full location string directly to combobox field — Full location strings (e.g., 'San Francisco, CA, United States') do not trigger city autocomplete dropdown; requires extraction of city name only
+- Ramp spam_warning recovery: inline retry with immediate resubmit — Spam-flagged applications require different handling strategies (overlay banner vs form replacement); deferring to end of session reduces complexity and improves UX
 
 ## Files In Play
-- `README.md`
+- `tests/test_pre_tool_use_guard.py`
+- `tests/test_guard_runner.py`
+- `askr_state/implementation_bippin.jsonl`
 
 ## Relational Files
-- `permission_gate.py` (imported_by): Core security gate detecting dangerous permissions; imported by session_start.py
-- `session_start.py` (imports): Holds queued tasks when dangerous permissions detected; calls permission_gate.py
-- `guard_runner.py` (configures): Extended with cross-repo boundary checks for Bash tool calls; wires guard_warning notification type
-- `extension.js` (configures): Cursor IDE extension; renders task_approval_pending and guard_warning notification popups
-- `checkpoint.py` (configures): PreCompact emergency handover still uses hardcoded boilerplate instead of real LLM path (known gap)
+- `askr/guard/pre_tool_use.py` (tested_by): Core guard logic for detecting dangerous permissions and blocking unsafe tool calls; 64 new tests added this session
+- `askr/guard/guard_runner.py` (tested_by): Guard execution and cross-repo boundary checking; extended to Bash tool calls; comprehensive test coverage added
+- `askr/guard/permission_gate.py` (imported_by): Detects dangerous permissions (skip-permissions, unrestricted Bash, rm in allow list); used by session_start.py to hold queued tasks
+- `askr/session_start.py` (imports): Holds queued tasks when dangerous permissions detected; implements task approval workflow
+- `.claude/extension.js` (configures): Wired to render task_approval_pending and guard_warning notification types as IDE popups
+- `README.md` (documents): Updated with real Homebrew installation commands (one-liner and tap-then-install) and explanation of homebrew-askr tap
+- `askr/checkpoint.py` (imports): Contains create_checkpoint function with emergency handover branch that currently uses hardcoded boilerplate instead of real LLM handover
 
 ## Uncommitted Files
-- `.claude/`
+- `askr_state/implementation_bippin.jsonl`
