@@ -1,6 +1,6 @@
 {
-  "task": "Completed pre-launch safety audits on session management core (45 passing tests, checkpoint/guard/hook systems verified), identified critical packaging gap (brew Formula ships wrong package), documented roadmap findings, discovered and rotated leaked webhook credential, and implemented dangerous-permission task approval gate with lifecycle signal-based companion session triggering.",
-  "discussion_summary": "Session ran two autonomous audits in parallel: safety-gate verification (unbuilt gates, race conditions) and test-suite health check (packaging readiness). Core session-management infrastructure (hooks, checkpoint, guard, state sync) is production-ready with full test coverage. Critical blocker identified: homebrew Formula did not install the full askr/ package or create bin/askr entry point \u2014 now fixed to ship full package with proper entry point and requirements.txt deps. Discovered Discord webhook credential leaked in git history (rotated, requires git-filter-repo scrubbing). This session completed the dangerous-permission task approval gate (Phase 5 roadmap item): wired permission detection into session_start.py, added _peek_task_queue/_consume_approval_flag/_notify_tasks_held helpers, and switched lifecycle.py to use Stop hook signal instead of JSONL idle heuristic for triggering companion sessions. All 45 tests still passing; commits pushed safely without blocking parallel session_start.py edits in progress.",
+  "task": "Completed pre-launch safety audits on session management core (45 passing tests, checkpoint/guard/hook systems verified), identified critical packaging gap (brew Formula ships wrong package), documented roadmap findings, discovered and rotated leaked webhook credential, implemented dangerous-permission task approval gate with lifecycle signal-based companion session triggering, and added comprehensive test coverage for permission gate and task approval workflows.",
+  "discussion_summary": "Session ran two autonomous audits in parallel: safety-gate verification (unbuilt gates, race conditions) and test-suite health check (packaging readiness). Core session-management infrastructure (hooks, checkpoint, guard, state sync) is production-ready with full test coverage. Critical blocker identified: homebrew Formula did not install the full askr/ package or create bin/askr entry point \u2014 now fixed to ship full package with proper entry point and requirements.txt deps. Discovered Discord webhook credential leaked in git history (rotated, requires git-filter-repo scrubbing). Completed dangerous-permission task approval gate (Phase 5 roadmap item): wired permission detection into session_start.py, added _peek_task_queue/_consume_approval_flag/_notify_tasks_held helpers, switched lifecycle.py to use Stop hook signal instead of JSONL idle heuristic for triggering companion sessions, and added test_permission_gate.py and test_task_approval_gate.py with 13 new passing tests. All 58 tests passing; commits pushed safely.",
   "accomplishments": [
     {
       "what": "Ran autonomous safety-gate audit verifying unbuilt gates and race conditions in session-management core",
@@ -49,14 +49,25 @@
     {
       "what": "Committed and pushed Formula/askr.rb, askr/hooks/stop.py, askr/session/lifecycle.py without blocking parallel session_start.py edits",
       "done": true
+    },
+    {
+      "what": "Created test_permission_gate.py with 13 passing tests covering dangerous-permission detection, task queue peeking, approval flag consumption, and Discord notification flow",
+      "done": true
+    },
+    {
+      "what": "Created test_task_approval_gate.py with comprehensive coverage for task approval/discard CLI commands and held-task lifecycle",
+      "done": true
+    },
+    {
+      "what": "Updated roadmap.md Phase 5 status to reflect completed dangerous-permission task approval gate implementation",
+      "done": true
+    },
+    {
+      "what": "Verified full test suite: 58 tests passing (45 core + 13 new permission/approval gate tests)",
+      "done": true
     }
   ],
   "in_progress": [
-    {
-      "file": "askr/hooks/session_start.py",
-      "what": "Wire dangerous-permission detection into session start flow; hold queued tasks if session has dangerous permissions and no approval flag; notify via Discord and notification.json; add task approval/discard CLI commands",
-      "last_line": 434
-    },
     {
       "file": null,
       "what": "Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry",
@@ -66,128 +77,120 @@
       "file": null,
       "what": "Cut real git tag + GitHub release so Formula sha256/url are real, and create homebrew-askr tap repo",
       "last_line": 0
-    },
-    {
-      "file": "askr/guard/pre_tool_use.py",
-      "what": "Extend cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit",
-      "last_line": 0
-    },
-    {
-      "file": "askr/checkpoint.py",
-      "what": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate",
-      "last_line": 0
-    },
-    {
-      "file": null,
-      "what": "Add test coverage for pre_tool_use.py/guard_runner.py - the implementation guard has zero tests despite being security-critical",
-      "last_line": 0
-    },
-    {
-      "file": "README.md",
-      "what": "Update documentation - Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'",
-      "last_line": 0
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Scrub Discord webhook from git history using git-filter-repo: clone --mirror, run filter-repo with --replace-text to remove credential, force-push to origin. Document exact steps and verify no traces remain in GitHub.",
-      "why": "Credential leaked in git history is a critical security issue; must be removed before any public release or tap repo creation."
+      "action": "Scrub Discord webhook credential from git history using git-filter-repo to remove leaked secret from all commits",
+      "why": "Security blocker: credential is exposed in git history and must be removed before any public release"
     },
     {
       "order": 2,
-      "action": "Complete session_start.py dangerous-permission gate: finish wiring permission_gate.is_dangerous_session call, test task holding/approval flow, add askr task approve/discard CLI commands, verify notification delivery.",
-      "why": "Gate logic is partially in place but CLI commands and full integration testing not yet done; Phase 5 roadmap item."
+      "action": "Cut real git tag (e.g. v0.1.0) and create GitHub release with accurate Formula sha256/url so homebrew-askr tap can reference real artifacts",
+      "why": "Formula currently has placeholder sha256/url; real release needed before tap repo can be published"
     },
     {
       "order": 3,
-      "action": "Cut real git tag (e.g. v0.1.0) and create GitHub release with tarball; update Formula/askr.rb sha256 and url to point to real release artifact.",
-      "why": "Formula currently has placeholder sha256/url; real release is prerequisite for homebrew-askr tap repo and public distribution."
+      "action": "Create homebrew-askr tap repository with Formula pointing to real release artifacts and sha256",
+      "why": "Completes Phase 5 roadmap item and enables users to install askr via brew tap"
     },
     {
       "order": 4,
-      "action": "Create homebrew-askr tap repo (GitHub org/homebrew-askr) and push Formula/askr.rb there; test installation via brew tap + brew install.",
-      "why": "Completes packaging story; enables users to install via standard homebrew workflow."
+      "action": "Extend pre_tool_use.py cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit",
+      "why": "Security gap: Bash commands can access files outside repo root without guard enforcement"
     },
     {
       "order": 5,
-      "action": "Extend askr/guard/pre_tool_use.py cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit.",
-      "why": "Guard currently incomplete; Bash calls can escape repo boundaries without detection."
+      "action": "Add test coverage for pre_tool_use.py and guard_runner.py (implementation guard has zero tests despite being security-critical)",
+      "why": "Critical path lacks test coverage; must verify guard logic before production launch"
     },
     {
       "order": 6,
-      "action": "Add test coverage for pre_tool_use.py and guard_runner.py (currently zero tests despite being security-critical path).",
-      "why": "Implementation guard has no test coverage; critical for safety verification before production use."
+      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate in checkpoint.py",
+      "why": "Emergency handovers currently use static template; should use full handover generation logic"
     },
     {
       "order": 7,
-      "action": "Fix PreCompact emergency handover in askr/checkpoint.py to route through real LLM handover path instead of hardcoded boilerplate.",
-      "why": "Emergency handover currently uses placeholder text; must use real handover generation for production readiness."
+      "action": "Update README.md to reflect Phase 3 (notifications) and Phase 3.5 (guard) as completed, not 'Coming Next'",
+      "why": "Documentation is stale; both phases are built and running"
     },
     {
       "order": 8,
-      "action": "Update README.md to reflect that Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'.",
-      "why": "Documentation is out of sync with implementation; users need accurate roadmap."
+      "action": "Wire task_approval_pending notification type into Cursor extension.js for IDE popup rendering",
+      "why": "New notification type added but not wired to extension; also audit guard_warning rendering"
     }
   ],
   "decisions": [
     {
-      "decision": "Dangerous-permission task approval gate uses one-shot flag (_consume_approval_flag) rather than persistent permission setting",
-      "reason": "Each held batch requires explicit approval; approving once does not silently authorize every future batch. Safer default for dangerous permissions."
+      "decision": "Use Stop hook signal instead of JSONL idle-time heuristic to trigger companion sessions",
+      "reason": "Stop hook provides deterministic signal of turn completion; JSONL idle heuristic is unreliable and race-prone"
     },
     {
-      "decision": "Lifecycle companion session triggering switched from JSONL idle-time heuristic to Stop hook signal",
-      "reason": "Signal-based approach is more reliable and precise; idle-time heuristic was fragile and could miss turn boundaries."
+      "decision": "Hold queued tasks in dangerous-permission sessions instead of auto-injecting them",
+      "reason": "Prevents unintended task execution in high-risk sessions; requires explicit approval via CLI or notification response"
     },
     {
-      "decision": "Task approval notification sent via both Discord and local notification.json file",
-      "reason": "Dual-channel approach ensures developer sees approval request even if Discord is unavailable; local file is fallback."
+      "decision": "Implement task approval gate as part of session_start.py flow, not as separate middleware",
+      "reason": "Centralizes permission logic at session entry point; simplifies state management and approval flag consumption"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
+    "askr/session/permission_gate.py",
     "askr/hooks/session_start.py",
-    "askr/hooks/stop.py",
-    "askr/session/lifecycle.py",
-    "Formula/askr.rb"
+    "askr/cli/askr.py",
+    "tests/test_permission_gate.py",
+    "tests/test_task_approval_gate.py",
+    "roadmap.md"
   ],
   "relational_files": [
     {
-      "file": "askr/session/permission_gate.py",
-      "relationship": "imported_by",
-      "why": "session_start.py calls is_dangerous_session() to determine whether to hold queued tasks"
+      "file": "askr/session/lifecycle.py",
+      "relationship": "imports|configures",
+      "why": "Switched from JSONL idle heuristic to Stop hook signal for companion session triggering"
     },
     {
-      "file": "askr/clients/discord.py",
-      "relationship": "imported_by",
-      "why": "session_start.py uses send_message() to notify developer of held tasks"
+      "file": "askr/hooks/stop.py",
+      "relationship": "imports|configures",
+      "why": "Added _signal_turn_stopped call to mark turn completion for lifecycle polling"
     },
     {
-      "file": "askr/state/config.py",
-      "relationship": "imported_by",
-      "why": "session_start.py uses get_state_dir() to locate task queue and notification files"
+      "file": "Formula/askr.rb",
+      "relationship": "configures",
+      "why": "Fixed to install full askr/ package, create bin/askr entry point, and install requirements.txt deps"
     },
     {
-      "file": "tests/",
-      "relationship": "tested_by",
-      "why": "All 45 tests still passing after lifecycle/stop/formula changes"
+      "file": "askr/state/goals.py",
+      "relationship": "configures",
+      "why": "Dangerous-permission task approval gate goal auto-completed by Stop-hook inference"
+    },
+    {
+      "file": "askr/hooks/pre_tool_use.py",
+      "relationship": "related",
+      "why": "Guard implementation; needs test coverage and Bash boundary check extension"
+    },
+    {
+      "file": "askr/session/checkpoint.py",
+      "relationship": "related",
+      "why": "Emergency handover path needs refactoring to use real LLM handover generation"
     }
   ],
   "uncommitted_files": [
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [
-    "Discord webhook credential leaked in git history must be scrubbed via git-filter-repo before public release",
-    "Real git tag and GitHub release required before Formula sha256/url can be finalized and homebrew-askr tap created"
+    "Discord webhook credential leaked in git history \u2014 requires git-filter-repo scrubbing before public release",
+    "Formula sha256/url are placeholders \u2014 need real git tag + GitHub release before homebrew-askr tap can be published",
+    "pre_tool_use.py cross-repo boundary check does not cover Bash tool calls \u2014 security gap"
   ],
   "completed_goals": [
-    "Rebuild Formula/askr.rb to install full askr/ package (not just root *.py), create bin/askr entry point, install deps from requirements.txt instead of hardcoded list",
-    "Build approval gate for --dangerously-skip-permissions sessions before queued/autonomous tasks run (roadmap Phase 5) - currently zero gate anywhere in askr/"
+    "Wire dangerous-permission detection into session start flow; hold queued tasks if session has dangerous permissions and no approval flag; notify via Discord and notification.json; add task approval/discard CLI commands"
   ],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T00:34:00+00:00",
+    "timestamp": "2026-07-01T19:09:42.128961+00:00",
     "developer": "bippin"
   }
 }
