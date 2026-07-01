@@ -879,3 +879,8 @@
 {"ts": "2026-07-01T18:28:47Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -n \"brew\\|Installation\\|install.sh\" README.md | head -20"}
 {"ts": "2026-07-01T18:28:49Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "sed -n '300,330p' README.md"}
 {"ts": "2026-07-01T18:28:50Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -n '\"emergency\"' askr/session/checkpoint.py"}
+{"ts": "2026-07-01T18:28:55Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -n \"cross.repo\\|project_root\\|boundary\\|outside.*project\\|find_project_root"}
+{"ts": "2026-07-01T18:28:57Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -rn \"TODO\\|FIXME\\|not implemented\\|NotImplementedError\\|placeholder\\|STUB\\|"}
+{"ts": "2026-07-01T18:29:03Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -n \"tool_name\\|def main\\|Write\\|Edit\\|Bash\\|MultiEdit\" askr/hooks/pre_tool_"}
+{"ts": "2026-07-01T18:29:04Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "grep -rn \"/Users/bippin\" askr/*.py askr/**/*.py 2>/dev/null | grep -v __pycache_"}
+{"ts": "2026-07-01T18:29:06Z", "session_id": "fb98c2d5-c07a-45ee-934d-d4725dcdea88", "type": "command", "detail": "sed -n '1,20p' askr/state/writer.py | grep -n \"def file_lock\" -A 15"}
