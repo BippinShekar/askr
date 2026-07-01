@@ -1,6 +1,6 @@
 {
-  "task": "askr is a multi-agent session management system for Claude Code; this session fixed handover document generation to scope file paths to the askr repository only, preventing cross-repo contamination in project state tracking.",
-  "discussion_summary": "Previous sessions fixed companion session opening and guard system boundary validation. This session discovered that checkpoint.py's _generate_project_brief() was including file paths from outside the askr repository (e.g., Claude's memory directory), polluting the handover document with foreign-repo context. Root cause was missing path filtering in the handover generation logic. Session fixed the scoping to ensure only files within /Users/bippin/Desktop/askr are tracked in project state, preventing future sessions from inheriting irrelevant context from sibling projects or system directories.",
+  "task": "askr is a multi-agent session management system for Claude Code; prior sessions fixed handover document generation to scope file paths to the askr repository only, preventing cross-repo contamination in project state tracking. This session explored voice notification and platform-specific features during initialization but did not commit code changes.",
+  "discussion_summary": "Previous sessions fixed companion session opening, guard system boundary validation, and handover document scoping to prevent foreign-repo context pollution. This session investigated adding voice/TTS notifications during askr init to inform users about state switching and session limits, searching for existing discord/notification/voice infrastructure and platform detection logic (macOS/Linux). No implementation was completed; session ended with exploration phase incomplete.",
   "accomplishments": [
     {
       "what": "Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention",
@@ -15,7 +15,13 @@
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "Exploring voice notification feature for askr init: user wants option to enable voice updates (TTS) to notify about task completion and state switching; investigating existing notification infrastructure and platform-specific audio capabilities",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
@@ -30,7 +36,12 @@
     {
       "order": 3,
       "action": "Verify handover document scoping is working correctly by checking that next session's context contains only askr-repo files",
-      "why": "Checkpoint fix just committed; ensures project state remains clean and doesn't accumulate foreign-repo paths in future sessions"
+      "why": "Checkpoint fix was committed; ensures project state remains clean and doesn't accumulate foreign-repo paths in future sessions"
+    },
+    {
+      "order": 4,
+      "action": "Design voice notification feature: determine TTS library (pyttsx3 for cross-platform, or platform-specific say/espeak), integration point in askr init, and user opt-in flow",
+      "why": "User requested voice updates during init to notify about task completion and session limits; requires architecture decision on library choice and init flow modification"
     }
   ],
   "decisions": [
@@ -52,56 +63,22 @@
     },
     {
       "decision": "Companion session opening must wait for Stop hook to signal completion before firing, not watch for file deletion",
-      "reason": "Prevents mid-reply session switches that cause context loss and force manual pinning; Stop hook is the authoritative completion signal"
-    },
-    {
-      "decision": "Handover document generation must scope file paths to the askr repository root only; paths outside this boundary must be filtered out",
-      "reason": "Prevents cross-repo contamination in project state tracking; ensures future sessions inherit only relevant context from the askr codebase"
+      "reason": "Prevents mid-reply session switches that cause context loss and force manual pinning; Stop hook is the authoritative signal"
     }
   ],
   "user_rejected_decisions": [],
-  "failed_approaches": [
-    {
-      "approach": "Assuming the stats file anomaly was caused by session_start.py being called twice with different cwd values",
-      "reason": "Investigation revealed the root cause was cwd drift during the session (via Bash `cd` command) combined with find_project_root() stopping at the first .claude it found, not multiple session_start.py calls"
-    },
-    {
-      "approach": "Treating all decisions.jsonl entries equally in guard context without distinguishing guard-inferred from user-made decisions",
-      "reason": "Guard rationale was polluting architectural decisions; guard-inferred constraints must be filtered before persisting to decisions.jsonl"
-    },
-    {
-      "approach": "Including all file paths from checkpoint.py's file discovery in handover documents without filtering by repository boundary",
-      "reason": "Caused cross-repo contamination (Claude memory paths, system directories) to pollute project state; scoping to askr root path required"
-    }
-  ],
-  "files_in_play": [
-    "askr/session/checkpoint.py"
-  ],
-  "relational_files": [
-    {
-      "file": "askr/state/writer.py",
-      "relationship": "imported_by",
-      "why": "Provides write_handover() function used by checkpoint.py to persist project state"
-    },
-    {
-      "file": "askr_state/project_brief.md",
-      "relationship": "configures",
-      "why": "Output file generated by checkpoint.py; contains scoped file paths for handover"
-    },
-    {
-      "file": "askr/guard/pre_tool_use.py",
-      "relationship": "related",
-      "why": "Enforces cross-repo boundary validation; checkpoint.py scoping aligns with guard's boundary checks"
-    }
-  ],
+  "failed_approaches": [],
+  "files_in_play": [],
+  "relational_files": [],
   "uncommitted_files": [
+    "askr_state/goals.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-01T18:22:17.183244+00:00",
+    "timestamp": "2026-07-01T18:27:13.004134+00:00",
     "developer": "bippin"
   }
 }

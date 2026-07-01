@@ -144,3 +144,7 @@
 {"id": "2956252c", "text": "Run full test suite and validate daemon stability over extended runtime", "status": "open", "date": "2026-06-19", "added": "2026-06-18T22:20:52Z", "auto_suggested": true, "done_at": null}
 {"id": "abaa1858", "text": "Verify IDE status bar displays correct session stats after stop.py fix", "status": "discarded", "date": "2026-06-19", "added": "2026-06-18T22:20:52Z", "auto_suggested": true, "done_at": "2026-06-18T22:24:18Z"}
 {"id": "2956252c", "text": "Run full test suite and validate daemon stability over extended runtime", "status": "discarded", "date": "2026-06-19", "added": "2026-06-18T22:20:52Z", "auto_suggested": true, "done_at": "2026-06-18T22:24:18Z"}
+{"id": "feceaa7e", "text": "Test companion session handoff at 60% quota threshold", "status": "open", "date": "2026-07-01", "added": "2026-07-01T18:26:31Z", "auto_suggested": true, "done_at": null}
+{"id": "6e1cd3c2", "text": "Verify handover document scoping contains only askr-repo files", "status": "open", "date": "2026-07-01", "added": "2026-07-01T18:26:31Z", "auto_suggested": true, "done_at": null}
+{"id": "feceaa7e", "text": "Test companion session handoff at 60% quota threshold", "status": "discarded", "date": "2026-07-01", "added": "2026-07-01T18:26:31Z", "auto_suggested": true, "done_at": "2026-07-01T18:27:40Z"}
+{"id": "6e1cd3c2", "text": "Verify handover document scoping contains only askr-repo files", "status": "discarded", "date": "2026-07-01", "added": "2026-07-01T18:26:31Z", "auto_suggested": true, "done_at": "2026-07-01T18:27:40Z"}
