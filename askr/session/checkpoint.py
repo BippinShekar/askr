@@ -275,9 +275,15 @@ Rules:
   file path against the root path above; a path that does not start with it belongs to another
   repo even if the work looks legitimate and on-topic), EXCLUDE that content entirely from
   task/discussion_summary/accomplishments/in_progress/next_actions/decisions/failed_approaches —
-  do not summarize it, do not soften it, just leave it out. Off-topic or foreign-repo content that
-  gets merged in here never gets cleaned up automatically and keeps reappearing in every future
-  session's context, including in a completely unrelated codebase.
+  do not summarize it, do not soften it, just leave it out. This applies EVEN IF there is no
+  "TOOL:" line to check — a purely conversational answer or explanation about another named
+  project, product, or codebase (no file edits, just discussion) is just as foreign as one
+  backed by tool calls. The absence of tool-call evidence is not evidence the content belongs
+  here. If the subject matter names a different product/codebase than the one at the root path
+  above, or describes decisions/data fields/architecture that has no corresponding file in THIS
+  repository, leave it out. Off-topic or foreign-repo content that gets merged in here never
+  gets cleaned up automatically and keeps reappearing in every future session's context,
+  including in a completely unrelated codebase.
 - MERGE, do not replace: keep relevant items from EXISTING PROJECT STATE; update or remove items this session resolved.
 - in_progress: REMOVE items this session completed. KEEP still-relevant items from existing state. ADD new in-progress from this session.
 - in_progress.file: only set this to a real source file this session was actively editing. Never set it to
