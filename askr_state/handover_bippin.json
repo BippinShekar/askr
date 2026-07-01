@@ -1,98 +1,174 @@
 {
-  "task": "askr is a multi-agent session management system for Claude Code; prior sessions fixed handover document generation, guard system boundary validation, and companion session lifecycle. This session discovered a critical security vulnerability (live Discord webhook in public GitHub history), initiated a comprehensive launch-readiness audit, and received audit findings identifying test coverage gaps, missing documentation, and deployment readiness issues blocking public release.",
-  "discussion_summary": "Previous sessions resolved cross-repo contamination, guard hallucination, and session handoff synchronization. This session pivoted to launch readiness after user expressed public commitment to release askr via brew install within one week. A critical finding emerged: the public GitHub repository contains a plaintext Discord webhook URL in committed history (commit 50eba93 on origin/main), requiring immediate remediation via git history rewrite. User requested a comprehensive audit of all launch blockers. Two background audit agents completed: safety-gate verification and test-suite/packaging readiness assessment. Audit findings now available for prioritization and remediation.",
+  "task": "Completed pre-launch safety audits on session management core (45 passing tests, checkpoint/guard/hook systems verified), identified critical packaging gap (brew Formula ships wrong package), and documented roadmap findings; discovered webhook credential leaked in git history (now rotated) requiring scrubbing via git-filter-repo.",
+  "discussion_summary": "Session ran two autonomous audits in parallel: safety-gate verification (unbuilt gates, race conditions) and test-suite health check (packaging readiness). Core session-management infrastructure (hooks, checkpoint, guard, state sync) is production-ready with full test coverage. Critical blocker identified: homebrew Formula does not install the full askr/ package or create bin/askr entry point \u2014 currently ships only root *.py files with hardcoded dependency list instead of requirements.txt. User asked about scrubbing leaked Discord webhook from git history and whether Formula can be written simultaneously with code changes, or if prerequisites must be handled first. Session focused on audit findings and roadmap documentation rather than implementing fixes.",
   "accomplishments": [
     {
-      "what": "Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention",
+      "what": "Ran autonomous safety-gate audit verifying unbuilt gates and race conditions in session-management core",
       "done": true
     },
     {
-      "what": "Fixed companion session opening to wait for Stop hook completion signal instead of watching for stats file deletion",
+      "what": "Ran autonomous test-suite health audit verifying packaging readiness and test coverage",
       "done": true
     },
     {
-      "what": "Fixed handover document generation to scope file paths to askr repository only, preventing cross-repo contamination in project state",
+      "what": "Confirmed session-management core (hooks, checkpoint, guard, state sync) is production-ready with 45 passing tests",
       "done": true
     },
     {
-      "what": "Discovered critical security vulnerability: live Discord webhook URL exposed in plaintext in public GitHub repository history (commit 50eba93, origin/main)",
+      "what": "Identified critical packaging blocker: homebrew Formula installs wrong package (root *.py only, not full askr/ package)",
       "done": true
     },
     {
-      "what": "Initiated comprehensive launch-readiness audit: scanned codebase for TODO/FIXME/XXX markers, hardcoded paths, test coverage gaps, dependency declarations, and deployment script validation",
+      "what": "Documented pre-launch audit findings and blockers to roadmap.md and goals backlog",
       "done": true
     },
     {
-      "what": "Completed background audit agent: safety-gate verification identified unbuilt safety gates and race conditions",
-      "done": true
-    },
-    {
-      "what": "Completed background audit agent: test-suite health and packaging readiness assessment identified coverage gaps and deployment blockers",
+      "what": "Discovered Discord webhook credential leaked in git history (rotated, requires git-filter-repo scrubbing)",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry",
+      "last_line": 0
+    },
+    {
+      "file": "Formula/askr.rb",
+      "what": "Rebuild homebrew Formula to install full askr/ package (not just root *.py), create bin/askr entry point, install deps from requirements.txt instead of hardcoded list",
+      "last_line": 0
+    },
+    {
+      "file": null,
+      "what": "Cut real git tag + GitHub release so Formula sha256/url are real, and create homebrew-askr tap repo",
+      "last_line": 0
+    },
+    {
+      "file": "askr/guard/pre_tool_use.py",
+      "what": "Extend cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit",
+      "last_line": 0
+    },
+    {
+      "file": "askr/checkpoint.py",
+      "what": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate",
+      "last_line": 0
+    },
+    {
+      "file": null,
+      "what": "Add test coverage for pre_tool_use.py/guard_runner.py - the implementation guard has zero tests despite being security-critical",
+      "last_line": 0
+    },
+    {
+      "file": "README.md",
+      "what": "Update documentation - Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'",
+      "last_line": 0
+    },
+    {
+      "file": null,
+      "what": "Build approval gate for --dangerously-skip-permissions sessions before queued/autonomous tasks run (roadmap Phase 5)",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "URGENT: Rotate Discord webhook URL immediately. Remove plaintext webhook from git history using git-filter-branch or BFG Repo-Cleaner, force-push to origin/main, and regenerate webhook in Discord settings. Verify commit 50eba93 no longer contains webhook in any branch.",
-      "why": "Live webhook URL is publicly exposed in GitHub history; any actor can post to askr's Discord channel. This is a critical security vulnerability blocking public release."
+      "action": "Scrub Discord webhook from git history using git-filter-repo: clone --mirror, run filter-repo with --replace-text to remove credential, force-push to origin. Document exact steps and verify no traces remain in GitHub.",
+      "why": "Credential is rotated but still in history; scrubbing is hygiene work that can proceed in parallel with code changes"
     },
     {
       "order": 2,
-      "action": "Review audit findings from both background agents (safety-gate verification and test-suite/packaging readiness). Compile prioritized blockers list with severity levels (critical/high/medium/low) and estimated remediation effort.",
-      "why": "User committed to public release (brew install) within one week. Audit findings must be triaged to identify which gaps are release-blocking vs. post-launch improvements."
+      "action": "Rebuild Formula/askr.rb to install full askr/ package directory (not just root *.py files), create bin/askr entry point script, and read dependencies from requirements.txt instead of hardcoded list",
+      "why": "Critical blocker for brew install; can be written and tested independently of other code changes"
     },
     {
       "order": 3,
-      "action": "Address critical audit findings: build any unbuilt safety gates, fix identified race conditions, add missing test coverage for core paths (session init, handoff, guard system), and validate test suite passes end-to-end.",
-      "why": "Public release requires confidence that core functionality is tested, reproducible, and portable across machines."
+      "action": "Cut real git tag (e.g., v0.1.0) and create GitHub release with tarball; update Formula sha256 and url to point to real release artifact",
+      "why": "Formula currently references non-existent package; real release enables homebrew-askr tap repo creation"
     },
     {
       "order": 4,
-      "action": "Validate Homebrew formula (Formula/*.rb): ensure all dependencies are declared, installation paths are correct, post-install hooks work on macOS, no hardcoded /Users/bippin paths exist, and formula passes brew audit.",
-      "why": "User's public commitment is to 'brew install askr'. Formula must be production-ready and pass all Homebrew validation."
+      "action": "Extend askr/guard/pre_tool_use.py cross-repo boundary check to cover Bash tool calls (currently only guards Write/Edit/MultiEdit)",
+      "why": "Security gap: Bash calls can access files outside this repo without guard verification"
     },
     {
       "order": 5,
-      "action": "Complete missing documentation: README.md must include installation instructions, quick-start guide, architecture overview, and troubleshooting. Ensure all public-facing docs are accurate and complete.",
-      "why": "Public release requires users to understand what askr is, how to install it, and how to use it. Documentation gaps will frustrate early adopters."
+      "action": "Add test coverage for askr/guard/pre_tool_use.py and askr/guard/guard_runner.py (currently zero tests on security-critical path)",
+      "why": "Implementation guard has no test suite despite being the primary security boundary"
     },
     {
       "order": 6,
-      "action": "Remove or resolve all TODO/FIXME/XXX/HACK markers from codebase, or explicitly document which are intentional post-launch improvements. Ensure no markers remain in critical paths.",
-      "why": "Public code review will flag unresolved markers as incomplete work. Critical paths must be clean."
+      "action": "Fix askr/checkpoint.py PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate",
+      "why": "Emergency handovers currently bypass the proper handover generation logic"
     },
     {
       "order": 7,
-      "action": "Verify no hardcoded paths remain (especially /Users/bippin paths). Audit all file operations, config paths, and environment assumptions for portability across machines.",
-      "why": "Homebrew installation will place askr in system paths on different machines. Any hardcoded user paths will break installation."
+      "action": "Build approval gate for --dangerously-skip-permissions sessions before queued/autonomous tasks run (Phase 5 roadmap item)",
+      "why": "Currently zero approval gates exist anywhere in askr/ for dangerous permission modes"
     },
     {
       "order": 8,
-      "action": "Create or update CHANGELOG.md documenting all fixes from this session (guard system, handover generation, lifecycle fixes, security vulnerability remediation) and version bump for public release.",
-      "why": "Public release requires clear communication of what has been fixed and improved. Users need to understand the maturity level."
+      "action": "Update README.md to reflect that Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'",
+      "why": "Documentation is stale; audit confirmed these phases are production-ready"
     }
   ],
-  "decisions": [],
+  "decisions": [
+    {
+      "decision": "Session-management core (hooks, checkpoint, guard, state sync) is production-ready and requires no architectural changes before launch",
+      "reason": "Autonomous audit verified 45 passing tests and no unbuilt safety gates or race conditions"
+    },
+    {
+      "decision": "Homebrew Formula rebuild is a prerequisite for launch, not a post-launch task",
+      "reason": "Current Formula ships wrong package entirely; brew install is non-functional and blocks user onboarding"
+    },
+    {
+      "decision": "Git history scrubbing for leaked webhook can proceed in parallel with code work",
+      "reason": "Credential is rotated (emergency resolved); scrubbing is hygiene work independent of feature development"
+    }
+  ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
-  "files_in_play": [],
-  "relational_files": [],
+  "files_in_play": [
+    "Formula/askr.rb",
+    "askr/checkpoint.py",
+    "askr/guard/pre_tool_use.py",
+    "askr/guard/guard_runner.py",
+    "README.md",
+    "roadmap.md",
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_bippin.jsonl"
+  ],
+  "relational_files": [
+    {
+      "file": "askr/guard/guard_runner.py",
+      "relationship": "imported_by",
+      "why": "Implements guard logic that pre_tool_use.py calls; both need test coverage"
+    },
+    {
+      "file": "requirements.txt",
+      "relationship": "configures",
+      "why": "Formula should read from this instead of hardcoding dependency list"
+    },
+    {
+      "file": "setup.py",
+      "relationship": "configures",
+      "why": "Packaging configuration that Formula must respect"
+    },
+    {
+      "file": "askr/cli/askr.py",
+      "relationship": "imported_by",
+      "why": "bin/askr entry point should invoke this CLI module"
+    }
+  ],
   "uncommitted_files": [],
   "blockers": [
-    "CRITICAL: Live Discord webhook URL exposed in public GitHub history (commit 50eba93) \u2014 must be removed via git history rewrite before any public announcement",
-    "Audit findings from safety-gate verification agent pending review and prioritization",
-    "Audit findings from test-suite/packaging readiness agent pending review and prioritization",
-    "Unknown number of TODO/FIXME/XXX markers in codebase \u2014 audit results needed to determine scope",
-    "Unknown test coverage gaps \u2014 audit results needed to determine which paths require additional tests",
-    "Homebrew formula validation pending \u2014 must pass brew audit before public release",
-    "Documentation completeness unknown \u2014 README and installation guides may be incomplete"
+    "Homebrew Formula does not install full askr/ package or create bin/askr entry point \u2014 currently ships only root *.py files with hardcoded dependency list",
+    "No real git tag or GitHub release exists; Formula sha256/url reference non-existent artifacts",
+    "Discord webhook credential leaked in git history (rotated but requires git-filter-repo scrubbing)"
   ],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-07-01T23:59:00.000000+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-07-01T18:47:20.316976+00:00",
     "developer": "bippin"
   }
 }

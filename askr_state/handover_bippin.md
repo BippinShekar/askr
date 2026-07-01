@@ -1,48 +1,74 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 00:00
+Last updated: 2026-07-02 00:17
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-askr is a multi-agent session management system for Claude Code; prior sessions fixed handover document generation, guard system boundary validation, and companion session lifecycle. This session discovered a critical security vulnerability (live Discord webhook in public GitHub history), initiated a comprehensive launch-readiness audit, and received audit findings identifying test coverage gaps, missing documentation, and deployment readiness issues blocking public release.
+Completed pre-launch safety audits on session management core (45 passing tests, checkpoint/guard/hook systems verified), identified critical packaging gap (brew Formula ships wrong package), and documented roadmap findings; discovered webhook credential leaked in git history (now rotated) requiring scrubbing via git-filter-repo.
 
 ## Discussion
-Previous sessions resolved cross-repo contamination, guard hallucination, and session handoff synchronization. This session pivoted to launch readiness after user expressed public commitment to release askr via brew install within one week. A critical finding emerged: the public GitHub repository contains a plaintext Discord webhook URL in committed history (commit 50eba93 on origin/main), requiring immediate remediation via git history rewrite. User requested a comprehensive audit of all launch blockers. Two background audit agents completed: safety-gate verification and test-suite/packaging readiness assessment. Audit findings now available for prioritization and remediation.
+Session ran two autonomous audits in parallel: safety-gate verification (unbuilt gates, race conditions) and test-suite health check (packaging readiness). Core session-management infrastructure (hooks, checkpoint, guard, state sync) is production-ready with full test coverage. Critical blocker identified: homebrew Formula does not install the full askr/ package or create bin/askr entry point — currently ships only root *.py files with hardcoded dependency list instead of requirements.txt. User asked about scrubbing leaked Discord webhook from git history and whether Formula can be written simultaneously with code changes, or if prerequisites must be handled first. Session focused on audit findings and roadmap documentation rather than implementing fixes.
 
 ## Accomplishments
-- [x] Fixed 8 hallucination and boundary issues in guard system: cross-repo boundary validation, retry state tracking, guard rule tightening, and decision.jsonl pollution prevention
-- [x] Fixed companion session opening to wait for Stop hook completion signal instead of watching for stats file deletion
-- [x] Fixed handover document generation to scope file paths to askr repository only, preventing cross-repo contamination in project state
-- [x] Discovered critical security vulnerability: live Discord webhook URL exposed in plaintext in public GitHub repository history (commit 50eba93, origin/main)
-- [x] Initiated comprehensive launch-readiness audit: scanned codebase for TODO/FIXME/XXX markers, hardcoded paths, test coverage gaps, dependency declarations, and deployment script validation
-- [x] Completed background audit agent: safety-gate verification identified unbuilt safety gates and race conditions
-- [x] Completed background audit agent: test-suite health and packaging readiness assessment identified coverage gaps and deployment blockers
+- [x] Ran autonomous safety-gate audit verifying unbuilt gates and race conditions in session-management core
+- [x] Ran autonomous test-suite health audit verifying packaging readiness and test coverage
+- [x] Confirmed session-management core (hooks, checkpoint, guard, state sync) is production-ready with 45 passing tests
+- [x] Identified critical packaging blocker: homebrew Formula installs wrong package (root *.py only, not full askr/ package)
+- [x] Documented pre-launch audit findings and blockers to roadmap.md and goals backlog
+- [x] Discovered Discord webhook credential leaked in git history (rotated, requires git-filter-repo scrubbing)
+
+## In Progress
+- `None`: Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry
+- `Formula/askr.rb`: Rebuild homebrew Formula to install full askr/ package (not just root *.py), create bin/askr entry point, install deps from requirements.txt instead of hardcoded list
+- `None`: Cut real git tag + GitHub release so Formula sha256/url are real, and create homebrew-askr tap repo
+- `askr/guard/pre_tool_use.py`: Extend cross-repo boundary check to cover Bash tool calls, not just Write/Edit/MultiEdit
+- `askr/checkpoint.py`: Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate
+- `None`: Add test coverage for pre_tool_use.py/guard_runner.py - the implementation guard has zero tests despite being security-critical
+- `README.md`: Update documentation - Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'
+- `None`: Build approval gate for --dangerously-skip-permissions sessions before queued/autonomous tasks run (roadmap Phase 5)
 
 ## Next Actions
-1. URGENT: Rotate Discord webhook URL immediately. Remove plaintext webhook from git history using git-filter-branch or BFG Repo-Cleaner, force-push to origin/main, and regenerate webhook in Discord settings. Verify commit 50eba93 no longer contains webhook in any branch.
-   *Why: Live webhook URL is publicly exposed in GitHub history; any actor can post to askr's Discord channel. This is a critical security vulnerability blocking public release.*
-2. Review audit findings from both background agents (safety-gate verification and test-suite/packaging readiness). Compile prioritized blockers list with severity levels (critical/high/medium/low) and estimated remediation effort.
-   *Why: User committed to public release (brew install) within one week. Audit findings must be triaged to identify which gaps are release-blocking vs. post-launch improvements.*
-3. Address critical audit findings: build any unbuilt safety gates, fix identified race conditions, add missing test coverage for core paths (session init, handoff, guard system), and validate test suite passes end-to-end.
-   *Why: Public release requires confidence that core functionality is tested, reproducible, and portable across machines.*
-4. Validate Homebrew formula (Formula/*.rb): ensure all dependencies are declared, installation paths are correct, post-install hooks work on macOS, no hardcoded /Users/bippin paths exist, and formula passes brew audit.
-   *Why: User's public commitment is to 'brew install askr'. Formula must be production-ready and pass all Homebrew validation.*
-5. Complete missing documentation: README.md must include installation instructions, quick-start guide, architecture overview, and troubleshooting. Ensure all public-facing docs are accurate and complete.
-   *Why: Public release requires users to understand what askr is, how to install it, and how to use it. Documentation gaps will frustrate early adopters.*
-6. Remove or resolve all TODO/FIXME/XXX/HACK markers from codebase, or explicitly document which are intentional post-launch improvements. Ensure no markers remain in critical paths.
-   *Why: Public code review will flag unresolved markers as incomplete work. Critical paths must be clean.*
-7. Verify no hardcoded paths remain (especially /Users/bippin paths). Audit all file operations, config paths, and environment assumptions for portability across machines.
-   *Why: Homebrew installation will place askr in system paths on different machines. Any hardcoded user paths will break installation.*
-8. Create or update CHANGELOG.md documenting all fixes from this session (guard system, handover generation, lifecycle fixes, security vulnerability remediation) and version bump for public release.
-   *Why: Public release requires clear communication of what has been fixed and improved. Users need to understand the maturity level.*
+1. Scrub Discord webhook from git history using git-filter-repo: clone --mirror, run filter-repo with --replace-text to remove credential, force-push to origin. Document exact steps and verify no traces remain in GitHub.
+   *Why: Credential is rotated but still in history; scrubbing is hygiene work that can proceed in parallel with code changes*
+2. Rebuild Formula/askr.rb to install full askr/ package directory (not just root *.py files), create bin/askr entry point script, and read dependencies from requirements.txt instead of hardcoded list
+   *Why: Critical blocker for brew install; can be written and tested independently of other code changes*
+3. Cut real git tag (e.g., v0.1.0) and create GitHub release with tarball; update Formula sha256 and url to point to real release artifact
+   *Why: Formula currently references non-existent package; real release enables homebrew-askr tap repo creation*
+4. Extend askr/guard/pre_tool_use.py cross-repo boundary check to cover Bash tool calls (currently only guards Write/Edit/MultiEdit)
+   *Why: Security gap: Bash calls can access files outside this repo without guard verification*
+5. Add test coverage for askr/guard/pre_tool_use.py and askr/guard/guard_runner.py (currently zero tests on security-critical path)
+   *Why: Implementation guard has no test suite despite being the primary security boundary*
+6. Fix askr/checkpoint.py PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate
+   *Why: Emergency handovers currently bypass the proper handover generation logic*
+7. Build approval gate for --dangerously-skip-permissions sessions before queued/autonomous tasks run (Phase 5 roadmap item)
+   *Why: Currently zero approval gates exist anywhere in askr/ for dangerous permission modes*
+8. Update README.md to reflect that Phase 3 (notifications) and Phase 3.5 (guard) are built and running, not 'Coming Next'
+   *Why: Documentation is stale; audit confirmed these phases are production-ready*
+
+## Decisions
+- Session-management core (hooks, checkpoint, guard, state sync) is production-ready and requires no architectural changes before launch — Autonomous audit verified 45 passing tests and no unbuilt safety gates or race conditions
+- Homebrew Formula rebuild is a prerequisite for launch, not a post-launch task — Current Formula ships wrong package entirely; brew install is non-functional and blocks user onboarding
+- Git history scrubbing for leaked webhook can proceed in parallel with code work — Credential is rotated (emergency resolved); scrubbing is hygiene work independent of feature development
+
+## Files In Play
+- `Formula/askr.rb`
+- `askr/checkpoint.py`
+- `askr/guard/pre_tool_use.py`
+- `askr/guard/guard_runner.py`
+- `README.md`
+- `roadmap.md`
+- `askr_state/goals.jsonl`
+- `askr_state/implementation_bippin.jsonl`
+
+## Relational Files
+- `askr/guard/guard_runner.py` (imported_by): Implements guard logic that pre_tool_use.py calls; both need test coverage
+- `requirements.txt` (configures): Formula should read from this instead of hardcoding dependency list
+- `setup.py` (configures): Packaging configuration that Formula must respect
+- `askr/cli/askr.py` (imported_by): bin/askr entry point should invoke this CLI module
 
 ## Blockers
-- CRITICAL: Live Discord webhook URL exposed in public GitHub history (commit 50eba93) — must be removed via git history rewrite before any public announcement
-- Audit findings from safety-gate verification agent pending review and prioritization
-- Audit findings from test-suite/packaging readiness agent pending review and prioritization
-- Unknown number of TODO/FIXME/XXX markers in codebase — audit results needed to determine scope
-- Unknown test coverage gaps — audit results needed to determine which paths require additional tests
-- Homebrew formula validation pending — must pass brew audit before public release
-- Documentation completeness unknown — README and installation guides may be incomplete
+- Homebrew Formula does not install full askr/ package or create bin/askr entry point — currently ships only root *.py files with hardcoded dependency list
+- No real git tag or GitHub release exists; Formula sha256/url reference non-existent artifacts
+- Discord webhook credential leaked in git history (rotated but requires git-filter-repo scrubbing)
