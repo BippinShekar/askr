@@ -1,6 +1,6 @@
 {
   "task": "Implemented macOS voice notification system for askr init to enable users to opt-in to spoken state updates via native `say` command, integrated with existing Discord notification hooks to announce task completion and session state transitions.",
-  "discussion_summary": "Session focused on adding voice notification capability to askr initialization flow. User requested voice updates during askr init to notify when Claude Code completes tasks and to warn about session limits, complementing existing Discord notifications. Investigation confirmed macOS-only deployment (safe to use native `say` TTS without cross-platform abstraction). Architecture identified: voice notifications should hook into existing notification infrastructure (askr/hooks/stop.py, notification.py) as an additional sink alongside Discord, requiring minimal mechanical changes to wire opt-in preference through init flow and state management.",
+  "discussion_summary": "Session focused on voice notification preference schema design and initial implementation. Determined that voice_notifications is a machine-level user trait (stored in global ~/.config/askr/config.json) rather than per-project, mirroring the pattern of developer name. Added load_voice_enabled() and save_voice_enabled() helper functions to askr/state/config.py following existing config.py conventions. Architecture identified: voice notifications hook into existing notification infrastructure (askr/hooks/stop.py, notification.py) as an additional sink alongside Discord, requiring minimal mechanical changes to wire opt-in preference through init flow and state management.",
   "accomplishments": [
     {
       "what": "LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern",
@@ -57,6 +57,14 @@
     {
       "what": "Identified notification hook integration points (askr/hooks/stop.py, notification.py) for wiring voice updates as additional sink alongside Discord",
       "done": true
+    },
+    {
+      "what": "Designed voice notification preference schema: machine-level boolean flag stored in global ~/.config/askr/config.json (not per-project)",
+      "done": true
+    },
+    {
+      "what": "Implemented load_voice_enabled() and save_voice_enabled() helper functions in askr/state/config.py following existing config pattern",
+      "done": true
     }
   ],
   "in_progress": [
@@ -65,82 +73,82 @@
       "what": "Architectural design for stateful retry mechanism that captures failure context (screenshots, error reasoning) to enable learning-based job resubmission instead of blind retry"
     },
     {
-      "file": null,
-      "what": "Voice notification system implementation: wire opt-in preference through askr init flow, integrate with existing notification hooks to announce task completion and session state transitions"
+      "file": "askr/state/config.py",
+      "what": "Voice notification system implementation: wire voice_enabled preference through askr init flow, integrate with existing notification hooks to announce task completion and session state transitions"
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Design voice notification preference schema for askr init (boolean flag in user config or session state)",
-      "why": "Required before implementation; determines where opt-in preference is stored and how it flows through session lifecycle"
+      "action": "Implement voice preference prompt in askr init flow (mirror Discord webhook prompt pattern) to capture user opt-in during initialization",
+      "why": "Required before voice notifications can be triggered; determines UX for first-time setup and preference changes"
     },
     {
       "order": 2,
-      "action": "Implement voice notification sink in notification.py or new module, wrapping native `say` command with task name and state transition messages",
-      "why": "Core implementation; should mirror Discord sink pattern to reuse existing hook infrastructure"
+      "action": "Create askr/hooks/voice.py notification sink that wraps macOS `say` command with error handling and optional volume/rate parameters",
+      "why": "Implements the actual TTS invocation; should follow notification.py Discord sink pattern for consistency"
     },
     {
       "order": 3,
-      "action": "Wire voice preference into askr init CLI flow to prompt user for opt-in during initialization",
-      "why": "User-facing requirement; enables voice notifications to be enabled at setup time"
+      "action": "Wire voice_enabled preference check into askr/hooks/stop.py and notification.py to conditionally invoke voice sink alongside Discord webhook",
+      "why": "Connects preference to actual notification dispatch; minimal mechanical change to existing hook infrastructure"
     },
     {
       "order": 4,
-      "action": "Test voice notifications for task completion ('done with <task>') and session state warnings (session limit approaching)",
-      "why": "Validates feature meets user requirements for state transition notifications"
-    },
-    {
-      "order": 5,
-      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)",
-      "why": "Open goal from prior sessions; emergency handovers currently bypass proper LLM-based context generation"
-    },
-    {
-      "order": 6,
-      "action": "Investigate guard_runner.py's non-blocking notification.json path (type: guard_warning) dead code and determine if Phase 3.5 IDE popup feature is still planned",
-      "why": "Open goal; code path never invoked from pre_tool_use.py or HOOK_MAP; clarify if feature should be removed or completed"
+      "action": "Add voice notification test coverage for load_voice_enabled/save_voice_enabled in tests/test_config.py",
+      "why": "Ensures preference persistence and retrieval work correctly; follows existing test patterns"
     }
   ],
   "decisions": [
     {
-      "decision": "Voice notifications use native macOS `say` command rather than cross-platform TTS library",
-      "reason": "Codebase is macOS-only deployment; native command is mechanically simpler and requires no additional dependencies"
+      "decision": "Voice notification preference stored as machine-level boolean in global ~/.config/askr/config.json, not per-project",
+      "reason": "Voice is a user/machine trait (do I want this Mac to talk), not a per-project secret like discord_webhook; mirrors developer name pattern in config.py"
     },
     {
-      "decision": "Voice notifications integrate as additional sink in existing notification infrastructure (askr/hooks/stop.py, notification.py) rather than separate system",
-      "reason": "Minimizes mechanical changes; reuses existing hook patterns and state management for Discord notifications"
+      "decision": "Voice notifications implemented as additional sink in existing notification infrastructure, not separate code path",
+      "reason": "Minimizes mechanical changes; reuses Discord webhook pattern (notification.py, hooks/stop.py) for consistency and maintainability"
+    },
+    {
+      "decision": "macOS-only deployment using native `say` command without cross-platform abstraction",
+      "reason": "askr is macOS-only; native TTS avoids external dependencies and licensing complexity"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/hooks/stop.py",
-    "askr/notification.py",
-    "askr/cli/askr.py"
+    "askr/state/config.py"
   ],
   "relational_files": [
     {
       "file": "askr/hooks/stop.py",
-      "relationship": "imports",
-      "why": "Existing hook point where notification sinks are triggered; voice notifications will integrate here"
-    },
-    {
-      "file": "askr/notification.py",
-      "relationship": "imports",
-      "why": "Existing notification infrastructure; voice sink will be added alongside Discord sink"
-    },
-    {
-      "file": "askr/cli/askr.py",
       "relationship": "configures",
-      "why": "Init flow where user voice preference will be prompted and stored"
+      "why": "Notification dispatch point where voice sink will be wired alongside Discord webhook"
+    },
+    {
+      "file": "askr/hooks/notification.py",
+      "relationship": "configures",
+      "why": "Existing notification sink pattern that voice implementation will mirror"
+    },
+    {
+      "file": "askr/init.py",
+      "relationship": "configures",
+      "why": "Init flow where voice preference prompt will be added (mirror Discord webhook prompt)"
+    },
+    {
+      "file": "tests/test_config.py",
+      "relationship": "tested_by",
+      "why": "Test coverage for load_voice_enabled/save_voice_enabled functions"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr/state/config.py",
+    "askr_state/implementation_bippin.jsonl"
+  ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "context",
-    "timestamp": "2026-07-01T20:27:19.295696+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-01T20:29:50.594737+00:00",
     "developer": "bippin"
   }
 }
