@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-07-01 22:33
+Last updated: 2026-07-01 22:58
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-askr is a multi-agent session management system for Claude Code; this session completed fixes for 8 hallucination and boundary issues in the guard system, including cross-repo boundary validation, retry state tracking, and guard rule tightening, and committed all changes to main.
+askr is a multi-agent session management system for Claude Code; this session completed fixes for 8 hallucination and boundary issues in the guard system, including cross-repo boundary validation, retry state tracking, and guard rule tightening, and fixed a critical lifecycle bug where companion sessions were opening mid-reply instead of after Claude's message completed.
 
 ## Discussion
-This session inherited partial fixes from the previous session (issues 1, 2, 4 in pre_tool_use.py and checkpoint.py) and completed the remaining 5 issues (3, 5, 6, 7, 8) across pre_tool_use.py, stop.py, and guard.py. The work focused on eliminating false guard blocks by: adding cross-repo boundary checks to prevent tool use outside askr, fixing retry state tracking to avoid false "creating new file" labels, tightening guard rules to require explicit architectural prohibition before blocking, and filtering guard-inferred signals from the decision record. All changes were tested for syntax correctness and committed to main.
+This session inherited partial fixes from the previous session (issues 1, 2, 4 in pre_tool_use.py and checkpoint.py) and completed the remaining 5 issues (3, 5, 6, 7, 8) across pre_tool_use.py, stop.py, and guard.py. The work focused on eliminating false guard blocks by adding cross-repo boundary checks, fixing retry state tracking, tightening guard rules to require explicit architectural prohibition before blocking, and filtering guard-inferred signals from the decision record. Additionally, the session identified and fixed a critical lifecycle bug where the companion session trigger was firing mid-reply instead of waiting for Claude's message to complete, which caused context loss and forced manual pinning. The fix ensures the Stop hook properly signals completion before the companion session opens.
 
 ## Accomplishments
 - [x] Located and reviewed all guard-related code across askr codebase (guard.py, guard_context.py, guard_decision.py, etc.)
@@ -30,39 +30,41 @@ This session inherited partial fixes from the previous session (issues 1, 2, 4 i
 - [x] Implemented Issue 8: added cross-repo boundary validation to prevent tool use outside askr project root
 - [x] Verified all code changes for syntax correctness using Python AST parser
 - [x] Committed all guard fixes (pre_tool_use.py, stop.py, checkpoint.py, guard.py) with message explaining hallucination loop fix and new guard rules
-- [x] Pushed committed changes to main branch
-
-## In Progress
-- `None`: Test askr hooks in leaps repo after commit to verify end-to-end hook processing works correctly with the fixed find_project_root() and hookEventName output
-- `None`: Queue drain system implementation for proper task sequencing across teammates (goal lifecycle: queued → claimed → executing → archived)
-- `None`: Permission model to ensure one teammate's tasks don't overwrite another's, respecting Claude permissions per user
+- [x] Identified lifecycle bug: _open_companion_session_for_trigger was firing mid-reply instead of waiting for Stop hook to signal completion
+- [x] Fixed lifecycle.py: replaced broken stats file deletion detection with explicit Stop hook signal via checkpoint marker
+- [x] Verified lifecycle.py syntax and committed fix (commit 887c298) ensuring companion sessions open only after Claude's reply completes
 
 ## Next Actions
-1. Test askr hooks in leaps repo to verify end-to-end hook processing works correctly with the fixed guard system, cross-repo boundary checks, and retry state tracking
-   *Why: Guard fixes are committed but untested in real hook execution; need to confirm no regressions and that boundary checks work as intended*
-2. Implement queue drain system for proper task sequencing across teammates (queued → claimed → executing → archived lifecycle)
-   *Why: Multi-agent coordination requires explicit task state transitions to prevent race conditions and task loss*
-3. Implement permission model to ensure one teammate's tasks don't overwrite another's, respecting Claude permissions per user
-   *Why: Multi-agent system needs isolation guarantees to prevent concurrent agents from corrupting each other's work*
+1. Monitor next session quota threshold crossing to verify companion session now opens cleanly after reply completion without mid-message interruption
+   *Why: The lifecycle fix was just committed; needs real-world validation that the Stop hook signal properly gates companion session opening*
+2. If companion session opening still has issues, check that checkpoint marker is being written by Stop hook before lifecycle checks for it
+   *Why: The fix depends on Stop hook writing the marker; if Stop hook is not running or marker is not persisting, the gate will fail*
+3. Review guard decision history in decisions.jsonl after several sessions to confirm guard-inferred constraints are no longer accumulating
+   *Why: The guard-signal filtering was implemented to break the hallucination loop; needs validation that decisions.jsonl stays clean*
 
 ## Decisions
-- Guard blocks (operational events from PreToolUse hook) are NOT architectural decisions and must be filtered from decisions.jsonl to prevent self-reinforcing hallucination loops — Guard blocks were being logged as architectural constraints, creating false prohibitions that constrained future decisions; only explicit developer choices should be recorded as decisions
-- Absence of a file/directory/pattern in architecture.md does NOT mean it is prohibited; only explicit forbiddance in CLAUDE.md or architecture.md triggers guard blocks — Guard was over-blocking legitimate operations based on absence of mention; explicit prohibition is required to block
-- Cross-repo boundary checks must be enforced in pre_tool_use.py to prevent tool use outside the askr repository — Multi-agent system must be confined to its own codebase to prevent unintended modifications to external projects
-- Retry state must preserve original operation type (read/write/create) across retries to avoid false 'creating new file' labels — Retries on existing files were being mislabeled as creates, causing false guard blocks on legitimate retry operations
+- Guard blocks require explicit architectural prohibition in CLAUDE.md or architecture.md to trigger; absence of a pattern does not constitute prohibition — Prevents false guard blocks from creating self-reinforcing hallucination loops where inferred constraints become real constraints
+- Guard-inferred signals (phrases like 'do NOT write this to decisions.jsonl') must be filtered before writing to decisions.jsonl — Prevents guard rationale from polluting the architectural decision record and creating false constraints in future sessions
+- Companion session opening must wait for Stop hook to signal completion before firing, not watch for file deletion — Prevents mid-reply session switches that cause context loss and force manual pinning; Stop hook is the authoritative completion signal
+- Cross-repo boundary checks must prevent tool use outside askr project root — Prevents guard from being bypassed by tool use in sibling directories; askr is a single-repo system
+- Retry state tracking must preserve original operation type across retries to avoid false 'creating new file' labels — Prevents misleading guard decision records when operations are retried after transient failures
+
+## Failed Approaches
+- Watching for stats file deletion to detect Stop hook completion in lifecycle.py — Stop hook does not delete the stats file; this was a false assumption that caused companion sessions to fire mid-reply
 
 ## Files In Play
+- `askr/session/lifecycle.py`
+- `askr/session/guard.py`
 - `askr/hooks/pre_tool_use.py`
 - `askr/hooks/stop.py`
 - `askr/session/checkpoint.py`
-- `askr/session/guard.py`
 
 ## Relational Files
-- `askr/session/guard_context.py` (imported_by): Guard context is used by guard.py to evaluate blocking rules
-- `askr/session/guard_decision.py` (imported_by): Guard decision tracking is used by guard.py to log guard evaluations
-- `CLAUDE.md` (configures): Project-level constraints that guard rules must respect
-- `architecture.md` (configures): Architectural decisions that guard uses to evaluate blocking rules
-- `askr_state/decisions.jsonl` (tested_by): Guard filtering prevents guard-inferred signals from polluting this decision record
+- `askr/session/guard_context.py` (imported_by): Guard context is used by guard.py to track decision state and cross-repo boundaries
+- `askr/session/guard_decision.py` (imported_by): Guard decision logic is used by guard.py to evaluate blocking rules
+- `CLAUDE.md` (configures): Defines explicit architectural prohibitions that guard.py checks before blocking
+- `architecture.md` (configures): Defines project architecture that guard.py references for boundary validation
+- `askr_state/decisions.jsonl` (tested_by): Guard-signal filtering prevents guard rationale from polluting this file; needs monitoring
 
 ## Uncommitted Files
 - `askr_state/implementation_bippin.jsonl`
