@@ -1,6 +1,6 @@
 {
-  "task": "Unified all spoken announcements across the askr codebase through a single `announce()` voice pipeline, consolidating duplicated `_speak` helpers and wiring user voice selection into the CLI initialization flow.",
-  "discussion_summary": "The askr voice notification system has evolved from scattered `_speak` helpers in multiple hooks (stop.py, notification.py, pre_compact.py, lifecycle.py) into a unified `announce()` function in voice.py. This session refactored all call sites to route through the single pipeline, added config loaders for prefix and body voices, and integrated voice selection prompts into `askr init`. The two-voice sonic logo (prefix in one voice, body in another) is now consistently applied across all announcement contexts. All 161 tests pass and live playback has been verified.",
+  "task": "Unified all spoken announcements across the askr codebase through a single `announce()` voice pipeline, consolidating duplicated `_speak` helpers and wiring user voice selection into the CLI initialization flow, with Zarvox as the default voice.",
+  "discussion_summary": "The askr voice notification system has evolved from scattered `_speak` helpers in multiple hooks (stop.py, notification.py, pre_compact.py, lifecycle.py) into a unified `announce()` function in voice.py. This session refactored all call sites to route through the single pipeline, added config loaders for prefix and body voices, integrated voice selection prompts into `askr init`, and changed the default voice from Samantha to Zarvox to avoid sounding like Siri. The two-voice sonic logo (prefix in one voice, body in another) is now consistently applied across all announcement contexts. All 161 tests pass and live playback has been verified.",
   "accomplishments": [
     {
       "what": "Refactored duplicated `_speak` helpers from notification.py, pre_compact.py, and lifecycle.py into unified `announce()` function in voice.py",
@@ -31,7 +31,11 @@
       "done": true
     },
     {
-      "what": "Committed all changes with message 'feat(voice): unify all spoken announcements through one voice pipeline'",
+      "what": "Changed default voice from Samantha to Zarvox to avoid sounding like Siri",
+      "done": true
+    },
+    {
+      "what": "Committed all changes with messages 'feat(voice): unify all spoken announcements through one voice pipeline' and 'fix(voice): default single-voice mode to Zarvox instead of Samantha'",
       "done": true
     }
   ],
@@ -65,6 +69,10 @@
     {
       "decision": "Empty prefix or body strings are valid signals to skip that part of the announcement",
       "reason": "Allows callers to use the two-voice pattern selectively without forcing both parts"
+    },
+    {
+      "decision": "Default voice is Zarvox instead of Samantha",
+      "reason": "Samantha sounds too much like Siri; Zarvox is a more distinctive default that better represents askr's identity"
     }
   ],
   "user_rejected_decisions": [],
@@ -75,39 +83,45 @@
     "askr/hooks/stop.py",
     "askr/hooks/notification.py",
     "askr/hooks/pre_compact.py",
-    "askr/session/lifecycle.py",
+    "askr/hooks/lifecycle.py",
     "askr/cli/askr.py",
     "tests/test_voice.py"
   ],
   "relational_files": [
     {
-      "file": "askr/state/config.py",
-      "relationship": "configures",
-      "why": "Provides load_voice_enabled(), load_voice_prefix(), load_voice_body() loaders used by voice.py and all hooks"
+      "file": "askr/hooks/stop.py",
+      "relationship": "imports",
+      "why": "Calls `announce()` for session-done notifications"
     },
     {
-      "file": "tests/test_voice.py",
-      "relationship": "tested_by",
-      "why": "Unit tests for announce() function and voice parameter handling"
+      "file": "askr/hooks/notification.py",
+      "relationship": "imports",
+      "why": "Calls `announce()` for quota warnings and permission-prompt alerts"
+    },
+    {
+      "file": "askr/hooks/pre_compact.py",
+      "relationship": "imports",
+      "why": "Calls `announce()` for pre-compact warnings"
+    },
+    {
+      "file": "askr/hooks/lifecycle.py",
+      "relationship": "imports",
+      "why": "Calls `announce()` for autonomous companion-session handoff announcements"
     },
     {
       "file": "askr/cli/askr.py",
-      "relationship": "imports",
-      "why": "CLI initialization flow now prompts for voice selection and saves to config"
+      "relationship": "configures",
+      "why": "Wires voice selection prompts into `askr init` flow"
     }
   ],
   "uncommitted_files": [
-    "askr_state/goals.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [],
-  "completed_goals": [
-    "Commit voice.py and stop.py changes with 'feat(voice): dual-voice sonic logo' me",
-    "Verify/add load_voice_prefix() and load_voice_body() config keys in askr/state/c"
-  ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T11:12:08.943018+00:00",
+    "timestamp": "2026-07-02T11:13:22.171104+00:00",
     "developer": "bippin"
   }
 }
