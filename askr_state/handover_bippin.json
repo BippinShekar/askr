@@ -1,6 +1,6 @@
 {
-  "task": "Fixed a voice announcement gating bug where the per-turn elapsed-time check was mistaking tool_result transcript entries for real user messages, causing session-done announcements to fire incorrectly or not at all.",
-  "discussion_summary": "The voice module's `_turn_elapsed_seconds()` function in `askr/hooks/stop.py` was keying off the last transcript line with `\"type\": \"user\"`, but tool_results are also logged under that same type. This caused the gate to measure elapsed time from a tool_result timestamp (often seconds before the actual session end) rather than the last real human message, breaking the per-turn announcement logic. The fix filters out tool_result-shaped entries to find the actual last user message. All 156 tests pass.",
+  "task": "Fixed a voice announcement gating bug where the per-turn elapsed-time check was mistaking tool_result transcript entries for real user messages, causing session-done announcements to fire incorrectly or not at all. Validated the fix end-to-end across multiple scenarios including fast turns, slow turns, and autonomous session relaunches.",
+  "discussion_summary": "The voice module's `_turn_elapsed_seconds()` function in `askr/hooks/stop.py` was keying off the last transcript line with `\"type\": \"user\"`, but tool_results are also logged under that same type. This caused the gate to measure elapsed time from a tool_result timestamp (often seconds before the actual session end) rather than the last real human message, breaking the per-turn announcement logic. The fix filters out tool_result-shaped entries to find the actual last user message. This session discovered that `_was_autonomous()` unconditionally imports `askr.session.lifecycle`, which has a module-level side effect that overwrites `os.environ[\"PATH\"]` with a freshly-sourced login-shell PATH. To test the voice announcement behavior end-to-end, a test harness was built that shims `zsh` to return a controlled PATH, allowing the fake `say` command to be injected while keeping real system binaries reachable. All four test scenarios (fast turn silence, slow turn announcement, autonomous relaunch early-return, and multi-turn timing) were verified to work correctly. All 156 tests pass.",
   "accomplishments": [
     {
       "what": "Identified root cause of voice announcement timing bug in _turn_elapsed_seconds()",
@@ -21,30 +21,78 @@
     {
       "what": "Committed fix to git (99a23e6)",
       "done": true
+    },
+    {
+      "what": "Discovered PATH clobbering side effect in askr.session.lifecycle module-level import",
+      "done": true
+    },
+    {
+      "what": "Built end-to-end test harness with zsh shim to inject fake say command while preserving system binaries",
+      "done": true
+    },
+    {
+      "what": "Validated voice announcement gating across four scenarios: fast turn (silent), slow turn (announces), autonomous relaunch (early-return), multi-turn timing",
+      "done": true
     }
   ],
   "in_progress": [],
-  "next_actions": [],
-  "decisions": [],
+  "next_actions": [
+    {
+      "order": 1,
+      "action": "Commit the two uncommitted state files (askr_state/goals.jsonl and askr_state/implementation_bippin.jsonl) to persist the new open goals and session history",
+      "why": "State tracking files have been modified but not yet committed; they need to be saved to git to maintain accurate project history"
+    },
+    {
+      "order": 2,
+      "action": "Implement unit tests for voice announcement gating with tool_result entries (goal a8526cce) \u2014 add dedicated test cases to test_voice.py that explicitly cover scenarios where tool_results appear in the transcript",
+      "why": "Open goal created during session; ensures regression coverage for the tool_result filtering logic"
+    },
+    {
+      "order": 3,
+      "action": "Verify session-done announcement timing across multi-turn conversations (goal 93e0ada1) \u2014 run production-like multi-turn sessions and log announcement cadence to confirm no spam on long turns",
+      "why": "Open goal created during session; validates that the per-turn gate works correctly in realistic multi-turn workflows"
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Filter tool_result-shaped entries (those with 'tool_call_id' or 'tool_name' fields) when searching for the last real user message in _turn_elapsed_seconds()",
+      "reason": "tool_results are logged under type='user' but represent system responses, not human input; filtering them ensures elapsed time is measured from the actual last human message"
+    }
+  ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
     "askr/hooks/stop.py",
-    "tests/test_voice.py"
+    "tests/test_voice.py",
+    "askr/session/lifecycle.py",
+    "askr/clients/voice.py"
   ],
   "relational_files": [
     {
       "file": "tests/test_voice.py",
       "relationship": "tested_by",
-      "why": "Contains regression test for the _turn_elapsed_seconds fix"
+      "why": "Contains regression test for the _turn_elapsed_seconds fix and end-to-end voice announcement scenarios"
+    },
+    {
+      "file": "askr/session/lifecycle.py",
+      "relationship": "imported_by",
+      "why": "Module-level import in _was_autonomous() has side effect of overwriting os.environ[\"PATH\"] with login-shell PATH, affecting test harness design"
+    },
+    {
+      "file": "askr/clients/voice.py",
+      "relationship": "configures",
+      "why": "Contains speak() and voice announcement logic that depends on correct elapsed-time gating from stop.py"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_bippin.jsonl"
+  ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "context",
-    "timestamp": "2026-07-02T08:44:04.915347+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-02T08:54:53.251550+00:00",
     "developer": "bippin"
   }
 }
