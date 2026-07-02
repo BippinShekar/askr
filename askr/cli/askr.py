@@ -3,6 +3,7 @@
 import sys
 import os
 import json
+import platform
 from datetime import datetime
 
 # Force UTF-8 stdout so Unicode characters render correctly in all terminal
@@ -777,6 +778,23 @@ def cmd_init():
                 _f.write(f"\nASKR_DISCORD_WEBHOOK={global_hook}\n")
             os.environ["ASKR_DISCORD_WEBHOOK"] = global_hook
             console.print("  [green]✓[/green] global webhook saved to ~/.config/askr/.env")
+
+    # Voice notifications — machine-level preference (native macOS `say`), not
+    # per-project: it's "does this Mac talk", same trait as the developer name.
+    if platform.system() == "Darwin":
+        from askr.state.config import load_voice_enabled, save_voice_enabled
+        existing_voice = load_voice_enabled()
+        console.print()
+        console.print(f"  [dim]voice notifications (current: {'on' if existing_voice else 'off'})[/dim]")
+        try:
+            voice_raw = input("  enable spoken updates via macOS `say`? [y/N]: ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            voice_raw = ""
+        if voice_raw == "y":
+            save_voice_enabled(True)
+            console.print("  [green]✓[/green] voice notifications enabled")
+        elif voice_raw == "n":
+            save_voice_enabled(False)
 
     from askr.clients.discord import _get_webhook_url
     if _get_webhook_url():
