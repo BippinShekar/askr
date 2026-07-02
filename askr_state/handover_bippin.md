@@ -12,18 +12,6 @@ Implemented macOS voice notification system for askr init to enable users to opt
 Session focused on two parallel tracks: (1) completing voice notification preference schema implementation by adding load_voice_enabled() and save_voice_enabled() helper functions to askr/state/config.py following existing config pattern, and (2) investigating and fixing a real handover bug in checkpoint.py where _get_uncommitted_files() was dumping raw git status output without filtering, causing .claude/ directory artifacts to pollute the handover document. Confirmed no active nested worktree lockout condition exists currently; prior session's guard lockout was collision-specific, not a standing bug. Architecture for voice notifications remains: machine-level boolean flag in ~/.config/askr/config.json, wired through notification hooks as additional sink alongside Discord.
 
 ## Accomplishments
-- [x] LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern
-- [x] Identified root cause of LinkedIn location field failures: full location strings do not trigger city autocomplete dropdown
-- [x] Implemented two-part fix: prompt instructs extraction of city name from full location string, with retry on failure
-- [x] Killed orphaned uvicorn process blocking backend logs
-- [x] Conducted comprehensive security audit of apply agent code generation paths with four hardening fixes against prompt injection attacks
-- [x] Fixed resume PDF portfolio URL lookup from qa_bank.portfolio_url to application_prefill.answers.portfolio_url
-- [x] Updated PDF generator to render 'Portfolio' as link label instead of domain URL
-- [x] Diagnosed Ramp application failure as Ashby spam_warning state (browser fingerprinting-based anti-bot detection)
-- [x] Implemented spam_warning recovery with 'Learn more' probe to locate submit/submit-again button
-- [x] Extended spam_warning handling to distinguish overlay banner (resubmit after scroll) vs form replacement (hard refresh required)
-- [x] Refactored spam recovery strategy to defer spam-flagged jobs to end of session instead of inline retry
-- [x] Investigated queue drain architecture and browser_stream replay buffer lifecycle
 - [x] Scoped voice notification feature: confirmed macOS-only deployment enables native `say` TTS without cross-platform abstraction
 - [x] Identified notification hook integration points (askr/hooks/stop.py, notification.py) for wiring voice updates as additional sink alongside Discord
 - [x] Designed voice notification preference schema: machine-level boolean flag stored in global ~/.config/askr/config.json (not per-project)

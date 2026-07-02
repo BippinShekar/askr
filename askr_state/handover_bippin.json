@@ -3,54 +3,6 @@
   "discussion_summary": "Session focused on two parallel tracks: (1) completing voice notification preference schema implementation by adding load_voice_enabled() and save_voice_enabled() helper functions to askr/state/config.py following existing config pattern, and (2) investigating and fixing a real handover bug in checkpoint.py where _get_uncommitted_files() was dumping raw git status output without filtering, causing .claude/ directory artifacts to pollute the handover document. Confirmed no active nested worktree lockout condition exists currently; prior session's guard lockout was collision-specific, not a standing bug. Architecture for voice notifications remains: machine-level boolean flag in ~/.config/askr/config.json, wired through notification hooks as additional sink alongside Discord.",
   "accomplishments": [
     {
-      "what": "LinkedIn location combobox field filling fixed with city name extraction and fallback retry pattern",
-      "done": true
-    },
-    {
-      "what": "Identified root cause of LinkedIn location field failures: full location strings do not trigger city autocomplete dropdown",
-      "done": true
-    },
-    {
-      "what": "Implemented two-part fix: prompt instructs extraction of city name from full location string, with retry on failure",
-      "done": true
-    },
-    {
-      "what": "Killed orphaned uvicorn process blocking backend logs",
-      "done": true
-    },
-    {
-      "what": "Conducted comprehensive security audit of apply agent code generation paths with four hardening fixes against prompt injection attacks",
-      "done": true
-    },
-    {
-      "what": "Fixed resume PDF portfolio URL lookup from qa_bank.portfolio_url to application_prefill.answers.portfolio_url",
-      "done": true
-    },
-    {
-      "what": "Updated PDF generator to render 'Portfolio' as link label instead of domain URL",
-      "done": true
-    },
-    {
-      "what": "Diagnosed Ramp application failure as Ashby spam_warning state (browser fingerprinting-based anti-bot detection)",
-      "done": true
-    },
-    {
-      "what": "Implemented spam_warning recovery with 'Learn more' probe to locate submit/submit-again button",
-      "done": true
-    },
-    {
-      "what": "Extended spam_warning handling to distinguish overlay banner (resubmit after scroll) vs form replacement (hard refresh required)",
-      "done": true
-    },
-    {
-      "what": "Refactored spam recovery strategy to defer spam-flagged jobs to end of session instead of inline retry",
-      "done": true
-    },
-    {
-      "what": "Investigated queue drain architecture and browser_stream replay buffer lifecycle",
-      "done": true
-    },
-    {
       "what": "Scoped voice notification feature: confirmed macOS-only deployment enables native `say` TTS without cross-platform abstraction",
       "done": true
     },
