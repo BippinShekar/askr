@@ -25,10 +25,17 @@ def find_project_root(start_dir: str = None) -> str:
     .claude for allowedTools but share the parent's askr_state, so stopping
     at the first .claude would return the wrong root if the cwd drifted into
     a subdirectory (e.g. via a Bash `cd` command during a session).
+
+    Candidates under a .claude/ segment (e.g. a forked agent's git worktree
+    at <root>/.claude/worktrees/<id>/, which is a full checkout and so has
+    its own duplicate askr_state/ and .claude/) are skipped in both loops —
+    see askr.state.config.has_claude_segment.
     """
+    from askr.state.config import has_claude_segment
+
     d = start_dir or os.getcwd()
     while True:
-        if os.path.exists(os.path.join(d, "askr_state")):
+        if os.path.exists(os.path.join(d, "askr_state")) and not has_claude_segment(d):
             return d
         parent = os.path.dirname(d)
         if parent == d:
@@ -37,7 +44,8 @@ def find_project_root(start_dir: str = None) -> str:
     # Fallback for projects that have .claude but no askr_state yet
     d = start_dir or os.getcwd()
     while True:
-        if os.path.exists(os.path.join(d, ".claude")) or os.path.exists(os.path.join(d, ".askr_history")):
+        if (os.path.exists(os.path.join(d, ".claude")) or os.path.exists(os.path.join(d, ".askr_history"))) \
+                and not has_claude_segment(d):
             return d
         parent = os.path.dirname(d)
         if parent == d:

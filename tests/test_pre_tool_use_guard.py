@@ -190,6 +190,19 @@ class HandleBashTests(unittest.TestCase):
                 pre_tool_use._handle_bash({"command": "cat /etc/passwd"})
             mock_block.assert_not_called()
 
+    def test_cwd_inside_nested_worktree_does_not_lock_out_real_root(self):
+        # Regression: cwd drifting into a git worktree under .claude/worktrees/
+        # (a full checkout, so it has its own duplicate askr_state/) used to
+        # make get_state_dir() pick the worktree as project_root, after which
+        # even `cd ..` or `pwd`-style absolute-path commands back to the real
+        # root were blocked as "cross-repo" — a total self-lockout.
+        worktree = os.path.join(self.project_dir, ".claude", "worktrees", "agent-x")
+        os.makedirs(os.path.join(worktree, "askr_state"), exist_ok=True)
+        os.chdir(worktree)
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": f"ls {self.project_dir}"})
+        mock_block.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # _block_tool — unit
