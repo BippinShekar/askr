@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-07-03 02:01
+Last updated: 2026-07-03 02:02
 
 *Source of truth: `handover_bippin.json`*
 
@@ -8,9 +8,10 @@ Last updated: 2026-07-03 02:01
 ## Task
 <task-notification>
 <task-id>acff48a070b97d0a9</task-id>
+<tool-use-id>toolu_012ESJLQznFRbeR5pUJU3Ccq</tool-use-id>
 <output-file>/private/tmp/claude-501/-Users-bippin-Desktop-askr/4e825a02-894f-43e3-893a-80455b2dee6b/tasks/acff48a070b97d0a9.output</output-file>
 <status>completed</status>
-<summary>Agent "Deep-dive voice/daemon trigger bug" finished</summary>
+<summary>Age
 
 ## Discussion
 The voice subsystem had multiple entry points for spoken notifications, each using different voice configurations. Prior sessions refactored all call sites to route through a single `announce()` function and changed the default voice to Zarvox per user preference. A previous session discovered and fixed a bug where `speak()` did not guard against empty messages; the fix adds an early return when text is empty. Earlier research confirmed that switching between Claude Code sessions in different repositories is an open gap (Claude Code locks `.claude/` config to session-start directory) and not solved by upstream tooling, making it a potential feature for askr to address. The session traced quota warning announcement triggers through `lifecycle.py`, `usage_api.py`, and `post_tool_use.py` hooks to understand how `quota_pct` flows from the Anthropic API into voice announcements, and examined credential handling and webhook patterns in the codebase. This session launched five parallel audit agents to investigate daemon logging paths, security scanning, IDE extension polling intervals, and the root cause of the voice/quota bug. Two audits have completed: security scan found no command-injection or leaked-secrets issues but identified a rejected-and-supposedly-fixed `getpass()` bug still present in Discord webhook prompt code; ask CLI and qa pipeline audit completed with findings on ask log command and cost_summary integration.
