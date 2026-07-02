@@ -28,6 +28,16 @@ def save_developer(name: str):
     _save_config(data)
 
 
+def load_voice_enabled() -> bool:
+    return bool(_load_config().get("voice_notifications", False))
+
+
+def save_voice_enabled(enabled: bool):
+    data = _load_config()
+    data["voice_notifications"] = bool(enabled)
+    _save_config(data)
+
+
 def save_project_path(path: str):
     data = _load_config()
     data["project_path"] = os.path.abspath(path)
@@ -42,13 +52,26 @@ def load_project_path() -> str:
 
 
 def get_state_dir() -> str:
-    # Prefer cwd-relative askr_state — hooks run inside Claude with the correct
-    # project cwd, so this is always right for multi-repo installs.
-    # Falls back to stored path for daemon/CLI calls that may run elsewhere.
-    cwd_state = os.path.join(os.getcwd(), _STATE_DIR_NAME)
-    if os.path.isdir(cwd_state):
-        return cwd_state
-    return os.path.join(load_project_path(), _STATE_DIR_NAME)
+    # Walk up from cwd looking for the nearest askr_state/ (same idea as git
+    # walking up to find .git/) — handles running from a subdirectory of an
+    # initialized project. Deliberately never falls back to a DIFFERENT
+    # project's globally-stored path: that previously caused hooks firing in
+    # a sibling repo with no askr_state/ anywhere in its own tree (e.g. never
+    # ran `askr init` there) to silently resolve to whichever project was
+    # stored globally and write cross-project state into it. Walking up can
+    # only ever reach ancestors of cwd, never a sibling project, so it's safe.
+    # If nothing is found anywhere up the tree, return the (nonexistent)
+    # cwd-relative path — every caller already checks os.path.isdir() on the
+    # result before treating askr as initialized here.
+    current = os.path.abspath(os.getcwd())
+    while True:
+        candidate = os.path.join(current, _STATE_DIR_NAME)
+        if os.path.isdir(candidate):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:
+            return os.path.join(os.getcwd(), _STATE_DIR_NAME)
+        current = parent
 
 
 def state_path(filename: str) -> str:
