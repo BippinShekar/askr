@@ -83,6 +83,47 @@ class SpeakGatingTests(unittest.TestCase):
             args, kwargs = mock_run.call_args
             self.assertEqual(args[0], ["/usr/bin/say", "done with task"])
 
+    def test_speak_sends_humanized_text_to_say(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.speak("🔴 **[askr] Claude notification (ERROR)**\nBash(rm -rf /tmp/*) needs approval")
+            args, kwargs = mock_run.call_args
+            spoken = args[0][1]
+            self.assertNotIn("🔴", spoken)
+            self.assertNotIn("**", spoken)
+            self.assertNotIn("Bash(", spoken)
+            self.assertIn("a bash action", spoken)
+
+
+class HumanizeForSpeechTests(unittest.TestCase):
+    def test_empty_string_passthrough(self):
+        self.assertEqual(voice.humanize_for_speech(""), "")
+
+    def test_strips_emoji(self):
+        self.assertEqual(voice.humanize_for_speech("🔴 error occurred"), "error occurred")
+
+    def test_strips_markdown_symbols(self):
+        self.assertEqual(voice.humanize_for_speech("**bold** and `code`"), "bold and code")
+
+    def test_collapses_newlines_into_pauses(self):
+        self.assertEqual(voice.humanize_for_speech("line one\nline two"), "line one. line two")
+
+    def test_rewrites_tool_call_syntax(self):
+        result = voice.humanize_for_speech("Bash(rm -rf /tmp/foo) needs approval")
+        self.assertIn("a bash action", result)
+        self.assertNotIn("rm -rf", result)
+
+    def test_caps_length_at_sentence_boundary(self):
+        text = "This is a normal sentence. " + ("filler word " * 30)
+        result = voice.humanize_for_speech(text, max_len=50)
+        self.assertLessEqual(len(result), 50)
+        self.assertTrue(result.endswith(".") or result.endswith("…"))
+
+    def test_short_text_unaffected_by_cap(self):
+        self.assertEqual(voice.humanize_for_speech("done with task"), "done with task")
+
     def test_subprocess_exception_never_raises(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
              patch("platform.system", return_value="Darwin"), \
