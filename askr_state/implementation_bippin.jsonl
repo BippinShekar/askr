@@ -1210,3 +1210,12 @@
 {"ts": "2026-07-02T06:03:56Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"def cmd_init\" -A 5 askr/cli/askr.py | head -10; echo ---; sed -n '740,7"}
 {"ts": "2026-07-02T06:09:26Z", "session_id": "1c08e7d9-9153-488e-ba21-a0dfda3f4f37", "type": "command", "detail": "find /Users/bippin/Desktop/askr/askr_state -iname \"*handover*\" -newer /Users/bip"}
 {"ts": "2026-07-02T06:09:35Z", "session_id": "1c08e7d9-9153-488e-ba21-a0dfda3f4f37", "type": "command", "detail": "git log --oneline -5 && echo \"---status---\" && git status && echo \"---voice file"}
+{"ts": "2026-07-02T07:31:07Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"Voice notification\" askr_state/decisions.jsonl"}
+{"ts": "2026-07-02T07:31:14Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "wc -l askr_state/decisions.jsonl; grep -n \"Voice notification\\|voice notificatio"}
+{"ts": "2026-07-02T07:31:31Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "sed -i '' '388d;390d;391d;392d;395d;396d;398d;401d;402d;405d;409d;414d;415d;420d"}
+{"ts": "2026-07-02T07:31:36Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -rn \"companion\\|context.*cut\\|persist context\\|compaction\" askr/session/lif"}
+{"ts": "2026-07-02T07:31:39Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"send_message\\|def.*companion\\|def.*context_cut\\|def.*trigger\" askr/sess"}
+{"ts": "2026-07-02T07:31:57Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"quota_pct\\|QUOTA_TRIGGER\\|CONTEXT_TRIGGER\\|trigger ==\\|def.*_check_trig"}
+{"ts": "2026-07-02T07:35:07Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"quota_pct\\|quota_reset_at\" askr/session/monitor.py | head -20"}
+{"ts": "2026-07-02T07:35:10Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -rln \"quota_pct\" askr/ | grep -v \".pyc\""}
+{"ts": "2026-07-02T07:35:13Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"quota_pct\" askr/hooks/post_tool_use.py"}

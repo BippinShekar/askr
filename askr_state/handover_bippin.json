@@ -1,70 +1,82 @@
 {
-  "task": "Scoped a macOS voice notification feature (TTS via `say` command) into implementation stages, confirmed prior session had already committed config scaffolding and identified integration points; this session verified handover state and confirmed readiness for Stage 1 implementation.",
-  "discussion_summary": "A prior session had begun building voice notification support by adding `load_voice_enabled()` and `save_voice_enabled()` to `askr/state/config.py` (commit f323a65). The previous session investigated the scope by grepping for voice/TTS references, confirmed macOS-only deployment (no cross-platform concern), and mapped the feature into a 3-stage rollout: (1) create `askr/clients/voice.py` with a `speak()` sink, (2) wire it into `askr/hooks/stop.py` and `notification.py`, (3) add init-time prompt to enable/disable. This session read the handover file, verified the prior session's work was still in place and committed, and confirmed the 3-stage plan is ready for implementation approval.",
+  "task": "Deduped 14 repeated voice notification decisions from decisions.jsonl, confirmed session quota/context-cut warning infrastructure exists in lifecycle.py and monitor.py, and rescoped Stage 4 of voice feature to add real session limit quota warning messages (distinct from existing context-persistence notifications).",
+  "discussion_summary": "Prior sessions had scoped voice notifications into 3 stages and committed config scaffolding. This session discovered that Stage 4 (user-facing warnings) must distinguish between two existing notification types: (1) quota trigger at 90% (already fires via QUOTA_TRIGGER in lifecycle.py:1234-1236, writes to Discord/notification.py), and (2) context-cut persistence messages (fired when session switches to prevent compaction). User requested building real session limit quota warning messages from scratch, separate from these existing triggers. Session also cleaned up 14 duplicate decision entries in decisions.jsonl that had accumulated across prior checkpoints.",
   "accomplishments": [
     {
-      "what": "Confirmed prior session's config scaffolding (load_voice_enabled/save_voice_enabled in askr/state/config.py:31-38) is in place and committed",
+      "what": "Removed 14 repeated voice notification decision entries from askr_state/decisions.jsonl (kept original 3: macOS-only/say, additional-sink-not-separate-system, machine-level config storage)",
       "done": true
     },
     {
-      "what": "Mapped voice notification feature into 3-stage implementation plan with clear file targets and integration points",
+      "what": "Verified existing quota trigger infrastructure: QUOTA_TRIGGER=90.0 in askr/session/lifecycle.py:1234-1236 fires when API quota hits 90%, writes notification and Discord message",
       "done": true
     },
     {
-      "what": "Verified macOS-only deployment is safe (no cross-platform TTS abstraction needed)",
+      "what": "Confirmed context-cut persistence messages exist as separate notification type (fired on session context switch to prevent compaction, distinct from quota warnings)",
       "done": true
     },
     {
-      "what": "Read handover file and verified prior session's work remains valid and committed; confirmed no conflicts or regressions",
+      "what": "Identified that Stage 4 voice feature must add NEW real session limit quota warning messages, not reuse existing quota/context-cut infrastructure",
       "done": true
     }
   ],
   "in_progress": [
     {
       "file": null,
-      "what": "Voice notification feature design \u2014 awaiting user review of 3-stage scope before implementation begins",
+      "what": "Rescoping Stage 4 of voice notification feature to clarify what 'session limit quota warning messages' means and how they differ from existing quota_pct trigger and context-persistence notifications",
       "last_line": 0
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "User to review and approve the 3-stage voice notification rollout plan (create voice.py client \u2192 wire into hooks \u2192 add init prompt)",
-      "why": "Session ended with user requesting scope review before proceeding; no implementation should start until approval"
+      "action": "Clarify with user: what constitutes a 'real session limit quota warning message' \u2014 is this a new trigger threshold (e.g. 75% quota), a different message format, or integration with a new quota tracking mechanism not yet in lifecycle.py?",
+      "why": "Session ended mid-rescope; existing quota_pct trigger at 90% already exists and fires notifications, so Stage 4 scope is ambiguous without user clarification"
     },
     {
       "order": 2,
-      "action": "Once approved, implement Stage 1: create askr/clients/voice.py with speak(text) function using subprocess.run(['say', text]), guarded by load_voice_enabled(), with silent failure if say unavailable",
-      "why": "Lowest-risk foundation; mirrors existing Discord client pattern"
+      "action": "Once Stage 4 scope is clarified, update next_actions to include implementation steps for new quota warning infrastructure (likely in askr/session/lifecycle.py or askr/session/monitor.py)",
+      "why": "Cannot proceed with implementation until Stage 4 requirements are concrete"
     },
     {
       "order": 3,
-      "action": "Implement Stage 2: integrate speak() calls into askr/hooks/stop.py and askr/hooks/notification.py at task completion points",
-      "why": "Connects config to actual notifications; reuses existing hook infrastructure"
-    },
-    {
-      "order": 4,
-      "action": "Implement Stage 3: add voice enable/disable prompt to cmd_init in askr/cli/askr.py (around line 740-750)",
-      "why": "Completes user-facing setup flow; matches existing init pattern"
+      "action": "Commit askr_state/decisions.jsonl deduplication (14 lines removed, file now 407 lines)",
+      "why": "Cleanup is complete and ready; reduces noise in future decision history"
     }
   ],
   "decisions": [
     {
-      "decision": "Voice notifications use macOS `say` command directly, not a cross-platform TTS abstraction",
+      "decision": "Voice notifications use native macOS `say` command directly, not a cross-platform TTS abstraction",
       "reason": "Project is macOS-only; `say` is built-in and reliable; no cross-platform users to support"
     },
     {
       "decision": "Voice client follows Discord client pattern: silent failure if `say` unavailable, guarded by load_voice_enabled()",
       "reason": "Consistent error handling; non-blocking; matches existing notification sink design"
+    },
+    {
+      "decision": "Voice notification preference stored as machine-level boolean in global ~/.config/askr/config.json, not per-project",
+      "reason": "Voice is a user/machine trait (do I want this Mac to talk), not a per-project secret like discord_webhook; mirrors developer name pattern in config.py"
+    },
+    {
+      "decision": "Voice notifications integrate as additional sink in existing notification infrastructure (askr/hooks/stop.py, notification.py) rather than separate system",
+      "reason": "Minimizes mechanical changes; reuses existing hook patterns and state management for Discord notifications"
+    },
+    {
+      "decision": "get_state_dir() must always return current project's state directory without fallback to other projects' stored paths",
+      "reason": "Cross-project path contamination is a critical security issue; each project must maintain isolation"
+    },
+    {
+      "decision": "Nested worktree cwd-drift lockout left unfixed pending recurrence outside collision scenarios",
+      "reason": "Bug is genuine but rare; fixing requires deeper refactor of worktree state tracking; defer until it recurs in non-collision context"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/state/config.py",
-    "askr/hooks/stop.py",
+    "askr_state/decisions.jsonl",
+    "askr/session/lifecycle.py",
+    "askr/session/monitor.py",
     "askr/hooks/notification.py",
-    "askr/cli/askr.py"
+    "askr/hooks/stop.py"
   ],
   "relational_files": [
     {
@@ -75,27 +87,27 @@
     {
       "file": "askr/state/config.py",
       "relationship": "configures",
-      "why": "Already holds load_voice_enabled/save_voice_enabled; voice.py will call these"
+      "why": "Contains load_voice_enabled() and save_voice_enabled() scaffolding from prior session"
     },
     {
-      "file": "askr/hooks/stop.py",
+      "file": "askr/cli/askr.py",
       "relationship": "imports",
-      "why": "Will import and call voice.speak() at task completion"
-    },
-    {
-      "file": "askr/hooks/notification.py",
-      "relationship": "imports",
-      "why": "Will import and call voice.speak() at notification trigger points"
+      "why": "Will contain Stage 3 init-time prompt for voice enable/disable (around line 740-750)"
     }
   ],
   "uncommitted_files": [
+    "askr_state/decisions.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
-  "blockers": [],
-  "completed_goals": [],
+  "blockers": [
+    "Stage 4 scope ambiguity: user requested 'real session limit quota warning messages from scratch' but existing QUOTA_TRIGGER at 90% already fires quota notifications; unclear what new messages Stage 4 should add"
+  ],
+  "completed_goals": [
+    "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)"
+  ],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T06:09:42.230244+00:00",
+    "timestamp": "2026-07-02T07:35:21.960314+00:00",
     "developer": "bippin"
   }
 }
