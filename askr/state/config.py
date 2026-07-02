@@ -49,7 +49,7 @@ DEFAULT_VOICE_BODY = "Zarvox"
 # above; "single" speaks everything in one voice for users who find the
 # two-tone pattern more novelty than useful.
 DEFAULT_VOICE_MODE = "dual"
-DEFAULT_VOICE_SINGLE = "Samantha"
+DEFAULT_VOICE_SINGLE = "Zarvox"
 
 
 def load_voice_prefix() -> str:
