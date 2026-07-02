@@ -1299,3 +1299,41 @@
 {"ts": "2026-07-02T07:54:45Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"session_duration\" askr/session/checkpoint.py | head -10"}
 {"ts": "2026-07-02T08:04:30Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -rn \"checkpoint_pending\\|_CHECKPOINT_PENDING\" askr/session/*.py askr/hooks/"}
 {"ts": "2026-07-02T08:05:34Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nfrom askr.state.config import save_voice_enabled, load_voic"}
+{"ts": "2026-07-02T08:14:55Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"\\\"timestamp\\\"\\|\\.get(\\\"timestamp\\\")\\|iso\" askr/session/checkpoint.py as"}
+{"ts": "2026-07-02T08:15:10Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"_parse_iso\\|entry.get(\\\"timestamp\\\")\\|obj.get(\\\"timestamp\\\")\\|\\[\\\"times"}
+{"ts": "2026-07-02T08:15:16Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nimport json\np='/Users/bippin/.claude/projects'\nimport os\n# "}
+{"ts": "2026-07-02T08:15:23Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nimport json\nfp='/Users/bippin/.claude/projects/-Users-bippi"}
+{"ts": "2026-07-02T08:17:30Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py"}
+{"ts": "2026-07-02T08:17:38Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py"}
+{"ts": "2026-07-02T08:17:45Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"import ast; ast.parse(open('askr/hooks/pre_compact.py').read"}
+{"ts": "2026-07-02T08:18:41Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -10"}
+{"ts": "2026-07-02T08:19:41Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q --durations=10 2>&1 | tail -20"}
+{"ts": "2026-07-02T08:20:14Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_context_cut_handover.py"}
+{"ts": "2026-07-02T08:20:20Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"pre_compact\\|import\\|class \\|def test_\" tests/test_checkpoint_emergency"}
+{"ts": "2026-07-02T08:20:28Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -rln \"stop_module.main\\|notification.*main(\\|pre_compact.*main(\\|_broadcast"}
+{"ts": "2026-07-02T08:20:43Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q --durations=5 2>&1 | tail -15"}
+{"ts": "2026-07-02T08:20:52Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"def test_quota_trigger_writes_quota_notification\" -A 30 tests/test_cont"}
+{"ts": "2026-07-02T08:20:59Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_context_cut_handover.py"}
+{"ts": "2026-07-02T08:21:07Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q --durations=5 2>&1 | tail -15"}
+{"ts": "2026-07-02T08:21:12Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git add askr/hooks/pre_compact.py tests/test_context_cut_handover.py && git stat"}
+{"ts": "2026-07-02T08:21:21Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git commit -m \"feat(voice): announce PreCompact emergency kill; fix tests shelli"}
+{"ts": "2026-07-02T08:21:38Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/clients/voice.py"}
+{"ts": "2026-07-02T08:21:47Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"import ast; ast.parse(open('askr/clients/voice.py').read());"}
+{"ts": "2026-07-02T08:22:01Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T08:22:08Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/test_voice.py -v 2>&1 | tail -30"}
+{"ts": "2026-07-02T08:22:16Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/clients/voice.py"}
+{"ts": "2026-07-02T08:22:22Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/test_voice.py -q 2>&1 | tail -10"}
+{"ts": "2026-07-02T08:22:29Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -10"}
+{"ts": "2026-07-02T08:22:34Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git add askr/clients/voice.py tests/test_voice.py && git status --porcelain"}
+{"ts": "2026-07-02T08:22:42Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git commit -m \"feat(voice): humanize text inside speak(), keep written copies un"}
+{"ts": "2026-07-02T08:23:09Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/stop.py"}
+{"ts": "2026-07-02T08:23:37Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/stop.py"}
+{"ts": "2026-07-02T08:23:51Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/stop.py"}
+{"ts": "2026-07-02T08:24:07Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"import ast; ast.parse(open('askr/hooks/stop.py').read()); pr"}
+{"ts": "2026-07-02T08:24:15Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "tail -30 tests/test_voice.py | head -5; echo ---; grep -c \"^class\" tests/test_vo"}
+{"ts": "2026-07-02T08:24:32Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T08:24:45Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T08:24:49Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/test_voice.py -v 2>&1 | tail -30"}
+{"ts": "2026-07-02T08:24:56Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -10"}
+{"ts": "2026-07-02T08:24:59Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git add askr/hooks/stop.py tests/test_voice.py && git status --porcelain"}
+{"ts": "2026-07-02T08:25:07Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git commit -m \"feat(voice): gate the 'done' ping on per-turn elapsed time, not s"}
