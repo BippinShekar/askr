@@ -1,6 +1,6 @@
 {
-  "task": "Implemented voice notification system with quota pre-warning, speak() sink gated by user preference, integration into stop/notification hooks, askr init prompt, and comprehensive test coverage.",
-  "discussion_summary": "The voice notification feature is now complete across 5 stages: a speak() sink that respects voice_notifications config preference, wiring into task-done and HITL notification events via stop.py hooks, user onboarding prompt in askr init, quota pre-warning at 75% threshold with deduplication via quota_warned_sessions, and 11 new tests covering gating, config round-trip, and quota-warning behavior. All commits are pushed and tests pass.",
+  "task": "Implemented voice notification system with quota pre-warning, speak() sink gated by user preference, integration into stop/notification hooks, askr init prompt, comprehensive test coverage, and confirmed guard_runner.py notification.json path is dead code pending user direction on build-vs-cut decision.",
+  "discussion_summary": "The voice notification feature is complete across 5 stages with all commits pushed and tests passing. This session independently verified (for the third time across three sessions) that guard_runner.py's non-blocking notification.json path (type: guard_warning) is dead code: pre_tool_use.py runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json. A prior session opened then discarded a deletion goal within 4 minutes with no recorded rationale, so the decision to delete, wire up, or leave as documented dead code has been escalated to the user pending explicit direction rather than unilaterally resolved.",
   "accomplishments": [
     {
       "what": "Added speak() sink function gated by voice_notifications preference",
@@ -23,7 +23,15 @@
       "done": true
     },
     {
-      "what": "All 5 stages committed and pushed to main",
+      "what": "All 5 voice notification stages committed and pushed to main",
+      "done": true
+    },
+    {
+      "what": "Confirmed guard_runner.py notification.json path is dead code (three independent sessions reached same conclusion; prior deletion goal discarded within 4 minutes with no rationale recorded)",
+      "done": true
+    },
+    {
+      "what": "Recorded guard_runner.py dead-code finding as formal decision to prevent re-investigation in future sessions",
       "done": true
     }
   ],
@@ -31,8 +39,8 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Investigate guard_runner.py's non-blocking notification.json path (type: guard_warning) \u2014 verify if it is truly dead code or if pre_tool_use.py HOOK_MAP needs updating to invoke it",
-      "why": "Open goal notes this path is never invoked from pre_tool_use.py, HOOK_MAP, or .claude/settings.json; Phase 3.5's IDE popup for non-blocking guard warnings cannot fire today regardless of extension.js whitelist fix"
+      "action": "Get user decision on guard_runner.py: delete it, wire it up (spawn from pre_tool_use.py + write guard_trigger.json + whitelist guard_warning in extension.js), or leave as documented dead code. Asked via AskUserQuestion, no response received.",
+      "why": "Confirmed dead code (see Decisions) \u2014 this is a build-vs-cut product call, not something to resolve unilaterally"
     },
     {
       "order": 2,
@@ -52,6 +60,10 @@
     {
       "decision": "speak() is a sink function that logs and returns early if voice_notifications is False",
       "reason": "Simplifies call sites \u2014 no conditional logic needed before calling speak()"
+    },
+    {
+      "decision": "guard_runner.py non-blocking notification.json path (type: guard_warning) is confirmed dead code, not left unwired by accident: pre_tool_use.py already runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json (the file check_and_save() expects). Left in place undeleted pending explicit user direction on build-vs-cut rather than unilaterally deleting or wiring it up.",
+      "reason": "Three independent sessions now reached the same dead-code conclusion (goals 9ad0ffbf, 936fb14f); a prior session opened then discarded a deletion goal (af366587) within 4 minutes with no recorded rationale, so deleting without user sign-off risks redoing a call that was already reconsidered once"
     }
   ],
   "user_rejected_decisions": [],
@@ -70,27 +82,40 @@
     {
       "file": "askr/hooks/stop.py",
       "relationship": "imports",
-      "why": "Integrates speak() calls into task-done and HITL notification event hooks"
+      "why": "Wires speak() into task-done and HITL notification events"
     },
     {
-      "file": "askr/cli/init.py",
-      "relationship": "configures",
-      "why": "Prompts user for voice_notifications preference during askr init"
-    },
-    {
-      "file": "tests/test_context_cut_handover.py",
+      "file": "tests/test_voice.py",
       "relationship": "tested_by",
-      "why": "Provided test pattern and mocking approach for lifecycle internals used in test_voice.py"
+      "why": "11 tests covering speak() gating, config round-trip, and quota-warning deduplication"
+    },
+    {
+      "file": "askr/guards/guard_runner.py",
+      "relationship": "configures",
+      "why": "Contains dead-code notification.json path (type: guard_warning) confirmed not invoked from pre_tool_use.py or HOOK_MAP"
+    },
+    {
+      "file": "askr/guards/pre_tool_use.py",
+      "relationship": "imports",
+      "why": "Runs guard checks synchronously in-process and blocks via sys.exit(2); never spawns guard_runner.py"
     }
   ],
-  "uncommitted_files": [],
-  "blockers": [
-    "guard_runner.py non-blocking notification.json path (type: guard_warning) is dead code \u2014 unclear if this is intentional or requires HOOK_MAP fix"
+  "uncommitted_files": [
+    "askr_state/decisions.jsonl",
+    "askr_state/goals.jsonl",
+    "askr_state/handover_bippin.json",
+    "askr_state/handover_bippin.md",
+    "askr_state/implementation_bippin.jsonl"
   ],
-  "completed_goals": [],
+  "blockers": [
+    "User decision pending on guard_runner.py: delete, wire up, or leave as documented dead code"
+  ],
+  "completed_goals": [
+    "Verify guard_runner.py notification.json path is dead code or update HOOK_MAP"
+  ],
   "session_metadata": {
-    "trigger_type": "context",
-    "timestamp": "2026-07-02T07:46:14.960573+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-02T07:51:26.147318+00:00",
     "developer": "bippin"
   }
 }
