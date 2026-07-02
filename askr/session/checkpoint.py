@@ -751,77 +751,73 @@ def create_checkpoint(
 
     entries = read_transcript(transcript_path)
 
-    if trigger_type == "emergency":
-        summary = (
-            "## What Was Being Done\n\nEmergency checkpoint triggered.\n\n"
-            f"## Current State\n\n- Check implementation_{developer}.jsonl for what was in progress\n\n"
-            f"## Next Step\n\nReview recent git diff and implementation_{developer}.jsonl, then continue.\n\n"
-            "## Blockers\n\nNone noted"
+    # Try LLM-generated handover first; fall back to mechanical if unavailable.
+    # Emergency (PreCompact) checkpoints go through this same path — the LLM call
+    # uses the fast/cheap Haiku "checkpoint" mode already sized for this, and a
+    # hardcoded boilerplate summary here previously left handover_<dev>.json stale
+    # (write_handover only updates the JSON for dict summaries) and skipped
+    # decisions/failed-approaches/task extraction entirely.
+    transcript_text = _build_transcript_text(entries)
+
+    # Append git diff so Haiku sees what actually changed, not just which files
+    # were touched. This grounds Status and Next Action in reality — especially
+    # important when the transcript is thin (autonomous sessions with few text turns).
+    try:
+        diff_result = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True, text=True, timeout=10, cwd=project_path,
         )
+        git_diff = diff_result.stdout.strip()
+        if git_diff:
+            transcript_text += f"\n\nGIT DIFF (actual changes this session, not yet committed):\n{git_diff[:5000]}"
+    except Exception:
+        pass
+
+    # Inject recent git log so the LLM never lists already-committed work in next_actions.
+    try:
+        log_result = subprocess.run(
+            ["git", "log", "--oneline", "-15"],
+            capture_output=True, text=True, timeout=10, cwd=project_path,
+        )
+        git_log = log_result.stdout.strip()
+        if git_log:
+            transcript_text += f"\n\nRECENT GIT LOG (commits already done — do NOT list these in next_actions):\n{git_log}"
+    except Exception:
+        pass
+
+    # Load open goals so the handover can identify which were completed this session
+    open_goals = []
+    try:
+        from askr.state.goals import load_today_goals, load_open_goals
+        open_goals = load_today_goals(state_dir) or load_open_goals(state_dir) or []
+    except Exception:
+        pass
+
+    # Load existing handover as project state baseline — Haiku will UPDATE it,
+    # not replace it. This is what makes parallel sessions composable.
+    existing_handover = None
+    try:
+        from askr.state.reader import load_own_handover_raw
+        raw = load_own_handover_raw(developer)
+        if isinstance(raw, dict) and raw:
+            existing_handover = raw
+    except Exception:
+        pass
+
+    llm_summary = _generate_handover_with_llm(
+        transcript_text,
+        trigger_type=trigger_type,
+        open_goals=open_goals,
+        session_id=session_id,
+        existing_handover=existing_handover,
+        project_path=project_path,
+    )
+    if llm_summary:
+        summary = llm_summary
         tool_actions = _extract_tool_actions(entries)
     else:
-        # Try LLM-generated handover first; fall back to mechanical if unavailable
-        transcript_text = _build_transcript_text(entries)
-
-        # Append git diff so Haiku sees what actually changed, not just which files
-        # were touched. This grounds Status and Next Action in reality — especially
-        # important when the transcript is thin (autonomous sessions with few text turns).
-        try:
-            diff_result = subprocess.run(
-                ["git", "diff", "HEAD"],
-                capture_output=True, text=True, timeout=10, cwd=project_path,
-            )
-            git_diff = diff_result.stdout.strip()
-            if git_diff:
-                transcript_text += f"\n\nGIT DIFF (actual changes this session, not yet committed):\n{git_diff[:5000]}"
-        except Exception:
-            pass
-
-        # Inject recent git log so the LLM never lists already-committed work in next_actions.
-        try:
-            log_result = subprocess.run(
-                ["git", "log", "--oneline", "-15"],
-                capture_output=True, text=True, timeout=10, cwd=project_path,
-            )
-            git_log = log_result.stdout.strip()
-            if git_log:
-                transcript_text += f"\n\nRECENT GIT LOG (commits already done — do NOT list these in next_actions):\n{git_log}"
-        except Exception:
-            pass
-
-        # Load open goals so the handover can identify which were completed this session
-        open_goals = []
-        try:
-            from askr.state.goals import load_today_goals, load_open_goals
-            open_goals = load_today_goals(state_dir) or load_open_goals(state_dir) or []
-        except Exception:
-            pass
-
-        # Load existing handover as project state baseline — Haiku will UPDATE it,
-        # not replace it. This is what makes parallel sessions composable.
-        existing_handover = None
-        try:
-            from askr.state.reader import load_own_handover_raw
-            raw = load_own_handover_raw(developer)
-            if isinstance(raw, dict) and raw:
-                existing_handover = raw
-        except Exception:
-            pass
-
-        llm_summary = _generate_handover_with_llm(
-            transcript_text,
-            trigger_type=trigger_type,
-            open_goals=open_goals,
-            session_id=session_id,
-            existing_handover=existing_handover,
-            project_path=project_path,
-        )
-        if llm_summary:
-            summary = llm_summary
-            tool_actions = _extract_tool_actions(entries)
-        else:
-            summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type)
-            tool_actions = _extract_tool_actions(entries)
+        summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type)
+        tool_actions = _extract_tool_actions(entries)
 
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer, state_dir=state_dir)
