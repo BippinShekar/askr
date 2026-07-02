@@ -1,40 +1,39 @@
 {
-  "task": "Fixed nested git-worktree state directory hijacking and routed PreCompact emergency handovers through the real LLM path instead of hardcoded boilerplate.",
-  "discussion_summary": "The askr project addressed two critical bugs: (1) a state-directory hijacking vulnerability where nested git worktrees' .claude/askr_state could be discovered as the project root, fixed by refactoring get_state_dir() to use a shared find_project_root() helper that respects worktree boundaries; (2) emergency (PreCompact) checkpoints that bypassed proper handover serialization and had a latent UnboundLocalError for transcript_text, fixed by routing them through the real _generate_handover_with_llm() path in checkpoint.py. Both fixes are now in production with comprehensive test coverage (131 tests passing).",
+  "task": "Investigated voice notification feature scaffolding from a prior session and scoped implementation stages for review.",
+  "discussion_summary": "This session discovered that an earlier session had already committed config scaffolding for voice notifications (load_voice_enabled/save_voice_enabled in askr/state/config.py, commit f323a65). The session performed discovery work to understand the existing state: confirmed macOS-only platform (safe for `say` TTS), identified that voice notifications would reuse existing hook points (stop.py, notification.py) rather than create new channels, and began scoping the feature into implementation stages for user review. No code changes were committed this session; work remains in planning/scoping phase.",
   "accomplishments": [
     {
-      "what": "Refactored get_state_dir() to use shared find_project_root() helper that respects git worktree boundaries",
+      "what": "Confirmed voice notification config scaffolding already exists in askr/state/config.py from prior session (commit f323a65)",
       "done": true
     },
     {
-      "what": "Created test_get_state_dir.py with unit tests for state directory discovery logic",
+      "what": "Verified macOS-only platform constraint makes `say` command safe without cross-platform compatibility concerns",
       "done": true
     },
     {
-      "what": "Added nested-worktree regression test case to test_pre_tool_use_guard.py",
+      "what": "Identified that voice notifications reuse existing notification hook points (stop.py, notification.py) rather than requiring new infrastructure",
       "done": true
     },
     {
-      "what": "Verified nested-worktree fix live by creating test worktree and confirming cd .. works without guard blocking",
-      "done": true
-    },
-    {
-      "what": "Routed PreCompact emergency handovers through real LLM path in checkpoint.py instead of hardcoded boilerplate",
-      "done": true
-    },
-    {
-      "what": "Created test_checkpoint_emergency.py regression test proving emergency checkpoints call real handover serialization",
-      "done": true
-    },
-    {
-      "what": "All 131 tests passing including 5 new tests; committed as 4da1fdb and b89e588",
+      "what": "Scoped voice notification feature into implementation stages for user review",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "Voice notification feature implementation stages pending user review and approval",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
+      "action": "Await user review of voice notification implementation stages scoped this session",
+      "why": "Feature scope and phasing must be approved before implementation begins"
+    },
+    {
+      "order": 2,
       "action": "Audit and remove dead code path in guard_runner.py for non-blocking notification.json (type: guard_warning) that is never invoked from pre_tool_use.py or HOOK_MAP",
       "why": "Phase 3.5 IDE popup for non-blocking guard warnings cannot fire today; dead code should be cleaned up to reduce maintenance surface"
     }
@@ -51,38 +50,32 @@
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
-  "files_in_play": [
-    "askr/session/checkpoint.py",
-    "tests/test_checkpoint_emergency.py"
-  ],
+  "files_in_play": [],
   "relational_files": [
     {
-      "file": "askr/session/checkpoint.py",
-      "relationship": "imports",
-      "why": "Contains create_checkpoint() which now routes emergency trigger_type through real LLM handover path"
+      "file": "askr/state/config.py",
+      "relationship": "configures",
+      "why": "Contains load_voice_enabled/save_voice_enabled scaffolding from prior session; voice feature will extend this"
     },
     {
-      "file": "tests/test_checkpoint_emergency.py",
-      "relationship": "tested_by",
-      "why": "New regression test proving emergency checkpoints call real handover serialization and produce valid JSON"
+      "file": "askr/hooks/stop.py",
+      "relationship": "imports",
+      "why": "Existing hook point that voice notifications will reuse for task completion announcements"
     },
     {
-      "file": "askr/state/writer.py",
+      "file": "askr/hooks/notification.py",
       "relationship": "imports",
-      "why": "Contains _generate_handover_with_llm() which is now called for emergency checkpoints"
+      "why": "Existing notification sink that voice notifications will extend with `say` command output"
     }
   ],
   "uncommitted_files": [
-    "askr_state/goals.jsonl",
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [],
-  "completed_goals": [
-    "Route PreCompact emergency handover through real LLM path in checkpoint.py"
-  ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T05:57:15.688811+00:00",
+    "timestamp": "2026-07-02T06:04:08.399187+00:00",
     "developer": "bippin"
   }
 }
