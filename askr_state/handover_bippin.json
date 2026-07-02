@@ -1,6 +1,6 @@
 {
   "task": "Decoupled the Discord card gate from the call site and gated the 'done' ping on per-turn elapsed time rather than session total, with comprehensive test coverage.",
-  "discussion_summary": "The askr voice notification system has been progressively hardened over recent sessions: emergency kill announcements, humanized spoken text, and now per-turn elapsed-time gating for the session-done ping. This session focused on refactoring the stop.py hook to decouple the Discord card's gate logic from its call site, fixing a datetime import issue, and adding test coverage for the new `_turn_elapsed_seconds` and `_speak_session_done` gating logic. All 25 voice tests pass; the full suite passes; changes committed and pushed.",
+  "discussion_summary": "The askr voice notification system has progressively hardened over recent sessions: emergency kill announcements, humanized spoken text, and now per-turn elapsed-time gating for the session-done ping. This session focused on refactoring the stop.py hook to decouple the Discord card's gate logic from its call site, fixing a datetime import issue, and adding test coverage for the new `_turn_elapsed_seconds` and `_speak_session_done` gating logic. All 25 voice tests pass; the full suite passes; changes committed and pushed. Two new goals were auto-suggested for production monitoring and metrics tracking.",
   "accomplishments": [
     {
       "what": "Decoupled Discord card gate from call site in askr/hooks/stop.py",
@@ -20,6 +20,10 @@
     },
     {
       "what": "Committed and pushed changes (commit b95a7e7)",
+      "done": true
+    },
+    {
+      "what": "Auto-suggested two new goals for production monitoring and metrics tracking",
       "done": true
     }
   ],
@@ -64,12 +68,15 @@
       "why": "Tests the voice notification system including the new per-turn gating logic"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_bippin.jsonl"
+  ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "context",
-    "timestamp": "2026-07-02T08:25:53.737786+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-02T08:36:24.169087+00:00",
     "developer": "bippin"
   }
 }
