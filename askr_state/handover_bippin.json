@@ -1,6 +1,6 @@
 {
-  "task": "Implemented macOS voice notification system for askr init to enable users to opt-in to spoken state updates via native `say` command, integrated with existing Discord notification hooks to announce task completion and session state transitions; fixed handover generation bug leaking .claude/ directory noise into uncommitted files list; diagnosed and fixed get_state_dir() fallback vulnerability that could load a different project's stored path, and scrubbed foreign-repo (leaps) contamination from shared state files; reproduced and documented nested worktree cwd-drift lockout as a genuine but collision-specific bug requiring manual escape via absolute paths; clarified that desired architecture supports multi-repo concurrent execution from single terminal session, requiring cross-repo execution guards to remain permissive rather than restrictive, and deferred project-root-based path locking pending security review of askr_state/.gitignore exposure.",
-  "discussion_summary": "Session confirmed nested worktree lockout is a genuine bug (not phantom collision artifact) by deliberately reproducing it in a clean test worktree at .claude/worktrees/repro-test. User proposed storing absolute project root during askr init as a fix, but investigation revealed this conflicts with the desired architecture: the system must support multi-repo concurrent execution (spawning askr tasks in leaps repo while actively working in askr repo from same terminal), which requires cross-repo execution guards to be permissive rather than restrictive. The direct implementation of project-root-based path locking would block this capability. Session clarified that get_state_dir() fallback vulnerability was already fixed (upward walk, no global fallback), and cross-repo guards are already in place; the architectural intent requires rethinking guard strategy before implementing root-path-based locking.",
+  "task": "Implemented macOS voice notification system for askr init to enable users to opt-in to spoken state updates via native `say` command, integrated with existing Discord notification hooks to announce task completion and session state transitions; fixed handover generation bug leaking .claude/ directory noise into uncommitted files list; diagnosed and fixed get_state_dir() fallback vulnerability that could load a different project's stored path, and scrubbed foreign-repo (leaps) contamination from shared state files; reproduced and documented nested worktree cwd-drift lockout as a genuine but collision-specific bug requiring manual escape via absolute paths; clarified that desired architecture supports multi-repo concurrent execution from single terminal session, requiring cross-repo execution guards to remain permissive rather than restrictive; implemented permanent fix for nested git-worktree askr_state hijacking by refactoring get_state_dir() and find_project_root() to always resolve from current working directory upward without cross-project fallback, and added comprehensive regression test coverage.",
+  "discussion_summary": "Session completed the nested worktree lockout fix that prior sessions had diagnosed but deferred. The root cause was get_state_dir() and find_project_root() falling back to cached or global state when the current project had no stored path, allowing a nested worktree's askr_state to hijack the parent project's root resolution. The fix refactored both functions to always walk upward from cwd without fallback, eliminating cross-project contamination entirely. This preserves the desired multi-repo concurrent execution architecture (spawning askr tasks in one repo while working in another from the same terminal) by keeping guards permissive while ensuring each project's state directory is resolved independently. All 128 tests pass including 3 new regression tests that verify the nested-worktree scenario is fixed and guard behavior remains correct.",
   "accomplishments": [
     {
       "what": "Scoped voice notification feature: confirmed macOS-only deployment enables native `say` TTS without cross-platform abstraction",
@@ -47,15 +47,31 @@
       "done": true
     },
     {
-      "what": "Scrubbed remaining foreign-repo (leaps) content from shared state files to prevent cross-repo execution contamination",
+      "what": "Refactored find_project_root() to walk upward from cwd without global fallback, ensuring nested worktrees cannot hijack parent project root resolution",
       "done": true
     },
     {
-      "what": "Clarified architectural intent: system must support multi-repo concurrent execution from single terminal session (e.g., spawning askr tasks in leaps repo while actively working in askr repo), requiring cross-repo execution guards to remain permissive rather than restrictive",
+      "what": "Updated monitor.py to use refactored find_project_root() helper for consistent project root discovery across all session monitoring code",
       "done": true
     },
     {
-      "what": "Identified that direct implementation of project-root-based path locking conflicts with desired multi-repo concurrent execution architecture and deferred implementation pending security review",
+      "what": "Created test_get_state_dir.py with unit tests for get_state_dir() and find_project_root() covering normal project, nested worktree, and cross-project contamination scenarios",
+      "done": true
+    },
+    {
+      "what": "Added nested-worktree regression test case to test_pre_tool_use_guard.py's HandleBashTests class to verify guard behavior remains correct when cwd is inside nested worktree",
+      "done": true
+    },
+    {
+      "what": "Ran full test suite: all 128 tests pass including 3 new regression tests for nested worktree and get_state_dir() fixes",
+      "done": true
+    },
+    {
+      "what": "Verified nested worktree lockout is permanently fixed by creating live test worktree, confirming cd .. now works instead of being blocked",
+      "done": true
+    },
+    {
+      "what": "Committed fix with decision log: get_state_dir() and find_project_root() now always resolve from cwd upward without cross-project fallback",
       "done": true
     }
   ],
@@ -63,128 +79,86 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Clarify and document the cross-repo execution guard strategy: define which operations should be repo-scoped vs. which should permit cross-repo execution, and how to distinguish between legitimate multi-repo concurrent work and accidental contamination",
-      "why": "Current guards are working but the architectural intent for multi-repo support conflicts with direct project-root-based locking; strategy must be clarified before implementing nested worktree lockout fix"
+      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)",
+      "why": "Open goal from prior sessions; emergency handovers currently bypass the full handover generation pipeline"
     },
     {
       "order": 2,
-      "action": "Review askr_state/.gitignore exposure: determine whether storing absolute project root in config.json creates a security or reproducibility issue, and whether askr_state/ should be .gitignored entirely or selectively",
-      "why": "Project-root-based locking is blocked pending this security review; current state files may leak cross-repo information"
+      "action": "Investigate guard_runner.py's non-blocking notification.json path (type: guard_warning) dead code \u2014 verify it is never invoked from pre_tool_use.py, HOOK_MAP, or .claude/settings.json, and document or remove if confirmed unused",
+      "why": "Open goal; Phase 3.5's IDE popup for non-blocking guard warnings cannot fire today regardless of extension.js whitelist fix, suggesting this code path may be orphaned"
     },
     {
       "order": 3,
-      "action": "Implement nested worktree lockout fix once guard strategy is clarified: store absolute project root during askr init and use it in pre_tool_use.py guard to detect and reject cwd-drift into nested worktrees",
-      "why": "Nested worktree lockout is a genuine bug affecting usability; fix is straightforward once architectural constraints are resolved"
-    },
-    {
-      "order": 4,
-      "action": "Fix PreCompact emergency handover to route through real LLM handover path instead of hardcoded boilerplate (checkpoint.py create_checkpoint, trigger_type==emergency branch)",
-      "why": "Emergency handovers currently bypass proper handover generation; this is a known gap from prior sessions"
-    },
-    {
-      "order": 5,
-      "action": "Investigate guard_runner.py's non-blocking notification.json path (type: guard_warning) dead code: determine whether it should be wired into pre_tool_use.py or removed entirely",
-      "why": "Dead code path never invoked from pre_tool_use.py, HOOK_MAP, or .claude/settings.json; Phase 3.5's IDE popup for non-blocking guard warnings cannot fire today"
+      "action": "Integrate voice notification feature into askr init flow and Discord notification hooks to complete the macOS TTS opt-in system",
+      "why": "Voice notification feature is designed and partially implemented but not yet wired into the actual notification pipeline"
     }
   ],
   "decisions": [
     {
-      "decision": "Voice notifications are macOS-only feature; no cross-platform abstraction layer required",
-      "reason": "Native `say` command is macOS-specific; adding cross-platform TTS would increase complexity without user demand"
+      "decision": "Voice notification feature is macOS-only, using native `say` command without cross-platform abstraction",
+      "reason": "Simplifies implementation and deployment; macOS users get native TTS without adding external dependencies or platform-specific complexity"
     },
     {
-      "decision": "Voice notification preference stored globally in ~/.config/askr/config.json, not per-project",
-      "reason": "User preference for spoken updates is machine-level, not project-specific; single global flag simplifies configuration"
+      "decision": "Voice notification preference is stored as machine-level boolean in ~/.config/askr/config.json, not per-project",
+      "reason": "User preference for spoken updates is a machine-wide setting, not project-specific; centralizing in global config avoids duplication"
     },
     {
-      "decision": "get_state_dir() must always return current project's state directory without cross-project fallback",
-      "reason": "Cross-project fallback created security vulnerability where one repo could load another repo's stored path; upward walk from cwd is correct isolation mechanism"
+      "decision": "get_state_dir() and find_project_root() must always walk upward from current working directory without global or cached fallback",
+      "reason": "Prevents nested git-worktrees from hijacking parent project root resolution; ensures each project's state is resolved independently, supporting multi-repo concurrent execution from single terminal session"
     },
     {
-      "decision": "Nested worktree lockout fix deferred pending clarification of cross-repo execution guard strategy",
-      "reason": "Direct project-root-based locking conflicts with desired architecture supporting multi-repo concurrent execution from single terminal; strategy must be clarified first"
-    },
-    {
-      "decision": "Cross-repo execution guards must remain permissive to support multi-repo concurrent execution",
-      "reason": "User wants to spawn askr tasks in different repos (e.g., leaps) while actively working in askr repo from same terminal session; restrictive guards would block this capability"
+      "decision": "Cross-repo execution guards remain permissive rather than restrictive to support multi-repo concurrent execution architecture",
+      "reason": "System must allow spawning askr tasks in one repo while actively working in another from the same terminal; restrictive project-root-based locking would block this capability"
     }
   ],
-  "user_rejected_decisions": [
-    {
-      "what_was_proposed": "Implement project-root-based path locking as direct fix for nested worktree lockout by storing absolute project root during askr init",
-      "user_signal": "User clarified that desired architecture requires multi-repo concurrent execution support, which conflicts with restrictive root-path-based locking; asked 'what's stopping us?' and explained need to work across repos from single terminal",
-      "domain": "askr/session/checkpoint.py, askr/state/config.py, pre_tool_use.py guards",
-      "confidence": 0.85
-    }
-  ],
+  "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Attempted to fix nested worktree lockout by storing absolute project root in config.json and using it for guard validation",
-      "reason": "Conflicts with desired architecture supporting multi-repo concurrent execution; direct implementation would block legitimate cross-repo task spawning"
+      "approach": "Implementing project-root-based path locking to prevent nested worktree cwd-drift lockout",
+      "reason": "Conflicts with desired architecture: system must support multi-repo concurrent execution from single terminal, which requires cross-repo execution guards to be permissive rather than restrictive"
     }
   ],
   "files_in_play": [
     "askr/state/config.py",
-    "askr/session/checkpoint.py",
-    "askr/hooks/stop.py",
-    "askr/notification.py",
-    "pre_tool_use.py",
-    "guard_runner.py",
-    "askr_state/implementation_bippin.jsonl"
+    "askr/session/monitor.py",
+    "tests/test_get_state_dir.py",
+    "tests/test_pre_tool_use_guard.py"
   ],
   "relational_files": [
     {
-      "file": "askr/state/config.py",
-      "relationship": "imports",
-      "why": "Contains load_voice_enabled() and save_voice_enabled() helper functions for voice notification preference; also contains get_state_dir() and load_project_path() functions affected by cross-project fallback fix"
+      "file": "askr/session/checkpoint.py",
+      "relationship": "imports|configures",
+      "why": "Contains _get_uncommitted_files() that was fixed to exclude .claude/ directory; uses get_state_dir() for state directory resolution"
     },
     {
-      "file": "askr/session/checkpoint.py",
+      "file": "askr/session/pre_tool_use.py",
       "relationship": "imports",
-      "why": "Contains _get_uncommitted_files() function that was leaking .claude/ directory noise; also contains create_checkpoint() with emergency handover branch that needs fixing"
+      "why": "Invokes pre_tool_use guard logic that depends on find_project_root() for guard collision detection"
     },
     {
       "file": "askr/hooks/stop.py",
-      "relationship": "imports",
-      "why": "Identified as integration point for wiring voice notifications as additional sink alongside Discord"
+      "relationship": "configures",
+      "why": "Identified as integration point for voice notification feature alongside Discord notifications"
     },
     {
       "file": "askr/notification.py",
-      "relationship": "imports",
-      "why": "Identified as integration point for wiring voice notifications; contains existing Discord notification hooks"
-    },
-    {
-      "file": "pre_tool_use.py",
       "relationship": "configures",
-      "why": "Contains guard logic that blocks cross-repo writes; must be updated once cross-repo execution guard strategy is clarified"
+      "why": "Identified as integration point for voice notification feature; will wire voice updates as additional sink"
     },
     {
-      "file": "guard_runner.py",
-      "relationship": "imported_by",
-      "why": "Contains non-blocking notification.json path (type: guard_warning) that is dead code and never invoked from pre_tool_use.py"
-    },
-    {
-      "file": ".claude/settings.json",
-      "relationship": "configures",
-      "why": "Hook configuration; guard_warning path is not wired in HOOK_MAP"
-    },
-    {
-      "file": "askr_state/.gitignore",
-      "relationship": "configures",
-      "why": "Security review needed to determine whether askr_state/ should be .gitignored entirely or selectively before implementing project-root-based locking"
+      "file": "tests/test_pre_tool_use_guard.py",
+      "relationship": "tested_by",
+      "why": "Contains HandleBashTests class with new nested-worktree regression test case verifying guard behavior"
     }
   ],
   "uncommitted_files": [
     "askr_state/implementation_bippin.jsonl"
   ],
-  "blockers": [
-    "Cross-repo execution guard strategy must be clarified before implementing nested worktree lockout fix; direct project-root-based locking conflicts with desired multi-repo concurrent execution architecture",
-    "askr_state/.gitignore exposure security review required before storing absolute project root in config.json"
-  ],
+  "blockers": [],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T05:39:25.060202+00:00",
+    "timestamp": "2026-07-02T05:52:09.265808+00:00",
     "developer": "bippin"
   }
 }
