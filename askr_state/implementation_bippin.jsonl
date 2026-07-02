@@ -1297,3 +1297,5 @@
 {"ts": "2026-07-02T07:54:31Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nfrom askr.state.config import load_voice_enabled\nprint('voi"}
 {"ts": "2026-07-02T07:54:40Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"duration_seconds\" askr/session/checkpoint.py | head -20"}
 {"ts": "2026-07-02T07:54:45Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"session_duration\" askr/session/checkpoint.py | head -10"}
+{"ts": "2026-07-02T08:04:30Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -rn \"checkpoint_pending\\|_CHECKPOINT_PENDING\" askr/session/*.py askr/hooks/"}
+{"ts": "2026-07-02T08:05:34Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nfrom askr.state.config import save_voice_enabled, load_voic"}
