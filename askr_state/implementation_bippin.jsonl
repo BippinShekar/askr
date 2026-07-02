@@ -1294,3 +1294,6 @@
 {"ts": "2026-07-02T07:51:12Z", "session_id": "0fd279e0-7a15-4475-8e34-236d42ad6676", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr_state/handover_bippin.json"}
 {"ts": "2026-07-02T07:51:16Z", "session_id": "0fd279e0-7a15-4475-8e34-236d42ad6676", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr_state/handover_bippin.json"}
 {"ts": "2026-07-02T07:51:20Z", "session_id": "0fd279e0-7a15-4475-8e34-236d42ad6676", "type": "command", "detail": "venv/bin/python3 -c \"import json; json.load(open('askr_state/handover_bippin.jso"}
+{"ts": "2026-07-02T07:54:31Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "venv/bin/python -c \"\nfrom askr.state.config import load_voice_enabled\nprint('voi"}
+{"ts": "2026-07-02T07:54:40Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"duration_seconds\" askr/session/checkpoint.py | head -20"}
+{"ts": "2026-07-02T07:54:45Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"session_duration\" askr/session/checkpoint.py | head -10"}

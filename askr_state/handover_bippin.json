@@ -1,6 +1,6 @@
 {
-  "task": "Implemented voice notification system with quota pre-warning, speak() sink gated by user preference, integration into stop/notification hooks, askr init prompt, comprehensive test coverage, and confirmed guard_runner.py notification.json path is dead code pending user direction on build-vs-cut decision.",
-  "discussion_summary": "The voice notification feature is complete across 5 stages with all commits pushed and tests passing. This session independently verified (for the third time across three sessions) that guard_runner.py's non-blocking notification.json path (type: guard_warning) is dead code: pre_tool_use.py runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json. A prior session opened then discarded a deletion goal within 4 minutes with no recorded rationale, so the decision to delete, wire up, or leave as documented dead code has been escalated to the user pending explicit direction rather than unilaterally resolved.",
+  "task": "Implemented voice notification system with quota pre-warning, speak() sink gated by user preference, integration into stop/notification hooks, askr init prompt, comprehensive test coverage, and confirmed guard_runner.py notification.json path is dead code pending user direction on build-vs-cut decision. User began requesting additional voice command triggers (task completion, context-switch notifications) but session ended mid-conversation before implementation.",
+  "discussion_summary": "The voice notification feature is complete across 5 stages with all commits pushed and tests passing. This session independently verified (for the third time across three sessions) that guard_runner.py's non-blocking notification.json path (type: guard_warning) is dead code: pre_tool_use.py runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json. A prior session opened then discarded a deletion goal within 4 minutes with no recorded rationale, so the decision to delete, wire up, or leave as documented dead code has been escalated to the user pending explicit direction rather than unilaterally resolved. User then raised three new feature requests: (1) voice notification when Claude finishes and all hooks complete, (2) clarification on whether re-running askr init is needed when context switches mid-session, (3) what message is spoken during context switches. Session ended before these were addressed.",
   "accomplishments": [
     {
       "what": "Added speak() sink function gated by voice_notifications preference",
@@ -35,15 +35,26 @@
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "User requested three new voice notification triggers: (1) task completion notification when Claude finishes and all hooks run, (2) context-switch notification with clarification on whether askr init re-run is needed, (3) message content for context-switch voice alert. Session ended mid-conversation before requirements were fully captured or implementation began.",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Get user decision on guard_runner.py: delete it, wire it up (spawn from pre_tool_use.py + write guard_trigger.json + whitelist guard_warning in extension.js), or leave as documented dead code. Asked via AskUserQuestion, no response received.",
-      "why": "Confirmed dead code (see Decisions) \u2014 this is a build-vs-cut product call, not something to resolve unilaterally"
+      "action": "Clarify user's three voice trigger requests: (1) exact timing and message for task-done voice alert (already implemented in speak() + stop.py hooks \u2014 confirm this satisfies request or if different behavior needed), (2) whether askr init must be re-run when context switches mid-session or if voice_notifications preference persists, (3) what message/sound should play during context-switch events and where that event is triggered in the codebase",
+      "why": "User raised these mid-session but did not complete the request; need full requirements before implementation"
     },
     {
       "order": 2,
+      "action": "Get user decision on guard_runner.py: delete it, wire it up (spawn from pre_tool_use.py + write guard_trigger.json + whitelist guard_warning in extension.js), or leave as documented dead code. Asked via AskUserQuestion in prior session, no response received.",
+      "why": "Confirmed dead code (see Decisions) \u2014 this is a build-vs-cut product call, not something to resolve unilaterally"
+    },
+    {
+      "order": 3,
       "action": "Review and test the full voice notification flow end-to-end in a real session to confirm speak() is called at correct times and respects user preference",
       "why": "Unit tests pass but integration with actual task lifecycle and notification events should be validated"
     }
@@ -62,60 +73,56 @@
       "reason": "Simplifies call sites \u2014 no conditional logic needed before calling speak()"
     },
     {
-      "decision": "guard_runner.py non-blocking notification.json path (type: guard_warning) is confirmed dead code, not left unwired by accident: pre_tool_use.py already runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json (the file check_and_save() expects). Left in place undeleted pending explicit user direction on build-vs-cut rather than unilaterally deleting or wiring it up.",
-      "reason": "Three independent sessions now reached the same dead-code conclusion (goals 9ad0ffbf, 936fb14f); a prior session opened then discarded a deletion goal (af366587) within 4 minutes with no recorded rationale, so deleting without user sign-off risks redoing a call that was already reconsidered once"
+      "decision": "guard_runner.py non-blocking notification.json path (type: guard_warning) is confirmed dead code, not left unwired by accident: pre_tool_use.py already runs the guard check synchronously in-process and blocks via sys.exit(2), never spawning guard_runner.py or writing guard_trigger.json",
+      "reason": "Three independent sessions verified this; prior deletion goal was discarded without rationale; escalating to user for explicit build-vs-cut direction"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
+    "askr/voice/speak.py",
+    "askr/session/stop.py",
+    "askr/cmd/init.py",
     "askr/session/lifecycle.py",
-    "askr/hooks/stop.py",
     "tests/test_voice.py"
   ],
   "relational_files": [
     {
-      "file": "askr/session/lifecycle.py",
+      "file": "askr/session/stop.py",
       "relationship": "imports",
-      "why": "Defines quota_warned_sessions state and lifecycle management for voice notifications"
+      "why": "Wired speak() into task-done and HITL notification hooks"
     },
     {
-      "file": "askr/hooks/stop.py",
+      "file": "askr/cmd/init.py",
       "relationship": "imports",
-      "why": "Wires speak() into task-done and HITL notification events"
+      "why": "Added voice_notifications prompt to askr init flow"
+    },
+    {
+      "file": "askr/session/lifecycle.py",
+      "relationship": "imports",
+      "why": "Quota pre-warning logic checks lifecycle state for quota_warned_sessions deduplication"
+    },
+    {
+      "file": "askr/state/config.py",
+      "relationship": "imports",
+      "why": "speak() reads voice_notifications preference from config"
     },
     {
       "file": "tests/test_voice.py",
       "relationship": "tested_by",
-      "why": "11 tests covering speak() gating, config round-trip, and quota-warning deduplication"
-    },
-    {
-      "file": "askr/guards/guard_runner.py",
-      "relationship": "configures",
-      "why": "Contains dead-code notification.json path (type: guard_warning) confirmed not invoked from pre_tool_use.py or HOOK_MAP"
-    },
-    {
-      "file": "askr/guards/pre_tool_use.py",
-      "relationship": "imports",
-      "why": "Runs guard checks synchronously in-process and blocks via sys.exit(2); never spawns guard_runner.py"
+      "why": "11 tests cover speak() gating, config round-trip, and quota-warning scenarios"
     }
   ],
   "uncommitted_files": [
-    "askr_state/decisions.jsonl",
-    "askr_state/goals.jsonl",
-    "askr_state/handover_bippin.json",
-    "askr_state/handover_bippin.md",
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [
-    "User decision pending on guard_runner.py: delete, wire up, or leave as documented dead code"
+    "User decision on guard_runner.py dead code: delete, wire up, or document and leave \u2014 awaiting explicit direction"
   ],
-  "completed_goals": [
-    "Verify guard_runner.py notification.json path is dead code or update HOOK_MAP"
-  ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-02T07:51:26.147318+00:00",
+    "timestamp": "2026-07-02T07:55:22.068213+00:00",
     "developer": "bippin"
   }
 }
