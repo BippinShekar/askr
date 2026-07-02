@@ -1,81 +1,95 @@
 {
-  "task": "Investigated voice notification feature scaffolding from a prior session and scoped implementation stages for review.",
-  "discussion_summary": "This session discovered that an earlier session had already committed config scaffolding for voice notifications (load_voice_enabled/save_voice_enabled in askr/state/config.py, commit f323a65). The session performed discovery work to understand the existing state: confirmed macOS-only platform (safe for `say` TTS), identified that voice notifications would reuse existing hook points (stop.py, notification.py) rather than create new channels, and began scoping the feature into implementation stages for user review. No code changes were committed this session; work remains in planning/scoping phase.",
+  "task": "Scoped a macOS voice notification feature (TTS via `say` command) into implementation stages, confirming prior session had already committed config scaffolding and identified integration points.",
+  "discussion_summary": "A prior session had begun building voice notification support by adding `load_voice_enabled()` and `save_voice_enabled()` to `askr/state/config.py` (commit f323a65). This session investigated the scope by grepping for voice/TTS references, confirmed macOS-only deployment (no cross-platform concern), and mapped the feature into a 3-stage rollout: (1) create `askr/clients/voice.py` with a `speak()` sink, (2) wire it into `askr/hooks/stop.py` and `notification.py`, (3) add init-time prompt to enable/disable. User requested staging breakdown for review before proceeding.",
   "accomplishments": [
     {
-      "what": "Confirmed voice notification config scaffolding already exists in askr/state/config.py from prior session (commit f323a65)",
+      "what": "Confirmed prior session's config scaffolding (load_voice_enabled/save_voice_enabled in askr/state/config.py:31-38) is in place and committed",
       "done": true
     },
     {
-      "what": "Verified macOS-only platform constraint makes `say` command safe without cross-platform compatibility concerns",
+      "what": "Mapped voice notification feature into 3-stage implementation plan with clear file targets and integration points",
       "done": true
     },
     {
-      "what": "Identified that voice notifications reuse existing notification hook points (stop.py, notification.py) rather than requiring new infrastructure",
-      "done": true
-    },
-    {
-      "what": "Scoped voice notification feature into implementation stages for user review",
+      "what": "Verified macOS-only deployment is safe (no cross-platform TTS abstraction needed)",
       "done": true
     }
   ],
   "in_progress": [
     {
       "file": null,
-      "what": "Voice notification feature implementation stages pending user review and approval",
+      "what": "Voice notification feature design \u2014 awaiting user review of 3-stage scope before implementation begins",
       "last_line": 0
     }
   ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Await user review of voice notification implementation stages scoped this session",
-      "why": "Feature scope and phasing must be approved before implementation begins"
+      "action": "User to review and approve the 3-stage voice notification rollout plan (create voice.py client \u2192 wire into hooks \u2192 add init prompt)",
+      "why": "Session ended with user requesting scope review before proceeding; no implementation should start until approval"
     },
     {
       "order": 2,
-      "action": "Audit and remove dead code path in guard_runner.py for non-blocking notification.json (type: guard_warning) that is never invoked from pre_tool_use.py or HOOK_MAP",
-      "why": "Phase 3.5 IDE popup for non-blocking guard warnings cannot fire today; dead code should be cleaned up to reduce maintenance surface"
+      "action": "Once approved, implement Stage 1: create askr/clients/voice.py with speak(text) function using subprocess.run(['say', text]), guarded by load_voice_enabled(), with silent failure if say unavailable",
+      "why": "Lowest-risk foundation; mirrors existing Discord client pattern"
+    },
+    {
+      "order": 3,
+      "action": "Implement Stage 2: integrate speak() calls into askr/hooks/stop.py and askr/hooks/notification.py at task completion points",
+      "why": "Connects config to actual notifications; reuses existing hook infrastructure"
+    },
+    {
+      "order": 4,
+      "action": "Implement Stage 3: add voice enable/disable prompt to cmd_init in askr/cli/askr.py (around line 740-750)",
+      "why": "Completes user-facing setup flow; matches existing init pattern"
     }
   ],
   "decisions": [
     {
-      "decision": "Implement prevention of nested-worktree state hijacking via shared find_project_root() helper rather than post-hoc detection",
-      "reason": "True prevention at discovery time is cleaner and more reliable than detecting duplicates after the fact; git worktree is a legitimate use case that must be supported"
+      "decision": "Voice notifications use macOS `say` command directly, not a cross-platform TTS abstraction",
+      "reason": "Project is macOS-only; `say` is built-in and reliable; no cross-platform users to support"
     },
     {
-      "decision": "Route emergency (PreCompact) handovers through real _generate_handover_with_llm() path instead of hardcoded boilerplate string",
-      "reason": "Ensures emergency checkpoints produce proper JSON handover documents with full context serialization; eliminates latent UnboundLocalError bug in transcript_text assignment"
+      "decision": "Voice client follows Discord client pattern: silent failure if `say` unavailable, guarded by load_voice_enabled()",
+      "reason": "Consistent error handling; non-blocking; matches existing notification sink design"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
-  "files_in_play": [],
+  "files_in_play": [
+    "askr/state/config.py",
+    "askr/hooks/stop.py",
+    "askr/hooks/notification.py",
+    "askr/cli/askr.py"
+  ],
   "relational_files": [
+    {
+      "file": "askr/clients/discord.py",
+      "relationship": "imported_by",
+      "why": "Voice client will follow same pattern (sink with error guard)"
+    },
     {
       "file": "askr/state/config.py",
       "relationship": "configures",
-      "why": "Contains load_voice_enabled/save_voice_enabled scaffolding from prior session; voice feature will extend this"
+      "why": "Already holds load_voice_enabled/save_voice_enabled; voice.py will call these"
     },
     {
       "file": "askr/hooks/stop.py",
       "relationship": "imports",
-      "why": "Existing hook point that voice notifications will reuse for task completion announcements"
+      "why": "Will import and call voice.speak() at task completion"
     },
     {
       "file": "askr/hooks/notification.py",
       "relationship": "imports",
-      "why": "Existing notification sink that voice notifications will extend with `say` command output"
+      "why": "Will import and call voice.speak() for notifications"
     }
   ],
-  "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl"
-  ],
+  "uncommitted_files": [],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-07-02T06:04:08.399187+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-07-02T06:08:41.694431+00:00",
     "developer": "bippin"
   }
 }
