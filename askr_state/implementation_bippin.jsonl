@@ -1208,3 +1208,5 @@
 {"ts": "2026-07-02T06:03:43Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git log --oneline -5 -- askr/state/config.py; echo ---; git status askr/state/co"}
 {"ts": "2026-07-02T06:03:48Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "git log -1 --format=%H -- askr/state/config.py; git blame -L 31,38 askr/state/co"}
 {"ts": "2026-07-02T06:03:56Z", "session_id": "e021e008-0e82-4cd6-adb7-9a5ae600bd9d", "type": "command", "detail": "grep -n \"def cmd_init\" -A 5 askr/cli/askr.py | head -10; echo ---; sed -n '740,7"}
+{"ts": "2026-07-02T06:09:26Z", "session_id": "1c08e7d9-9153-488e-ba21-a0dfda3f4f37", "type": "command", "detail": "find /Users/bippin/Desktop/askr/askr_state -iname \"*handover*\" -newer /Users/bip"}
+{"ts": "2026-07-02T06:09:35Z", "session_id": "1c08e7d9-9153-488e-ba21-a0dfda3f4f37", "type": "command", "detail": "git log --oneline -5 && echo \"---status---\" && git status && echo \"---voice file"}
