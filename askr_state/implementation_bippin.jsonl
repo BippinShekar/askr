@@ -1410,3 +1410,27 @@
 {"ts": "2026-07-02T08:54:20Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "SCRATCH=/private/tmp/claude-501/-Users-bippin-Desktop-askr/3154b9ce-e123-4dbf-87"}
 {"ts": "2026-07-02T08:54:23Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "SCRATCH=/private/tmp/claude-501/-Users-bippin-Desktop-askr/3154b9ce-e123-4dbf-87"}
 {"ts": "2026-07-02T08:54:30Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "git status --short askr_state/ 2>/dev/null; git diff --stat 2>/dev/null"}
+{"ts": "2026-07-02T10:52:01Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "say -v '?' 2>/dev/null | grep -iE \"en_US|en_GB|en_AU|en_IE\" | head -40"}
+{"ts": "2026-07-02T10:53:40Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "for v in Zarvox Trinoids Superstar Daniel Ralph \"Good News\" Samantha; do\n  say -"}
+{"ts": "2026-07-02T10:55:11Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "SENTENCE=\"Done. Fixed the voice announcement gating bug in the stop hook.\"\nfor v"}
+{"ts": "2026-07-02T10:57:14Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "say -v '?' 2>/dev/null | grep -iE \"premium|enhanced\" | head -20\necho \"---\"\nsay -"}
+{"ts": "2026-07-02T10:57:58Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/clients/voice.py"}
+{"ts": "2026-07-02T10:58:05Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/state/config.py"}
+{"ts": "2026-07-02T10:58:22Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/hooks/stop.py"}
+{"ts": "2026-07-02T10:58:35Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T10:58:42Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T10:58:45Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T10:58:49Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T10:59:06Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_voice.py"}
+{"ts": "2026-07-02T10:59:09Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "python3 -m pytest tests/test_voice.py -q 2>&1 | tail -40"}
+{"ts": "2026-07-02T10:59:11Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "(python3 -m unittest tests.test_voice -v 2>&1 | tail -60)"}
+{"ts": "2026-07-02T10:59:15Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "grep -rn \"Done: {completed_goals\\|_speak_session_done\\|voice.speak(\" /Users/bipp"}
+{"ts": "2026-07-02T10:59:20Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "python3 -m unittest discover -s tests -q 2>&1 | tail -20"}
+{"ts": "2026-07-02T10:59:33Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "command -v python3.11; python3.11 -m unittest discover -s tests -q 2>&1 | tail -"}
+{"ts": "2026-07-02T10:59:39Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "find /Users/bippin/Desktop/askr -maxdepth 2 -iname \"requirements*.txt\" -o -maxde"}
+{"ts": "2026-07-02T10:59:53Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "python3.11 -m pip show rich 2>&1 | head -5\necho \"---\"\npython3.11 -c \"import sys;"}
+{"ts": "2026-07-02T10:59:58Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "find /Users/bippin/Desktop/askr -maxdepth 1 -iname \"*venv*\" -o -maxdepth 1 -inam"}
+{"ts": "2026-07-02T11:00:04Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "source /Users/bippin/Desktop/askr/venv/bin/activate && python -m pytest tests/ -"}
+{"ts": "2026-07-02T11:00:08Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "source /Users/bippin/Desktop/askr/venv/bin/activate\npython - <<'PYEOF'\nfrom askr"}
+{"ts": "2026-07-02T11:00:35Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "source /Users/bippin/Desktop/askr/venv/bin/activate\npython - <<'PYEOF'\nfrom askr"}
+{"ts": "2026-07-02T11:00:39Z", "session_id": "3154b9ce-e123-4dbf-8745-76e39ef3334f", "type": "command", "detail": "source /Users/bippin/Desktop/askr/venv/bin/activate\npython - <<'PYEOF'\nfrom askr"}
