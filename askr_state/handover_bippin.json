@@ -1,5 +1,5 @@
 {
-  "task": "<task-notification>\n<task-id>acff48a070b97d0a9</task-id>\n<tool-use-id>toolu_012ESJLQznFRbeR5pUJU3Ccq</tool-use-id>\n<output-file>/private/tmp/claude-501/-Users-bippin-Desktop-askr/4e825a02-894f-43e3-893a-80455b2dee6b/tasks/acff48a070b97d0a9.output</output-file>\n<status>completed</status>\n<summary>Age",
+  "task": "<task-notification>\n<task-id>a7e57503377d4842a</task-id>\n<tool-use-id>toolu_01Jsh8Br8NaUnLbxHY7GDw7p</tool-use-id>\n<output-file>/private/tmp/claude-501/-Users-bippin-Desktop-askr/d2ba616d-6bc7-4858-9054-1361ac0f2c29/tasks/a7e57503377d4842a.output</output-file>\n<status>completed</status>\n<summary>Age",
   "next_actions": [
     {
       "order": 1,
@@ -7,7 +7,9 @@
       "why": "handover generation failed this session"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr_state/implementation_bippin.jsonl"
+  ],
   "in_progress": [],
   "accomplishments": [],
   "decisions": [],
@@ -18,8 +20,8 @@
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "quota",
-    "timestamp": "2026-07-02T20:34:07.727892+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-02T20:35:17.607035+00:00",
     "degraded": true,
     "developer": "bippin"
   }
