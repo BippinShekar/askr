@@ -40,6 +40,14 @@ def _send_discord(message: str, level: str):
         pass
 
 
+def _speak(message: str):
+    try:
+        from askr.clients.voice import speak
+        speak(message)
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -58,6 +66,7 @@ def main():
     _log_notification(message, level)
     if level != "INFO":
         _send_discord(message, level)
+        _speak(message)
 
 
 if __name__ == "__main__":

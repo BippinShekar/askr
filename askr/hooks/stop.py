@@ -468,6 +468,15 @@ def _broadcast_session_text(developer: str, completed_goals: list, project_path:
         pass
 
 
+def _speak_session_done(completed_goals: list):
+    try:
+        from askr.clients.voice import speak
+        message = f"Done: {completed_goals[0]}" if completed_goals else "Session done."
+        speak(message)
+    except Exception:
+        pass
+
+
 def _was_autonomous() -> bool:
     """True if this session was launched by askr (goal_launch or context trigger)."""
     try:
@@ -541,6 +550,7 @@ def main():
     # Suppresses noise from casual conversation turns and quick tests.
     if completed_goals or duration_seconds >= 300:
         _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds, autonomous)
+        _speak_session_done(completed_goals)
 
     _advance_launch_goal()
 
