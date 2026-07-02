@@ -1,43 +1,54 @@
 # Handover: bippin
 
-Last updated: 2026-07-02 16:31
+Last updated: 2026-07-02 16:42
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Implemented dual-voice 'sonic logo' for session-done notifications and added voice parameter support to the speak() function.
+Unified all spoken announcements across the askr codebase through a single `announce()` voice pipeline, consolidating duplicated `_speak` helpers and wiring user voice selection into the CLI initialization flow.
 
 ## Discussion
-The askr voice notification system has been extended to support per-call voice selection and a two-voice signature pattern for the session-done ping. The 'Done.' prefix now plays in one voice (askr's branded prefix voice) followed by the detail in a second, distinct voice, creating a recognizable sonic logo that differentiates askr's notifications from generic TTS. The implementation refactored preconditions into a shared gate, added voice parameter to speak(), introduced speak_signature() for the two-tone pattern, and updated the done-ping logic to use random phrases when no goals are completed. All 161 tests pass.
+The askr voice notification system has evolved from scattered `_speak` helpers in multiple hooks (stop.py, notification.py, pre_compact.py, lifecycle.py) into a unified `announce()` function in voice.py. This session refactored all call sites to route through the single pipeline, added config loaders for prefix and body voices, and integrated voice selection prompts into `askr init`. The two-voice sonic logo (prefix in one voice, body in another) is now consistently applied across all announcement contexts. All 161 tests pass and live playback has been verified.
 
 ## Accomplishments
-- [x] Added voice parameter to speak(text, voice='') to support per-call voice selection via macOS -v flag
-- [x] Implemented speak_signature(prefix, body, prefix_voice, body_voice) for two-voice sequential playback
-- [x] Refactored voice preconditions into shared _say_preconditions() gate used by both speak() and speak_signature()
-- [x] Updated _speak_session_done() to use speak_signature() with configurable prefix and body voices
-- [x] Added _GENERIC_DONE_PHRASES rotation for no-goal case to vary the detail portion of the done ping
-- [x] Added test coverage for speak_signature() and voice parameter in test_voice.py
-- [x] Verified live playback through actual code path with real macOS say command
-- [x] All 161 tests passing (156 prior + 5 new)
+- [x] Refactored duplicated `_speak` helpers from notification.py, pre_compact.py, and lifecycle.py into unified `announce()` function in voice.py
+- [x] Added `load_voice_prefix()` and `load_voice_body()` config loaders to askr/state/config.py
+- [x] Wired voice selection prompts into `askr init` CLI flow to capture user's prefix and body voice preferences
+- [x] Updated all call sites across stop.py, notification.py, pre_compact.py, and lifecycle.py to use `announce()` instead of local `_speak` functions
+- [x] Refactored test_voice.py to reflect `announce()` signature and removed tests for obsolete `_speak` variants
+- [x] Verified no remaining bare `speak()` imports or calls exist in codebase via grep
+- [x] Confirmed live playback of unified announcement pipeline with real macOS say command
+- [x] Committed all changes with message 'feat(voice): unify all spoken announcements through one voice pipeline'
 
 ## Next Actions
-1. Commit the voice.py and stop.py changes with message 'feat(voice): dual-voice sonic logo for session-done ping'
-   *Why: Changes are complete, tested, and verified live; ready for permanent record*
-2. Verify that load_voice_prefix() and load_voice_body() config keys exist in askr/state/config.py or add them if missing
-   *Why: The stop.py code references these config loaders; they must be present for the feature to work end-to-end*
+1. Verify that `announce()` correctly handles empty prefix or body strings (should skip that part rather than play silence)
+   *Why: Edge case validation to ensure the unified pipeline behaves correctly when caller intentionally omits prefix or body*
+2. Test voice selection flow in `askr init` end-to-end with actual user input to confirm config is persisted and loaded on subsequent runs
+   *Why: Integration test to verify the CLI wiring works correctly and user preferences survive session boundaries*
+3. Document the `announce(text, prefix_text='', prefix_voice='', body_voice='')` signature and voice selection flow in README or ARCHITECTURE.md
+   *Why: Future developers need to understand the unified announcement pattern and how to add new announcement contexts*
 
 ## Decisions
-- Two-voice pattern uses sequential subprocess.run() calls rather than a single say command with multiple -v flags — macOS say does not support switching voices mid-utterance; sequential calls with brief natural pause between them create the desired effect
-- Preconditions gate (voice_notifications on, macOS, say on PATH) is shared via _say_preconditions() rather than duplicated — Single source of truth for the gating logic; both speak() and speak_signature() must pass the same checks
-- speak_signature() always fires both prefix and body if preconditions pass, even if one is empty string — Allows caller to control whether prefix is spoken; empty string is a valid 'skip this part' signal
-- Generic done phrases are rotated randomly rather than cycling through a fixed sequence — Prevents predictable repetition; user hears variety across multiple sessions
+- All spoken announcements route through a single `announce()` function rather than scattered `_speak` helpers — Single source of truth for voice gating, preconditions, and two-voice pattern; easier to maintain and extend
+- Voice selection is captured during `askr init` and persisted in config rather than prompted at runtime — Avoids interrupting the user during normal operation; preferences are set once during setup
+- Empty prefix or body strings are valid signals to skip that part of the announcement — Allows callers to use the two-voice pattern selectively without forcing both parts
 
 ## Files In Play
 - `askr/clients/voice.py`
+- `askr/state/config.py`
 - `askr/hooks/stop.py`
+- `askr/hooks/notification.py`
+- `askr/hooks/pre_compact.py`
+- `askr/session/lifecycle.py`
+- `askr/cli/askr.py`
 - `tests/test_voice.py`
 
 ## Relational Files
-- `askr/state/config.py` (configures): Provides load_voice_enabled(), load_voice_prefix(), load_voice_body() config loaders used by voice.py and stop.py
-- `tests/test_voice.py` (tested_by): Contains 5 new test cases for speak_signature() and voice parameter; all 31 voice tests pass
+- `askr/state/config.py` (configures): Provides load_voice_enabled(), load_voice_prefix(), load_voice_body() loaders used by voice.py and all hooks
+- `tests/test_voice.py` (tested_by): Unit tests for announce() function and voice parameter handling
+- `askr/cli/askr.py` (imports): CLI initialization flow now prompts for voice selection and saves to config
+
+## Uncommitted Files
+- `askr_state/goals.jsonl`
+- `askr_state/implementation_bippin.jsonl`
