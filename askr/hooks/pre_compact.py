@@ -25,6 +25,14 @@ _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json
 QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 
+def _speak(message: str):
+    try:
+        from askr.clients.voice import speak
+        speak(message)
+    except Exception:
+        pass
+
+
 def _quota_pct() -> float | None:
     """Read quota from any recent stats file for this project (quota is per-account)."""
     try:
@@ -103,6 +111,11 @@ def main():
 
     developer = load_developer()
     transcript_path = payload.get("transcript_path", "")
+
+    # Speak first, before the (potentially slow) checkpoint call — this is the
+    # only voice announcement for a mid-turn kill, since PreCompact can't wait
+    # for Stop to fire cleanly after SIGTERM.
+    _speak("Context critical. Claude is compacting — restarting your session now.")
 
     from askr.session.checkpoint import create_checkpoint
     create_checkpoint(

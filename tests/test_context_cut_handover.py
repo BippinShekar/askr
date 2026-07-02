@@ -96,6 +96,10 @@ class TestContextCutAutoLaunch(unittest.TestCase):
             patch("askr.session.lifecycle._read_session_arc", return_value=arc),
             patch("askr.state.config.load_developer", return_value="bippin"),
             patch("askr.hooks.stop.os.makedirs"),
+            # speak() shells out to real macOS `say` if voice_notifications happens
+            # to be enabled in the developer's own global config — never let a test's
+            # runtime depend on that ambient machine state.
+            patch("askr.clients.voice.speak"),
         ]
 
         with contextlib.ExitStack() as stack:
@@ -252,6 +256,7 @@ class TestContextCutAutoLaunch(unittest.TestCase):
                     patch("askr.session.lifecycle._get_next_goal", return_value=""),
                     patch("askr.session.lifecycle._write_launch_mode"),
                     patch("askr.hooks.stop.os.makedirs"),
+                    patch("askr.clients.voice.speak"),
                 ]
                 with contextlib.ExitStack() as stack:
                     for p in patches:
