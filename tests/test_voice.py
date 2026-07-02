@@ -192,6 +192,29 @@ class TurnElapsedSecondsTests(unittest.TestCase):
             elapsed = stop_module._turn_elapsed_seconds(path)
             self.assertLess(elapsed, 30)
 
+    def test_ignores_tool_result_entries_logged_as_user(self):
+        # Real transcripts log tool_result blocks under type "user" — the last
+        # "user" line in a turn with tool calls is almost always one of these,
+        # timestamped right before Stop fires, not when the human last typed.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            real_user_ts = (now - datetime.timedelta(seconds=90)).isoformat().replace("+00:00", "Z")
+            tool_result_ts = (now - datetime.timedelta(seconds=3)).isoformat().replace("+00:00", "Z")
+            path = os.path.join(tmpdir, "transcript.jsonl")
+            with open(path, "w") as f:
+                f.write(json.dumps({
+                    "type": "user",
+                    "timestamp": real_user_ts,
+                    "message": {"content": [{"type": "text", "text": "go ahead"}]},
+                }) + "\n")
+                f.write(json.dumps({
+                    "type": "user",
+                    "timestamp": tool_result_ts,
+                    "message": {"content": [{"type": "tool_result", "content": "ok"}]},
+                }) + "\n")
+            elapsed = stop_module._turn_elapsed_seconds(path)
+            self.assertGreaterEqual(elapsed, 85)
+
 
 class SpeakSessionDoneGatingTests(unittest.TestCase):
     def test_completed_goal_always_speaks_even_on_fast_turn(self):

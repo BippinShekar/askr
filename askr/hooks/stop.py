@@ -493,8 +493,17 @@ def _turn_elapsed_seconds(transcript_path: str) -> float:
                     obj = json.loads(line)
                 except Exception:
                     continue
-                if obj.get("type") == "user" and obj.get("timestamp"):
-                    last_user_ts = obj["timestamp"]
+                if obj.get("type") != "user" or not obj.get("timestamp"):
+                    continue
+                # Tool results are logged as type "user" too (they're the next
+                # turn in the API sense) — skip those, we only want messages
+                # the human actually typed.
+                content = obj.get("message", {}).get("content")
+                if isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+                ):
+                    continue
+                last_user_ts = obj["timestamp"]
     except Exception:
         return 0.0
     if not last_user_ts:
