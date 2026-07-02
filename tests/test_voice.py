@@ -107,6 +107,16 @@ class SpeakGatingTests(unittest.TestCase):
             args, kwargs = mock_run.call_args
             self.assertEqual(args[0], ["/usr/bin/say", "-v", "Zarvox", "done"])
 
+    def test_empty_text_skips_subprocess_entirely(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            ok, reason = voice.speak("")
+            self.assertFalse(ok)
+            self.assertIn("empty", reason)
+            mock_run.assert_not_called()
+
 
 class SpeakSignatureTests(unittest.TestCase):
     def test_speaks_prefix_then_body_in_their_own_voices(self):
@@ -136,6 +146,27 @@ class SpeakSignatureTests(unittest.TestCase):
              patch("subprocess.run") as mock_run:
             voice.speak_signature("Done.", "", "Good News", "Zarvox")
             mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args, ["/usr/bin/say", "-v", "Good News", "Done."])
+
+    def test_empty_prefix_only_speaks_body(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.speak_signature("", "ship OAuth", "Good News", "Zarvox")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args, ["/usr/bin/say", "-v", "Zarvox", "ship OAuth"])
+
+    def test_both_empty_touches_subprocess_not_at_all(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            ok, reason = voice.speak_signature("", "", "Good News", "Zarvox")
+            self.assertTrue(ok)
+            mock_run.assert_not_called()
 
 
 class HumanizeForSpeechTests(unittest.TestCase):
@@ -328,6 +359,28 @@ class AnnounceTests(unittest.TestCase):
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
             self.assertEqual(args, ["/usr/bin/say", "-v", "Samantha", "quota at 90 percent"])
+
+    def test_single_mode_empty_message_skips_subprocess(self):
+        with patch("askr.state.config.load_voice_mode", return_value="single"), \
+             patch("askr.state.config.load_voice_single", return_value="Zarvox"), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            ok, reason = voice.announce("")
+            self.assertFalse(ok)
+            mock_run.assert_not_called()
+
+    def test_dual_mode_empty_prefix_and_message_skips_subprocess(self):
+        with patch("askr.state.config.load_voice_mode", return_value="dual"), \
+             patch("askr.state.config.load_voice_prefix", return_value="Good News"), \
+             patch("askr.state.config.load_voice_body", return_value="Zarvox"), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.announce("", prefix="")
+            mock_run.assert_not_called()
 
     def test_custom_prefix_used_in_dual_mode(self):
         with patch("askr.state.config.load_voice_mode", return_value="dual"), \

@@ -66,6 +66,9 @@ def speak(text: str, voice: str = "") -> tuple[bool, str]:
     call should never take down a hook. `voice` selects a specific macOS
     voice (e.g. "Zarvox"); empty uses the system default.
     """
+    if not text:
+        return False, "empty text"
+
     say_bin, reason = _say_preconditions()
     if not say_bin:
         return False, reason
