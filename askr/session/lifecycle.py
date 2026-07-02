@@ -72,6 +72,7 @@ _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 _TRIGGER_STATE_PATH    = os.path.expanduser("~/.config/askr/trigger_state.json")
 _COMPANIONED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/companioned_sessions.json")
+_QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_sessions.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -118,6 +119,7 @@ SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
 CONTEXT_TRIGGER    = 0.60  # fire at 60% — 40% runway to auto-compact; earlier than 65% to survive extended-thinking spikes
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
+QUOTA_WARNING_TRIGGER = 75.0  # heads-up spoken warning before the 90% hard trigger; fires once per session
 TRIGGER_COOLDOWN   = 300   # seconds after a successful kill before re-firing
 TRIGGER_MISS_COOLDOWN = 60 # seconds when trigger fired but Claude PID was not found
 
@@ -757,6 +759,7 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
             payload["prompt"] = f"Read the handover and start on the Next Action immediately. Work on: {goal}. Work autonomously."
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
+        _speak(msg)
     except Exception:
         pass
 
@@ -979,11 +982,12 @@ def _open_companion_session(project_path: str, session_id: str = None):
         daemon_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
 
     try:
+        companion_message = "Context high on your current session — a fresh companion session is ready. Your current one keeps running."
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
                 "type": "context",
-                "message": "Context high on your current session — a fresh companion session is ready. Your current one keeps running.",
+                "message": companion_message,
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,
@@ -992,6 +996,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
         _log("wrote notification.json — extension will open a NEW terminal; existing session left running")
+        _speak(companion_message)
     except Exception as e:
         _log(f"companion notification error: {e}")
 
@@ -1137,6 +1142,34 @@ def _save_companioned_sessions(sessions: set):
         _log(f"WARN: failed to persist companioned sessions: {e}")
 
 
+def _load_quota_warned_sessions() -> set:
+    """Session-ids already given the QUOTA_WARNING_TRIGGER heads-up — same
+    one-per-session dedup idea as _load_companioned_sessions, otherwise the
+    warning re-fires every poll for as long as a session sits above 75%."""
+    try:
+        with open(_QUOTA_WARNED_SESSIONS_PATH) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _save_quota_warned_sessions(sessions: set):
+    try:
+        os.makedirs(os.path.dirname(_QUOTA_WARNED_SESSIONS_PATH), exist_ok=True)
+        with open(_QUOTA_WARNED_SESSIONS_PATH, "w") as f:
+            json.dump(list(sessions), f)
+    except Exception as e:
+        _log(f"WARN: failed to persist quota-warned sessions: {e}")
+
+
+def _speak(message: str):
+    try:
+        from askr.clients.voice import speak
+        speak(message)
+    except Exception:
+        pass
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -1156,6 +1189,7 @@ def run_daemon():
     was_active = False
     last_trigger_at: dict = _load_trigger_state()  # project_path → epoch seconds, disk-backed (survives restarts)
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
+    quota_warned_sessions: set = _load_quota_warned_sessions()  # session_id → already spoke the 75% heads-up, disk-backed
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1202,6 +1236,16 @@ def run_daemon():
                     in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
                     session_id = stats.get("session_id")
                     already_companioned = bool(session_id) and session_id in companioned_sessions
+
+                    # Pre-emptive heads-up, independent of the trigger/cooldown state below —
+                    # it doesn't checkpoint or open anything, just speaks once per session.
+                    if (session_id and quota_pct is not None
+                            and QUOTA_WARNING_TRIGGER <= quota_pct < QUOTA_TRIGGER
+                            and session_id not in quota_warned_sessions):
+                        _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] session={session_id[:8]}")
+                        quota_warned_sessions.add(session_id)
+                        _save_quota_warned_sessions(quota_warned_sessions)
+                        _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.")
 
                     if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
                         # This exact session already got a companion. Since we never kill

@@ -271,6 +271,11 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
+        try:
+            from askr.clients.voice import speak
+            speak(payload["message"])
+        except Exception:
+            pass
 
         # Notification written successfully — now safe to remove the flag.
         try:
@@ -520,6 +525,16 @@ def main():
             if session_id in companioned:
                 companioned.discard(session_id)
                 _save_companioned_sessions(companioned)
+        except Exception:
+            pass
+        # Same cleanup for the quota-warning dedup set — otherwise it grows
+        # forever across every session that ever crossed QUOTA_WARNING_TRIGGER.
+        try:
+            from askr.session.lifecycle import _load_quota_warned_sessions, _save_quota_warned_sessions
+            quota_warned = _load_quota_warned_sessions()
+            if session_id in quota_warned:
+                quota_warned.discard(session_id)
+                _save_quota_warned_sessions(quota_warned)
         except Exception:
             pass
 
