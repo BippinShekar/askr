@@ -1,9 +1,9 @@
 {
-  "task": "Fixed the per-turn elapsed-time gate in the session-done ping by correcting the user-message detection logic to skip tool_result entries, restoring the announcement behavior for auto-started sessions.",
-  "discussion_summary": "The askr voice notification system has progressively hardened over recent sessions with emergency kill announcements, humanized spoken text, and per-turn elapsed-time gating for the session-done ping. In the previous session, the gating logic was decoupled and tested, but production observation revealed the gate almost never fired because `_turn_elapsed_seconds` was mistakenly treating tool_result-shaped entries as real user messages, preventing the elapsed-time calculation from working correctly. This session identified and fixed the entry filter to skip tool_result lines, added a regression test using real transcript shapes, verified all 26 voice tests and 156 full suite tests pass, and committed the fix.",
+  "task": "Fixed a voice announcement gating bug where the per-turn elapsed-time check was mistaking tool_result transcript entries for real user messages, causing session-done announcements to fire incorrectly or not at all.",
+  "discussion_summary": "The voice module's `_turn_elapsed_seconds()` function in `askr/hooks/stop.py` was keying off the last transcript line with `\"type\": \"user\"`, but tool_results are also logged under that same type. This caused the gate to measure elapsed time from a tool_result timestamp (often seconds before the actual session end) rather than the last real human message, breaking the per-turn announcement logic. The fix filters out tool_result-shaped entries to find the actual last user message. All 156 tests pass.",
   "accomplishments": [
     {
-      "what": "Identified bug in _turn_elapsed_seconds: was not filtering out tool_result entries when finding last user message",
+      "what": "Identified root cause of voice announcement timing bug in _turn_elapsed_seconds()",
       "done": true
     },
     {
@@ -11,80 +11,40 @@
       "done": true
     },
     {
-      "what": "Added regression test in tests/test_voice.py using real transcript shape with tool_result entries",
+      "what": "Added regression test to test_voice.py covering real transcript shape",
       "done": true
     },
     {
-      "what": "Verified all 26 voice tests pass (25 original + 1 new regression test)",
+      "what": "Verified all 156 tests pass after fix",
       "done": true
     },
     {
-      "what": "Verified full test suite (156 tests) passes",
-      "done": true
-    },
-    {
-      "what": "Committed and pushed fix (commit 99a23e6)",
+      "what": "Committed fix to git (99a23e6)",
       "done": true
     }
   ],
   "in_progress": [],
-  "next_actions": [
-    {
-      "order": 1,
-      "action": "Verify in production that the session-done ping now fires correctly for auto-started sessions and respects the per-turn elapsed-time gate",
-      "why": "The bug fix restores the announcement behavior; production observation will confirm the gate now works as intended"
-    },
-    {
-      "order": 2,
-      "action": "Monitor whether the per-turn gate suppresses spam on long-running turns and adjust the elapsed-time threshold if needed",
-      "why": "Real-world behavior will validate the heuristic and inform any tuning required"
-    }
-  ],
-  "decisions": [
-    {
-      "decision": "Gate the session-done ping on per-turn elapsed time, not session total",
-      "reason": "Prevents spam on long-running sessions by only speaking 'done' when a single turn has taken sufficient time"
-    },
-    {
-      "decision": "Decouple the Discord card's gate logic from its call site",
-      "reason": "Improves separation of concerns and makes the gating logic testable and reusable"
-    },
-    {
-      "decision": "Filter out tool_result entries when detecting the last real user message for elapsed-time calculation",
-      "reason": "Tool results are not user messages and should not reset the elapsed-time clock; only actual user input should count"
-    }
-  ],
+  "next_actions": [],
+  "decisions": [],
   "user_rejected_decisions": [],
-  "failed_approaches": [
-    {
-      "approach": "Treating any entry with 'type': 'user' as a real user message in _turn_elapsed_seconds",
-      "reason": "Tool_result entries also have 'type': 'user' but represent system responses, not user input; this caused the gate to almost never fire"
-    }
-  ],
+  "failed_approaches": [],
   "files_in_play": [
     "askr/hooks/stop.py",
     "tests/test_voice.py"
   ],
   "relational_files": [
     {
-      "file": "askr/voice.py",
-      "relationship": "imported_by",
-      "why": "Contains the speak() function and voice notification logic that stop.py gates"
-    },
-    {
       "file": "tests/test_voice.py",
-      "relationship": "tests",
-      "why": "Tests the voice notification system including the per-turn gating logic and real transcript shapes"
+      "relationship": "tested_by",
+      "why": "Contains regression test for the _turn_elapsed_seconds fix"
     }
   ],
-  "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl"
-  ],
+  "uncommitted_files": [],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-07-02T08:39:03.136983+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-07-02T08:44:04.915347+00:00",
     "developer": "bippin"
   }
 }
