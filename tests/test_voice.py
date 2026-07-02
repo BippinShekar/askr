@@ -6,6 +6,7 @@ plumbing it depends on:
   - quota_warned_sessions.json round-trips the same way companioned_sessions.json does
 """
 
+import datetime
 import json
 import os
 import sys
@@ -18,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from askr.clients import voice
 from askr.state import config as state_config
 from askr.session import lifecycle
+from askr.hooks import stop as stop_module
 
 
 class VoiceConfigRoundTripTests(unittest.TestCase):
@@ -157,6 +159,63 @@ class QuotaWarnedSessionsRoundTripTests(unittest.TestCase):
                 f.write("not json")
             with patch.object(lifecycle, "_QUOTA_WARNED_SESSIONS_PATH", path):
                 self.assertEqual(lifecycle._load_quota_warned_sessions(), set())
+
+
+def _write_transcript(tmpdir, user_timestamps):
+    path = os.path.join(tmpdir, "transcript.jsonl")
+    with open(path, "w") as f:
+        for ts in user_timestamps:
+            f.write(json.dumps({"type": "user", "timestamp": ts}) + "\n")
+    return path
+
+
+class TurnElapsedSecondsTests(unittest.TestCase):
+    def test_missing_transcript_returns_zero(self):
+        self.assertEqual(stop_module._turn_elapsed_seconds(""), 0.0)
+        self.assertEqual(stop_module._turn_elapsed_seconds("/no/such/file.jsonl"), 0.0)
+
+    def test_computes_seconds_since_last_user_message(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_ts = (datetime.datetime.now(datetime.timezone.utc)
+                      - datetime.timedelta(seconds=90)).isoformat().replace("+00:00", "Z")
+            path = _write_transcript(tmpdir, [old_ts])
+            elapsed = stop_module._turn_elapsed_seconds(path)
+            self.assertGreaterEqual(elapsed, 85)
+            self.assertLessEqual(elapsed, 100)
+
+    def test_uses_last_user_message_not_first(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            far = (now - datetime.timedelta(seconds=500)).isoformat().replace("+00:00", "Z")
+            recent = (now - datetime.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+            path = _write_transcript(tmpdir, [far, recent])
+            elapsed = stop_module._turn_elapsed_seconds(path)
+            self.assertLess(elapsed, 30)
+
+
+class SpeakSessionDoneGatingTests(unittest.TestCase):
+    def test_completed_goal_always_speaks_even_on_fast_turn(self):
+        with patch("askr.clients.voice.speak") as mock_speak:
+            stop_module._speak_session_done(["ship OAuth"], transcript_path="")
+            mock_speak.assert_called_once_with("Done: ship OAuth")
+
+    def test_fast_turn_no_goals_stays_silent(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recent = (datetime.datetime.now(datetime.timezone.utc)
+                      - datetime.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+            path = _write_transcript(tmpdir, [recent])
+            with patch("askr.clients.voice.speak") as mock_speak:
+                stop_module._speak_session_done([], transcript_path=path)
+                mock_speak.assert_not_called()
+
+    def test_slow_turn_no_goals_speaks_generic_done(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old = (datetime.datetime.now(datetime.timezone.utc)
+                   - datetime.timedelta(seconds=90)).isoformat().replace("+00:00", "Z")
+            path = _write_transcript(tmpdir, [old])
+            with patch("askr.clients.voice.speak") as mock_speak:
+                stop_module._speak_session_done([], transcript_path=path)
+                mock_speak.assert_called_once_with("Done.")
 
 
 if __name__ == "__main__":

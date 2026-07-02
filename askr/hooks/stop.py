@@ -473,10 +473,57 @@ def _broadcast_session_text(developer: str, completed_goals: list, project_path:
         pass
 
 
-def _speak_session_done(completed_goals: list):
+TURN_AWAY_THRESHOLD_SECONDS = 60  # below this, assume an active back-and-forth and stay quiet
+
+
+def _turn_elapsed_seconds(transcript_path: str) -> float:
+    """Seconds since the last user message in this turn — a proxy for 'did the
+    user likely step away while Claude worked', since Stop fires right when a
+    reply finishes and has no other signal about what the user is doing now."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return 0.0
+    last_user_ts = None
+    try:
+        with open(transcript_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                if obj.get("type") == "user" and obj.get("timestamp"):
+                    last_user_ts = obj["timestamp"]
+    except Exception:
+        return 0.0
+    if not last_user_ts:
+        return 0.0
+    try:
+        from datetime import timezone
+        ts = datetime.fromisoformat(last_user_ts.replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - ts).total_seconds()
+    except Exception:
+        return 0.0
+
+
+def _speak_session_done(completed_goals: list, transcript_path: str = ""):
+    """
+    Spoken 'done' ping — deliberately gated differently from the Discord card
+    above (which fires on completed_goals or >=5min TOTAL session duration,
+    for an async catch-up summary). Voice is a real-time signal: a completed
+    goal is always worth announcing, but otherwise only speak if THIS turn ran
+    long enough that the user probably tabbed away — a fast back-and-forth
+    should stay silent regardless of how long the overall session has run.
+    """
     try:
         from askr.clients.voice import speak
-        message = f"Done: {completed_goals[0]}" if completed_goals else "Session done."
+        if completed_goals:
+            message = f"Done: {completed_goals[0]}"
+        elif _turn_elapsed_seconds(transcript_path) >= TURN_AWAY_THRESHOLD_SECONDS:
+            message = "Done."
+        else:
+            return
         speak(message)
     except Exception:
         pass
@@ -565,7 +612,10 @@ def main():
     # Suppresses noise from casual conversation turns and quick tests.
     if completed_goals or duration_seconds >= 300:
         _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds, autonomous)
-        _speak_session_done(completed_goals)
+
+    # Voice has its own gate (see _speak_session_done docstring) — independent
+    # of the Discord card's total-session-duration gate above.
+    _speak_session_done(completed_goals, transcript_path)
 
     _advance_launch_goal()
 
