@@ -42,8 +42,8 @@ def _send_discord(message: str, level: str):
 
 def _speak(message: str):
     try:
-        from askr.clients.voice import speak
-        speak(message)
+        from askr.clients.voice import announce
+        announce(message)
     except Exception:
         pass
 

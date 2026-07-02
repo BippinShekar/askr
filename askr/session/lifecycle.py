@@ -1164,8 +1164,8 @@ def _save_quota_warned_sessions(sessions: set):
 
 def _speak(message: str):
     try:
-        from askr.clients.voice import speak
-        speak(message)
+        from askr.clients.voice import announce
+        announce(message)
     except Exception:
         pass
 

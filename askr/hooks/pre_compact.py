@@ -27,8 +27,8 @@ QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
 
 def _speak(message: str):
     try:
-        from askr.clients.voice import speak
-        speak(message)
+        from askr.clients.voice import announce
+        announce(message)
     except Exception:
         pass
 

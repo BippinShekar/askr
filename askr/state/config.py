@@ -38,6 +38,55 @@ def save_voice_enabled(enabled: bool):
     _save_config(data)
 
 
+# Default two-voice "sonic logo" for spoken announcements: a cheerful
+# prefix voice for the short lead-in (e.g. "Done.", "Askr.") followed by a
+# distinct voice for the detail — picked over askr's generic single-voice
+# default per user preference.
+DEFAULT_VOICE_PREFIX = "Good News"
+DEFAULT_VOICE_BODY = "Zarvox"
+
+# voice_mode: "dual" speaks every announcement as the two-voice sonic logo
+# above; "single" speaks everything in one voice for users who find the
+# two-tone pattern more novelty than useful.
+DEFAULT_VOICE_MODE = "dual"
+DEFAULT_VOICE_SINGLE = "Samantha"
+
+
+def load_voice_prefix() -> str:
+    return _load_config().get("voice_prefix", DEFAULT_VOICE_PREFIX)
+
+
+def load_voice_body() -> str:
+    return _load_config().get("voice_body", DEFAULT_VOICE_BODY)
+
+
+def save_voice_style(prefix: str, body: str):
+    data = _load_config()
+    data["voice_prefix"] = prefix
+    data["voice_body"] = body
+    _save_config(data)
+
+
+def load_voice_mode() -> str:
+    return _load_config().get("voice_mode", DEFAULT_VOICE_MODE)
+
+
+def save_voice_mode(mode: str):
+    data = _load_config()
+    data["voice_mode"] = mode
+    _save_config(data)
+
+
+def load_voice_single() -> str:
+    return _load_config().get("voice_single", DEFAULT_VOICE_SINGLE)
+
+
+def save_voice_single(voice: str):
+    data = _load_config()
+    data["voice_single"] = voice
+    _save_config(data)
+
+
 def save_project_path(path: str):
     data = _load_config()
     data["project_path"] = os.path.abspath(path)

@@ -782,7 +782,12 @@ def cmd_init():
     # Voice notifications — machine-level preference (native macOS `say`), not
     # per-project: it's "does this Mac talk", same trait as the developer name.
     if platform.system() == "Darwin":
-        from askr.state.config import load_voice_enabled, save_voice_enabled
+        from askr.state.config import (
+            load_voice_enabled, save_voice_enabled,
+            load_voice_mode, save_voice_mode,
+            load_voice_single, save_voice_single,
+            load_voice_prefix, load_voice_body, save_voice_style,
+        )
         existing_voice = load_voice_enabled()
         console.print()
         console.print(f"  [dim]voice notifications (current: {'on' if existing_voice else 'off'})[/dim]")
@@ -795,6 +800,31 @@ def cmd_init():
             console.print("  [green]✓[/green] voice notifications enabled")
         elif voice_raw == "n":
             save_voice_enabled(False)
+
+        if voice_raw == "y" or (existing_voice and voice_raw != "n"):
+            console.print(f"  [dim]voice style (current: {load_voice_mode()})[/dim]")
+            try:
+                mode_raw = input("  one voice for everything, or a two-voice sonic logo? [1=single/2=dual, enter to keep]: ").strip()
+            except (KeyboardInterrupt, EOFError):
+                mode_raw = ""
+            if mode_raw == "1":
+                save_voice_mode("single")
+                try:
+                    voice_name = input(f"  which voice? (current: {load_voice_single()}, enter to keep): ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    voice_name = ""
+                if voice_name:
+                    save_voice_single(voice_name)
+                console.print("  [green]✓[/green] single-voice mode saved")
+            elif mode_raw == "2":
+                save_voice_mode("dual")
+                try:
+                    prefix_voice = input(f"  prefix voice? (current: {load_voice_prefix()}, enter to keep): ").strip()
+                    body_voice = input(f"  body voice? (current: {load_voice_body()}, enter to keep): ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    prefix_voice = body_voice = ""
+                save_voice_style(prefix_voice or load_voice_prefix(), body_voice or load_voice_body())
+                console.print("  [green]✓[/green] dual-voice sonic logo saved")
 
     from askr.clients.discord import _get_webhook_url
     if _get_webhook_url():

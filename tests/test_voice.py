@@ -98,6 +98,45 @@ class SpeakGatingTests(unittest.TestCase):
             self.assertNotIn("Bash(", spoken)
             self.assertIn("a bash action", spoken)
 
+    def test_speak_with_voice_passes_dash_v_flag(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.speak("done", voice="Zarvox")
+            args, kwargs = mock_run.call_args
+            self.assertEqual(args[0], ["/usr/bin/say", "-v", "Zarvox", "done"])
+
+
+class SpeakSignatureTests(unittest.TestCase):
+    def test_speaks_prefix_then_body_in_their_own_voices(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            ok, reason = voice.speak_signature("Done.", "ship OAuth", "Good News", "Zarvox")
+            self.assertTrue(ok)
+            self.assertEqual(mock_run.call_count, 2)
+            first_args = mock_run.call_args_list[0][0][0]
+            second_args = mock_run.call_args_list[1][0][0]
+            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Done."])
+            self.assertEqual(second_args, ["/usr/bin/say", "-v", "Zarvox", "ship OAuth"])
+
+    def test_disabled_never_touches_subprocess(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=False), \
+             patch("subprocess.run") as mock_run:
+            ok, reason = voice.speak_signature("Done.", "ship OAuth", "Good News", "Zarvox")
+            self.assertFalse(ok)
+            mock_run.assert_not_called()
+
+    def test_empty_body_only_speaks_prefix(self):
+        with patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.speak_signature("Done.", "", "Good News", "Zarvox")
+            mock_run.assert_called_once()
+
 
 class HumanizeForSpeechTests(unittest.TestCase):
     def test_empty_string_passthrough(self):
@@ -218,27 +257,113 @@ class TurnElapsedSecondsTests(unittest.TestCase):
 
 class SpeakSessionDoneGatingTests(unittest.TestCase):
     def test_completed_goal_always_speaks_even_on_fast_turn(self):
-        with patch("askr.clients.voice.speak") as mock_speak:
+        with patch("askr.clients.voice.announce") as mock_announce:
             stop_module._speak_session_done(["ship OAuth"], transcript_path="")
-            mock_speak.assert_called_once_with("Done: ship OAuth")
+            mock_announce.assert_called_once_with("ship OAuth", prefix="Done.")
 
     def test_fast_turn_no_goals_stays_silent(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             recent = (datetime.datetime.now(datetime.timezone.utc)
                       - datetime.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
             path = _write_transcript(tmpdir, [recent])
-            with patch("askr.clients.voice.speak") as mock_speak:
+            with patch("askr.clients.voice.announce") as mock_announce:
                 stop_module._speak_session_done([], transcript_path=path)
-                mock_speak.assert_not_called()
+                mock_announce.assert_not_called()
 
     def test_slow_turn_no_goals_speaks_generic_done(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             old = (datetime.datetime.now(datetime.timezone.utc)
                    - datetime.timedelta(seconds=90)).isoformat().replace("+00:00", "Z")
             path = _write_transcript(tmpdir, [old])
-            with patch("askr.clients.voice.speak") as mock_speak:
+            with patch("askr.clients.voice.announce") as mock_announce:
                 stop_module._speak_session_done([], transcript_path=path)
-                mock_speak.assert_called_once_with("Done.")
+                mock_announce.assert_called_once()
+                args, kwargs = mock_announce.call_args
+                self.assertIn(args[0], stop_module._GENERIC_DONE_PHRASES)
+                self.assertEqual(kwargs["prefix"], "Done.")
+
+    def test_respects_configured_voice_style(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = os.path.join(tmpdir, "config.json")
+            with patch.object(state_config, "CONFIG_PATH", cfg_path):
+                state_config.save_voice_enabled(True)
+                state_config.save_voice_style("Daniel", "Ralph")
+                with patch("askr.state.config.load_voice_enabled", return_value=True), \
+                     patch("askr.state.config.load_voice_mode", return_value="dual"), \
+                     patch("askr.state.config.load_voice_prefix", return_value="Daniel"), \
+                     patch("askr.state.config.load_voice_body", return_value="Ralph"), \
+                     patch("platform.system", return_value="Darwin"), \
+                     patch("shutil.which", return_value="/usr/bin/say"), \
+                     patch("subprocess.run") as mock_run:
+                    stop_module._speak_session_done(["ship OAuth"], transcript_path="")
+                    first_args = mock_run.call_args_list[0][0][0]
+                    second_args = mock_run.call_args_list[1][0][0]
+                    self.assertEqual(first_args, ["/usr/bin/say", "-v", "Daniel", "Done."])
+                    self.assertEqual(second_args, ["/usr/bin/say", "-v", "Ralph", "ship OAuth"])
+
+
+class AnnounceTests(unittest.TestCase):
+    def test_dual_mode_speaks_prefix_then_message(self):
+        with patch("askr.state.config.load_voice_mode", return_value="dual"), \
+             patch("askr.state.config.load_voice_prefix", return_value="Good News"), \
+             patch("askr.state.config.load_voice_body", return_value="Zarvox"), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.announce("quota at 90 percent")
+            first_args = mock_run.call_args_list[0][0][0]
+            second_args = mock_run.call_args_list[1][0][0]
+            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Askr."])
+            self.assertEqual(second_args, ["/usr/bin/say", "-v", "Zarvox", "quota at 90 percent"])
+
+    def test_single_mode_speaks_message_in_one_voice_only(self):
+        with patch("askr.state.config.load_voice_mode", return_value="single"), \
+             patch("askr.state.config.load_voice_single", return_value="Samantha"), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.announce("quota at 90 percent")
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            self.assertEqual(args, ["/usr/bin/say", "-v", "Samantha", "quota at 90 percent"])
+
+    def test_custom_prefix_used_in_dual_mode(self):
+        with patch("askr.state.config.load_voice_mode", return_value="dual"), \
+             patch("askr.state.config.load_voice_prefix", return_value="Good News"), \
+             patch("askr.state.config.load_voice_body", return_value="Zarvox"), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as mock_run:
+            voice.announce("ship OAuth", prefix="Done.")
+            first_args = mock_run.call_args_list[0][0][0]
+            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Done."])
+
+
+class VoiceModeConfigRoundTripTests(unittest.TestCase):
+    def test_default_mode_is_dual(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(state_config, "CONFIG_PATH", os.path.join(tmpdir, "config.json")):
+                self.assertEqual(state_config.load_voice_mode(), "dual")
+
+    def test_save_then_load_mode_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(state_config, "CONFIG_PATH", os.path.join(tmpdir, "config.json")):
+                state_config.save_voice_mode("single")
+                self.assertEqual(state_config.load_voice_mode(), "single")
+
+    def test_default_single_voice(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(state_config, "CONFIG_PATH", os.path.join(tmpdir, "config.json")):
+                self.assertEqual(state_config.load_voice_single(), state_config.DEFAULT_VOICE_SINGLE)
+
+    def test_save_then_load_single_voice_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(state_config, "CONFIG_PATH", os.path.join(tmpdir, "config.json")):
+                state_config.save_voice_single("Alex")
+                self.assertEqual(state_config.load_voice_single(), "Alex")
 
 
 if __name__ == "__main__":

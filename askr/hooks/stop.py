@@ -272,8 +272,8 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
         try:
-            from askr.clients.voice import speak
-            speak(payload["message"])
+            from askr.clients.voice import announce
+            announce(payload["message"])
         except Exception:
             pass
 
@@ -516,6 +516,17 @@ def _turn_elapsed_seconds(transcript_path: str) -> float:
         return 0.0
 
 
+# Rotated for the no-goal case so the ping doesn't say the exact same thing
+# every time — the "Done." prefix is the constant, recognizable part (see
+# speak_signature); this is just the detail that follows it.
+_GENERIC_DONE_PHRASES = [
+    "Session wrapped up.",
+    "All quiet on this end.",
+    "Nothing else pending.",
+    "Back whenever you're ready.",
+]
+
+
 def _speak_session_done(completed_goals: list, transcript_path: str = ""):
     """
     Spoken 'done' ping — deliberately gated differently from the Discord card
@@ -524,16 +535,21 @@ def _speak_session_done(completed_goals: list, transcript_path: str = ""):
     goal is always worth announcing, but otherwise only speak if THIS turn ran
     long enough that the user probably tabbed away — a fast back-and-forth
     should stay silent regardless of how long the overall session has run.
+
+    Spoken as a two-voice "sonic logo": a short "Done." prefix in one voice
+    (askr's signature) followed by the detail in a second, distinct voice —
+    so it doesn't sound like every other generic TTS notification.
     """
     try:
-        from askr.clients.voice import speak
+        import random
+        from askr.clients.voice import announce
         if completed_goals:
-            message = f"Done: {completed_goals[0]}"
+            body = completed_goals[0]
         elif _turn_elapsed_seconds(transcript_path) >= TURN_AWAY_THRESHOLD_SECONDS:
-            message = "Done."
+            body = random.choice(_GENERIC_DONE_PHRASES)
         else:
             return
-        speak(message)
+        announce(body, prefix="Done.")
     except Exception:
         pass
 
