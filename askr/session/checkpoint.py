@@ -616,7 +616,37 @@ def _build_fallback_summary(entries: list) -> tuple[str, list]:
     return "\n\n".join(sections), tool_actions
 
 
-def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigger_type: str) -> dict:
+def _tail_decisions_jsonl(state_dir: str, n: int = 5) -> list:
+    """Ground truth recent decisions — this file is append-only and never gutted,
+    unlike handover.json's decisions array which can be wiped by a prior degraded run."""
+    path = os.path.join(state_dir, "decisions.jsonl")
+    try:
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+    except Exception:
+        return []
+    out = []
+    for line in lines[-n:]:
+        try:
+            d = json.loads(line)
+            out.append({"decision": d.get("decision", ""), "reason": d.get("reason", "")})
+        except Exception:
+            pass
+    return out
+
+
+def _tail_failed_approaches(state_dir: str, n: int = 5) -> list:
+    """Ground truth recent failed approaches from the cumulative append-only log."""
+    path = os.path.join(state_dir, "failed_approaches.md")
+    try:
+        with open(path) as f:
+            bullets = [l.strip("- ").strip() for l in f if l.strip().startswith("-")]
+    except Exception:
+        return []
+    return [{"approach": b, "reason": ""} for b in bullets[-n:]]
+
+
+def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigger_type: str, state_dir: str = "") -> dict:
     """
     Degraded handover when the LLM call fails or truncates — used instead of the
     legacy string fallback so write_handover() still updates handover_<dev>.json.
@@ -625,6 +655,11 @@ def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigge
     whatever the last successful LLM call wrote (potentially many sessions ago)
     kept surfacing in _infer_direction's git-history walk — feeding completely
     unrelated, ancient directions into later sessions' relaunch prompts.
+
+    decisions/failed_approaches are re-derived from their append-only ground-truth
+    files rather than copied from existing_handover — once that dict gets gutted by
+    one failed run, copying it forward would keep it empty on every subsequent
+    failure too, even though the ground-truth files still have the real history.
     """
     md_summary, tool_actions = _build_fallback_summary(entries)
     files_changed = sorted(set(
@@ -649,10 +684,10 @@ def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigge
     base["uncommitted_files"] = uncommitted_files
     base.setdefault("in_progress", [])
     base.setdefault("accomplishments", [])
-    base.setdefault("decisions", [])
+    base["decisions"] = _tail_decisions_jsonl(state_dir) if state_dir else base.get("decisions", [])
     base.setdefault("user_rejected_decisions", [])
-    base.setdefault("failed_approaches", [])
-    base.setdefault("files_in_play", files_changed)
+    base["failed_approaches"] = _tail_failed_approaches(state_dir) if state_dir else base.get("failed_approaches", [])
+    base["files_in_play"] = sorted(set(files_changed) | set(base.get("files_in_play") or []))
     base.setdefault("relational_files", [])
     base.setdefault("blockers", [])
     base.setdefault("completed_goals", [])
@@ -816,7 +851,7 @@ def create_checkpoint(
         summary = llm_summary
         tool_actions = _extract_tool_actions(entries)
     else:
-        summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type)
+        summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type, state_dir=state_dir)
         tool_actions = _extract_tool_actions(entries)
 
     from askr.state.writer import write_handover

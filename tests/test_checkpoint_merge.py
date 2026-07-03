@@ -15,7 +15,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from askr.session.checkpoint import _append_failed_approaches, _write_decisions_from_handover
+from askr.session.checkpoint import (
+    _append_failed_approaches,
+    _write_decisions_from_handover,
+    _build_fallback_handover_dict,
+    _tail_decisions_jsonl,
+    _tail_failed_approaches,
+)
 
 
 class AppendFailedApproachesTests(unittest.TestCase):
@@ -107,6 +113,75 @@ class WriteDecisionsFromHandoverTests(unittest.TestCase):
         lines = self._read_lines()
         self.assertEqual(len(lines), 2)
         self.assertEqual({l["decision"] for l in lines}, {"older decision", "new decision from alice"})
+
+
+class FallbackHandoverSelfHealingTests(unittest.TestCase):
+    """
+    A degraded (LLM-failed) checkpoint used to copy decisions/failed_approaches
+    straight from existing_handover. Once one failed run gutted that dict to [],
+    every subsequent failed run copied the emptiness forward forever — even
+    though decisions.jsonl and failed_approaches.md (append-only, never gutted)
+    still had the real history. The fallback must re-derive from those files
+    instead of trusting existing_handover's arrays.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.state_dir = self._tmp.name
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_decisions(self, decisions):
+        path = os.path.join(self.state_dir, "decisions.jsonl")
+        with open(path, "w") as f:
+            for d in decisions:
+                f.write(json.dumps(d) + "\n")
+
+    def _write_failed_approaches(self, bullets):
+        path = os.path.join(self.state_dir, "failed_approaches.md")
+        with open(path, "w") as f:
+            f.write("# Failed Approaches\n\n")
+            for b in bullets:
+                f.write(f"- {b}\n")
+
+    def test_recovers_decisions_when_existing_handover_is_gutted(self):
+        self._write_decisions([
+            {"at": "2026-07-01 00:00", "dev": "bippin", "decision": "use Zarvox as default voice", "reason": "Samantha sounds like Siri"},
+        ])
+        existing_handover = {"decisions": [], "failed_approaches": [], "files_in_play": []}
+
+        result = _build_fallback_handover_dict([], existing_handover, "stop", state_dir=self.state_dir)
+
+        self.assertEqual(len(result["decisions"]), 1)
+        self.assertEqual(result["decisions"][0]["decision"], "use Zarvox as default voice")
+
+    def test_recovers_failed_approaches_when_existing_handover_is_gutted(self):
+        self._write_failed_approaches(["mocking the database — masked a real migration bug"])
+        existing_handover = {"decisions": [], "failed_approaches": [], "files_in_play": []}
+
+        result = _build_fallback_handover_dict([], existing_handover, "stop", state_dir=self.state_dir)
+
+        self.assertEqual(len(result["failed_approaches"]), 1)
+        self.assertIn("mocking the database", result["failed_approaches"][0]["approach"])
+
+    def test_no_state_dir_falls_back_to_existing_handover(self):
+        existing_handover = {"decisions": [{"decision": "kept as-is", "reason": ""}], "failed_approaches": [], "files_in_play": []}
+
+        result = _build_fallback_handover_dict([], existing_handover, "stop")
+
+        self.assertEqual(result["decisions"], [{"decision": "kept as-is", "reason": ""}])
+
+    def test_tail_decisions_jsonl_returns_last_n(self):
+        self._write_decisions([{"decision": f"decision {i}", "reason": ""} for i in range(10)])
+        result = _tail_decisions_jsonl(self.state_dir, n=3)
+        self.assertEqual([d["decision"] for d in result], ["decision 7", "decision 8", "decision 9"])
+
+    def test_tail_decisions_jsonl_missing_file_returns_empty(self):
+        self.assertEqual(_tail_decisions_jsonl(self.state_dir), [])
+
+    def test_tail_failed_approaches_missing_file_returns_empty(self):
+        self.assertEqual(_tail_failed_approaches(self.state_dir), [])
 
 
 if __name__ == "__main__":
