@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import pathspec
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from askr.utils.config import SNAPSHOT_DIR
 from askr.clients.claude import call_claude
@@ -15,13 +16,38 @@ EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".html", ".css", ".rb", ".go"
 MAX_WORKERS = 6
 
 
+def _load_gitignore_spec():
+    """.gitignore-matched files are skipped when building the codebase snapshot —
+    otherwise gitignored files (which can include secrets, generated output, or
+    anything else a developer deliberately excluded from the repo) get read and
+    sent to the LLM as context."""
+    try:
+        with open(".gitignore") as f:
+            lines = f.readlines()
+        return pathspec.PathSpec.from_lines("gitwildmatch", lines)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
 def _collect_files():
+    spec = _load_gitignore_spec()
     found = []
     for root, dirs, files in os.walk("."):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        if spec is not None:
+            dirs[:] = [d for d in dirs
+                       if not spec.match_file(os.path.relpath(os.path.join(root, d), ".") + "/")]
         for f in files:
-            if os.path.splitext(f)[1] in EXTENSIONS:
-                found.append(os.path.join(root, f))
+            if os.path.splitext(f)[1] not in EXTENSIONS:
+                continue
+            path = os.path.join(root, f)
+            if spec is not None:
+                rel = os.path.relpath(path, ".")
+                if spec.match_file(rel):
+                    continue
+            found.append(path)
     return found
 
 
