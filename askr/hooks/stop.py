@@ -599,14 +599,24 @@ def main():
                 _save_companioned_sessions(companioned)
         except Exception:
             pass
-        # Same cleanup for the quota-warning dedup set — otherwise it grows
-        # forever across every session that ever crossed QUOTA_WARNING_TRIGGER.
+        # Prune the quota-warning dedup set of any reset window that's already
+        # passed — it's keyed by quota_reset_at (account-wide window), not
+        # session_id, so there's nothing session-specific to discard here;
+        # this just stops the set from growing forever.
         try:
-            from askr.session.lifecycle import _load_quota_warned_sessions, _save_quota_warned_sessions
-            quota_warned = _load_quota_warned_sessions()
-            if session_id in quota_warned:
-                quota_warned.discard(session_id)
-                _save_quota_warned_sessions(quota_warned)
+            from datetime import datetime, timezone
+            from askr.session.lifecycle import _load_quota_warned_windows, _save_quota_warned_windows
+            quota_warned = _load_quota_warned_windows()
+            now = datetime.now(timezone.utc)
+            still_valid = set()
+            for reset_at in quota_warned:
+                try:
+                    if datetime.fromisoformat(reset_at.replace("Z", "+00:00")) > now:
+                        still_valid.add(reset_at)
+                except Exception:
+                    continue
+            if still_valid != quota_warned:
+                _save_quota_warned_windows(still_valid)
         except Exception:
             pass
 

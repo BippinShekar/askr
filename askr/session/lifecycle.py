@@ -62,6 +62,7 @@ import signal
 import shlex
 import shutil
 import subprocess
+import threading
 from datetime import datetime, timezone
 
 _PID_PATH              = os.path.expanduser("~/.config/askr/daemon.pid")
@@ -72,6 +73,8 @@ _NOTIFICATION_PATH     = os.path.expanduser("~/.config/askr/notification.json")
 _LOG_PATH              = os.path.expanduser("~/.config/askr/daemon.log")
 _TRIGGER_STATE_PATH    = os.path.expanduser("~/.config/askr/trigger_state.json")
 _COMPANIONED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/companioned_sessions.json")
+# Despite the filename (kept for backward compat with existing installs), this now
+# stores warned quota_reset_at timestamps, not session ids — see _load/_save below.
 _QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_sessions.json")
 
 # ---------------------------------------------------------------------------
@@ -122,6 +125,9 @@ QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 QUOTA_WARNING_TRIGGER = 75.0  # heads-up spoken warning before the 90% hard trigger; fires once per session
 TRIGGER_COOLDOWN   = 300   # seconds after a successful kill before re-firing
 TRIGGER_MISS_COOLDOWN = 60 # seconds when trigger fired but Claude PID was not found
+ACTIVITY_GRACE_SECS = 60   # skip trigger evaluation for this long after a session_id is first observed —
+                           # otherwise a brand-new session can inherit an already-high account-wide quota%
+                           # from prior usage and get interrupted before the user has even sent one message
 
 
 # ---------------------------------------------------------------------------
@@ -982,7 +988,10 @@ def _open_companion_session(project_path: str, session_id: str = None):
         daemon_prompt = f"Read the handover and start on the Next Action immediately.{goal_part} Work autonomously."
 
     try:
-        companion_message = "Context high on your current session — a fresh companion session is ready. Your current one keeps running."
+        # "is ready" implied the companion already existed — it doesn't yet: the
+        # extension (or the Terminal.app fallback below, ~20-30s out) opens it
+        # asynchronously after this. Say what's actually happening, not the result.
+        companion_message = "Context high on your current session — opening a fresh companion session now. Your current one keeps running."
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
@@ -996,7 +1005,6 @@ def _open_companion_session(project_path: str, session_id: str = None):
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }, f)
         _log("wrote notification.json — extension will open a NEW terminal; existing session left running")
-        _speak(companion_message)
     except Exception as e:
         _log(f"companion notification error: {e}")
 
@@ -1007,6 +1015,9 @@ def _open_companion_session(project_path: str, session_id: str = None):
     tools_flag  = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
     safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
+    # Speak only once the fallback spawn is actually dispatched, so the announcement
+    # never lands before something has genuinely started happening.
+    _speak(companion_message)
 
 
 _TURN_STOP_DIR = os.path.expanduser("~/.config/askr/turn_stops")
@@ -1142,10 +1153,14 @@ def _save_companioned_sessions(sessions: set):
         _log(f"WARN: failed to persist companioned sessions: {e}")
 
 
-def _load_quota_warned_sessions() -> set:
-    """Session-ids already given the QUOTA_WARNING_TRIGGER heads-up — same
-    one-per-session dedup idea as _load_companioned_sessions, otherwise the
-    warning re-fires every poll for as long as a session sits above 75%."""
+def _load_quota_warned_windows() -> set:
+    """quota_reset_at timestamps already given the QUOTA_WARNING_TRIGGER heads-up.
+
+    Keyed by the account's actual 5h reset window, not session_id — quota is
+    account-wide, so a new chat session doesn't mean a new quota window. Keying
+    by session_id let the warning re-fire every time a session (or a companion
+    askr itself opens) restarted mid-window, even though nothing about the real
+    quota had changed since the last warning."""
     try:
         with open(_QUOTA_WARNED_SESSIONS_PATH) as f:
             return set(json.load(f))
@@ -1153,11 +1168,11 @@ def _load_quota_warned_sessions() -> set:
         return set()
 
 
-def _save_quota_warned_sessions(sessions: set):
+def _save_quota_warned_windows(windows: set):
     try:
         os.makedirs(os.path.dirname(_QUOTA_WARNED_SESSIONS_PATH), exist_ok=True)
         with open(_QUOTA_WARNED_SESSIONS_PATH, "w") as f:
-            json.dump(list(sessions), f)
+            json.dump(list(windows), f)
     except Exception as e:
         _log(f"WARN: failed to persist quota-warned sessions: {e}")
 
@@ -1189,7 +1204,8 @@ def run_daemon():
     was_active = False
     last_trigger_at: dict = _load_trigger_state()  # project_path → epoch seconds, disk-backed (survives restarts)
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
-    quota_warned_sessions: set = _load_quota_warned_sessions()  # session_id → already spoke the 75% heads-up, disk-backed
+    quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
+    session_first_seen: dict = {}  # session_id → epoch first observed by this daemon run, for ACTIVITY_GRACE_SECS
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1237,14 +1253,27 @@ def run_daemon():
                     session_id = stats.get("session_id")
                     already_companioned = bool(session_id) and session_id in companioned_sessions
 
+                    # Grace period: give a newly-observed session a moment before evaluating
+                    # any trigger against it. Quota is account-wide, so a brand-new chat can
+                    # otherwise inherit an already-high % from prior usage and get interrupted
+                    # (or hear the 75% warning) before the user has even sent a first message.
+                    if session_id:
+                        first_seen = session_first_seen.setdefault(session_id, time.time())
+                        if (time.time() - first_seen) < ACTIVITY_GRACE_SECS:
+                            _log(f"activity grace period — skipping trigger checks for new session "
+                                 f"{session_id[:8]} [{project_path}]")
+                            continue
+
                     # Pre-emptive heads-up, independent of the trigger/cooldown state below —
-                    # it doesn't checkpoint or open anything, just speaks once per session.
-                    if (session_id and quota_pct is not None
+                    # it doesn't checkpoint or open anything, just speaks once per quota window
+                    # (keyed by the account's real reset time, not session_id — the 5h window
+                    # doesn't reset just because a new chat session started).
+                    if (reset_at and quota_pct is not None
                             and QUOTA_WARNING_TRIGGER <= quota_pct < QUOTA_TRIGGER
-                            and session_id not in quota_warned_sessions):
-                        _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] session={session_id[:8]}")
-                        quota_warned_sessions.add(session_id)
-                        _save_quota_warned_sessions(quota_warned_sessions)
+                            and reset_at not in quota_warned_windows):
+                        _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] resets={reset_at}")
+                        quota_warned_windows.add(reset_at)
+                        _save_quota_warned_windows(quota_warned_windows)
                         _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.")
 
                     if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
@@ -1263,7 +1292,15 @@ def run_daemon():
                         if session_id:
                             companioned_sessions.add(session_id)
                             _save_companioned_sessions(companioned_sessions)
-                        found = _open_companion_session_for_trigger(project_path, session_id)
+                        # _open_companion_session_for_trigger can block for up to 600s waiting
+                        # for the current turn to finish — run it off the poll-loop thread so
+                        # other projects keep getting monitored while this one waits.
+                        found = bool(_find_all_claude_pids_by_project(project_path))
+                        threading.Thread(
+                            target=_open_companion_session_for_trigger,
+                            args=(project_path, session_id),
+                            daemon=True,
+                        ).start()
                         if found:
                             # Full cooldown — companion opened alongside a live session
                             last_trigger_at[project_path] = time.time()
@@ -1277,7 +1314,15 @@ def run_daemon():
                         break  # re-scan all projects next cycle after handling this one
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
-                        _execute_trigger("quota", stats, project_path)
+                        # _execute_trigger can block for hours in _wait_for_reset — run it off
+                        # the poll-loop thread so other open projects don't go unmonitored for
+                        # the whole quota window (this was the root cause of triggers/warnings
+                        # stacking up and firing all at once when the loop finally woke up).
+                        threading.Thread(
+                            target=_execute_trigger,
+                            args=("quota", stats, project_path),
+                            daemon=True,
+                        ).start()
                         last_trigger_at[project_path] = time.time()
                         _save_trigger_state(last_trigger_at)
                         triggered_this_cycle = True

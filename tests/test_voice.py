@@ -4,6 +4,7 @@ plumbing it depends on:
   - voice_notifications preference round-trips through ~/.config/askr/config.json
   - speak() no-ops (never raises, never shells out) unless enabled + Darwin + `say` present
   - quota_warned_sessions.json round-trips the same way companioned_sessions.json does
+    (now keyed by quota_reset_at timestamps, not session ids)
 """
 
 import datetime
@@ -211,15 +212,16 @@ class QuotaWarnedSessionsRoundTripTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "quota_warned_sessions.json")
             with patch.object(lifecycle, "_QUOTA_WARNED_SESSIONS_PATH", path):
-                self.assertEqual(lifecycle._load_quota_warned_sessions(), set())
+                self.assertEqual(lifecycle._load_quota_warned_windows(), set())
 
     def test_save_then_load_round_trips(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "quota_warned_sessions.json")
             with patch.object(lifecycle, "_QUOTA_WARNED_SESSIONS_PATH", path):
-                lifecycle._save_quota_warned_sessions({"session-a", "session-b"})
+                lifecycle._save_quota_warned_windows({"2026-07-03T10:00:00Z", "2026-07-03T15:00:00Z"})
                 self.assertEqual(
-                    lifecycle._load_quota_warned_sessions(), {"session-a", "session-b"}
+                    lifecycle._load_quota_warned_windows(),
+                    {"2026-07-03T10:00:00Z", "2026-07-03T15:00:00Z"},
                 )
 
     def test_corrupt_file_returns_empty_set(self):
@@ -228,7 +230,7 @@ class QuotaWarnedSessionsRoundTripTests(unittest.TestCase):
             with open(path, "w") as f:
                 f.write("not json")
             with patch.object(lifecycle, "_QUOTA_WARNED_SESSIONS_PATH", path):
-                self.assertEqual(lifecycle._load_quota_warned_sessions(), set())
+                self.assertEqual(lifecycle._load_quota_warned_windows(), set())
 
 
 def _write_transcript(tmpdir, user_timestamps):
