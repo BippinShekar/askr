@@ -79,10 +79,16 @@ def get_session_cost_summary(project_path: str = "") -> dict:
     if not output_tokens:
         output_tokens = context_tokens // 4
 
-    actual_cost    = tokens_to_usd(context_tokens, output_tokens, model)
-    projected_cost = actual_cost * 2.0
-    savings        = max(0.0, projected_cost - actual_cost)
+    actual_cost = tokens_to_usd(context_tokens, output_tokens, model)
 
+    # There used to be a "projected_usd"/"savings_usd" pair here — projected_cost
+    # was actual_cost * 2.0, a hardcoded multiplier with no basis in what full
+    # context-resend would actually have cost, and savings (projected - actual)
+    # collapsed to exactly actual_cost again, so "Saved: $X" was always identical
+    # to "Cost: $X" under a different label. Decided against redefining it (see
+    # decisions.jsonl 2026-06-14: "time saved" wall-clock metric was removed
+    # entirely rather than redefined, on the same "don't show fabricated numbers"
+    # principle) — dropped rather than shipped as a fake projection.
     return {
         "model": model,
         "context_tokens": context_tokens,
@@ -92,8 +98,6 @@ def get_session_cost_summary(project_path: str = "") -> dict:
         "turns": turns,
         "user_turns": user_turns,
         "cost_usd": round(actual_cost, 4),
-        "projected_usd": round(projected_cost, 4),
-        "savings_usd": round(savings, 4),
     }
 
 
@@ -133,8 +137,6 @@ def today_cost_summary() -> dict:
         return {
             "sessions": len(entries),
             "total_cost_usd": round(sum(e.get("cost_usd", 0) for e in entries), 4),
-            "total_projected_usd": round(sum(e.get("projected_usd", 0) for e in entries), 4),
-            "total_savings_usd": round(sum(e.get("savings_usd", 0) for e in entries), 4),
             "total_tokens": sum(e.get("context_tokens", 0) for e in entries),
         }
     except Exception:

@@ -304,7 +304,6 @@ def morning_report_card(
     sessions: int,
     total_seconds: int,
     total_cost_usd: float,
-    total_savings_usd: float,
     total_tokens: int,
     goals_completed: list[str] | None = None,
     goals_open: list[str] | None = None,

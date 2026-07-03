@@ -1606,15 +1606,18 @@ def cmd_report():
     done_today   = [g.lstrip("[x] ✓ ").strip() for g in today_goals
                     if g.startswith("[x]") or "✓" in g]
 
+    # "Time saved" (raw wall-clock session duration, no baseline to compare
+    # against) and "Saved: $X" (a hardcoded actual_cost*2 projection that always
+    # collapsed to exactly actual_cost under a different label) are both
+    # fabricated-looking numbers with no real derivation behind them — dropped
+    # per the same principle as decisions.jsonl 2026-06-14 ("better to show
+    # nothing than misleading data"), not redefined.
     console.print()
     console.print(f"[bold]Daily Report — {developer} — {today}[/bold]")
     if summary["sessions"] > 0:
-        console.print(f"  Sessions: {summary['sessions']}  |  Time saved: {summary['total_human']}")
+        console.print(f"  Sessions: {summary['sessions']}")
     if cost_today:
-        console.print(
-            f"  Cost: ${cost_today.get('total_cost_usd', 0):.2f}  |  "
-            f"Saved: ${cost_today.get('total_savings_usd', 0):.2f}"
-        )
+        console.print(f"  Cost: ${cost_today.get('total_cost_usd', 0):.2f}")
     if done_today:
         console.print("  Completed: " + ", ".join(done_today[:3]))
     if open_goals:
@@ -1632,7 +1635,6 @@ def cmd_report():
             sessions=summary.get("sessions", 0),
             total_seconds=summary.get("total_seconds", 0),
             total_cost_usd=cost_today.get("total_cost_usd", 0.0),
-            total_savings_usd=cost_today.get("total_savings_usd", 0.0),
             total_tokens=cost_today.get("total_tokens", 0),
             goals_completed=done_today,
             goals_open=open_goals[:4],
