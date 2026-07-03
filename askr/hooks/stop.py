@@ -653,6 +653,23 @@ def main():
                 _save_quota_warned_windows(still_valid)
         except Exception:
             pass
+        # Same pruning for the 90% hard-trigger dedup set.
+        try:
+            from datetime import datetime, timezone
+            from askr.session.lifecycle import _load_quota_triggered_windows, _save_quota_triggered_windows
+            quota_triggered = _load_quota_triggered_windows()
+            now = datetime.now(timezone.utc)
+            still_valid = set()
+            for reset_at in quota_triggered:
+                try:
+                    if datetime.fromisoformat(reset_at.replace("Z", "+00:00")) > now:
+                        still_valid.add(reset_at)
+                except Exception:
+                    continue
+            if still_valid != quota_triggered:
+                _save_quota_triggered_windows(still_valid)
+        except Exception:
+            pass
 
     # Always run the authoritative stop checkpoint first — this is ground truth.
     # _write_relaunch_notification_if_pending uses its result but never replaces it.

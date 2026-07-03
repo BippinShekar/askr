@@ -76,6 +76,10 @@ _COMPANIONED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/companioned_sess
 # Despite the filename (kept for backward compat with existing installs), this now
 # stores warned quota_reset_at timestamps, not session ids — see _load/_save below.
 _QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_sessions.json")
+# quota_reset_at timestamps that already had the 90% hard trigger fired — same
+# dedup shape as _QUOTA_WARNED_SESSIONS_PATH, but for _execute_trigger (which
+# checkpoints, speaks, and waits for reset) rather than the pre-trigger heads-up.
+_QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_triggered_windows.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -1191,6 +1195,31 @@ def _save_quota_warned_windows(windows: set):
         _log(f"WARN: failed to persist quota-warned sessions: {e}")
 
 
+def _load_quota_triggered_windows() -> set:
+    """quota_reset_at timestamps that already had the 90% hard trigger fired.
+
+    Without this, TRIGGER_COOLDOWN (300s) is the only gate on the quota branch
+    below — but quota stays >=90% for the whole 5h window until reset, so every
+    poll cycle after cooldown expires spawns another _execute_trigger thread,
+    each of which re-announces the same 'Quota at X% — state saved' line and
+    re-checkpoints, for as long as the wait lasts. Keyed by the account's real
+    reset window, same as _load_quota_warned_windows, not by session_id."""
+    try:
+        with open(_QUOTA_TRIGGERED_WINDOWS_PATH) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _save_quota_triggered_windows(windows: set):
+    try:
+        os.makedirs(os.path.dirname(_QUOTA_TRIGGERED_WINDOWS_PATH), exist_ok=True)
+        with open(_QUOTA_TRIGGERED_WINDOWS_PATH, "w") as f:
+            json.dump(list(windows), f)
+    except Exception as e:
+        _log(f"WARN: failed to persist quota-triggered windows: {e}")
+
+
 def _speak(message: str):
     try:
         from askr.clients.voice import announce
@@ -1219,6 +1248,7 @@ def run_daemon():
     last_trigger_at: dict = _load_trigger_state()  # project_path → epoch seconds, disk-backed (survives restarts)
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
+    quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
     session_first_seen: dict = {}  # session_id → epoch first observed by this daemon run, for ACTIVITY_GRACE_SECS
 
     def _on_term(sig, frame):
@@ -1333,8 +1363,19 @@ def run_daemon():
                         _save_trigger_state(last_trigger_at)
                         triggered_this_cycle = True
                         break  # re-scan all projects next cycle after handling this one
+                    elif (quota_pct is not None and quota_pct >= QUOTA_TRIGGER
+                            and reset_at and reset_at in quota_triggered_windows):
+                        # Already fired the hard trigger for this reset window — quota stays
+                        # >=90% for the whole 5h window, so without this the per-project
+                        # TRIGGER_COOLDOWN (300s) alone would spawn a fresh _execute_trigger
+                        # thread — and re-speak the same "Quota at X%" line — every 5 minutes
+                        # for as long as the wait lasts.
+                        _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
+                        if reset_at:
+                            quota_triggered_windows.add(reset_at)
+                            _save_quota_triggered_windows(quota_triggered_windows)
                         # _execute_trigger can block for hours in _wait_for_reset — run it off
                         # the poll-loop thread so other open projects don't go unmonitored for
                         # the whole quota window (this was the root cause of triggers/warnings

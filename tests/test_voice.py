@@ -233,6 +233,32 @@ class QuotaWarnedSessionsRoundTripTests(unittest.TestCase):
                 self.assertEqual(lifecycle._load_quota_warned_windows(), set())
 
 
+class QuotaTriggeredWindowsRoundTripTests(unittest.TestCase):
+    def test_missing_file_returns_empty_set(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "quota_triggered_windows.json")
+            with patch.object(lifecycle, "_QUOTA_TRIGGERED_WINDOWS_PATH", path):
+                self.assertEqual(lifecycle._load_quota_triggered_windows(), set())
+
+    def test_save_then_load_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "quota_triggered_windows.json")
+            with patch.object(lifecycle, "_QUOTA_TRIGGERED_WINDOWS_PATH", path):
+                lifecycle._save_quota_triggered_windows({"2026-07-03T10:00:00Z", "2026-07-03T15:00:00Z"})
+                self.assertEqual(
+                    lifecycle._load_quota_triggered_windows(),
+                    {"2026-07-03T10:00:00Z", "2026-07-03T15:00:00Z"},
+                )
+
+    def test_corrupt_file_returns_empty_set(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "quota_triggered_windows.json")
+            with open(path, "w") as f:
+                f.write("not json")
+            with patch.object(lifecycle, "_QUOTA_TRIGGERED_WINDOWS_PATH", path):
+                self.assertEqual(lifecycle._load_quota_triggered_windows(), set())
+
+
 def _write_transcript(tmpdir, user_timestamps):
     path = os.path.join(tmpdir, "transcript.jsonl")
     with open(path, "w") as f:
