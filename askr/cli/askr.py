@@ -630,7 +630,16 @@ def cmd_init():
         console.print("  [yellow]no API keys found — let's set them up[/yellow]")
         console.print()
         from askr.cli.ask import setup_keys
-        setup_keys()
+        try:
+            setup_keys()
+        except SystemExit:
+            # setup_keys() exits if the user declines to enter a key. That's a
+            # valid choice, not a fatal error for `askr init` as a whole — state
+            # files, hooks, and team registration don't need a key; only
+            # codebase indexing and ask/architecture-summary calls do, and those
+            # already degrade gracefully below when no key is present.
+            console.print("  [yellow]⚠ no API key set — continuing without codebase indexing[/yellow]")
+            console.print("  [dim]run[/dim] [bold]ask setup[/bold] [dim]later to add one[/dim]\n")
         _env.load()
 
     # Register developer in team roster
@@ -657,7 +666,10 @@ def cmd_init():
             try:
                 from askr.qa.snapshot import build_snapshot
                 build_snapshot(show_progress=False)
-            except Exception as e:
+            except (Exception, SystemExit) as e:
+                # SystemExit (not just Exception) because a missing API key
+                # raises SystemExit(1) from clients/claude.py — that must not
+                # abort the rest of `askr init`, just skip indexing.
                 console.print(f"  [yellow]⚠ snapshot failed: {e}[/yellow]")
         if os.path.exists(SNAPSHOT_PATH):
             console.print("  [green]✓[/green] codebase indexed")
