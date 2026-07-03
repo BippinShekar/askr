@@ -18,6 +18,7 @@ guard detects a real architectural contradiction. Exits 0 (allow) otherwise.
 import sys
 import os
 import json
+import re
 import shlex
 from datetime import datetime, timezone
 
@@ -29,6 +30,17 @@ _GUARD_COOLDOWN_SECS = 300   # don't re-trigger within 5 minutes
 _BLOCK_TTL_SECS      = 86400 # expire block entries after 24 hours
 _BATCH_THRESHOLD     = 3     # N file edits before a batch trigger fires
 _ESCAPE_HATCH_COUNT  = 2     # allow through + escalate after this many consecutive blocks
+
+# Claude Code's own scratchpad dirs (e.g. /private/tmp/claude-501/<cwd-slug>/<session-id>/scratchpad/...)
+# are harness-designated temp space, not a sibling repo. The cross-repo guard must not
+# treat writes there as a boundary violation.
+_SCRATCH_DIR_RE = re.compile(r"^/(?:private/)?tmp/claude-[^/]+(?:/|$)")
+
+
+def _is_scratch_path(path: str) -> bool:
+    if not path:
+        return False
+    return bool(_SCRATCH_DIR_RE.match(path))
 
 
 def _load_session() -> dict:
@@ -212,6 +224,8 @@ def find_cross_repo_bash_path(command: str, project_root: str):
             abs_candidate = _resolve_bash_path(candidate)
         except Exception:
             continue
+        if _is_scratch_path(abs_candidate):
+            continue
         if abs_candidate and abs_candidate != abs_root and not abs_candidate.startswith(abs_root + os.sep):
             return candidate
 
@@ -285,7 +299,11 @@ def main():
         project_root = os.path.dirname(os.path.normpath(_gsd()))
         abs_file = os.path.realpath(os.path.abspath(file_path))
         abs_root = os.path.realpath(project_root)
-        if abs_file and abs_root and not abs_file.startswith(abs_root + os.sep) and abs_file != abs_root:
+        if (
+            abs_file and abs_root
+            and not abs_file.startswith(abs_root + os.sep) and abs_file != abs_root
+            and not _is_scratch_path(abs_file)
+        ):
             _block_tool(
                 f"Cross-repo write blocked: {file_path} is outside the current project root "
                 f"({project_root}). This session is scoped to that project. "
