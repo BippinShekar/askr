@@ -11,9 +11,3 @@ no I was continuing the sesion post 100%, the switch happened, but as my anhtrop
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
    *Why: handover generation failed this session*
-
-## Files In Play
-- `/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py`
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
