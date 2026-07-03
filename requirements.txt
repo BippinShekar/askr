@@ -4,3 +4,4 @@ python-dotenv
 pathspec
 rich
 certifi
+matplotlib
