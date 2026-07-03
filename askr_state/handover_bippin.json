@@ -7,23 +7,21 @@
       "why": "handover generation failed this session"
     }
   ],
-  "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl"
-  ],
+  "uncommitted_files": [],
   "in_progress": [],
   "accomplishments": [],
   "decisions": [],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "/Users/bippin/Desktop/askr/tests/test_context_cut_handover.py"
+    "/Users/bippin/Desktop/askr/askr/hooks/pre_compact.py"
   ],
   "relational_files": [],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-07-03T13:17:42.885387+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-07-03T13:17:51.070743+00:00",
     "degraded": true,
     "developer": "bippin"
   }
