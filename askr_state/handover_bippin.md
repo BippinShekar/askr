@@ -1,16 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 00:03
+Last updated: 2026-07-04 00:06
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-I don't think the latency calculation is correct, ain't no way in hell a claude session call is taking over a minute to over 2 minutes consistently, when the same level of detailed call is made to the API it's done in 3-5-7 seconds max? something doesn't add up, how can it be like 20-30x?
-ALso, show
+Unknown — transcript unavailable
 
 ## Next Actions
-1. Inspect /Users/bippin/Desktop/askr/_scratch_quota_measure.py — last file modified this session (handover generation failed/truncated — verify manually)
+1. Inspect /Users/bippin/Desktop/askr/tests/test_voice.py — last file modified this session (handover generation failed/truncated — verify manually)
    *Why: handover generation failed this session*
 
 ## Decisions
@@ -30,3 +29,7 @@ ALso, show
 ## Files In Play
 - `/Users/bippin/Desktop/askr/_scratch_full_handover_test.py`
 - `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
+- `/Users/bippin/Desktop/askr/tests/test_voice.py`
+
+## Uncommitted Files
+- `askr_state/implementation_bippin.jsonl`
