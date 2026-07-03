@@ -125,6 +125,25 @@ def _advance_launch_goal():
         pass
 
 
+def _live_stats(project_path: str) -> dict:
+    """Freshest real session_stats.json for this project — used so any percentage
+    spoken from a pending checkpoint always reflects current reality rather than
+    whatever quota_pct/context_pct happened to be cached in checkpoint_pending.json
+    at write time."""
+    try:
+        from askr.session.monitor import find_project_stats_files
+        candidates = sorted(find_project_stats_files(project_path), key=os.path.getmtime, reverse=True)
+        for path in candidates:
+            try:
+                with open(path) as f:
+                    return json.load(f)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return {}
+
+
 def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
     """
     If the daemon flagged a pending checkpoint, write the re-launch notification
@@ -188,8 +207,16 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         allowed_tools = _load_allowed_tools(project_path)
         now           = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
+        # Never speak a percentage sourced only from checkpoint_pending.json —
+        # it's a hand-off flag, not a live reading, and can carry an arbitrarily
+        # stale number even when its own timestamp looks fresh (e.g. pre_compact.py
+        # writes it once at kill-time; by the time this Stop hook runs seconds or
+        # minutes later in a NEW session, the account's real quota/context may have
+        # already moved). Always prefer whatever the current stats file says now.
+        live_stats = _live_stats(project_path)
+
         if trigger == "quota":
-            quota_pct = pending.get("quota_pct", 0)
+            quota_pct = live_stats.get("quota_pct", pending.get("quota_pct", 0))
             pct_str   = f"{round(quota_pct)}%" if quota_pct else "high"
             payload = {
                 "type": "quota",
@@ -201,7 +228,7 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
                 "timestamp": now,
             }
         else:
-            pct       = pending.get("context_pct", 0)
+            pct       = live_stats.get("context_pct", pending.get("context_pct", 0))
             pct_str   = f"{round(pct * 100)}%"
             developer = load_developer()
 
