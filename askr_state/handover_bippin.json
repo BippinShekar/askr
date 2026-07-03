@@ -3,7 +3,7 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Inspect /Users/bippin/Desktop/askr/tests/test_checkpoint_merge.py \u2014 last file modified this session (handover generation failed/truncated \u2014 verify manually)",
+      "action": "Handover generation failed/truncated this session \u2014 review transcript manually before continuing",
       "why": "handover generation failed this session"
     }
   ],
@@ -68,7 +68,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-03T13:34:48.253028+00:00",
+    "timestamp": "2026-07-03T13:40:17.938909+00:00",
     "degraded": true,
     "developer": "bippin"
   }
