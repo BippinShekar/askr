@@ -1,12 +1,12 @@
 # Handover: bippin
 
-Last updated: 2026-07-03 19:45
+Last updated: 2026-07-03 20:09
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-isn't the claude code's sub used for all hadnling of askr? cause how many would be paying for the API ontop of claude code, the anthropic endpoint is supposed to like an optional input right?
+Continue work on: resume uncommitted work on: askr/session/checkpoint.py, tests/test_checkpoint_merge.py. Read the handover file for the full state. Your previous session is still running in another window — pick up from the handover, don't redo work already in flight there.
 
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
@@ -25,3 +25,8 @@ isn't the claude code's sub used for all hadnling of askr? cause how many would 
 - [2026-07-02] Attempted to fix nested worktree lockout by storing absolute project root in config.json and using it for guard validation — Conflicts with desired architecture supporting multi-repo concurrent execution; direct implementation would block legitimate cross-repo task spawning
 - [2026-07-02] Implementing project-root-based path locking to prevent nested worktree cwd-drift lockout — Conflicts with desired architecture: system must support multi-repo concurrent execution from single terminal, which requires cross-repo execution guards to be permissive rather than restrictive
 - [2026-07-02] Treating any entry with 'type': 'user' as a real user message in _turn_elapsed_seconds — Tool_result entries also have 'type': 'user' but represent system responses, not user input; this caused the gate to almost never fire
+
+## Uncommitted Files
+- `askr/session/checkpoint.py`
+- `askr_state/implementation_bippin.jsonl`
+- `tests/test_checkpoint_merge.py`
