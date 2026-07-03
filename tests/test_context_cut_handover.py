@@ -204,6 +204,34 @@ class TestContextCutAutoLaunch(unittest.TestCase):
             self.assertFalse(ok, "stale checkpoint_pending must be silently ignored")
             self.assertIsNone(notif, "no notification should be written for stale checkpoint")
 
+    def test_missing_timestamp_is_treated_as_stale_not_skipped(self):
+        """A checkpoint_pending.json with no timestamp field (e.g. a leftover file
+        from before lifecycle.py's writer was removed in 65e543b, or a bare
+        {"trigger": "quota"} patch from pre_compact.py's old partial-write code)
+        must be treated as stale garbage, not processed as if it just happened.
+        This is the exact bug that spoke a wildly wrong, days-old quota% on an
+        otherwise healthy, actively-running session."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending = {"trigger": "quota", "quota_pct": 92}  # no timestamp at all
+            direction = _direction_coding_high_confidence()
+
+            ok, notif = self._run_relaunch(tmpdir, pending, direction)
+
+            self.assertFalse(ok, "missing-timestamp checkpoint_pending must be treated as stale")
+            self.assertIsNone(notif, "no notification should be written for a timestamp-less checkpoint")
+
+    def test_malformed_timestamp_is_treated_as_stale_not_skipped(self):
+        """An unparseable timestamp must fail closed (treated as stale), not silently
+        fall through the exception handler and get processed as fresh."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending = {"trigger": "quota", "quota_pct": 92, "timestamp": "not-a-real-timestamp"}
+            direction = _direction_coding_high_confidence()
+
+            ok, notif = self._run_relaunch(tmpdir, pending, direction)
+
+            self.assertFalse(ok, "malformed-timestamp checkpoint_pending must be treated as stale")
+            self.assertIsNone(notif, "no notification should be written for a malformed-timestamp checkpoint")
+
     def test_missing_checkpoint_pending_returns_false(self):
         """If checkpoint_pending.json doesn't exist, function returns False cleanly."""
         with tempfile.TemporaryDirectory() as tmpdir:

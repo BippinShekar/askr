@@ -16,6 +16,7 @@ import sys
 import os
 import json
 import signal
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -33,22 +34,20 @@ def _speak(message: str):
         pass
 
 
-def _quota_pct() -> float | None:
-    """Read quota from any recent stats file for this project (quota is per-account)."""
+def _latest_stats() -> dict:
+    """Most recent stats file for this project (quota is per-account, context is per-session)."""
     try:
         from askr.session.monitor import find_project_root, find_project_stats_files
         project_path = find_project_root()
         for path in sorted(find_project_stats_files(project_path), key=os.path.getmtime, reverse=True):
             try:
                 with open(path) as f:
-                    quota = json.load(f).get("quota_pct")
-                if quota is not None:
-                    return quota
+                    return json.load(f)
             except Exception:
                 continue
     except Exception:
         pass
-    return None
+    return {}
 
 
 def _find_session_pid(transcript_path: str) -> int | None:
@@ -135,17 +134,26 @@ def main():
 
     # If quota is high, mark checkpoint_pending as quota-type so the Stop hook
     # waits for reset instead of immediately opening a new session.
-    quota = _quota_pct()
+    #
+    # Always write a complete, fresh payload here — never merge onto whatever's
+    # already on disk. This used to patch just "trigger" onto the existing file
+    # (or {} if unreadable), leaving quota_pct/context_pct/timestamp as whatever
+    # ancient values were last written by lifecycle.py's _write_checkpoint_pending()
+    # — which was removed entirely in 65e543b. Any pre-existing file is from a
+    # different (possibly days-old) event; carrying its stale numbers forward is
+    # exactly what caused the Stop hook to announce a wildly wrong quota% on an
+    # otherwise healthy session.
+    stats = _latest_stats()
+    quota = stats.get("quota_pct")
     if quota is not None and quota >= QUOTA_HIGH:
-        try:
-            with open(_CHECKPOINT_PENDING) as f:
-                pending = json.load(f)
-        except Exception:
-            pending = {}
-        pending["trigger"] = "quota"
         os.makedirs(os.path.dirname(_CHECKPOINT_PENDING), exist_ok=True)
         with open(_CHECKPOINT_PENDING, "w") as f:
-            json.dump(pending, f)
+            json.dump({
+                "trigger": "quota",
+                "quota_pct": quota,
+                "context_pct": stats.get("context_pct", 0),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
 
     # Delete own stats file before dying — prevents the daemon from re-triggering
     # on a dead session's stale high ctx% after the cooldown expires.

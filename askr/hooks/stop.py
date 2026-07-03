@@ -147,22 +147,29 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
     except Exception:
         return False
 
-    # If the daemon wrote the flag more than 5 min ago and the session continued
-    # past it, treat the flag as stale — the user finished their work voluntarily.
+    # If the flag was written more than 5 min ago and the session continued past
+    # it, treat it as stale — the user finished their work voluntarily. A missing
+    # or unparseable timestamp must ALSO count as stale, not skip this check: this
+    # file is only ever fully populated by pre_compact.py's emergency path now
+    # (the daemon's own writer for context-triggered checkpoints was removed in
+    # 65e543b), so a malformed/legacy file with no valid timestamp is garbage,
+    # never something to trust and act on as if it just happened.
+    is_stale = True
     try:
-        import datetime as _dt_check
         written_at = pending.get("timestamp", "")
         if written_at:
+            import datetime as _dt_check
             written = _dt_check.datetime.fromisoformat(written_at)
             age_s = (_dt_check.datetime.now(_dt_check.timezone.utc) - written).total_seconds()
-            if age_s > 300:
-                try:
-                    os.remove(_CHECKPOINT_PENDING)
-                except Exception:
-                    pass
-                return False
+            is_stale = age_s > 300
     except Exception:
-        pass
+        is_stale = True
+    if is_stale:
+        try:
+            os.remove(_CHECKPOINT_PENDING)
+        except Exception:
+            pass
+        return False
 
     try:
         from askr.session.lifecycle import (
