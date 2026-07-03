@@ -13,8 +13,4 @@ Unknown — transcript unavailable
    *Why: handover generation failed this session*
 
 ## Files In Play
-- `/Users/bippin/Desktop/askr/askr/cli/ask.py`
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
+- `/Users/bippin/Desktop/askr/tests/test_context_cut_handover.py`
