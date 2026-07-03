@@ -1232,9 +1232,6 @@ def run_daemon():
 
     try:
         while True:
-            from askr.state.config import load_project_path
-            fallback_path = load_project_path()
-
             active = _session_is_active()
 
             if active and not was_active:
@@ -1256,7 +1253,17 @@ def run_daemon():
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
-                    project_path = stats.get("project_path") or fallback_path
+                    project_path = stats.get("project_path")
+                    if not project_path:
+                        # Same bug class as the sibling-repo leak fixed 2026-07-02 in
+                        # get_state_dir(): falling back to a single globally-stored path
+                        # here could apply a trigger/checkpoint to the WRONG project when
+                        # multiple projects are active at once. Every writer of a stats
+                        # file populates project_path, so this should never actually hit —
+                        # skip rather than guess if it somehow does.
+                        _log("WARN: stats entry missing project_path — skipping rather than "
+                             "guessing which project it belongs to")
+                        continue
                     ctx_pct   = stats.get("context_pct", 0)
                     ctx_label = stats.get("context_label", "ok")
                     quota_pct = stats.get("quota_pct")
