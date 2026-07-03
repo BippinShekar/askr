@@ -106,6 +106,7 @@ def setup_keys():
             f.write(f"ASKR_DISCORD_WEBHOOK={discord_webhook}\n")
         else:
             f.write(f"# ASKR_DISCORD_WEBHOOK=https://discord.com/api/webhooks/... (add to enable Discord alerts)\n")
+    os.chmod(env_file, 0o600)  # contains plaintext API keys — default umask leaves this world-readable
 
     console.print("\n  [green]✓ saved[/green]  [dim]keys stored at[/dim] ~/.config/askr/.env\n")
 

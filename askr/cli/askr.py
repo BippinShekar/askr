@@ -780,6 +780,7 @@ def cmd_init():
             os.makedirs(config_dir, exist_ok=True)
             with open(env_file, "a") as _f:
                 _f.write(f"\nASKR_DISCORD_WEBHOOK={global_hook}\n")
+            os.chmod(env_file, 0o600)  # contains plaintext keys/webhook — default umask leaves this world-readable
             os.environ["ASKR_DISCORD_WEBHOOK"] = global_hook
             console.print("  [green]✓[/green] global webhook saved to ~/.config/askr/.env")
 

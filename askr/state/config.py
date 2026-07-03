@@ -170,3 +170,4 @@ def save_project_config(data: dict, project_path: str = None):
     existing.update(data)
     with open(path, "w") as f:
         json.dump(existing, f, indent=2)
+    os.chmod(path, 0o600)  # contains a plaintext Discord webhook — default umask leaves this world-readable
