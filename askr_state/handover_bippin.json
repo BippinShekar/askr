@@ -1,9 +1,9 @@
 {
-  "task": "not fixed yet, still the voice keeps saying ctx at 75% despite a new session opened and being run.",
+  "task": "[Image: source: /Users/bippin/.claude/image-cache/4e825a02-894f-43e3-893a-80455b2dee6b/4.png]",
   "next_actions": [
     {
       "order": 1,
-      "action": "Inspect /Users/bippin/Desktop/askr/askr/hooks/stop.py \u2014 last file modified this session (handover generation failed/truncated \u2014 verify manually)",
+      "action": "Inspect /Users/bippin/Desktop/askr/askr/hooks/pre_compact.py \u2014 last file modified this session (handover generation failed/truncated \u2014 verify manually)",
       "why": "handover generation failed this session"
     }
   ],
@@ -23,7 +23,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-03T13:12:36.041335+00:00",
+    "timestamp": "2026-07-03T13:17:42.885387+00:00",
     "degraded": true,
     "developer": "bippin"
   }
