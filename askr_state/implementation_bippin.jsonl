@@ -1803,3 +1803,8 @@
 {"ts": "2026-07-03T09:50:17Z", "session_id": "74423ce5-6994-415b-86e4-43d7b0b34054", "type": "command", "detail": "ls -la /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/*.jsonl 2>/dev/"}
 {"ts": "2026-07-03T09:50:23Z", "session_id": "74423ce5-6994-415b-86e4-43d7b0b34054", "type": "command", "detail": "cd /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/ && python3 -c \"\nim"}
 {"ts": "2026-07-03T09:50:32Z", "session_id": "74423ce5-6994-415b-86e4-43d7b0b34054", "type": "command", "detail": "cd /Users/bippin/.claude/projects/-Users-bippin-Desktop-askr/ && python3 -c \"\nim"}
+{"ts": "2026-07-03T11:51:56Z", "session_id": "d2ba616d-6bc7-4858-9054-1361ac0f2c29", "type": "command", "detail": "cat roadmap.md"}
+{"ts": "2026-07-03T11:51:56Z", "session_id": "d2ba616d-6bc7-4858-9054-1361ac0f2c29", "type": "command", "detail": "cat askr_state/blockers.md; echo \"---\"; tail -30 askr_state/handover_bippin.md"}
+{"ts": "2026-07-03T11:52:00Z", "session_id": "d2ba616d-6bc7-4858-9054-1361ac0f2c29", "type": "command", "detail": "grep -E \"Phase [2-9]|Phase [0-9][0-9]|## Phase|In Progress|\ud83d\udea7|TODO|\u2b1c|pending|not "}
+{"ts": "2026-07-03T11:52:04Z", "session_id": "d2ba616d-6bc7-4858-9054-1361ac0f2c29", "type": "command", "detail": "grep -A 200 \"Phase 7 - Public Launch\" roadmap.md | head -80"}
+{"ts": "2026-07-03T11:52:05Z", "session_id": "d2ba616d-6bc7-4858-9054-1361ac0f2c29", "type": "command", "detail": "grep -E \"\ud83d\udd32|\u274c|Open|pending|Todo|not done|still pending|unbuilt\" roadmap.md"}
