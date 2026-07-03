@@ -277,6 +277,17 @@ def _claude_cli_available() -> bool:
     return shutil.which("claude") is not None
 
 
+def _applescript_quote(s: str) -> str:
+    """Escape and wrap a string as a safe AppleScript double-quoted literal.
+
+    Without this, a project_path or prompt containing a `"` breaks out of the
+    `do script "..."` / `keystroke "..."` string boundary — and since `do script`
+    runs its argument as a real shell command in Terminal.app, that's a command
+    injection, not just a syntax error.
+    """
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def _terminal_app_fallback_worker(project_path: str, claude_bin: str, tools_flag: str,
                                    safe_prompt: str, notif_path: str, delay: int = 20):
     """
@@ -303,13 +314,16 @@ def _terminal_app_fallback_worker(project_path: str, claude_bin: str, tools_flag
     except Exception:
         pass
 
-    start_cmd = f'cd {project_path} && {claude_bin}{tools_flag}'
-    open_script = 'tell application "Terminal"\n  do script "' + start_cmd + '"\n  activate\nend tell'
+    # shlex.quote guards the shell layer (project_path could contain ; $() ` etc),
+    # _applescript_quote guards the AppleScript string layer (a literal " would
+    # otherwise close the do-script string early) — both are needed, independently.
+    start_cmd = f'cd {shlex.quote(project_path)} && {claude_bin}{tools_flag}'
+    open_script = 'tell application "Terminal"\n  do script ' + _applescript_quote(start_cmd) + '\n  activate\nend tell'
     subprocess.run(["osascript", "-e", open_script], timeout=5,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     _time.sleep(10)
     type_script = ('tell application "Terminal"\n  tell front window\n'
-                    f'    keystroke {safe_prompt!r}\n    key code 36\n  end tell\nend tell')
+                    f'    keystroke {_applescript_quote(safe_prompt)}\n    key code 36\n  end tell\nend tell')
     subprocess.run(["osascript", "-e", type_script], timeout=5,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
