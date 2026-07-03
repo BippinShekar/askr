@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 00:06
+Last updated: 2026-07-04 00:14
 
 *Source of truth: `handover_bippin.json`*
 
@@ -27,9 +27,4 @@ Unknown — transcript unavailable
 - [2026-07-02] Treating any entry with 'type': 'user' as a real user message in _turn_elapsed_seconds — Tool_result entries also have 'type': 'user' but represent system responses, not user input; this caused the gate to almost never fire
 
 ## Files In Play
-- `/Users/bippin/Desktop/askr/_scratch_full_handover_test.py`
-- `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
 - `/Users/bippin/Desktop/askr/tests/test_voice.py`
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
