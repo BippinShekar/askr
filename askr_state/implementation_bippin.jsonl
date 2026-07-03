@@ -2128,3 +2128,5 @@
 {"ts": "2026-07-03T17:58:58Z", "session_id": "8f107887-480a-478d-a59f-045d0c44c6a8", "type": "command", "detail": "grep -n \"def _execute_trigger\\|_execute_trigger(\" askr/session/lifecycle.py | he"}
 {"ts": "2026-07-03T17:58:58Z", "session_id": "8f107887-480a-478d-a59f-045d0c44c6a8", "type": "command", "detail": "grep -n \"def create_checkpoint\\|anthropic\\|messages.create\\|_call_llm\\|client.me"}
 {"ts": "2026-07-03T17:59:02Z", "session_id": "8f107887-480a-478d-a59f-045d0c44c6a8", "type": "command", "detail": "grep -n \"def _llm_summary\\|def _call\\|import anthropic\\|Anthropic(\\|\\.messages\\."}
+{"ts": "2026-07-03T18:01:43Z", "session_id": "5c756644-dbbb-4226-9435-e8a91d40eb5e", "type": "command", "detail": "git status --short && echo ---DIFF--- && git diff"}
+{"ts": "2026-07-03T18:01:55Z", "session_id": "5c756644-dbbb-4226-9435-e8a91d40eb5e", "type": "command", "detail": "grep -n \"TRIGGER_COOLDOWN\\s*=\\|def _execute_trigger\" askr/session/lifecycle.py |"}
