@@ -55,20 +55,44 @@ def setup_keys():
     console.print()
     console.rule("[bold]askr setup[/]", style="dim")
 
+    # Only prompt for whatever's actually missing — the old code bailed out
+    # entirely the moment the file existed at all, so a user who'd only ever
+    # set an Anthropic key (or had a stale file with a blank webhook) could
+    # never get prompted for OpenAI/Discord without manually deleting the file.
+    existing = {}
     if os.path.exists(env_file):
-        console.print(f"  [dim]keys already saved at[/dim] {env_file}")
-        console.print("  [dim]delete that file to reconfigure[/dim]\n")
+        from dotenv import dotenv_values
+        existing = {k: v for k, v in dotenv_values(env_file).items() if v}
+        console.print(f"  [dim]existing config found at[/dim] {env_file}\n")
+    else:
+        console.print(f"  [dim]saving to[/dim] {env_file}\n")
+
+    anthropic_key = existing.get("ANTHROPIC_API_KEY", "")
+    if anthropic_key:
+        console.print("  [dim]- ANTHROPIC_API_KEY already set[/dim]")
+    else:
+        anthropic_key = getpass.getpass("  ANTHROPIC_API_KEY: ").strip()
+        if not anthropic_key:
+            console.print("  [red]✗ anthropic key required[/red]\n")
+            raise SystemExit(1)
+
+    openai_key = existing.get("OPENAI_API_KEY", "")
+    if openai_key:
+        console.print("  [dim]- OPENAI_API_KEY already set[/dim]")
+    else:
+        openai_key = getpass.getpass("  OPENAI_API_KEY (optional — press enter to skip): ").strip()
+
+    discord_webhook = existing.get("ASKR_DISCORD_WEBHOOK", "")
+    if discord_webhook:
+        console.print("  [dim]- ASKR_DISCORD_WEBHOOK already set[/dim]")
+    else:
+        discord_webhook = getpass.getpass("  ASKR_DISCORD_WEBHOOK (optional — press enter to skip): ").strip()
+
+    if existing and anthropic_key == existing.get("ANTHROPIC_API_KEY", "") \
+            and openai_key == existing.get("OPENAI_API_KEY", "") \
+            and discord_webhook == existing.get("ASKR_DISCORD_WEBHOOK", ""):
+        console.print("\n  [dim]nothing to change[/dim]\n")
         return
-
-    console.print(f"  [dim]saving to[/dim] {env_file}\n")
-
-    anthropic_key = getpass.getpass("  ANTHROPIC_API_KEY: ").strip()
-    if not anthropic_key:
-        console.print("  [red]✗ anthropic key required[/red]\n")
-        raise SystemExit(1)
-
-    openai_key = getpass.getpass("  OPENAI_API_KEY (optional — press enter to skip): ").strip()
-    discord_webhook = getpass.getpass("  ASKR_DISCORD_WEBHOOK (optional — press enter to skip): ").strip()
 
     os.makedirs(config_dir, exist_ok=True)
     with open(env_file, "w") as f:
