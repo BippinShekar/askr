@@ -744,9 +744,13 @@ def cmd_init():
     if os.path.exists(_askr_dot_env):
         _load_dotenv(dotenv_path=_askr_dot_env, override=False)
 
-    import getpass as _gp
     from askr.state.config import load_project_config, save_project_config
 
+    # A webhook URL isn't a secret in the shoulder-surfing sense getpass() protects
+    # against — and getpass() hides all input including paste, which repeatedly
+    # looked like a hang to users pasting a long Discord URL here (see
+    # askr_state/failed_approaches.md, 2026-06-15).
+    #
     # Per-project webhook (overrides global) — stored locally in askr_state/config.json,
     # which is gitignored. Never committed: it's a plaintext secret, and each teammate
     # should set their own (or share it out of band, e.g. 1Password/DM).
@@ -754,7 +758,7 @@ def cmd_init():
     console.print()
     console.print(f"  [dim]project Discord webhook (current: {'set' if existing_project_hook else 'none'})[/dim]")
     try:
-        project_hook = _gp.getpass("  project webhook (enter to keep/skip): ").strip()
+        project_hook = input("  project webhook (enter to keep/skip): ").strip()
     except (KeyboardInterrupt, EOFError):
         project_hook = ""
     if project_hook:
@@ -767,7 +771,7 @@ def cmd_init():
     if not existing_project_hook and not project_hook and not os.getenv("ASKR_DISCORD_WEBHOOK"):
         console.print("  [dim]no global webhook set — enter one as fallback (enter to skip)[/dim]")
         try:
-            global_hook = _gp.getpass("  global webhook: ").strip()
+            global_hook = input("  global webhook: ").strip()
         except (KeyboardInterrupt, EOFError):
             global_hook = ""
         if global_hook:

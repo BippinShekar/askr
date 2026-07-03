@@ -86,7 +86,10 @@ def setup_keys():
     if discord_webhook:
         console.print("  [dim]- ASKR_DISCORD_WEBHOOK already set[/dim]")
     else:
-        discord_webhook = getpass.getpass("  ASKR_DISCORD_WEBHOOK (optional — press enter to skip): ").strip()
+        # A webhook URL isn't a secret in the shoulder-surfing sense getpass()
+        # protects against — and getpass() hides all input including paste, which
+        # repeatedly looked like a hang to users pasting a long Discord URL here.
+        discord_webhook = input("  ASKR_DISCORD_WEBHOOK (optional — press enter to skip): ").strip()
 
     if existing and anthropic_key == existing.get("ANTHROPIC_API_KEY", "") \
             and openai_key == existing.get("OPENAI_API_KEY", "") \
