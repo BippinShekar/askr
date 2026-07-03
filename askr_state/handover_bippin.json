@@ -1,5 +1,5 @@
 {
-  "task": "brother that sounds like you wrote it, it should sound like I wrote it.",
+  "task": "alos with these subprocess we will call, how many tokens/limit will we be burning of the user's sessions? what performance drop? what latency? how are we going to measure and keep track of all of that?\n\nAlso, does this sound right as to what burned through so much of my money?\nWhat broke: askr runs",
   "next_actions": [
     {
       "order": 1,
@@ -11,7 +11,6 @@
     "askr/hooks/stop.py",
     "askr/session/checkpoint.py",
     "askr/session/lifecycle.py",
-    "askr_state/implementation_bippin.jsonl",
     "tests/test_checkpoint_merge.py"
   ],
   "in_progress": [],
@@ -70,7 +69,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-03T18:01:52.528542+00:00",
+    "timestamp": "2026-07-03T18:03:04.091718+00:00",
     "degraded": true,
     "developer": "bippin"
   }

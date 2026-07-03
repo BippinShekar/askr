@@ -1,12 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-07-03 23:31
+Last updated: 2026-07-03 23:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-brother that sounds like you wrote it, it should sound like I wrote it.
+alos with these subprocess we will call, how many tokens/limit will we be burning of the user's sessions? what performance drop? what latency? how are we going to measure and keep track of all of that?
+
+Also, does this sound right as to what burned through so much of my money?
+What broke: askr runs
 
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
@@ -34,5 +37,4 @@ brother that sounds like you wrote it, it should sound like I wrote it.
 - `askr/hooks/stop.py`
 - `askr/session/checkpoint.py`
 - `askr/session/lifecycle.py`
-- `askr_state/implementation_bippin.jsonl`
 - `tests/test_checkpoint_merge.py`
