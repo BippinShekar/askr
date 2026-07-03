@@ -1075,6 +1075,7 @@ def cmd_goal(args: list[str]):
         console.print("\n  [bold]askr goal[/bold]")
         console.print("  [dim]askr goal add \"finish the auth layer\"[/dim]")
         console.print("  [dim]askr goal add \"ship phase 2\" --backlog[/dim]")
+        console.print("  [dim]askr goal add \"finish the auth layer\" --launch[/dim]  [dim](also starts an autonomous Claude session on it now)[/dim]")
         console.print("  [dim]askr goal done \"finish the auth layer\"[/dim]")
         console.print("  [dim]askr goal discard \"finish the auth layer\"[/dim]\n")
         return
@@ -1091,7 +1092,11 @@ def cmd_goal(args: list[str]):
         label = "backlog" if section == "backlog" else "today"
         console.print(f"\n  [green]✓[/green] added to {label}: [bold]{text}[/bold]\n")
 
-        if section == "today":
+        # Adding a goal only records it. Launching an autonomous, unsandboxed
+        # Claude session on it is a much bigger action and must be opted into
+        # explicitly with --launch — it used to fire unconditionally for any
+        # today-goal, with no confirmation and no mention of it in --help.
+        if section == "today" and "--launch" in args:
             _maybe_launch_for_goal(text)
 
     elif sub == "done":

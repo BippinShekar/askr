@@ -225,8 +225,9 @@ askr launch --restart       # force restart now
 
 # Goals
 askr goals                  # show today, backlog, done
-askr goal add "..."         # add a goal for today
+askr goal add "..."         # add a goal for today (just records it)
 askr goal add "..." --backlog   # add to backlog
+askr goal add "..." --launch    # add for today AND start an autonomous Claude session on it now
 askr goal done "..."        # mark a goal complete
 
 # Notifications
