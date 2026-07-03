@@ -30,13 +30,3 @@ ALso, show
 ## Files In Play
 - `/Users/bippin/Desktop/askr/_scratch_full_handover_test.py`
 - `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
-- `/Users/bippin/Desktop/askr/_scratch_test_claude_p.py`
-- `/Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py`
-- `/Users/bippin/Desktop/askr/askr/hooks/stop.py`
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
-
-## Uncommitted Files
-- `askr/hooks/stop.py`
-- `askr/session/lifecycle.py`
-- `askr_state/implementation_bippin.jsonl`
-- `project_brief.md`

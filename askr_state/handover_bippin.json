@@ -7,12 +7,7 @@
       "why": "handover generation failed this session"
     }
   ],
-  "uncommitted_files": [
-    "askr/hooks/stop.py",
-    "askr/session/lifecycle.py",
-    "askr_state/implementation_bippin.jsonl",
-    "project_brief.md"
-  ],
+  "uncommitted_files": [],
   "in_progress": [],
   "accomplishments": [],
   "decisions": [
@@ -62,18 +57,14 @@
   ],
   "files_in_play": [
     "/Users/bippin/Desktop/askr/_scratch_full_handover_test.py",
-    "/Users/bippin/Desktop/askr/_scratch_quota_measure.py",
-    "/Users/bippin/Desktop/askr/_scratch_test_claude_p.py",
-    "/Users/bippin/Desktop/askr/askr/hooks/pre_tool_use.py",
-    "/Users/bippin/Desktop/askr/askr/hooks/stop.py",
-    "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"
+    "/Users/bippin/Desktop/askr/_scratch_quota_measure.py"
   ],
   "relational_files": [],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "stop",
-    "timestamp": "2026-07-03T18:33:00.307820+00:00",
+    "trigger_type": "context",
+    "timestamp": "2026-07-03T18:33:04.710192+00:00",
     "degraded": true,
     "developer": "bippin"
   }
