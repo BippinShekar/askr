@@ -4,10 +4,48 @@ import sys
 import os
 import getpass
 
+import anthropic
+import openai
+
 from askr.qa.pipeline import run
 from askr.qa.snapshot import build_snapshot
 from askr.utils.logger import show_summary
 from askr.utils.display import console, print_progress, print_init, print_response
+
+
+def _run_query(query: str):
+    try:
+        return run(query)
+    except anthropic.AuthenticationError:
+        console.print("\n  [bold red]✗ Anthropic rejected your API key[/bold red]")
+        console.print("  run [bold]ask setup[/bold] to reconfigure it\n")
+        raise SystemExit(1)
+    except anthropic.PermissionDeniedError:
+        console.print("\n  [bold red]✗ Anthropic denied this request — often an insufficient credit balance[/bold red]")
+        console.print("  check your balance at [dim]console.anthropic.com[/dim]\n")
+        raise SystemExit(1)
+    except anthropic.RateLimitError:
+        console.print("\n  [bold red]✗ rate limited by Anthropic — try again in a moment[/bold red]\n")
+        raise SystemExit(1)
+    except anthropic.APIConnectionError:
+        console.print("\n  [bold red]✗ couldn't reach Anthropic — check your network connection[/bold red]\n")
+        raise SystemExit(1)
+    except anthropic.AnthropicError as e:
+        console.print(f"\n  [bold red]✗ Anthropic API error:[/bold red] {e}\n")
+        raise SystemExit(1)
+    except openai.AuthenticationError:
+        console.print("\n  [bold red]✗ OpenAI rejected your API key[/bold red]")
+        console.print("  run [bold]ask setup[/bold] to reconfigure it\n")
+        raise SystemExit(1)
+    except openai.RateLimitError:
+        console.print("\n  [bold red]✗ rate limited by OpenAI — often an insufficient credit balance or too many requests[/bold red]\n")
+        raise SystemExit(1)
+    except openai.APIConnectionError:
+        console.print("\n  [bold red]✗ couldn't reach OpenAI — check your network connection[/bold red]\n")
+        raise SystemExit(1)
+    except openai.OpenAIError as e:
+        console.print(f"\n  [bold red]✗ OpenAI API error:[/bold red] {e}\n")
+        raise SystemExit(1)
 
 
 def setup_keys():
@@ -100,7 +138,7 @@ def main():
         show_summary()
     else:
         query = " ".join(sys.argv[1:])
-        result, mode = run(query)
+        result, mode = _run_query(query)
         print_response(result, mode)
 
 
