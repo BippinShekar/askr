@@ -2154,3 +2154,6 @@
 {"ts": "2026-07-03T18:11:30Z", "session_id": "5c756644-dbbb-4226-9435-e8a91d40eb5e", "type": "command", "detail": "rm -f /Users/bippin/Desktop/askr/_scratch_test_claude_p.py\nclaude --help 2>&1 | "}
 {"ts": "2026-07-03T18:12:03Z", "session_id": "2b965a1d-67a6-4cf5-90d3-7f023bed5d67", "type": "command", "detail": "git add askr/session/checkpoint.py tests/test_checkpoint_merge.py && git status "}
 {"ts": "2026-07-03T18:12:08Z", "session_id": "2b965a1d-67a6-4cf5-90d3-7f023bed5d67", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(checkpoint): stop degraded handovers from perpe"}
+{"ts": "2026-07-03T18:12:16Z", "session_id": "2b965a1d-67a6-4cf5-90d3-7f023bed5d67", "type": "command", "detail": "git fetch origin && git log --oneline -5 origin/main && echo --- && git log --on"}
+{"ts": "2026-07-03T18:12:27Z", "session_id": "2b965a1d-67a6-4cf5-90d3-7f023bed5d67", "type": "command", "detail": "git status; git log --oneline -3; git rev-parse HEAD origin/main"}
+{"ts": "2026-07-03T18:12:31Z", "session_id": "2b965a1d-67a6-4cf5-90d3-7f023bed5d67", "type": "command", "detail": "git log --oneline origin/main | grep -m1 ed8aca7"}
