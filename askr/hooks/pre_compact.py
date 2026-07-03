@@ -22,8 +22,39 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
 
-_CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
-QUOTA_HIGH          = 85.0  # treat as quota-exhausted if above this
+_CHECKPOINT_PENDING   = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
+_LAST_EMERGENCY_SPEAK = os.path.expanduser("~/.config/askr/pre_compact_last_speak.json")
+QUOTA_HIGH            = 85.0  # treat as quota-exhausted if above this
+SPEAK_COOLDOWN_SECS   = 180   # don't re-announce more than once per 3 min
+
+
+def _should_speak_emergency() -> bool:
+    """PreCompact has no natural dedup — if a session sits at/near 100% context
+    and the user keeps sending messages into that same (already full) window
+    instead of switching to the companion session askr already opened, native
+    compaction can trigger again on every subsequent message, re-firing this
+    hook every time. The checkpoint+kill below still has to run every time
+    (that part is genuinely needed each time compaction is imminent), but the
+    voice announcement doesn't need to repeat the identical line every few
+    seconds — cap it to once per SPEAK_COOLDOWN_SECS."""
+    try:
+        if os.path.exists(_LAST_EMERGENCY_SPEAK):
+            with open(_LAST_EMERGENCY_SPEAK) as f:
+                last = datetime.fromisoformat(json.load(f).get("at", ""))
+            if (datetime.now(timezone.utc) - last).total_seconds() < SPEAK_COOLDOWN_SECS:
+                return False
+    except Exception:
+        pass
+    return True
+
+
+def _mark_emergency_spoken():
+    try:
+        os.makedirs(os.path.dirname(_LAST_EMERGENCY_SPEAK), exist_ok=True)
+        with open(_LAST_EMERGENCY_SPEAK, "w") as f:
+            json.dump({"at": datetime.now(timezone.utc).isoformat()}, f)
+    except Exception:
+        pass
 
 
 def _speak(message: str):
@@ -113,8 +144,14 @@ def main():
 
     # Speak first, before the (potentially slow) checkpoint call — this is the
     # only voice announcement for a mid-turn kill, since PreCompact can't wait
-    # for Stop to fire cleanly after SIGTERM.
-    _speak("Context critical. Claude is compacting — restarting your session now.")
+    # for Stop to fire cleanly after SIGTERM. Rate-limited: if this window is
+    # sitting at/near 100% context and messages keep coming, compaction can
+    # trigger again on every message — the checkpoint+kill must still run each
+    # time, but the announcement shouldn't repeat every few seconds.
+    if _should_speak_emergency():
+        _speak("Context full — this session can't continue. A companion session "
+               "should already be open; switch to it. Checkpointing this one now.")
+        _mark_emergency_spoken()
 
     from askr.session.checkpoint import create_checkpoint
     create_checkpoint(
