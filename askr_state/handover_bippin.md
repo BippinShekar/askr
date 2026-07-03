@@ -1,12 +1,13 @@
 # Handover: bippin
 
-Last updated: 2026-07-03 22:25
+Last updated: 2026-07-03 22:29
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-no but which askr user will ever want to oay for claude code(they already are) and then pay like whatever for the anthropic endpoint?
+but how will autnomous session reset post limit exhaustion will work if we are relying only on claude code?
+how much does this anthropic endpoint burn per session? per day? per week? per month? where are we tracking this? how much are we tracking?
 
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
@@ -28,4 +29,5 @@ no but which askr user will ever want to oay for claude code(they already are) a
 
 ## Uncommitted Files
 - `askr/session/checkpoint.py`
+- `askr_state/implementation_bippin.jsonl`
 - `tests/test_checkpoint_merge.py`
