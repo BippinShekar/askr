@@ -120,11 +120,27 @@ def expire_auto_suggested_goals(state_dir: str = None) -> int:
     return count
 
 
+def _to_local_date(iso_utc: str) -> str:
+    """Convert a _now_iso() UTC timestamp to the local calendar date.
+
+    done_at is stored in UTC (deliberate, for cross-timezone team consistency —
+    see decisions.jsonl 2026-06-16), but _today() is the local date. Comparing
+    the raw UTC date string against the local date let a goal completed near
+    midnight silently drop off "done today" (or appear on the wrong day, in
+    the other direction) purely because of the UTC/local offset.
+    """
+    try:
+        dt_utc = datetime.fromisoformat(iso_utc.replace("Z", "+00:00"))
+        return dt_utc.astimezone().strftime("%Y-%m-%d")
+    except Exception:
+        return iso_utc[:10]
+
+
 def load_done_today() -> list[str]:
     today = _today()
     return [
         g["text"] for g in _read_all()
-        if g.get("status") == "done" and (g.get("done_at") or "")[:10] == today
+        if g.get("status") == "done" and _to_local_date(g.get("done_at") or "") == today
     ]
 
 

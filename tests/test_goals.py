@@ -10,6 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -105,6 +106,35 @@ class GoalsStateDirTests(unittest.TestCase):
 
             self.assertEqual(goals.load_open_goals(self.state_dir), ["project A goal"])
             self.assertEqual(goals.load_open_goals(other_dir), ["project B goal"])
+
+
+class LoadDoneTodayTimezoneTests(unittest.TestCase):
+    """load_done_today() compares done_at (stored in UTC) against the local
+    calendar date. A naive iso_utc[:10] string-slice comparison silently drops
+    (or wrongly includes) goals completed near local midnight whenever the
+    local UTC offset is nonzero — _to_local_date() must actually convert."""
+
+    def test_to_local_date_converts_via_astimezone_not_string_slice(self):
+        with patch("askr.state.goals.datetime") as mock_dt:
+            mock_dt.fromisoformat.return_value.astimezone.return_value.strftime.return_value = "2026-07-02"
+            result = goals._to_local_date("2026-07-03T02:00:00Z")
+
+        self.assertEqual(result, "2026-07-02")
+        mock_dt.fromisoformat.assert_called_once_with("2026-07-03T02:00:00+00:00")
+
+    def test_to_local_date_falls_back_to_slice_on_bad_input(self):
+        self.assertEqual(goals._to_local_date("not-a-timestamp"), "not-a-time")
+        self.assertEqual(goals._to_local_date(""), "")
+
+    def test_load_done_today_includes_goal_completed_today(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(os, "getcwd", return_value=tmp):
+            os.makedirs(os.path.join(tmp, "askr_state"), exist_ok=True)
+            goals._append({
+                "id": "abc123", "text": "shipped it", "status": "done",
+                "date": goals._today(), "added": goals._now_iso(),
+                "auto_suggested": False, "done_at": goals._now_iso(),
+            })
+            self.assertEqual(goals.load_done_today(), ["shipped it"])
 
 
 if __name__ == "__main__":
