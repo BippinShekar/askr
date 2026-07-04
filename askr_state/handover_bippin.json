@@ -1,17 +1,41 @@
 {
-  "task": "now say a stop hook is running in the background, generating handover, how will it work once it's over a limit and opens a differet session and I keep continuting there, or I just keep texting with claude fast enough, how will that work? how will those background handover sessions be handled?",
+  "task": "Designed checkpoint-on-demand architecture to replace continuous stop-hook execution, establishing emergency-only triggers (90% session quota, user inactivity timeout) with background async execution to eliminate blocking handover delays.",
+  "discussion_summary": "Session clarified that stop-hook checkpointing must be emergency-only, not continuous. User rejected the original design (checkpoint after every turn) and established two legitimate triggers: (1) session quota at 90%, (2) user inactivity timeout. The key architectural insight is that backgrounding the checkpoint via async subprocess eliminates the 30+ second blocking wait, making the feature viable without shifting project-brief or architecture-regen to per-session. Cross-session handover continuity when a background checkpoint is still running remains an open design question \u2014 needs clarification on how concurrent sessions handle in-flight handover state.",
+  "accomplishments": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "Design checkpoint-on-demand trigger system: 90% quota hard-limit + inactivity timeout, with async background execution to avoid blocking user interaction",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Inspect /Users/bippin/Desktop/askr/_scratch_stophook_full_test.py \u2014 last file modified this session (handover generation failed/truncated \u2014 verify manually)",
-      "why": "handover generation failed this session"
+      "action": "Clarify cross-session handover continuity model: when background checkpoint is still running in session A and user opens session B, how should session B's handover generation interact with session A's in-flight checkpoint? (block, merge, ignore, queue?)",
+      "why": "User's question 'how will those background handover sessions be handled?' is unresolved; architectural decision required before implementation"
+    },
+    {
+      "order": 2,
+      "action": "Implement 90% quota trigger in stop.py: detect when session token budget reaches 90%, fire checkpoint async (Popen with setsid/DEVNULL), return immediately without blocking",
+      "why": "First concrete emergency trigger; user confirmed this is a legitimate checkpoint case"
+    },
+    {
+      "order": 3,
+      "action": "Implement inactivity timeout trigger: track last user message timestamp, checkpoint if no user input for N minutes (configurable, suggest 5-10 min), async execution same as quota trigger",
+      "why": "Second emergency trigger; user confirmed this is legitimate; coupled with voice announcement + Discord update per user spec"
+    },
+    {
+      "order": 4,
+      "action": "Remove or disable the continuous per-turn checkpoint logic currently in stop.py (the _signal_turn_stopped hook that fires after every assistant turn)",
+      "why": "User explicitly rejected this design; checkpoints must be emergency-only, not continuous"
+    },
+    {
+      "order": 5,
+      "action": "Add voice announcement + Discord notification when checkpoint is triggered (both quota and inactivity cases)",
+      "why": "User specified this in the emergency-trigger spec; keeps user informed of background work"
     }
   ],
-  "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl"
-  ],
-  "in_progress": [],
-  "accomplishments": [],
   "decisions": [
     {
       "decision": "`speak()` function skips subprocess call when text is empty",
@@ -32,9 +56,30 @@
     {
       "decision": "Cross-repo Claude Code session switching is an open gap not solved by upstream tooling and is a potential feature for askr",
       "reason": "Claude Code locks `.claude/` config to session-start directory; switching between repos requires manual workaround; askr could address this"
+    },
+    {
+      "decision": "Checkpoints must be emergency-only, triggered only on 90% session quota or user inactivity timeout, never continuously after every turn",
+      "reason": "User rejected continuous checkpointing; 30+ second blocking waits are unacceptable UX; emergency-only + async backgrounding solves the problem without shifting project-brief or architecture-regen to per-session"
+    },
+    {
+      "decision": "Background checkpoint execution via async subprocess (Popen with setsid/DEVNULL) to avoid blocking user interaction",
+      "reason": "Eliminates the 30+ second wait for handover generation; user can continue texting or open new session while checkpoint runs in background"
     }
   ],
-  "user_rejected_decisions": [],
+  "user_rejected_decisions": [
+    {
+      "what_was_proposed": "Continuous checkpoint execution after every assistant turn (current stop.py behavior with _signal_turn_stopped)",
+      "user_signal": "the checkpoint must only be run during emergency handover situations, ie. only one probable cases ever: (1) Session limit at 90%, (2) User inactive for X time",
+      "domain": "stop.py, checkpoint trigger logic",
+      "confidence": 0.95
+    },
+    {
+      "what_was_proposed": "Shift project-brief regeneration or architecture-regen to per-session or on-demand basis to avoid blocking",
+      "user_signal": "that can either be done like that, or via project brief regen being shifted to per session... and architecture regen we will take care of when we are building it",
+      "domain": "checkpoint architecture, project-brief generation strategy",
+      "confidence": 0.85
+    }
+  ],
   "failed_approaches": [
     {
       "approach": "[2026-07-02] Attempting to fix handover generation by filtering git status output at the point of collection \u2014 Root cause was deeper: _get_uncommitted_files() was not filtering .claude/ directory at all; needed explicit exclusion logic",
@@ -58,20 +103,29 @@
     }
   ],
   "files_in_play": [
-    "/Users/bippin/Desktop/askr/_scratch_full_handover_test.py",
-    "/Users/bippin/Desktop/askr/_scratch_oauth_direct_test.py",
-    "/Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py",
-    "/Users/bippin/Desktop/askr/_scratch_quota_measure.py",
-    "/Users/bippin/Desktop/askr/_scratch_stophook_full_test.py",
-    "/Users/bippin/Desktop/askr/tests/test_voice.py"
+    "/Users/bippin/Desktop/askr/stop.py",
+    "/Users/bippin/Desktop/askr/.claude/settings.json"
   ],
-  "relational_files": [],
-  "blockers": [],
+  "relational_files": [
+    {
+      "file": "/Users/bippin/Desktop/askr/stop.py",
+      "relationship": "configures",
+      "why": "Contains stop-hook logic and checkpoint trigger implementation; needs emergency-only trigger refactor"
+    },
+    {
+      "file": "/Users/bippin/Desktop/askr/.claude/settings.json",
+      "relationship": "configures",
+      "why": "Defines stop-hook timeout and execution settings; may need adjustment for async backgrounding"
+    }
+  ],
+  "uncommitted_files": [],
+  "blockers": [
+    "Cross-session handover continuity model undefined: when background checkpoint is running in session A and user opens session B, how should they interact?"
+  ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-04T11:24:48.231647+00:00",
-    "degraded": true,
+    "timestamp": "2026-07-04T12:16:50.083827+00:00",
     "developer": "bippin"
   }
 }
