@@ -910,8 +910,18 @@ def create_handover_only(
     time that a routine turn shouldn't have to pay for. Reserved for
     create_checkpoint(), which only runs on the two real emergency conditions
     (quota/context >=90%, or genuine user inactivity).
+
+    Serializes on a per-project checkpoint.lock — the Stop hook fires this on
+    every turn, so a burst of rapid replies would otherwise spawn overlapping
+    background processes that duplicate the same LLM call and race writing
+    handover_bippin.json/.md. A second call within the lock's 45s timeout
+    waits for the first to finish rather than running in parallel.
     """
-    result, _, _ = _run_light_handover(trigger_type, developer, transcript_path, state_dir, session_id)
+    from askr.state.config import get_state_dir as _get_state_dir
+    resolved_state_dir = state_dir or _get_state_dir()
+    from askr.state.writer import file_lock
+    with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
+        result, _, _ = _run_light_handover(trigger_type, developer, transcript_path, resolved_state_dir, session_id)
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
@@ -940,25 +950,34 @@ def create_checkpoint(
     since nothing in askr's own automation reads it — only a human does.
 
     trigger_type: "context", "quota", "idle", "manual", "emergency"
+
+    Holds the same per-project checkpoint.lock as create_handover_only() for
+    its entire duration (including architecture regen and git commit/push) —
+    this is the rare, heavy path, but it still must not race a concurrent
+    per-turn handover write for the same project.
     """
-    result, summary, transcript_text = _run_light_handover(
-        trigger_type, developer, transcript_path, state_dir, session_id
-    )
-    state_dir    = result["state_dir"]
-    project_path = result["project_path"]
+    from askr.state.config import get_state_dir as _get_state_dir
+    resolved_state_dir = state_dir or _get_state_dir()
+    from askr.state.writer import file_lock
+    with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
+        result, summary, transcript_text = _run_light_handover(
+            trigger_type, developer, transcript_path, resolved_state_dir, session_id
+        )
+        state_dir    = result["state_dir"]
+        project_path = result["project_path"]
 
-    _regenerate_architecture_md(project_path, state_dir)
-    _infer_and_queue_tasks(transcript_text, state_dir, developer)
+        _regenerate_architecture_md(project_path, state_dir)
+        _infer_and_queue_tasks(transcript_text, state_dir, developer)
 
-    session_duration = 0
-    try:
-        from askr.state.analytics import record_session_end
-        session_duration = record_session_end(trigger_type, developer)
-    except Exception:
-        pass
-    result["duration_seconds"] = session_duration
+        session_duration = 0
+        try:
+            from askr.state.analytics import record_session_end
+            session_duration = record_session_end(trigger_type, developer)
+        except Exception:
+            pass
+        result["duration_seconds"] = session_duration
 
-    git_commit_push(state_dir, developer, trigger_type)
+        git_commit_push(state_dir, developer, trigger_type)
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)

@@ -1,61 +1,54 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 17:54
+Last updated: 2026-07-04 18:12
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Designed checkpoint-on-demand architecture with emergency-only triggers (90% session quota, user inactivity timeout) and async background execution to eliminate blocking handover delays, while clarifying that handover continuity depends only on task/next_actions/files_in_play fields with opportunistic inference from other metadata.
+Refactored checkpoint architecture to split light per-turn handover updates from heavy emergency checkpoints, removed dead broadcast code, and clarified that stop.py fires after every assistant turn with async background handover execution while reserving full checkpoint (git commit, Discord, architecture regen) for daemon-triggered emergency conditions only.
 
 ## Discussion
-Session resolved the architectural model for checkpoint-on-demand: checkpoints fire only in two emergency cases (session quota at 90%, user inactivity after N minutes), executed asynchronously via background subprocess to avoid blocking user interaction. User corrected a misunderstanding about handover continuity — the ground truth for cross-session continuity is task/next_actions/files_in_play (deterministic), while goals-completed, failed_approaches, user_rejected_decisions, and decisions are opportunistically extracted from the same checkpoint call with no guarantee they populate every turn. This distinction means the append-only ground-truth files (decisions.md, failed_approaches.md, etc.) are the actual continuity source, not the handover JSON fields. Cross-session concurrency when a background checkpoint is still running remains an open design question requiring clarification before implementation.
+This session completed the architectural refactor of checkpoint.py and stop.py to implement the checkpoint-on-demand model discussed in prior sessions. The key insight: stop.py's _signal_turn_stopped fires after every assistant turn (the only authoritative 'reply done' signal Claude Code provides), but should spawn only lightweight async handover updates via checkpoint.create_handover_only(), never blocking the turn. Heavy checkpoint.create_checkpoint() (with git commit, Discord broadcast, architecture regen) is reserved exclusively for the daemon running on two emergency triggers: quota/context at 90% or genuine user inactivity. Dead broadcast code (_broadcast_session_end, _broadcast_session_text, _was_autonomous) was removed. The per-turn handover-only model ensures fast turn completion while maintaining cross-session continuity through deterministic fields (task/next_actions/files_in_play) and append-only ground-truth files (decisions.md, failed_approaches.md).
 
 ## Accomplishments
-- [x] Clarified handover continuity model: task/next_actions/files_in_play are deterministic continuity fields; goals-completed, failed_approaches, user_rejected_decisions, decisions are opportunistic inference with no per-turn guarantee
-- [x] Confirmed stop.py architecture: _signal_turn_stopped fires after every assistant turn; checkpoint-on-demand must be emergency-only, not continuous
+- [x] Removed dead broadcast code (_broadcast_session_end, _broadcast_session_text, _was_autonomous) from stop.py; these functions had no callers after checkpoint refactor
+- [x] Refactored stop.py docstring and structure to clarify: _signal_turn_stopped fires per-turn, spawns async background handover-only via checkpoint.create_handover_only(), never blocks; heavy checkpoint.create_checkpoint() runs only from daemon on emergency triggers
+- [x] Updated stop.py imports and constants to support background handover execution (added tempfile, _BG_HANDOVER_FLAG)
 
 ## In Progress
-- `None`: Design checkpoint-on-demand trigger system: 90% quota hard-limit + inactivity timeout (N minutes configurable), with async background execution (Popen + setsid/DEVNULL) to avoid blocking user interaction; coupled with voice announcement and Discord update
+- `askr/hooks/stop.py` (line 428): Implement async background handover spawning in _signal_turn_stopped: detach subprocess via Popen with setsid/DEVNULL, pass --background-handover flag to checkpoint.create_handover_only(), return immediately without waiting
+- `askr/session/checkpoint.py`: Implement checkpoint.create_handover_only() function: lightweight LLM-backed handover update (task/next_actions/files_in_play/goals_completed/failed_approaches/user_rejected_decisions/decisions) with no git commit, no Discord broadcast, no architecture regen; callable from stop.py background process
 
 ## Next Actions
-1. Clarify cross-session handover concurrency model: when background checkpoint is still running in session A and user opens session B, how should session B's handover generation interact with session A's in-flight checkpoint? (block, merge, ignore, queue?) — this is a prerequisite for implementation
-   *Why: User's question 'how will those background handover sessions be handled?' remains unresolved; architectural decision required before writing code*
-2. Implement 90% quota trigger in stop.py: detect when session token budget reaches 90%, fire checkpoint async via Popen with setsid and DEVNULL, return immediately without blocking
-   *Why: First concrete emergency trigger; user confirmed this is a legitimate checkpoint case*
-3. Implement inactivity timeout trigger in stop.py: track last user message timestamp, checkpoint if no user input for N minutes (configurable, suggest 5-10 min), async execution same as quota trigger
-   *Why: Second emergency trigger; user confirmed this is legitimate; coupled with voice announcement + Discord update per user spec*
-4. Remove or disable the continuous per-turn checkpoint logic currently in stop.py (_signal_turn_stopped hook that fires after every assistant turn)
-   *Why: User explicitly rejected continuous checkpointing; checkpoints must be emergency-only, not continuous*
-5. Add voice announcement + Discord notification when checkpoint is triggered (both quota and inactivity cases)
-   *Why: User specified this in the emergency-trigger spec; keeps user informed of background work*
+1. Implement checkpoint.create_handover_only() in askr/session/checkpoint.py: extract and update only the handover JSON fields (task, next_actions, files_in_play, goals_completed, failed_approaches, user_rejected_decisions, decisions) from current session state and transcript, with no git operations, no Discord, no architecture regen; accept --background-handover CLI flag
+   *Why: Core of the per-turn lightweight handover; required before stop.py can spawn background processes*
+2. Complete async background spawning in stop.py _signal_turn_stopped: use Popen with setsid (Unix) and DEVNULL to detach subprocess, pass --background-handover flag and session context, return immediately without waiting or error handling
+   *Why: Ensures turns never block on checkpoint latency; completes the per-turn handover-only model*
+3. Clarify cross-session handover concurrency model: when background checkpoint from session A is still running and user opens session B, how should session B's handover generation interact with session A's in-flight checkpoint? (block, merge, ignore, queue?) — this is a prerequisite for daemon emergency-trigger implementation
+   *Why: User's earlier question 'how will those background handover sessions be handled?' remains unresolved; architectural decision required before implementing daemon quota/inactivity triggers*
+4. Implement 90% quota trigger in askr daemon: detect when session token budget reaches 90%, fire checkpoint.create_checkpoint() async via Popen with setsid and DEVNULL, include voice announcement and Discord update per user spec
+   *Why: First concrete emergency trigger for daemon; user confirmed this is a legitimate checkpoint case*
+5. Implement inactivity timeout trigger in askr daemon: track last user message timestamp, checkpoint if no user input for N minutes (configurable, suggest 5-10 min), async execution same as quota trigger, coupled with voice announcement + Discord update
+   *Why: Second emergency trigger for daemon; user confirmed this is legitimate; keeps user informed of background work*
 
 ## Decisions
-- `speak()` function skips subprocess call when text is empty — Prevents spurious `say ""` calls that waste system resources; aligns with the settled decision that empty strings are valid skip signals
-- Route all spoken announcements through unified `announce()` function instead of direct `speak()` calls — Centralizes voice configuration, ensures consistent voice selection, and simplifies future voice-related changes
-- Default single-voice mode to Zarvox instead of Samantha — User preference; Zarvox provides better voice quality for announcements
-- Guard `speak()` function against empty text messages with early return — Prevents spurious subprocess calls and subprocess errors when announcement text is empty
-- Checkpoint-on-demand fires only in two emergency cases: (1) session quota at 90%, (2) user inactivity after N minutes — User explicitly rejected continuous per-turn checkpointing; checkpoints must be emergency-only to avoid blocking handover delays and unnecessary state writes
-- Handover continuity depends deterministically on task/next_actions/files_in_play fields; goals-completed, failed_approaches, user_rejected_decisions, decisions are opportunistically extracted with no per-turn guarantee — Append-only ground-truth files (decisions.md, failed_approaches.md, etc.) are the actual continuity source; handover JSON fields are inference, not authoritative
-
-## User-Rejected Approaches
-- **Continuous checkpoint after every assistant turn (per-turn checkpointing via _signal_turn_stopped hook)** — "the checkpoint must only be run during emergency handover situations, ie. only one probable cases ever: (1) Session limit is at 90%, (2) When the user is inactive for whatever time" (domain: stop.py, checkpoint architecture)
-
-## Failed Approaches
-- Debouncing continuous per-turn checkpoints to reduce frequency while keeping the hook active — User rejected the entire continuous-checkpoint model; the problem is not frequency but the fundamental design of checkpointing on every turn, which blocks user interaction
+- Checkpoint architecture split: stop.py fires per-turn with async lightweight handover-only (no git/Discord/regen); heavy checkpoint.create_checkpoint() runs only from daemon on emergency triggers (quota/inactivity) — Eliminates blocking handover delays on every turn while preserving full checkpoint capability for genuine emergencies; maintains cross-session continuity through deterministic fields and append-only ground-truth files
+- Removed _broadcast_session_end, _broadcast_session_text, _was_autonomous from stop.py — Dead code with no callers after checkpoint refactor; Discord/voice broadcast now belongs exclusively to daemon emergency triggers, not per-turn hook
 
 ## Files In Play
-- `askr/stop.py`
-- `askr/checkpoint.py`
-- `.claude/settings.json`
+- `askr/hooks/stop.py`
+- `askr/session/checkpoint.py`
 
 ## Relational Files
-- `askr/checkpoint.py` (imported_by): create_checkpoint() is called by stop.py; contains the handover generation logic that must be backgrounded
-- `.claude/settings.json` (configures): Defines Stop hook timeout and behavior; checkpoint-on-demand must respect these settings
-- `askr/state/writer.py` (imported_by): file_lock() is used by checkpoint.py for atomic state writes; relevant to async checkpoint execution
+- `askr/session/checkpoint.py` (imported_by): stop.py calls checkpoint.create_handover_only() in background subprocess; must implement this function
+- `askr/state/config.py` (imported_by): stop.py imports get_state_dir and load_developer; used to locate session state and project context
+- `askr/clients/discord.py` (configures): Discord broadcast moved from per-turn stop.py to daemon emergency triggers; Discord client still used by checkpoint.create_checkpoint()
 
 ## Uncommitted Files
+- `askr/hooks/stop.py`
+- `askr/session/checkpoint.py`
 - `askr_state/implementation_bippin.jsonl`
 
 ## Blockers
-- Cross-session handover concurrency model undefined: when background checkpoint is still running in session A and user opens session B, the interaction pattern (block, merge, ignore, queue) must be specified before implementation can proceed
+- Cross-session handover concurrency model unresolved: when background checkpoint from session A is still running and user opens session B, how should session B's handover generation interact with session A's in-flight checkpoint? Required before daemon emergency-trigger implementation.

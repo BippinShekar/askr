@@ -2,14 +2,25 @@
 """
 Claude Code Hook - Stop
 
-Fires when a Claude Code session ends.
-Delegates to checkpoint.create_checkpoint for handover, state update, commit+push.
+Fires after every assistant turn (the "reply is done" signal), not just at
+session end — this is the only authoritative "reply is done" signal Claude
+Code gives us (see _signal_turn_stopped below).
+
+Every firing spawns a detached background process that runs
+checkpoint.create_handover_only() — a light, LLM-backed handover update with
+no git commit/push, no Discord/voice, no project-brief or architecture regen.
+The hook itself never waits on it, so a turn is never blocked on checkpoint
+latency. The heavier checkpoint.create_checkpoint() (git commit+push,
+architecture regen, Discord broadcast) only runs from askr's daemon, on the
+two real emergency conditions: quota/context hitting 90%, or genuine user
+inactivity — never from this per-turn hook.
 """
 
 import sys
 import os
 import json
 import subprocess
+import tempfile
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -19,6 +30,7 @@ from askr.state.config import get_state_dir, load_developer
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
 _TURN_STOP_DIR      = os.path.expanduser("~/.config/askr/turn_stops")
+_BG_HANDOVER_FLAG   = "--background-handover"
 
 
 def _signal_turn_stopped(session_id: str):
@@ -416,95 +428,6 @@ def _extract_and_save_decisions(transcript_path: str, state_dir: str):
         pass
 
 
-def _broadcast_session_end(developer: str, completed_goals: list, project_path: str, duration_seconds: int = 0, autonomous: bool = False):
-    try:
-        from askr.session.cost import get_session_cost_summary, record_checkpoint_cost
-        from askr.session.report_image import session_card
-        from askr.session.checkpoint import _context_history_for_session
-        from askr.clients.discord import send_file, send_message
-
-        # collect files changed
-        files_changed = []
-        try:
-            res = subprocess.run(
-                ["git", "diff", "HEAD~1", "--name-only"],
-                capture_output=True, text=True, cwd=project_path, timeout=5,
-            )
-            files_changed = [
-                f for f in res.stdout.strip().splitlines()
-                if not f.startswith("askr_state/")
-            ]
-        except Exception:
-            pass
-
-        cost_summary = get_session_cost_summary(project_path)
-        record_checkpoint_cost("stop", developer, cost_summary)
-
-        duration    = duration_seconds
-        context_h   = _context_history_for_session(project_path)
-
-        img_path = session_card(
-            trigger_type="stop",
-            developer=developer,
-            cost_summary=cost_summary,
-            duration_seconds=duration,
-            goals_completed=completed_goals,
-            files_changed=files_changed,
-            context_history=context_h,
-            autonomous=autonomous,
-            project_path=project_path,
-        )
-
-        caption = f"**[askr] Session ended** — {developer}"
-        if completed_goals:
-            caption += "\n" + "  ".join(f"✓ {g}" for g in completed_goals[:3])
-
-        if img_path:
-            sent = send_file(img_path, caption)
-            try:
-                os.remove(img_path)
-            except Exception:
-                pass
-            if not sent:
-                _broadcast_session_text(developer, completed_goals, project_path)
-        else:
-            _broadcast_session_text(developer, completed_goals, project_path)
-    except Exception:
-        _broadcast_session_text(developer, completed_goals, project_path)
-
-
-def _broadcast_session_text(developer: str, completed_goals: list, project_path: str):
-    """Text-only fallback for when image generation fails."""
-    try:
-        from askr.clients.discord import send_message
-        lines = [f"**[askr] Session ended** — {developer}"]
-        if completed_goals:
-            lines.append("**Goals completed:**")
-            lines.extend(f"✓ {g}" for g in completed_goals)
-        try:
-            result = subprocess.run(
-                ["git", "diff", "HEAD~1", "--name-only"],
-                capture_output=True, text=True, cwd=project_path, timeout=5,
-            )
-            files = [f for f in result.stdout.strip().splitlines() if not f.startswith("askr_state/")]
-            if files:
-                lines.append("**Files changed:**")
-                lines.extend(f"  {f}" for f in files[:10])
-                if len(files) > 10:
-                    lines.append(f"  …and {len(files) - 10} more")
-            msg_result = subprocess.run(
-                ["git", "log", "-1", "--pretty=%s"],
-                capture_output=True, text=True, cwd=project_path, timeout=5,
-            )
-            commit_msg = msg_result.stdout.strip()
-            if commit_msg and not commit_msg.startswith("askr:"):
-                lines.append(f"**Last commit:** {commit_msg}")
-        except Exception:
-            pass
-        if len(lines) > 1:
-            send_message("\n".join(lines))
-    except Exception:
-        pass
 
 
 TURN_AWAY_THRESHOLD_SECONDS = 60  # below this, assume an active back-and-forth and stay quiet
@@ -588,16 +511,67 @@ def _speak_session_done(completed_goals: list, transcript_path: str = ""):
         pass
 
 
-def _was_autonomous() -> bool:
-    """True if this session was launched by askr (goal_launch or context trigger)."""
+def _spawn_background_handover(developer: str, transcript_path: str, session_id: str):
+    """
+    Fire-and-forget: run create_handover_only() in a fully detached child
+    process so this hook returns immediately regardless of how long the
+    handover's LLM call takes. start_new_session=True detaches the child
+    from this process's session, so it keeps running (and finishes writing
+    handover_bippin.json/.md, decisions.jsonl, failed_approaches.md) after
+    this hook has already exited and Claude Code has moved on.
+    """
     try:
-        from askr.session.lifecycle import _LAUNCH_MODE_PATH
-        if os.path.exists(_LAUNCH_MODE_PATH):
-            with open(_LAUNCH_MODE_PATH) as f:
-                return json.load(f).get("active", False)
+        fd, payload_path = tempfile.mkstemp(prefix="askr_bg_handover_", suffix=".json")
+        with os.fdopen(fd, "w") as f:
+            json.dump({
+                "developer": developer,
+                "transcript_path": transcript_path,
+                "session_id": session_id,
+            }, f)
+        subprocess.Popen(
+            [sys.executable, os.path.abspath(__file__), _BG_HANDOVER_FLAG, payload_path],
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("stop._spawn_background_handover", str(e))
+
+
+def _run_background_handover(payload_path: str):
+    """
+    Entry point for the detached child _spawn_background_handover() spawns.
+    Runs the actual (slow) handover generation, then the two things that
+    depend on its result: the spoken "done" ping (goal-completion is worth
+    announcing in real time) and advancing launch_mode's next-goal pointer.
+    Nothing waits on this process; it exits whenever it exits.
+    """
+    try:
+        with open(payload_path) as f:
+            ctx = json.load(f)
     except Exception:
-        pass
-    return False
+        return
+    finally:
+        try:
+            os.remove(payload_path)
+        except Exception:
+            pass
+
+    try:
+        from askr.session.checkpoint import create_handover_only
+        result = create_handover_only(
+            trigger_type="stop",
+            developer=ctx.get("developer", ""),
+            transcript_path=ctx.get("transcript_path", ""),
+            session_id=ctx.get("session_id", ""),
+        )
+        _speak_session_done(result.get("completed_goals", []), ctx.get("transcript_path", ""))
+        _advance_launch_goal()
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("stop._run_background_handover", str(e))
 
 
 def main():
@@ -612,7 +586,6 @@ def main():
     developer       = load_developer()
     transcript_path = payload.get("transcript_path", "")
     session_id      = payload.get("session_id", "")
-    autonomous      = _was_autonomous()
     _update_allowed_tools(transcript_path)
     _extract_and_save_decisions(transcript_path, get_state_dir())
 
@@ -671,40 +644,28 @@ def main():
         except Exception:
             pass
 
-    # Always run the authoritative stop checkpoint first — this is ground truth.
-    # _write_relaunch_notification_if_pending uses its result but never replaces it.
-    from askr.session.checkpoint import create_checkpoint
-    result = create_checkpoint(
-        trigger_type="stop",
-        developer=developer,
-        transcript_path=transcript_path,
-        session_id=session_id,
-    )
-
-    completed_goals = result.get("completed_goals", [])
-    duration_seconds = result.get("duration_seconds", 0)
-
     # Authoritative "this turn is done" signal — checked by lifecycle.py before
     # opening a companion session, instead of guessing from JSONL idle time.
+    # Independent of the handover below, so it's set immediately, not after
+    # a ~20s LLM call.
     _signal_turn_stopped(session_id)
 
-    # If daemon flagged a pending checkpoint, write the re-launch notification now.
-    # Return early so we don't also send a session-end card — the new session handles continuity.
-    if _write_relaunch_notification_if_pending(result):
-        _advance_launch_goal()
-        return
+    # The actual (slow) handover generation runs in a detached background
+    # process — this hook never blocks a turn on it. Emergency checkpoints
+    # (git commit/push, architecture regen, Discord broadcast) are handled
+    # separately by askr's daemon on the two real trigger conditions
+    # (quota/context >=90%, or genuine inactivity), not from this per-turn hook.
+    _spawn_background_handover(developer, transcript_path, session_id)
 
-    # Only send a card for meaningful stops — goals completed or session ran >5 min.
-    # Suppresses noise from casual conversation turns and quick tests.
-    if completed_goals or duration_seconds >= 300:
-        _broadcast_session_end(developer, completed_goals, os.getcwd(), duration_seconds, autonomous)
-
-    # Voice has its own gate (see _speak_session_done docstring) — independent
-    # of the Discord card's total-session-duration gate above.
-    _speak_session_done(completed_goals, transcript_path)
+    # Independent of the handover above — reads its own signal file, written
+    # by pre_compact.py's emergency path, not by anything in this hook.
+    _write_relaunch_notification_if_pending({})
 
     _advance_launch_goal()
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[1] == _BG_HANDOVER_FLAG:
+        _run_background_handover(sys.argv[2])
+    else:
+        main()
