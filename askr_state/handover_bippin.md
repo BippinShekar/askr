@@ -6,7 +6,7 @@ Last updated: 2026-07-04 10:22
 
 
 ## Task
-still -63
+I like the something useful lol, I need that in there, and no emdashes
 
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
