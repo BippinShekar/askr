@@ -264,7 +264,8 @@ class TestContextCutAutoLaunch(unittest.TestCase):
             self.assertAlmostEqual(notif["direction_confidence"], 0.85)
 
     def test_quota_trigger_writes_quota_notification(self):
-        """Quota trigger → type='quota', no auto-launch, just inform user."""
+        """Quota trigger → type='quota', no auto-launch, just inform user — when
+        live quota agrees the account is still actually high."""
         with tempfile.TemporaryDirectory() as tmpdir:
             pending = {
                 "trigger": "quota",
@@ -284,6 +285,7 @@ class TestContextCutAutoLaunch(unittest.TestCase):
                     patch("askr.session.lifecycle._get_next_goal", return_value=""),
                     patch("askr.session.lifecycle._write_launch_mode"),
                     patch("askr.hooks.stop.os.makedirs"),
+                    patch("askr.hooks.stop._live_stats", return_value={"quota_pct": 92.0}),
                     patch("askr.clients.voice.speak"),
                 ]
                 with contextlib.ExitStack() as stack:
@@ -297,6 +299,49 @@ class TestContextCutAutoLaunch(unittest.TestCase):
             self.assertTrue(ok)
             self.assertEqual(notif["type"], "quota")
             self.assertIn("Quota", notif["message"])
+
+    def test_quota_trigger_already_resolved_by_reset_is_discarded_silently(self):
+        """
+        CRITICAL: pre_compact.py only writes the quota-pending flag because
+        quota was high (>= QUOTA_HIGH) at kill time. If the 5h window resets
+        before the Stop hook processes that (still-fresh, <5min-old) flag, live
+        quota can have dropped back down to something low and unremarkable —
+        announcing that low number as "quota high, waiting for reset" is
+        actively wrong, not just stale. Must discard silently instead: no
+        notification, no voice announcement, flag removed.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending = {
+                "trigger": "quota",
+                "quota_pct": 92.0,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+
+            with tempfile.TemporaryDirectory() as t2:
+                checkpoint_path = os.path.join(t2, "checkpoint_pending.json")
+                notification_path = os.path.join(t2, "notification.json")
+                with open(checkpoint_path, "w") as f:
+                    json.dump(pending, f)
+
+                patches = [
+                    patch.object(stop_module, "_CHECKPOINT_PENDING", checkpoint_path),
+                    patch.object(stop_module, "_NOTIFICATION_PATH", notification_path),
+                    patch("askr.session.lifecycle._get_next_goal", return_value=""),
+                    patch("askr.session.lifecycle._write_launch_mode"),
+                    patch("askr.hooks.stop.os.makedirs"),
+                    # Window already reset — live quota is now unremarkable.
+                    patch("askr.hooks.stop._live_stats", return_value={"quota_pct": 16.0}),
+                ]
+                with contextlib.ExitStack() as stack:
+                    for p in patches:
+                        stack.enter_context(p)
+                    mock_announce = stack.enter_context(patch("askr.clients.voice.announce"))
+                    ok = stop_module._write_relaunch_notification_if_pending({})
+
+                self.assertFalse(ok, "must not report success when discarding a resolved quota flag")
+                self.assertFalse(os.path.exists(notification_path), "must not write a notification for an already-resolved quota flag")
+                self.assertFalse(os.path.exists(checkpoint_path), "stale/resolved pending flag must be removed")
+                mock_announce.assert_not_called()
 
 
 class TestPreCompactHookRegistration(unittest.TestCase):

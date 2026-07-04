@@ -229,6 +229,23 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
 
         if trigger == "quota":
             quota_pct = live_stats.get("quota_pct", pending.get("quota_pct", 0))
+
+            # The pending flag was only ever written because quota was high
+            # (pre_compact.py's QUOTA_HIGH threshold) at write time — but the
+            # 5h window can reset between then and whenever this Stop hook
+            # actually processes the flag (still within its own 5-min
+            # freshness check above). If live quota has since dropped back
+            # down, the emergency already resolved on its own — announcing a
+            # random low percentage as "quota high, waiting for reset" is
+            # actively wrong, not just imprecise. Discard silently instead.
+            from askr.hooks.pre_compact import QUOTA_HIGH
+            if quota_pct < QUOTA_HIGH:
+                try:
+                    os.remove(_CHECKPOINT_PENDING)
+                except Exception:
+                    pass
+                return False
+
             pct_str   = f"{round(quota_pct)}%" if quota_pct else "high"
             payload = {
                 "type": "quota",
