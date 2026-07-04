@@ -1,3 +1,4 @@
+import os
 import json
 import urllib.request
 import urllib.error
@@ -15,17 +16,30 @@ _MESSAGES_URL   = "https://api.anthropic.com/v1/messages"
 _ANTHROPIC_VER  = "2023-06-01"
 _OAUTH_BETA     = "oauth-2025-04-20"
 
+_MODE_MAX_TOKENS = {
+    "checkpoint": 4000,  # handover + Completed Goals section — was 2000, observed truncating
+                         # mid-JSON on real sessions (usage.log: out=2000 exactly, json.loads
+                         # failed, fell back to the mechanical/generic handover)
+    "guard":       500,  # JSON response: {"clean":..,"issues":[..],"summary":..} — 300 truncates
+}
+
+
+# ---------------------------------------------------------------------------
+# OAuth transport — every internal askr LLM call (handover, guard, architecture,
+# project brief, goal inference, task-queue inference) goes through this. It
+# authenticates via Claude Code's own OAuth session token — the same one
+# askr/session/usage_api.py reads from the macOS Keychain to check quota —
+# instead of a separate ANTHROPIC_API_KEY. Background checkpointing draws from
+# the Claude Code subscription's own usage window, not a second, separately
+# metered credit balance.
+#
+# Deliberately NOT used by askr/qa/pipeline.py (the `ask <query>` command,
+# below) — that command exists specifically to keep answering questions about
+# the repo after Claude Code's own session/quota is exhausted, so it needs a
+# credential independent of that same quota, not this one.
+# ---------------------------------------------------------------------------
 
 def _get_oauth_token() -> str:
-    """
-    All internal askr LLM calls (handover, guard, architecture, project brief,
-    goal inference) authenticate via Claude Code's own OAuth session token
-    instead of a separate ANTHROPIC_API_KEY. This is the same token
-    askr/session/usage_api.py already reads from the macOS Keychain to check
-    quota — reused here so background checkpointing draws from the Claude
-    Code subscription's own usage window instead of a second, separately
-    metered API key/credit balance.
-    """
     from askr.session.usage_api import _get_access_token
     token = _get_access_token()
     if not token:
@@ -69,14 +83,6 @@ def _post_messages(body: dict, mode: str, query_preview: str) -> dict:
     return data
 
 
-_MODE_MAX_TOKENS = {
-    "checkpoint": 4000,  # handover + Completed Goals section — was 2000, observed truncating
-                         # mid-JSON on real sessions (usage.log: out=2000 exactly, json.loads
-                         # failed, fell back to the mechanical/generic handover)
-    "guard":       500,  # JSON response: {"clean":..,"issues":[..],"summary":..} — 300 truncates
-}
-
-
 def call_claude(system, user, mode="default", query_preview=""):
     max_tokens = _MODE_MAX_TOKENS.get(mode, MAX_TOKENS)
     data = _post_messages({
@@ -102,3 +108,67 @@ def call_claude_web(system, user, mode="web", query_preview=""):
         block["text"] for block in data.get("content", [])
         if block.get("type") == "text" and block.get("text")
     ).strip()
+
+
+# ---------------------------------------------------------------------------
+# API-key transport — used ONLY by askr/qa/pipeline.py (the `ask <query>` CLI
+# command). That command's whole purpose is to keep answering repo questions
+# after Claude Code's own session/quota is exhausted, so it must draw from a
+# credential that isn't drained by the same quota the OAuth functions above
+# consume — a real, separately-billed ANTHROPIC_API_KEY the user opts into via
+# `ask setup`, not Claude Code's own login.
+# ---------------------------------------------------------------------------
+
+_api_client = None
+
+
+def _get_api_client():
+    global _api_client
+    if _api_client is None:
+        from anthropic import Anthropic
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            from askr.utils.display import console
+            console.print("\n  [bold red]✗ ANTHROPIC_API_KEY not set[/bold red]")
+            console.print("  run [bold]ask setup[/bold] to configure your keys\n")
+            raise SystemExit(1)
+        _api_client = Anthropic(api_key=api_key)
+    return _api_client
+
+
+def call_claude_api_key(system, user, mode="default", query_preview=""):
+    max_tokens = _MODE_MAX_TOKENS.get(mode, MAX_TOKENS)
+    res = _get_api_client().messages.create(
+        model=MODEL,
+        max_tokens=max_tokens,
+        temperature=TEMPERATURE,
+        system=system or "You are a helpful assistant.",
+        messages=[{"role": "user", "content": user}],
+    )
+    text = res.content[0].text
+    try:
+        from askr.utils.logger import log_query
+        log_query(MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
+    except Exception:
+        pass
+    return text
+
+
+def call_claude_web_api_key(system, user, mode="web", query_preview=""):
+    res = _get_api_client().messages.create(
+        model=WEB_MODEL,
+        max_tokens=WEB_MAX_TOKENS,
+        system=system or "You are a helpful assistant.",
+        messages=[{"role": "user", "content": user}],
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
+    )
+    text = "\n".join(
+        block.text for block in res.content
+        if hasattr(block, "text") and block.text
+    ).strip()
+    try:
+        from askr.utils.logger import log_query
+        log_query(WEB_MODEL, res.usage.input_tokens, res.usage.output_tokens, mode, query_preview)
+    except Exception:
+        pass
+    return text

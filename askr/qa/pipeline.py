@@ -9,7 +9,7 @@ from askr.qa.modes import MODES
 from askr.qa.context_loader import load_fast_context, load_snapshot, load_file_contents, load_inventory
 from askr.qa.snapshot import snapshot_is_stale, build_snapshot
 from askr.utils.git_utils import get_diff_summary
-from askr.clients.claude import call_claude, call_claude_web
+from askr.clients.claude import call_claude_api_key as call_claude, call_claude_web_api_key as call_claude_web
 from askr.clients.openai import call_openai
 
 MODE_PREFIXES = list(MODES.keys())
