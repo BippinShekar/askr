@@ -1601,6 +1601,26 @@ def cmd_team():
         console.print()
 
 
+def cmd_brief():
+    """Regenerate project_brief.md on demand — nothing in askr's own automation
+    reads this file, only a human does, so it's not part of the per-turn or
+    emergency-checkpoint flow. Run this whenever you actually want a fresh one."""
+    from askr.session.checkpoint import _generate_project_brief
+    from askr.state.config import get_state_dir
+
+    developer = load_developer()
+    state_dir = get_state_dir()
+
+    with console.status("  generating project_brief.md...", spinner="dots"):
+        _generate_project_brief(state_dir, developer)
+
+    brief_path = os.path.join(state_dir, "project_brief.md")
+    if os.path.exists(brief_path):
+        console.print(f"  [green]✓[/green] [dim]{brief_path}[/dim]\n")
+    else:
+        console.print("  [yellow]⚠ project_brief.md was not generated — check ~/.config/askr/error.log[/yellow]\n")
+
+
 def cmd_report():
     """Send a morning/daily report to Discord as a PNG card, print summary to stdout."""
     from askr.state.analytics import today_summary, _load_all
@@ -1695,6 +1715,7 @@ def main():
         console.print("  [dim]askr uninstall           - remove askr from this repo only[/dim]")
         console.print("  [dim]askr uninstall --global  - remove askr from this whole machine[/dim]")
         console.print("  [dim]askr report              - send morning/daily report to Discord[/dim]")
+        console.print("  [dim]askr brief               - regenerate project_brief.md on demand[/dim]")
         console.print()
         sys.exit(0)
 
@@ -1715,6 +1736,8 @@ def main():
         cmd_uninstall(global_uninstall="--global" in rest or "--everywhere" in rest)
     elif cmd == "report":
         cmd_report()
+    elif cmd == "brief":
+        cmd_brief()
     elif cmd == "task":
         cmd_task(rest)
     elif cmd == "team":
