@@ -80,6 +80,11 @@ _QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_se
 # dedup shape as _QUOTA_WARNED_SESSIONS_PATH, but for _execute_trigger (which
 # checkpoints, speaks, and waits for reset) rather than the pre-trigger heads-up.
 _QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_triggered_windows.json")
+# project_path -> ISO turn-stop timestamp the idle trigger already fired for.
+# Keyed by the turn-stop timestamp itself (not just a bool) so a brand new
+# turn automatically makes the project eligible again — no separate pruning
+# needed, unlike the quota dedup sets above which need reset-window pruning.
+_IDLE_TRIGGERED_PATH = os.path.expanduser("~/.config/askr/idle_triggered.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -132,6 +137,10 @@ TRIGGER_MISS_COOLDOWN = 60 # seconds when trigger fired but Claude PID was not f
 ACTIVITY_GRACE_SECS = 60   # skip trigger evaluation for this long after a session_id is first observed —
                            # otherwise a brand-new session can inherit an already-high account-wide quota%
                            # from prior usage and get interrupted before the user has even sent one message
+IDLE_TRIGGER_SECS   = SESSION_STALE_SECS  # genuine inactivity → run the heavy emergency checkpoint
+                           # (git commit+push, architecture regen, Discord/voice). Reuses the same
+                           # threshold askr already treats as "this session is effectively over"
+                           # elsewhere, instead of a separately-invented number.
 
 
 # ---------------------------------------------------------------------------
@@ -1220,6 +1229,40 @@ def _save_quota_triggered_windows(windows: set):
         _log(f"WARN: failed to persist quota-triggered windows: {e}")
 
 
+def _load_idle_triggered() -> dict:
+    try:
+        with open(_IDLE_TRIGGERED_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_idle_triggered(triggered: dict):
+    try:
+        os.makedirs(os.path.dirname(_IDLE_TRIGGERED_PATH), exist_ok=True)
+        with open(_IDLE_TRIGGERED_PATH, "w") as f:
+            json.dump(triggered, f)
+    except Exception as e:
+        _log(f"WARN: failed to persist idle-triggered state: {e}")
+
+
+def _last_turn_stop(session_id: str):
+    """(iso_mtime_str, seconds_ago) from this session's turn-stop marker
+    (written by stop.py's _signal_turn_stopped on every turn), or (None, None)
+    if this session has never stopped a turn yet — never treat "no marker" as
+    "idle forever", that would fire on a session's very first turn."""
+    if not session_id:
+        return None, None
+    marker = os.path.join(_TURN_STOP_DIR, f"{session_id}.json")
+    if not os.path.exists(marker):
+        return None, None
+    try:
+        mtime = os.path.getmtime(marker)
+        return datetime.fromtimestamp(mtime, timezone.utc).isoformat(), (time.time() - mtime)
+    except Exception:
+        return None, None
+
+
 def _speak(message: str):
     try:
         from askr.clients.voice import announce
@@ -1249,6 +1292,7 @@ def run_daemon():
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
+    idle_triggered: dict = _load_idle_triggered()  # project_path → turn-stop ISO ts already fired for, disk-backed
     session_first_seen: dict = {}  # session_id → epoch first observed by this daemon run, for ACTIVITY_GRACE_SECS
 
     def _on_term(sig, frame):
@@ -1303,6 +1347,7 @@ def run_daemon():
                     in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
                     session_id = stats.get("session_id")
                     already_companioned = bool(session_id) and session_id in companioned_sessions
+                    turn_stop_ts, idle_secs = _last_turn_stop(session_id)
 
                     # Grace period: give a newly-observed session a moment before evaluating
                     # any trigger against it. Quota is account-wide, so a brand-new chat can
@@ -1383,6 +1428,25 @@ def run_daemon():
                         threading.Thread(
                             target=_execute_trigger,
                             args=("quota", stats, project_path),
+                            daemon=True,
+                        ).start()
+                        last_trigger_at[project_path] = time.time()
+                        _save_trigger_state(last_trigger_at)
+                        triggered_this_cycle = True
+                        break
+                    elif (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
+                            and idle_triggered.get(project_path) != turn_stop_ts):
+                        _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
+                        idle_triggered[project_path] = turn_stop_ts
+                        _save_idle_triggered(idle_triggered)
+                        # Same off-thread pattern as Trigger B — _execute_trigger runs
+                        # create_checkpoint (git commit/push, architecture regen,
+                        # Discord/voice) for the emergency-checkpoint tier; genuine
+                        # inactivity is the second of the two real trigger conditions
+                        # (the first being quota/context >=90% above).
+                        threading.Thread(
+                            target=_execute_trigger,
+                            args=("idle", stats, project_path),
                             daemon=True,
                         ).start()
                         last_trigger_at[project_path] = time.time()
