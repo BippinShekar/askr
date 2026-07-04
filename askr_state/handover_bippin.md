@@ -1,15 +1,17 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 10:17
+Last updated: 2026-07-04 10:18
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-yes, as it's my own account I want to run that trial and see, cause if that's not possible, ain't no way askr will have any adoption, nobody will wait that long for latency nor they will add 20$ extra for anthropic API (we can keep this entierly optional)
+do I paste the problem in this depth?
+
+built askr thinking it'd help me get more out of my claude pro plan. turns out it had a bug where it kept re-checking in with the anthropic api every few mins for hours straight instead of just once, and that's billed separately from my pro plan. so yeah, burne
 
 ## Next Actions
-1. Inspect /Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py — last file modified this session (handover generation failed/truncated — verify manually)
+1. Handover generation failed/truncated this session — review transcript manually before continuing
    *Why: handover generation failed this session*
 
 ## Decisions
@@ -32,6 +34,3 @@ yes, as it's my own account I want to run that trial and see, cause if that's no
 - `/Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py`
 - `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
 - `/Users/bippin/Desktop/askr/tests/test_voice.py`
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
