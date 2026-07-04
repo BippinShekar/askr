@@ -822,6 +822,52 @@ def _write_resumed_marker(trigger: str, saved_seconds: int):
         pass
 
 
+def _execute_idle_checkpoint(stats: dict, project_path: str):
+    """
+    Genuine-inactivity trigger — deliberately NOT _execute_trigger(), which is
+    built for "quota exhausted, hand off to a fresh session": it labels its
+    announcement as a quota message unconditionally for any non-"context"
+    trigger (a real bug this idle trigger tripped — "Quota at 41%... waiting
+    for reset" spoken for a plain inactivity checkpoint that has nothing to do
+    with quota), and it unconditionally auto-launches a brand new claude
+    session afterward. Idle inactivity is just a safety-net checkpoint — save
+    state, announce it, notify Discord — not a reason to start new autonomous
+    work the user never asked for.
+    """
+    from askr.state.config import load_developer
+    from askr.session.safe_pause import is_safe_to_pause
+    from askr.session.checkpoint import create_checkpoint
+
+    developer = load_developer()
+    _log("trigger=idle — checking safe pause")
+
+    for attempt in range(1, SAFE_RETRY_LIMIT + 1):
+        safe, reason = is_safe_to_pause(project_path)
+        if safe:
+            break
+        _log(f"not safe ({reason}) — retry {attempt}/{SAFE_RETRY_LIMIT} in {SAFE_RETRY_WAIT}s")
+        if attempt < SAFE_RETRY_LIMIT:
+            time.sleep(SAFE_RETRY_WAIT)
+    else:
+        _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping this cycle")
+        return
+
+    state_dir = os.path.join(project_path, "askr_state")
+    if not os.path.isdir(state_dir):
+        _log(f"WARN: no askr_state/ in {project_path} — skipping checkpoint (run 'askr init' there first)")
+        return
+
+    _log("safe to pause — creating idle checkpoint")
+    from askr.session.monitor import _find_active_jsonl
+    transcript_path = _find_active_jsonl(project_path) or ""
+    result = create_checkpoint(trigger_type="idle", developer=developer,
+                                transcript_path=transcript_path, state_dir=state_dir)
+    _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
+
+    idle_minutes = round(IDLE_TRIGGER_SECS / 60)
+    _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.")
+
+
 def _execute_trigger(trigger: str, stats: dict, project_path: str):
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
@@ -1439,14 +1485,14 @@ def run_daemon():
                         _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
                         idle_triggered[project_path] = turn_stop_ts
                         _save_idle_triggered(idle_triggered)
-                        # Same off-thread pattern as Trigger B — _execute_trigger runs
-                        # create_checkpoint (git commit/push, architecture regen,
-                        # Discord/voice) for the emergency-checkpoint tier; genuine
-                        # inactivity is the second of the two real trigger conditions
-                        # (the first being quota/context >=90% above).
+                        # _execute_idle_checkpoint(), not _execute_trigger() — the latter
+                        # is built for "quota exhausted, hand off to a fresh session" and
+                        # unconditionally auto-launches a new claude session, which genuine
+                        # inactivity should never do on its own. Off-thread, same as
+                        # Trigger B, so other open projects don't go unmonitored.
                         threading.Thread(
-                            target=_execute_trigger,
-                            args=("idle", stats, project_path),
+                            target=_execute_idle_checkpoint,
+                            args=(stats, project_path),
                             daemon=True,
                         ).start()
                         last_trigger_at[project_path] = time.time()
