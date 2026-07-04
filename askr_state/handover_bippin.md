@@ -1,15 +1,15 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 10:09
+Last updated: 2026-07-04 10:17
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-can we not bypass the harness and leverage the claude code's token to call the model only?
+yes, as it's my own account I want to run that trial and see, cause if that's not possible, ain't no way askr will have any adoption, nobody will wait that long for latency nor they will add 20$ extra for anthropic API (we can keep this entierly optional)
 
 ## Next Actions
-1. Inspect /Users/bippin/Desktop/askr/_scratch_quota_measure.py — last file modified this session (handover generation failed/truncated — verify manually)
+1. Inspect /Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py — last file modified this session (handover generation failed/truncated — verify manually)
    *Why: handover generation failed this session*
 
 ## Decisions
@@ -28,5 +28,10 @@ can we not bypass the harness and leverage the claude code's token to call the m
 
 ## Files In Play
 - `/Users/bippin/Desktop/askr/_scratch_full_handover_test.py`
+- `/Users/bippin/Desktop/askr/_scratch_oauth_direct_test.py`
+- `/Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py`
 - `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
 - `/Users/bippin/Desktop/askr/tests/test_voice.py`
+
+## Uncommitted Files
+- `askr_state/implementation_bippin.jsonl`
