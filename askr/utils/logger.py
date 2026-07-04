@@ -45,6 +45,8 @@ def check_budget(daily_limit):
 
 
 def log_query(model, input_tokens, output_tokens, mode, query_preview):
+    """Logs a real, metered API-key call (askr/qa/pipeline.py's \`ask\` command
+    only) — cost_usd here reflects an actual charge against ANTHROPIC_API_KEY."""
     rates = COST_TABLE.get(model, {"input": 1.0, "output": 5.0})
     cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
 
@@ -63,6 +65,41 @@ def log_query(model, input_tokens, output_tokens, mode, query_preview):
         f.write(json.dumps(entry) + "\n")
 
     return cost
+
+
+def log_oauth_query(model, input_tokens, output_tokens, mode, query_preview):
+    """Logs an OAuth-authenticated call (Claude Code's own subscription —
+    every internal askr LLM call except \`ask <query>\`). There's no per-token
+    price here since nothing is billed directly; a fabricated cost_usd would
+    be misleading. Instead records the account's real five_hour/seven_day
+    quota utilization (askr/session/usage_api.get_quota_status(), the same
+    endpoint behind Claude Code's own /usage command) sampled right after this
+    call, so quota burn is tracked against ground truth, not invented dollars."""
+    quota_five_hour = None
+    quota_seven_day = None
+    try:
+        from askr.session.usage_api import get_quota_status
+        status = get_quota_status()
+        if status:
+            quota_five_hour = status.five_hour_pct
+            quota_seven_day = status.seven_day_pct
+    except Exception:
+        pass
+
+    entry = {
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "model": model,
+        "mode": mode,
+        "in": input_tokens,
+        "out": output_tokens,
+        "quota_five_hour_pct": quota_five_hour,
+        "quota_seven_day_pct": quota_seven_day,
+        "q": query_preview[:60],
+    }
+
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+    with open(LOG_PATH, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
 
 def log_error(component: str, detail: str):
@@ -143,7 +180,10 @@ def show_summary():
         if time.mktime(time.strptime(e["ts"], "%Y-%m-%d %H:%M")) > week_ago
     ]
 
-    total_cost = sum(e["cost_usd"] for e in recent)
+    api_key_entries = [e for e in recent if "cost_usd" in e]
+    oauth_entries    = [e for e in recent if "cost_usd" not in e]
+
+    total_cost = sum(e["cost_usd"] for e in api_key_entries)
     total_in = sum(e["in"] for e in recent)
     total_out = sum(e["out"] for e in recent)
 
@@ -151,4 +191,15 @@ def show_summary():
     for e in recent:
         mode_counts[e["mode"]] = mode_counts.get(e["mode"], 0) + 1
 
-    print_summary(recent, entries, total_in, total_out, total_cost, mode_counts)
+    oauth_summary = None
+    if oauth_entries:
+        latest = oauth_entries[-1]
+        oauth_summary = {
+            "queries": len(oauth_entries),
+            "tokens_in": sum(e["in"] for e in oauth_entries),
+            "tokens_out": sum(e["out"] for e in oauth_entries),
+            "latest_five_hour_pct": latest.get("quota_five_hour_pct"),
+            "latest_seven_day_pct": latest.get("quota_seven_day_pct"),
+        }
+
+    print_summary(recent, entries, total_in, total_out, total_cost, mode_counts, oauth_summary)

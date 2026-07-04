@@ -73,10 +73,10 @@ def _post_messages(body: dict, mode: str, query_preview: str) -> dict:
         raise RuntimeError(f"Claude OAuth call failed (HTTP {e.code}): {detail}")
 
     try:
-        from askr.utils.logger import log_query
+        from askr.utils.logger import log_oauth_query
         usage = data.get("usage", {})
-        log_query(body["model"], usage.get("input_tokens", 0), usage.get("output_tokens", 0),
-                   mode, query_preview)
+        log_oauth_query(body["model"], usage.get("input_tokens", 0), usage.get("output_tokens", 0),
+                         mode, query_preview)
     except Exception:
         pass
 

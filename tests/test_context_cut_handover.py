@@ -375,7 +375,7 @@ class TestInferDirectionSignals(unittest.TestCase):
         self.assertLessEqual(result["confidence"], 1.0)
         self.assertIn(
             result["signal_source"],
-            {"uncommitted_files", "blockers_md", "handover_next_actions",
+            {"uncommitted_files", "blockers", "handover_next_actions",
              "git_momentum", "commit_scope", "file_path_cluster", "none"},
         )
 

@@ -63,7 +63,7 @@ def make_progress_bar(total):
     return progress, task
 
 
-def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts):
+def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts, oauth_summary=None):
     console.print()
     console.rule("[bold]askr  - last 7 days[/]", style="dim")
     console.print()
@@ -74,8 +74,25 @@ def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts)
     stats.add_row("queries", str(len(recent)))
     stats.add_row("tokens in", f"{total_in:,}")
     stats.add_row("tokens out", f"{total_out:,}")
-    stats.add_row("total cost", f"[green]${total_cost:.4f}[/green]")
+    stats.add_row("total cost", f"[green]${total_cost:.4f}[/green] [dim](ask <query> only, ANTHROPIC_API_KEY)[/dim]")
     console.print(stats)
+
+    if oauth_summary:
+        console.print()
+        console.rule("[dim]internal askr calls — Claude Code subscription, not billed separately[/dim]", style="dim")
+        oauth_stats = Table(box=None, show_header=False, padding=(0, 2), show_edge=False)
+        oauth_stats.add_column("key", style="dim", min_width=14)
+        oauth_stats.add_column("value", style="bold")
+        oauth_stats.add_row("queries", str(oauth_summary["queries"]))
+        oauth_stats.add_row("tokens in", f"{oauth_summary['tokens_in']:,}")
+        oauth_stats.add_row("tokens out", f"{oauth_summary['tokens_out']:,}")
+        five_h = oauth_summary.get("latest_five_hour_pct")
+        seven_d = oauth_summary.get("latest_seven_day_pct")
+        if five_h is not None:
+            oauth_stats.add_row("5h quota (latest)", f"[yellow]{five_h:.0f}%[/yellow]")
+        if seven_d is not None:
+            oauth_stats.add_row("7d quota (latest)", f"[yellow]{seven_d:.0f}%[/yellow]")
+        console.print(oauth_stats)
 
     if mode_counts:
         console.print()
@@ -91,10 +108,15 @@ def print_summary(recent, entries, total_in, total_out, total_cost, mode_counts)
         console.print()
         console.rule("[dim]last 5[/]", style="dim")
         for e in entries[-5:]:
+            if "cost_usd" in e:
+                cost_col = f"[green]${e['cost_usd']:.5f}[/green]"
+            else:
+                pct = e.get("quota_five_hour_pct")
+                cost_col = f"[yellow]{pct:.0f}% quota[/yellow]" if pct is not None else "[dim]—[/dim]"
             console.print(
                 f"  [dim]{e['ts']}[/dim]  "
                 f"[{MODE_COLORS.get(e['mode'], 'white')}]{e['mode']:<8}[/]  "
-                f"[green]${e['cost_usd']:.5f}[/green]  "
+                f"{cost_col}  "
                 f"[dim]{e['q']}[/dim]"
             )
 
