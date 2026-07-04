@@ -764,17 +764,22 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def create_checkpoint(
+def _run_light_handover(
     trigger_type: str,
     developer: str,
     transcript_path: str = "",
     state_dir: Optional[str] = None,
     session_id: str = "",
-) -> dict:
+):
     """
-    Generate handover, update state files, commit and push.
+    Shared core for both create_handover_only() and create_checkpoint(): generate
+    and write the handover, then extract decisions/failed_approaches/completed
+    goals from that same LLM response. No git commit/push, no Discord/voice, no
+    project-brief or architecture regen here — callers layer those on top.
 
-    trigger_type: "context", "quota", "manual", "emergency", "stop"
+    Returns (result_dict, summary_dict, transcript_text) — the latter two let
+    create_checkpoint() reuse this call's output for architecture regen and task
+    inference instead of re-running the handover LLM call a second time.
     """
     from askr.state.config import get_state_dir as _get_state_dir
     if state_dir is None:
@@ -849,19 +854,14 @@ def create_checkpoint(
     )
     if llm_summary:
         summary = llm_summary
-        tool_actions = _extract_tool_actions(entries)
     else:
         summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type, state_dir=state_dir)
-        tool_actions = _extract_tool_actions(entries)
 
     from askr.state.writer import write_handover
     handover_path = write_handover(summary, developer, state_dir=state_dir)
 
-    _generate_project_brief(state_dir, developer)
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
-    _regenerate_architecture_md(project_path, state_dir)
-    _infer_and_queue_tasks(transcript_text, state_dir, developer)
 
     completed_goals = []
     try:
@@ -878,14 +878,7 @@ def create_checkpoint(
         from askr.utils.logger import log_error
         log_error("checkpoint.complete_goal", str(e))
 
-    session_duration = 0
-    try:
-        from askr.state.analytics import record_session_end
-        session_duration = record_session_end(trigger_type, developer)
-    except Exception:
-        pass
-
-    git_commit_push(state_dir, developer, trigger_type)
+    _clear_edit_cursor(session_id)
 
     result = {
         "trigger": trigger_type,
@@ -893,11 +886,79 @@ def create_checkpoint(
         "handover_path": handover_path or "",
         "developer": developer,
         "completed_goals": completed_goals,
-        "duration_seconds": session_duration,
         "project_path": project_path,
+        "state_dir": state_dir,
     }
+    return result, summary, transcript_text
 
-    _clear_edit_cursor(session_id)
+
+def create_handover_only(
+    trigger_type: str,
+    developer: str,
+    transcript_path: str = "",
+    state_dir: Optional[str] = None,
+    session_id: str = "",
+) -> dict:
+    """
+    Light, every-turn path — this is what askr/hooks/stop.py runs on every single
+    Stop hook (i.e. after every assistant reply, not just at session end).
+
+    Generates/updates the handover and extracts decisions, failed approaches, and
+    completed goals from that same response. Deliberately does NOT commit/push,
+    notify Discord, speak, regenerate project_brief.md, or regenerate
+    architecture.md — those cost real LLM calls, git operations, and wall-clock
+    time that a routine turn shouldn't have to pay for. Reserved for
+    create_checkpoint(), which only runs on the two real emergency conditions
+    (quota/context >=90%, or genuine user inactivity).
+    """
+    result, _, _ = _run_light_handover(trigger_type, developer, transcript_path, state_dir, session_id)
+
+    try:
+        os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
+        with open(_RESULT_PATH, "w") as f:
+            json.dump(result, f, indent=2)
+    except Exception:
+        pass
+
+    return result
+
+
+def create_checkpoint(
+    trigger_type: str,
+    developer: str,
+    transcript_path: str = "",
+    state_dir: Optional[str] = None,
+    session_id: str = "",
+) -> dict:
+    """
+    Heavy/emergency checkpoint: everything create_handover_only() does, plus
+    architecture regen, task inference, git commit+push, and a Discord broadcast.
+
+    Only ever called for the two real trigger conditions — quota/context hitting
+    the 90% threshold, or genuine user inactivity — never per-turn. project_brief.md
+    regen is NOT included here; it's on-demand only (see cli/askr.py `brief` command),
+    since nothing in askr's own automation reads it — only a human does.
+
+    trigger_type: "context", "quota", "idle", "manual", "emergency"
+    """
+    result, summary, transcript_text = _run_light_handover(
+        trigger_type, developer, transcript_path, state_dir, session_id
+    )
+    state_dir    = result["state_dir"]
+    project_path = result["project_path"]
+
+    _regenerate_architecture_md(project_path, state_dir)
+    _infer_and_queue_tasks(transcript_text, state_dir, developer)
+
+    session_duration = 0
+    try:
+        from askr.state.analytics import record_session_end
+        session_duration = record_session_end(trigger_type, developer)
+    except Exception:
+        pass
+    result["duration_seconds"] = session_duration
+
+    git_commit_push(state_dir, developer, trigger_type)
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
