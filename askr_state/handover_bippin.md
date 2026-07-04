@@ -1,12 +1,12 @@
 # Handover: bippin
 
-Last updated: 2026-07-04 10:22
+Last updated: 2026-07-04 10:26
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-I like the something useful lol, I need that in there, and no emdashes
+building askr, not built
 
 ## Next Actions
 1. Handover generation failed/truncated this session — review transcript manually before continuing
@@ -32,3 +32,6 @@ I like the something useful lol, I need that in there, and no emdashes
 - `/Users/bippin/Desktop/askr/_scratch_oauth_real_handover.py`
 - `/Users/bippin/Desktop/askr/_scratch_quota_measure.py`
 - `/Users/bippin/Desktop/askr/tests/test_voice.py`
+
+## Uncommitted Files
+- `askr_state/implementation_bippin.jsonl`
