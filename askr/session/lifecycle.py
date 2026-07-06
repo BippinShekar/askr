@@ -868,7 +868,7 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
     _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.")
 
 
-def _execute_trigger(trigger: str, stats: dict, project_path: str):
+def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: str = None):
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
     from askr.session.checkpoint import create_checkpoint
@@ -890,6 +890,12 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str):
     else:
         _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping this cycle")
         return
+
+    # Quota/context % is polled on its own clock, independent of whether Claude is
+    # mid-reply. Without this wait, the checkpoint below can capture a half-finished
+    # turn (broken handover) and the companion session can pop open mid-answer —
+    # is_safe_to_pause() only checks processes/file-locks, never turn state.
+    _wait_for_turn_to_finish(project_path, session_id)
 
     state_dir = os.path.join(project_path, "askr_state")
     if not os.path.isdir(state_dir):
@@ -1104,26 +1110,25 @@ def _turn_stopped_since(session_id: str, since_ts: float) -> bool:
     return os.path.exists(marker) and os.path.getmtime(marker) >= since_ts
 
 
-def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
+def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     """
-    Context trigger fired. Wait for the current Claude reply to finish before
-    opening the companion session — the user must always get their complete reply
-    before a second window appears.
+    Block until the current Claude reply finishes — the user must always get
+    their complete reply before askr acts on their session (opening a companion
+    window, or reading the transcript for a checkpoint).
 
     "Reply finished" is detected via the Stop hook's own completion signal
     (askr/hooks/stop.py writes ~/.config/askr/turn_stops/<session_id>.json when it
     finishes processing a turn) — not JSONL write-silence. The old idle-time
     heuristic false-positived whenever a tool call ran long enough to pause JSONL
     writes for IDLE_THRESHOLD seconds (e.g. a multi-minute git-filter-repo run),
-    opening a companion session while the original turn was still very much in
-    progress. The Stop hook firing is the only authoritative "turn is done" signal.
+    acting while the original turn was still very much in progress. The Stop
+    hook firing is the only authoritative "turn is done" signal.
 
-    Returns True if a live session was found (full cooldown applies), False if
-    no live process was detected (short retry).
+    Returns True if a live session was found and waited on, False if no live
+    process was detected for this project (nothing to wait for).
     """
     if not _find_all_claude_pids_by_project(project_path):
-        _log("claude process not found for this project — opening companion session anyway")
-        _open_companion_session(project_path, session_id)
+        _log("claude process not found for this project — nothing to wait for")
         return False
 
     POLL          = 5    # polling interval (seconds)
@@ -1139,19 +1144,32 @@ def _open_companion_session_for_trigger(project_path: str, session_id: str = Non
         waited += POLL
 
         if not _find_all_claude_pids_by_project(project_path):
-            _log("claude session ended while waiting — opening companion session")
+            _log("claude session ended while waiting")
             break
 
         if _turn_stopped_since(session_id, wait_start):
-            _log("Stop hook fired — reply finished, opening companion session")
+            _log("Stop hook fired — reply finished")
             break
 
         if waited >= MAX_WAIT_SECS:
-            _log(f"WARN: waited {MAX_WAIT_SECS}s, Stop hook never fired — opening companion session anyway")
+            _log(f"WARN: waited {MAX_WAIT_SECS}s, Stop hook never fired — proceeding anyway")
             break
 
-    _open_companion_session(project_path, session_id)
     return True
+
+
+def _open_companion_session_for_trigger(project_path: str, session_id: str = None) -> bool:
+    """
+    Context trigger fired. Wait for the current Claude reply to finish before
+    opening the companion session — the user must always get their complete reply
+    before a second window appears.
+
+    Returns True if a live session was found (full cooldown applies), False if
+    no live process was detected (short retry).
+    """
+    found = _wait_for_turn_to_finish(project_path, session_id)
+    _open_companion_session(project_path, session_id)
+    return found
 
 
 def _maybe_autolaunch(project_path: str):
@@ -1473,7 +1491,7 @@ def run_daemon():
                         # stacking up and firing all at once when the loop finally woke up).
                         threading.Thread(
                             target=_execute_trigger,
-                            args=("quota", stats, project_path),
+                            args=("quota", stats, project_path, session_id),
                             daemon=True,
                         ).start()
                         last_trigger_at[project_path] = time.time()
