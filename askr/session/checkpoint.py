@@ -21,6 +21,11 @@ _RESULT_PATH        = os.path.expanduser("~/.config/askr/checkpoint_result.json"
 _CURSOR_DIR         = os.path.expanduser("~/.config/askr/cursors")
 _MAX_TRANSCRIPT_ENTRIES = 60  # enough to capture a substantial work session
 
+# Tool calls that define/track a multi-step plan (stage tables, todo lists). Their
+# input IS the plan — collapsing them to a bare tool name (like other minor tools)
+# silently erases the plan before the handover-generation LLM ever sees it.
+_PLAN_TOOL_NAMES = {"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList"}
+
 
 def _cursor_path(session_id: str) -> str:
     return os.path.join(_CURSOR_DIR, f"edit_cursor_{session_id}.json")
@@ -132,6 +137,9 @@ def _build_transcript_text(entries: list) -> str:
                             elif name == "Bash":
                                 cmd = _scrub_secrets(inp.get("command", "")[:80])
                                 lines.append(f"TOOL: Bash({cmd})")
+                            elif name in _PLAN_TOOL_NAMES:
+                                plan_json = _scrub_secrets(json.dumps(inp, separators=(",", ":")))
+                                lines.append(f"TOOL: {name} {plan_json}")
                             else:
                                 lines.append(f"TOOL: {name}")
     return "\n".join(lines)
