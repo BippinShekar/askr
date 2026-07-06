@@ -35,6 +35,23 @@ def _cursor_path(session_id: str) -> str:
 # Transcript reading
 # ---------------------------------------------------------------------------
 
+def _is_plan_entry(entry: dict) -> bool:
+    """True if this transcript entry contains a plan/stage-tracking tool call
+    (TodoWrite/TaskCreate/TaskUpdate/TaskList) — these define the session's plan
+    and must survive truncation regardless of how far back they were made."""
+    msg = entry.get("message", {})
+    if msg.get("role") != "assistant":
+        return False
+    content = msg.get("content", [])
+    if not isinstance(content, list):
+        return False
+    return any(
+        isinstance(block, dict) and block.get("type") == "tool_use"
+        and block.get("name") in _PLAN_TOOL_NAMES
+        for block in content
+    )
+
+
 def read_transcript(transcript_path: str) -> list:
     if not transcript_path or not os.path.exists(transcript_path):
         return []
@@ -48,7 +65,14 @@ def read_transcript(transcript_path: str) -> list:
                 entries.append(json.loads(line))
             except Exception:
                 pass
-    return entries[-_MAX_TRANSCRIPT_ENTRIES:]
+
+    recent = entries[-_MAX_TRANSCRIPT_ENTRIES:]
+    recent_ids = {id(e) for e in recent}
+    # Plan-defining entries older than the recency window are kept anyway — a
+    # stage plan declared early in a long session must not be dropped just
+    # because it scrolled past the last _MAX_TRANSCRIPT_ENTRIES entries.
+    plan_entries = [e for e in entries if id(e) not in recent_ids and _is_plan_entry(e)]
+    return plan_entries + recent
 
 
 def _extract_tool_actions(entries: list) -> list[str]:
