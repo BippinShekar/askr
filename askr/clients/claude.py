@@ -72,6 +72,16 @@ def _post_messages(body: dict, mode: str, query_preview: str) -> dict:
         log_error(f"claude._post_messages[{mode}]", f"HTTP {e.code}: {detail}")
         raise RuntimeError(f"Claude OAuth call failed (HTTP {e.code}): {detail}")
 
+    if data.get("stop_reason") == "max_tokens":
+        from askr.utils.logger import log_error
+        usage = data.get("usage", {})
+        log_error(
+            f"claude._post_messages[{mode}]",
+            f"response truncated: hit max_tokens={body.get('max_tokens')} "
+            f"(output_tokens={usage.get('output_tokens')}) — content is incomplete, "
+            f"not a clean generation. query={query_preview!r}",
+        )
+
     try:
         from askr.utils.logger import log_oauth_query
         usage = data.get("usage", {})
