@@ -70,7 +70,7 @@ def _extract_tool_actions(entries: list) -> list[str]:
                 if path:
                     actions.append(f"Modified {path}")
             elif name == "Bash":
-                cmd = inp.get("command", "")[:80]
+                cmd = inp.get("command", "")
                 if cmd:
                     actions.append(f"Ran: {cmd}")
     return actions
@@ -112,13 +112,13 @@ def _build_transcript_text(entries: list) -> str:
 
         if role == "user":
             if isinstance(content, str) and len(content) > 5:
-                lines.append(f"USER: {_scrub_secrets(content[:400])}")
+                lines.append(f"USER: {_scrub_secrets(content)}")
             elif isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "text":
                         text = block.get("text", "").strip()
                         if text and len(text) > 5:
-                            lines.append(f"USER: {_scrub_secrets(text[:400])}")
+                            lines.append(f"USER: {_scrub_secrets(text)}")
 
         elif role == "assistant":
             if isinstance(content, list):
@@ -127,7 +127,7 @@ def _build_transcript_text(entries: list) -> str:
                         if block.get("type") == "text":
                             text = block.get("text", "").strip()
                             if text:
-                                lines.append(f"ASSISTANT: {_scrub_secrets(text[:300])}")
+                                lines.append(f"ASSISTANT: {_scrub_secrets(text)}")
                         elif block.get("type") == "tool_use":
                             name = block.get("name", "")
                             inp  = block.get("input", {})
@@ -135,7 +135,7 @@ def _build_transcript_text(entries: list) -> str:
                                 path = inp.get("file_path") or inp.get("path", "")
                                 lines.append(f"TOOL: {name}({path})")
                             elif name == "Bash":
-                                cmd = _scrub_secrets(inp.get("command", "")[:80])
+                                cmd = _scrub_secrets(inp.get("command", ""))
                                 lines.append(f"TOOL: Bash({cmd})")
                             elif name in _PLAN_TOOL_NAMES:
                                 plan_json = _scrub_secrets(json.dumps(inp, separators=(",", ":")))
@@ -225,7 +225,7 @@ def _generate_handover_with_llm(
         existing_state_section = ""
         if existing_handover:
             try:
-                existing_json = json.dumps(existing_handover, indent=2)[:4000]
+                existing_json = json.dumps(existing_handover, indent=2)
                 existing_state_section = f"""
 EXISTING PROJECT STATE (accumulated from prior sessions — update this, do not erase it):
 {existing_json}
@@ -589,13 +589,13 @@ def _build_fallback_summary(entries: list) -> tuple[str, list]:
             continue
         content = msg.get("content", [])
         if isinstance(content, str) and len(content) > 5:
-            user_prompts.append(content[:300])
+            user_prompts.append(content)
         elif isinstance(content, list):
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
                     text = block.get("text", "").strip()
                     if text and len(text) > 5:
-                        user_prompts.append(text[:300])
+                        user_prompts.append(text)
 
     files_changed = sorted(set(
         a.replace("Modified ", "") for a in tool_actions if a.startswith("Modified")
