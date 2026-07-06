@@ -141,6 +141,10 @@ IDLE_TRIGGER_SECS   = SESSION_STALE_SECS  # genuine inactivity → run the heavy
                            # (git commit+push, architecture regen, Discord/voice). Reuses the same
                            # threshold askr already treats as "this session is effectively over"
                            # elsewhere, instead of a separately-invented number.
+MAX_TURN_ACTIVE_SECS = 1800  # if a turn-start marker is older than this with no matching stop,
+                           # treat the turn as abandoned (crashed session, closed terminal) rather
+                           # than "still active" forever — otherwise a turn that never signals Stop
+                           # would permanently suppress the idle-checkpoint safety net.
 
 
 # ---------------------------------------------------------------------------
@@ -1099,7 +1103,8 @@ def _open_companion_session(project_path: str, session_id: str = None):
     _speak(companion_message)
 
 
-_TURN_STOP_DIR = os.path.expanduser("~/.config/askr/turn_stops")
+_TURN_STOP_DIR  = os.path.expanduser("~/.config/askr/turn_stops")
+_TURN_START_DIR = os.path.expanduser("~/.config/askr/turn_starts")
 
 
 def _turn_stopped_since(session_id: str, since_ts: float) -> bool:
@@ -1108,6 +1113,34 @@ def _turn_stopped_since(session_id: str, since_ts: float) -> bool:
         return False
     marker = os.path.join(_TURN_STOP_DIR, f"{session_id}.json")
     return os.path.exists(marker) and os.path.getmtime(marker) >= since_ts
+
+
+def _turn_currently_active(session_id: str) -> bool:
+    """
+    True if the user has submitted a prompt (user_prompt_submit.py's turn-start
+    marker) more recently than the last Stop-hook turn-stop marker — i.e. Claude
+    is actively working on a reply right now.
+
+    _last_turn_stop() only measures time since the PREVIOUS turn ended, blind to
+    whether a new turn has since started. Without this check, idle_secs keeps
+    growing through an entire in-progress turn (thinking time before the prompt
+    plus however long this turn takes to process), so submitting a question after
+    a long gap and then stepping away for even a minute can cross IDLE_TRIGGER_SECS
+    while the user is actively present and Claude is still replying — a false
+    "been quiet for 10 minutes" with no actual 10 minutes of inactivity.
+    """
+    if not session_id:
+        return False
+    start_marker = os.path.join(_TURN_START_DIR, f"{session_id}.json")
+    if not os.path.exists(start_marker):
+        return False
+    start_mtime = os.path.getmtime(start_marker)
+    if (time.time() - start_mtime) >= MAX_TURN_ACTIVE_SECS:
+        return False  # turn-start marker too old to trust — treat as abandoned, not active
+    stop_marker = os.path.join(_TURN_STOP_DIR, f"{session_id}.json")
+    if not os.path.exists(stop_marker):
+        return True  # turn started, never stopped yet
+    return start_mtime > os.path.getmtime(stop_marker)
 
 
 def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
@@ -1499,7 +1532,8 @@ def run_daemon():
                         triggered_this_cycle = True
                         break
                     elif (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
-                            and idle_triggered.get(project_path) != turn_stop_ts):
+                            and idle_triggered.get(project_path) != turn_stop_ts
+                            and not _turn_currently_active(session_id)):
                         _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
                         idle_triggered[project_path] = turn_stop_ts
                         _save_idle_triggered(idle_triggered)
