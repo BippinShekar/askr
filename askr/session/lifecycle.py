@@ -1059,11 +1059,22 @@ def _open_companion_session(project_path: str, session_id: str = None):
     try:
         direction = _infer_direction(project_path)
         if direction["confidence"] >= 0.70:
-            daemon_prompt = (
-                f"Continue work on: {direction['direction']}. Read the handover file "
-                f"for the full state. Your previous session is still running in another "
-                f"window — pick up from the handover, don't redo work already in flight there."
-            )
+            # Only claim a prior session is still live if one actually is — this
+            # function is also called when no process was found for the project
+            # (see "opening companion session anyway" above), and telling the new
+            # session to defer to a phantom other session it should never touch
+            # just stalls it for no reason.
+            if _find_all_claude_pids_by_project(project_path):
+                daemon_prompt = (
+                    f"Continue work on: {direction['direction']}. Read the handover file "
+                    f"for the full state. Your previous session is still running in another "
+                    f"window — pick up from the handover, don't redo work already in flight there."
+                )
+            else:
+                daemon_prompt = (
+                    f"Continue work on: {direction['direction']}. Read the handover file "
+                    f"for the full state and pick up from the Next Action."
+                )
     except Exception:
         pass
     if not daemon_prompt:
