@@ -1,7 +1,11 @@
+import fcntl
+import os
 import platform
 import re
 import shutil
 import subprocess
+
+_VOICE_LOCK_PATH = os.path.expanduser("~/.config/askr/voice.lock")
 
 _EMOJI_RE = re.compile(
     "["
@@ -58,6 +62,32 @@ def _say_preconditions() -> tuple[str, str]:
     return say_bin, ""
 
 
+def _acquire_voice_lock():
+    """
+    Serialize spoken output across processes. speak()/announce() are called
+    from entirely separate OS processes with no shared state — the daemon's
+    trigger thread, the per-turn background handover's detached "Done" ping,
+    and hook processes can all decide to speak within moments of each other.
+    Without a shared lock, two `say` invocations landing close together play
+    concurrently and audibly overlap on macOS, which is what garbles into
+    "yapping nonsense" — this forces them to queue and play one at a time.
+    flock is tied to the open fd/process, so a crashed holder releases it
+    automatically; nothing can deadlock this permanently.
+    """
+    os.makedirs(os.path.dirname(_VOICE_LOCK_PATH), exist_ok=True)
+    fd = open(_VOICE_LOCK_PATH, "w")
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
+
+
+def _release_voice_lock(fd):
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        fd.close()
+    except Exception:
+        pass
+
+
 def speak(text: str, voice: str = "") -> tuple[bool, str]:
     """
     Speak text aloud via macOS's native `say` command.
@@ -73,6 +103,7 @@ def speak(text: str, voice: str = "") -> tuple[bool, str]:
     if not say_bin:
         return False, reason
 
+    lock_fd = _acquire_voice_lock()
     try:
         cmd = [say_bin]
         if voice:
@@ -82,6 +113,8 @@ def speak(text: str, voice: str = "") -> tuple[bool, str]:
         return True, ""
     except Exception as e:
         return False, str(e)
+    finally:
+        _release_voice_lock(lock_fd)
 
 
 def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) -> tuple[bool, str]:
@@ -89,11 +122,16 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) 
     Speak a short branded prefix in one voice immediately followed by the
     detail in a second voice — askr's two-tone "sonic logo" for the
     session-done ping, distinct from any single generic TTS voice.
+
+    Locked as a single unit so another process's announcement can never land
+    between the prefix and body — that interleaving would sound just as
+    garbled as two full announcements overlapping.
     """
     say_bin, reason = _say_preconditions()
     if not say_bin:
         return False, reason
 
+    lock_fd = _acquire_voice_lock()
     try:
         if prefix:
             subprocess.run([say_bin, "-v", prefix_voice, humanize_for_speech(prefix)], timeout=30, check=False)
@@ -102,6 +140,8 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) 
         return True, ""
     except Exception as e:
         return False, str(e)
+    finally:
+        _release_voice_lock(lock_fd)
 
 
 def announce(message: str, prefix: str = "Askr.") -> tuple[bool, str]:
