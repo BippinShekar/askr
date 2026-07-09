@@ -418,8 +418,9 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 3.15 — Smart Context Injection
+## Phase 3.15 — Smart Context Injection ✅
 *Target: pre-stress-test*
+*Last audited against code: 2026-07-10*
 
 **Goal:** Session start injection is precise and complete — not a dump, not a surgical cut. Pulls the exact context the current session's work requires: the in-play files, their relational context (what they depend on and what depends on them), and the decisions/rejections that are semantically relevant to the upcoming work. Nothing more, nothing less.
 
@@ -431,13 +432,15 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | `reader.py` — `build_context_injection()` rewritten around `files_in_play` + `relational_files` from handover JSON | 🔲 Todo |
-| S2 | Snapshot entries pulled for `files_in_play` + `relational_files` (union, deduped) | 🔲 Todo |
-| S3 | Decisions: TF-IDF match against handover `task` + `next_actions` — top 10 by relevance score, not recency | 🔲 Todo |
-| S4 | Rejected decisions: filter by `domain` field matching in-play or relational file paths | 🔲 Todo |
-| S5 | Failed approaches: semantic match to current task, last 3 sessions as recency floor | 🔲 Todo |
-| S6 | Context budget enforced: injection capped at 15% of model context window (~30k tokens), truncated by priority if exceeded | 🔲 Todo |
-| S7 | Fallback: if `files_in_play` empty and no relational context, revert to full-dump (current behaviour) | 🔲 Todo |
+| S1 | `reader.py` — `build_context_injection()` rewritten around `files_in_play` + `relational_files` from handover JSON | ✅ Done — `reader.py:build_context_injection()`, routes to targeted mode whenever either field is populated |
+| S2 | Snapshot entries pulled for `files_in_play` + `relational_files` (union, deduped) | ✅ Done — `_load_snapshot_entries()` + `_format_targeted_files()`; degrades to bare file paths when `.llm_snapshot/summary.json` is missing/stale (Phase 3.14 still not built — this doesn't block on it) |
+| S3 | Decisions: TF-IDF match against handover `task` + `next_actions` — top 10 by relevance score, not recency | ✅ Done — `load_relevant_decisions()` + `_tfidf_rank()`, minimal from-scratch TF-IDF (no new dependency — decisions corpus is small). Falls back to most-recent-N when nothing scores above zero |
+| S4 | Rejected decisions: filter by `domain` field matching in-play or relational file paths | ✅ Done in code — `_format_rejected_decisions()`. Currently a no-op in practice: `rejected_decisions.jsonl` doesn't exist until Phase 3.13 S2 lands; will populate automatically once it does, no further wiring needed |
+| S5 | Failed approaches: semantic match to current task, last 3 sessions as recency floor | ✅ Done — `_format_failed_approaches()`. First time `failed_approaches.md` has been wired into context injection at all; it existed and was populated but nothing read it back before this |
+| S6 | Context budget enforced: injection capped at 15% of model context window (~30k tokens), truncated by priority if exceeded | ✅ Done — `_apply_budget()`, drops whole lower-priority sections (rejections > decisions > architecture > failed approaches) rather than truncating mid-sentence |
+| S7 | Fallback: if `files_in_play` empty and no relational context, revert to full-dump (current behaviour) | ✅ Done — exact prior full-dump behavior preserved verbatim for this path (own handover + team handovers + last-20 decisions + architecture + blockers) |
+
+**Verified against real project data**, not just synthetic tests: run against this repo's own `handover_bippin.json` at commit `20b4bca`, correctly routed to targeted mode (4 files_in_play, 4 relational_files), produced ~3.6k tokens of output — well under the 30k budget, so truncation wasn't exercised in practice but is covered by dedicated tests. 21 new tests in `tests/test_context_injection.py`, 236 total passing.
 
 **Honest risks:**
 - Dependent on Phase 3.11 (JSON handover with relational_files) and Phase 3.14 (snapshot + rdep index). Build those first — this phase doesn't function without them.
@@ -638,7 +641,7 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 | Verified fixed | P4-1 `_drain_task_queue` race (read-archive-truncate with no lock) | Confirmed fixed — wrapped in `file_lock()` |
 | Verified fixed | Handover generation could bleed sibling-repo work into this repo's `askr_state/` | Fixed in `checkpoint.py` — `project_path` now passed explicitly into the LLM prompt |
 
-**Remaining open items post re-audit:** session-launch-time `--dangerously-skip-permissions` gate, IDE popup rendering for `task_approval_pending`/`guard_warning` (Phase 5), Phase 3.13 S2-S5 (persisted rejection tracking), Phase 3.14/3.15 (snapshot-as-architecture, smart context injection), Phase 3.9 (behavioral preference persistence), and an unproven real overnight unattended run (Phase 2).
+**Remaining open items post re-audit (updated 2026-07-10):** Phase 3.13 S2-S5 (persisted rejection tracking — in progress), Phase 3.14 (snapshot-as-architecture — still not built; 3.15 shipped without depending on it by degrading gracefully), Phase 3.9 (behavioral preference persistence), and an unproven real overnight unattended run (Phase 2). Session-launch-time `--dangerously-skip-permissions` gate and IDE popup rendering for `task_approval_pending`/`guard_warning`/`dangerous_autolaunch_pending` (Phase 5) — done, see above. Phase 3.15 (smart context injection) — done, see above.
 
 ---
 
