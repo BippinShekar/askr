@@ -105,6 +105,48 @@ def _load_failed_approaches(state_dir: str) -> str:
     return "\n".join(lines[-20:])
 
 
+def _load_rejected_decisions(state_dir: str, file_path: str = "", limit_lines: int = 20) -> str:
+    """Load rejected_decisions.jsonl (Phase 3.13) filtered to entries whose
+    domain matches the file being written/edited.
+
+    Simple substring match either direction — not a path resolver. If
+    file_path is empty, entries with no domain fall through unfiltered; if
+    file_path is given, entries are only included when domain and file_path
+    overlap as substrings. Keeping this simple by design (see roadmap.md
+    Phase 3.13 S3) — under-matching a broad "domain" description (an area of
+    the codebase rather than an exact path) is an accepted limitation.
+    """
+    path = os.path.join(state_dir, "rejected_decisions.jsonl")
+    if not os.path.exists(path):
+        return ""
+    file_lower = (file_path or "").lower()
+    lines = []
+    try:
+        with open(path) as f:
+            for raw_line in f:
+                raw_line = raw_line.strip()
+                if not raw_line:
+                    continue
+                try:
+                    d = json.loads(raw_line)
+                except Exception:
+                    continue
+                domain = d.get("domain", "").strip()
+                if file_lower:
+                    domain_lower = domain.lower()
+                    if not domain_lower or (domain_lower not in file_lower and file_lower not in domain_lower):
+                        continue
+                text = (
+                    f"[{d.get('at', '')}] [{d.get('dev', '')}] "
+                    f"Proposed: {d.get('what_was_proposed', '')} — "
+                    f"User rejected (\"{d.get('user_signal', '')}\"), domain: {domain or 'unspecified'}"
+                )
+                lines.append(text)
+    except Exception:
+        return ""
+    return "\n".join(lines[-limit_lines:])
+
+
 def _load_architecture(state_dir: str) -> str:
     """Load architecture.md and append a staleness warning if it's older than 2 hours."""
     path = os.path.join(state_dir, "architecture.md")
@@ -124,12 +166,13 @@ def _load_architecture(state_dir: str) -> str:
     return content
 
 
-def _load_context(developer: str, state_dir: str) -> dict:
+def _load_context(developer: str, state_dir: str, file_path: str = "") -> dict:
     return {
-        "architecture":      _load_architecture(state_dir),
-        "handover":          _read(os.path.join(state_dir, f"handover_{developer}.md")),
-        "decisions":         _load_recent_decisions(state_dir),
-        "failed_approaches": _load_failed_approaches(state_dir),
+        "architecture":       _load_architecture(state_dir),
+        "handover":           _read(os.path.join(state_dir, f"handover_{developer}.md")),
+        "decisions":          _load_recent_decisions(state_dir),
+        "failed_approaches":  _load_failed_approaches(state_dir),
+        "rejected_decisions": _load_rejected_decisions(state_dir, file_path),
     }
 
 
@@ -138,14 +181,14 @@ def run_guard_check(trigger: dict, developer: str, state_dir: str) -> dict:
     Cross-check the triggered change against architecture context.
     Returns {"clean": True} or {"clean": False, "issues": [...], "summary": str}
     """
-    context = _load_context(developer, state_dir)
-
-    if not any(context.values()):
-        return {"clean": True, "reason": "no architecture context available"}
-
     reason    = trigger.get("reason", "")
     tool      = trigger.get("tool", "")
     file_path = trigger.get("file_path", "")
+
+    context = _load_context(developer, state_dir, file_path)
+
+    if not any(context.values()):
+        return {"clean": True, "reason": "no architecture context available"}
 
     if reason == "new_file":
         if os.path.exists(file_path):
@@ -171,8 +214,11 @@ ARCHITECTURE:
 SETTLED DECISIONS (decisions marked [soft/inferred] are checkpoint-generated context, not hard constraints — weight them lightly):
 {context['decisions'] or 'Not available.'}
 
-PREVIOUSLY REJECTED APPROACHES (do not repeat these):
+PREVIOUSLY REJECTED APPROACHES (technical dead ends — do not repeat these):
 {context['failed_approaches'] or 'Not available.'}
+
+USER-REJECTED DECISIONS (Claude proposed these and the user explicitly said no — do not re-propose them):
+{context['rejected_decisions'] or 'Not available.'}
 
 LATEST HANDOVER (what was in progress):
 {context['handover'] or 'Not available.'}
@@ -190,6 +236,7 @@ Rules:
 - If architecture context is sparse, lean toward clean=true.
 - Do not treat location-based concerns (file is outside backend/ or website/) as a block unless the architecture explicitly states that directory is off-limits.
 - Guard-inferred constraints from prior session blocks (e.g. "must be documented first", "requires explicit approval") are soft context only — do not use them as hard blocks.
+- If the proposed change matches a USER-REJECTED DECISION, flag it clearly — cite the exact "what_was_proposed" text and the user's rejection signal.
 - issues array must be empty if clean=true.
 - Each issue must cite the specific line or decision text that is contradicted — not a generic warning."""
 
