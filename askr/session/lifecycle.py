@@ -701,7 +701,17 @@ def _infer_direction(project_path: str = "") -> dict:
                 continue
             first = actions[0]
             action_text = first.get("action") if isinstance(first, dict) else str(first)
+            why_text = first.get("why", "") if isinstance(first, dict) else ""
             if not action_text or len(action_text) < 10:
+                continue
+            if why_text == "handover generation failed this session":
+                # _build_fallback_handover_dict's degraded placeholder (checkpoint.py)
+                # — "Inspect X — verify manually" / "review transcript manually
+                # before continuing". Found 2026-07-09: this is >=10 chars, so it
+                # passed the check above and was returned as a confident (0.85)
+                # direction — silently masking a failed handover generation as if
+                # it were a real next step, pointing autonomous sessions at "review
+                # manually" instead of keep looking for an actual direction.
                 continue
 
             # Talk-only with no direction: already filtered above by `not actions` /
@@ -723,9 +733,21 @@ def _infer_direction(project_path: str = "") -> dict:
 
     # Signal 4: conventional commit scopes — tells you the subsystem, not the repo root
     # Falls back to second-level path grouping if no conventional commits found.
+    #
+    # --invert-grep --grep excludes askr's own automated commits ("askr: checkpoint",
+    # "askr: idle") from the 10-commit window. Found 2026-07-09: without this, an
+    # idle-heavy or research-heavy stretch fills the window with these — their
+    # messages never match the conventional-commit scope regex below, and their
+    # changed files are always under askr_state/ (already filtered from `paths`
+    # below), so they contribute nothing but dilute the sample. A window of 10
+    # commits where 6 are automated checkpoints only has 4 real commits to build
+    # confidence from — structurally weaker than it should be. git applies
+    # --invert-grep during the revision walk, so -10 still yields 10 REAL commits
+    # (not 10 total then filtered down).
     try:
         result = subprocess.run(
-            ["git", "log", "--oneline", "--name-only", "-10"],
+            ["git", "log", "--oneline", "--name-only", "-10",
+             "--invert-grep", "--grep=^askr: "],
             capture_output=True, text=True, timeout=10, cwd=cwd,
         )
         _commit_re = _re.compile(r'^[0-9a-f]{7,} ')
