@@ -1,25 +1,25 @@
 {
-  "task": "The askr system implemented a Phase 5 approval gate for autonomous session relaunch, added IDE popup handlers, fixed critical transcript-truncation and race-condition bugs, unified statusline labeling, eliminated repeated quota-trigger announcements, diagnosed and fixed the context-trigger cascade root cause, resolved direction-inference signal quality gaps (Signals 3 and 4), and prevented premature session-completion announcements while dispatched subagents are still outstanding.",
-  "discussion_summary": "This session completed the investigation of direction-inference signal quality (Signal 3 and 4 gaps identified in prior sessions). Signal 4 was sampling askr's own automated checkpoint/idle commits which contribute nothing to direction inference \u2014 now excluded via invert-grep. Signal 3 was accepting degraded fallback handover placeholders as confident directions, masking failed handover generation \u2014 now skipped via sentinel detection. The session also discovered and fixed a critical subagent completion bug: Stop fires per-turn (not per-session-end), so it was announcing \"Done.\" while dispatched Agent subagents were still running and their results would still feed into the task. _has_outstanding_subagent() now checks the transcript for any Agent tool_use with no matching later task-notification, and _speak_session_done() stays silent when one is outstanding. A third fix addressed the actual root cause of repeated context-trigger announcements: stop.py was clearing the companioned_sessions dedup flag after every turn instead of pruning by liveness. All 209 tests passing; all changes committed to main.",
+  "task": "The askr system implemented comprehensive voice-output logging to voice_log.jsonl, capturing every spoken-output attempt with timestamp, exact text, gate-off reason (if applicable), and caller context; fixed brittle test assertions in test_voice.py; and validated all 215 tests passing.",
+  "discussion_summary": "This session added end-to-end voice-output diagnostics by threading caller context (source tag, project_path, session_id) through five call sites in lifecycle.py and stop.py, then logging every speak()/speak_signature()/announce() attempt to ~/.config/askr/voice_log.jsonl regardless of whether the system actually spoke. This captures both successful announcements and gated-off attempts (disabled, non-macOS, missing `say` binary, subprocess failure), making it possible to diagnose repeated or missing announcements by disk lookup instead of code inspection. Two brittle test assertions that checked exact call signatures were refactored to inspect call_args separately, improving test maintainability. All 215 tests pass; changes committed to main.",
   "accomplishments": [
     {
-      "what": "Fixed Signal 4 (git-log clustering) dilution: excluded askr's own automated checkpoint/idle commits via --invert-grep, preventing low-signal commits from reducing confidence",
+      "what": "Implemented voice_log.jsonl logging: every speak()/speak_signature()/announce() call now appends timestamp, exact text, gate-off reason (if any), and caller context (source tag, project_path, session_id)",
       "done": true
     },
     {
-      "what": "Fixed Signal 3 (handover next_actions) masking: skip degraded fallback placeholders (generic \"review manually\") that were accepted as confident 0.85 directions despite failed handover generation",
+      "what": "Threaded caller context through five call sites: lifecycle.py quota-warning, idle checkpoint, companion-session open, _write_notification; stop.py relaunch-notification and _speak_session_done, each tagged with source string for diagnostic lookup",
       "done": true
     },
     {
-      "what": "Fixed premature session-completion announcements: _speak_session_done() now detects outstanding dispatched subagents (Agent tool calls with no matching task-notification) and stays silent until they report back",
+      "what": "Refactored two brittle test assertions in test_voice.py to inspect call_args separately instead of checking exact call signature, improving test robustness",
       "done": true
     },
     {
-      "what": "Fixed repeated context-trigger announcements root cause: stop.py was clearing companioned_sessions dedup flag after every turn; now prunes by liveness instead",
+      "what": "Added VoiceLoggingTests class with 6 new unit tests covering voice_log.jsonl entry structure, gate-off reasons, and caller context threading",
       "done": true
     },
     {
-      "what": "Added 10 new unit tests covering Signal 3/4 quality fixes and subagent completion detection against real temp git repos",
+      "what": "Validated all 215 tests passing after voice logging implementation",
       "done": true
     }
   ],
@@ -47,8 +47,8 @@
     },
     {
       "order": 5,
-      "action": "Run an unattended overnight session to validate that quota-trigger, context-trigger, direction-inference, and subagent-completion fixes hold under real load",
-      "why": "Pre-launch validation; more likely to succeed now that quota-repeat, context-cascade, direction-inference, and subagent-announcement issues are all addressed"
+      "action": "Run an unattended overnight session to validate that quota-trigger, context-trigger, direction-inference, subagent-completion, and voice-logging fixes hold under real load",
+      "why": "Pre-launch validation; more likely to succeed now that quota-repeat, context-cascade, direction-inference, subagent-announcement, and voice-output-diagnostics are all addressed"
     }
   ],
   "decisions": [
@@ -87,15 +87,23 @@
     {
       "decision": "companioned_sessions dedup flag is pruned by liveness (removed after session ends) rather than cleared after every Stop turn",
       "reason": "Stop fires per-turn, not per-session-end; clearing after every turn meant the flag was always empty by the next poll cycle, allowing context-trigger to re-fire repeatedly on the same companion session"
+    },
+    {
+      "decision": "Every voice-output attempt (speak/speak_signature/announce) is logged to voice_log.jsonl with timestamp, exact text, gate-off reason if applicable, and caller context (source tag, project_path, session_id)",
+      "reason": "Enables diagnostic lookup of repeated or missing announcements without code inspection; captures both successful and gated-off attempts, making it possible to distinguish \"didn't speak because disabled\" from \"didn't speak because code path never fired\""
+    },
+    {
+      "decision": "Caller context is threaded through five specific call sites (lifecycle.py quota-warning, idle checkpoint, companion-session open, _write_notification; stop.py relaunch-notification and _speak_session_done), each tagged with a source string identifying the code path",
+      "reason": "Allows voice_log.jsonl entries to be traced back to their originating mechanism without re-deriving it from code; makes it possible to correlate repeated announcements with specific triggers"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/hooks/stop.py",
+    "askr/clients/voice.py",
     "askr/session/lifecycle.py",
-    "tests/test_voice.py",
-    "tests/test_infer_direction_signal_quality.py"
+    "askr/hooks/stop.py",
+    "tests/test_voice.py"
   ],
   "relational_files": [
     {
@@ -128,7 +136,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-09T18:10:19.336176+00:00",
+    "timestamp": "2026-07-09T18:35:22.529984+00:00",
     "developer": "bippin"
   }
 }
