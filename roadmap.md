@@ -573,7 +573,7 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 | Headless path: Discord notification (`task_approval_pending`) with task list + approve/discard instructions | ✅ Done |
 | Non-dangerous sessions: queued tasks auto-run without gate (by design) | ✅ Done — unchanged existing path |
 | IDE popup listing queued tasks + current permission state | 🔲 Todo — confirmed 2026-07-09: `extension.js` `checkNotification()` has explicit cases for `context`, `goal_launch`, `goal_check`, `reload_extension`, `direction_proposal`, `direction_confirm`/`direction_needed`, with a generic fallback for everything else. `task_approval_pending` and `guard_warning` both fall through to that generic popup — neither gets a purpose-built UI. |
-| Gate session launch itself on `--dangerously-skip-permissions` (distinct from the queued-task gate above) | 🔲 Todo — confirmed 2026-07-09: no code path prevents a session from launching with `--dangerously-skip-permissions`; only tasks queued *into* such a session are gated. |
+| Gate askr's own autonomous relaunch when the triggering session is dangerous (distinct from the queued-task gate above) | ✅ Done 2026-07-09 — `_launch_gate_check()` in `lifecycle.py`, wired into `_start_claude()` (quota-trigger, goal-autolaunch) and `_open_companion_session()` (context-trigger). Holds the relaunch, writes a `dangerous_autolaunch_pending` notification + Discord alert, requires `askr launch approve` (one-shot flag, mirrors the task queue's `askr task approve`). Note: this does not and cannot prevent a user from manually typing `claude --dangerously-skip-permissions` themselves — that's outside askr's process entirely. It gates what askr itself does next once that state is detected. |
 
 ---
 

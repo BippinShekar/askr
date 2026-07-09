@@ -403,6 +403,75 @@ def _load_allowed_tools(project_path: str) -> list:
     return []
 
 
+def _consume_launch_approval_flag(project_path: str, developer: str) -> bool:
+    """One-shot bypass written by `askr launch approve`. Consumed here (not a
+    permanent setting) so each held relaunch needs its own explicit approval —
+    mirrors session_start.py's _consume_approval_flag for the cross-dev task
+    queue gate, applied to askr's own autonomous relaunch instead."""
+    flag_path = os.path.join(project_path, "askr_state", "tasks", f"launch_approved_{developer}.flag")
+    if os.path.exists(flag_path):
+        try:
+            os.remove(flag_path)
+        except Exception:
+            pass
+        return True
+    return False
+
+
+def _notify_launch_held(project_path: str, developer: str, reasons: list[str]):
+    reason_text = "; ".join(reasons)
+    message = (
+        f"Autonomous relaunch held for {developer} — this session has {reason_text}, "
+        f"so askr did not start the next unattended session automatically. "
+        f"Run `askr launch approve` to release it."
+    )
+    _log(f"launch held — {reason_text}")
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump({
+                "type": "dangerous_autolaunch_pending",
+                "message": message,
+                "developer": developer,
+                "reasons": reasons,
+                "shown": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
+    except Exception as e:
+        _log(f"launch-held notification write failed: {e}")
+    try:
+        from askr.clients.discord import send_message
+        send_message(f"\U0001F6D1 **[askr] Autonomous relaunch held — approval needed**\n{message}")
+    except Exception:
+        pass
+
+
+def _launch_gate_check(project_path: str, developer: str) -> bool:
+    """
+    Returns True if askr should proceed with an autonomous relaunch.
+
+    The cross-dev task queue gate (permission_gate.is_dangerous_session,
+    Phase 5) only covers a teammate's task inheriting a dangerous session's
+    permissions. It never covered the session's OWN continuation: an
+    unattended companion session that askr relaunches after a context/quota/
+    goal trigger inherits the exact same zero-friction permission state from
+    whatever session triggered it. That's the same risk class, just without
+    a teammate in the loop — so it gets the same hold-until-approved gate.
+    """
+    try:
+        from askr.session.permission_gate import is_dangerous_session
+        dangerous, reasons = is_dangerous_session(project_path)
+    except Exception:
+        return True
+    if not dangerous:
+        return True
+    if _consume_launch_approval_flag(project_path, developer):
+        _log("launch approved via 'askr launch approve' — proceeding despite dangerous permissions")
+        return True
+    _notify_launch_held(project_path, developer, reasons)
+    return False
+
+
 def _start_claude(project_path: str, initial_prompt: str = "", force: bool = False) -> bool:
     if not _claude_cli_available():
         _log("ERROR: 'claude' not in PATH — cannot start new session")
@@ -417,6 +486,15 @@ def _start_claude(project_path: str, initial_prompt: str = "", force: bool = Fal
         if existing:
             _log(f"Claude pid(s) {existing} already running for {project_path} — skipping launch to prevent double-session")
             return False
+
+    try:
+        from askr.state.config import load_developer
+        developer = load_developer()
+    except Exception:
+        developer = ""
+
+    if developer and not _launch_gate_check(project_path, developer):
+        return False
 
     claude_bin = shutil.which("claude") or "claude"
 
@@ -1033,6 +1111,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
     _pre_kill_update_tools(project_path)  # sync allowedTools/permissions for the new session
 
     state_dir = os.path.join(project_path, "askr_state")
+    developer = ""
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
@@ -1054,6 +1133,12 @@ def _open_companion_session(project_path: str, session_id: str = None):
     next_goal = _get_next_goal(state_dir)
     _write_launch_mode(next_goal)
     allowed_tools = _load_allowed_tools(project_path)
+
+    # Checkpoint above always runs — state is captured either way. Only the
+    # actual new-terminal spawn below is held if the live session that
+    # triggered this companion is running with dangerous permissions.
+    if developer and not _launch_gate_check(project_path, developer):
+        return
 
     daemon_prompt = ""
     try:

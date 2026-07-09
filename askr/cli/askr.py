@@ -1149,11 +1149,25 @@ def cmd_launch(args: list):
     The daemon runs automatically via launchd (installed by askr init).
     Use --stop to manually kill it; it will restart at next login.
     Use --restart to force an immediate restart.
+    Use approve to release an autonomous relaunch held by the dangerous-
+    permissions gate (askr launched a companion/goal session but the
+    triggering session was running with --dangerously-skip-permissions or
+    equivalent unrestricted tool access).
     """
     from askr.session.lifecycle import daemon_is_running, stop_daemon
     import subprocess as _subprocess
 
     log_path = os.path.expanduser("~/.config/askr/daemon.log")
+
+    if "approve" in args:
+        developer = load_developer()
+        tasks_dir = os.path.join(get_state_dir(), "tasks")
+        os.makedirs(tasks_dir, exist_ok=True)
+        flag_path = os.path.join(tasks_dir, f"launch_approved_{developer}.flag")
+        with open(flag_path, "w") as f:
+            f.write(datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ") + "\n")
+        console.print(f"\n  [green]✓[/green] approved — next autonomous relaunch for [bold]{developer}[/bold] will proceed despite dangerous permissions\n")
+        return
 
     if "--stop" in args:
         if stop_daemon():
@@ -1211,6 +1225,15 @@ def cmd_launch(args: list):
         console.print(f"  [dim]pre-approved ({len(allowed)}):[/dim] {', '.join(sorted(allowed))}")
     else:
         console.print("  [yellow]⚠ no tools pre-approved[/yellow]  [dim]— run askr init[/dim]")
+
+    try:
+        with open(os.path.expanduser("~/.config/askr/notification.json")) as f:
+            notif = json.load(f)
+        if notif.get("type") == "dangerous_autolaunch_pending":
+            console.print(f"\n  [yellow]⚠ autonomous relaunch held[/yellow] — {'; '.join(notif.get('reasons', []))}")
+            console.print(f"  [dim]release it:[/dim] [bold]askr launch approve[/bold]")
+    except Exception:
+        pass
 
     console.print()
     console.print(f"  [dim]log:[/dim] {log_path}")
