@@ -1,25 +1,49 @@
 {
-  "task": "The askr system implemented comprehensive voice-output logging to voice_log.jsonl, capturing every spoken-output attempt with timestamp, exact text, gate-off reason (if applicable), and caller context; fixed brittle test assertions in test_voice.py; and validated all 215 tests passing.",
-  "discussion_summary": "This session added end-to-end voice-output diagnostics by threading caller context (source tag, project_path, session_id) through five call sites in lifecycle.py and stop.py, then logging every speak()/speak_signature()/announce() attempt to ~/.config/askr/voice_log.jsonl regardless of whether the system actually spoke. This captures both successful announcements and gated-off attempts (disabled, non-macOS, missing `say` binary, subprocess failure), making it possible to diagnose repeated or missing announcements by disk lookup instead of code inspection. Two brittle test assertions that checked exact call signatures were refactored to inspect call_args separately, improving test maintainability. All 215 tests pass; changes committed to main.",
+  "task": "The askr system implemented Phase 3.15 (smart, targeted context injection) by building build_context_injection() to replace full-dump state injection with files_in_play/relational_files targeting, decision/failed-approach relevance ranking, token budget capping at ~30k, and graceful degradation when targeting signals are absent; all 236 tests pass.",
+  "discussion_summary": "This session completed Phase 3.15 (S1\u2013S7) by implementing askr/state/reader.py with build_context_injection(), which transforms context injection from full-dump to targeted. When a handover includes files_in_play/relational_files (S1), injection now pulls snapshots for those files (S2), ranks decisions by TF-IDF relevance to task/next_actions (S3), filters rejected decisions by domain matching (S4, degrades gracefully when Phase 3.13 isn't landed yet), includes failed approaches with recency floor (S5), caps total output at ~30k tokens by dropping lower-priority sections rather than truncating mid-sentence (S6), and falls back to full-dump for pre-3.11 handovers with no targeting signal (S7). 21 new tests validate all paths including real project data. Roadmap marked Phase 3.15 complete. All 236 tests pass; changes committed to main.",
   "accomplishments": [
     {
-      "what": "Implemented voice_log.jsonl logging: every speak()/speak_signature()/announce() call now appends timestamp, exact text, gate-off reason (if any), and caller context (source tag, project_path, session_id)",
+      "what": "Implemented build_context_injection() in askr/state/reader.py: replaces full-dump state injection with targeted injection using files_in_play/relational_files when present",
       "done": true
     },
     {
-      "what": "Threaded caller context through five call sites: lifecycle.py quota-warning, idle checkpoint, companion-session open, _write_notification; stop.py relaunch-notification and _speak_session_done, each tagged with source string for diagnostic lookup",
+      "what": "Phase 3.15-S1: Targets RELEVANT FILES section to in-play/relational files instead of all state files",
       "done": true
     },
     {
-      "what": "Refactored two brittle test assertions in test_voice.py to inspect call_args separately instead of checking exact call signature, improving test robustness",
+      "what": "Phase 3.15-S2: Pulls snapshot purpose text for targeted files when .llm_snapshot exists, degrades to bare paths when absent",
       "done": true
     },
     {
-      "what": "Added VoiceLoggingTests class with 6 new unit tests covering voice_log.jsonl entry structure, gate-off reasons, and caller context threading",
+      "what": "Phase 3.15-S3: Ranks decisions by TF-IDF relevance to handover task/next_actions instead of just most recent 20",
       "done": true
     },
     {
-      "what": "Validated all 215 tests passing after voice logging implementation",
+      "what": "Phase 3.15-S4: Filters rejected decisions by domain matching in-play/relational files, degrades gracefully when Phase 3.13 not yet landed",
+      "done": true
+    },
+    {
+      "what": "Phase 3.15-S5: Wired failed approaches into context injection for first time with relevance ranking and recency floor (last 3)",
+      "done": true
+    },
+    {
+      "what": "Phase 3.15-S6: Implemented token budget cap at ~30k (15% of 200k window), drops whole lower-priority sections (rejections > decisions > architecture > failed approaches) rather than truncating mid-sentence",
+      "done": true
+    },
+    {
+      "what": "Phase 3.15-S7: Graceful fallback to full-dump behavior for pre-3.11 handovers with no targeting signal",
+      "done": true
+    },
+    {
+      "what": "Added 21 new unit tests in tests/test_context_injection.py covering all Phase 3.15 stages, validated against real project handover/decision data",
+      "done": true
+    },
+    {
+      "what": "Updated roadmap.md to mark Phase 3.15 complete with all 7 stages verified against code",
+      "done": true
+    },
+    {
+      "what": "Validated all 236 tests passing after Phase 3.15 implementation",
       "done": true
     }
   ],
@@ -27,28 +51,23 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Implement Phase 3.15-S0: hard context budget cap (~15% of window, \u224830k tokens) on today's existing full-dump injection, truncating by priority (rejections > decisions > architecture > failed approaches) when over budget",
-      "why": "Direct fix for companion-cascade bug; doesn't depend on any other Phase 3.15 stages; works on current dump as-is; will prevent new companion sessions from starting with already-high context"
+      "action": "Implement Phase 3.13 S2\u2013S5: persist rejected-decision tracking (rejected_decisions.json) across session boundaries",
+      "why": "Phase 3.15-S4 now filters rejected decisions by domain but degrades when Phase 3.13 isn't landed; this unblocks full rejected-decisions filtering and addresses the broader gap that rejected/decided context doesn't persist strongly enough across session boundaries"
     },
     {
       "order": 2,
-      "action": "Implement Phase 3.13 S2\u2013S5: persist rejected-decision tracking (rejected_decisions.json) across session boundaries",
-      "why": "Unblocks Phase 3.15-S4 (rejected-decisions filter); addresses the broader gap that rejected/decided context doesn't persist strongly enough across session boundaries"
+      "action": "Implement Phase 3.14: .llm_snapshot generation for all source files (purpose text extraction and caching)",
+      "why": "Phase 3.15-S2 currently degrades to bare paths when .llm_snapshot doesn't exist; Phase 3.14 will populate snapshots so targeted files always have purpose context in injection"
     },
     {
       "order": 3,
-      "action": "Implement Phase 3.15 S1\u2013S3, S5\u2013S7 (full smart context injection pipeline) after S0 is live and tested",
-      "why": "Completes the context-injection overhaul; S1 pulls from files_in_play/relational_files instead of full dump; S3 ranks decisions by relevance; S5 adds failed-approaches semantic matching"
-    },
-    {
-      "order": 4,
       "action": "Evaluate whether askr should hold a checkpoint/handover while a subagent is outstanding (vs. just staying quiet about it); if yes, implement the hold logic",
       "why": "Current fix prevents false \"Done.\" announcements but doesn't block checkpoints; could stall a real quota/context emergency handoff if a subagent hangs \u2014 needs explicit decision on risk tolerance"
     },
     {
-      "order": 5,
-      "action": "Run an unattended overnight session to validate that quota-trigger, context-trigger, direction-inference, subagent-completion, and voice-logging fixes hold under real load",
-      "why": "Pre-launch validation; more likely to succeed now that quota-repeat, context-cascade, direction-inference, subagent-announcement, and voice-output-diagnostics are all addressed"
+      "order": 4,
+      "action": "Run an unattended overnight session to validate that quota-trigger, context-trigger, direction-inference, subagent-completion, voice-logging, and Phase 3.15 context-injection fixes hold under real load",
+      "why": "Pre-launch validation; more likely to succeed now that all prior fixes are in place and Phase 3.15 smart injection is live"
     }
   ],
   "decisions": [
@@ -67,10 +86,6 @@
     {
       "decision": "Quota hard-trigger gates on populated quota_reset_at before firing; if reset_at is unknown (fresh per-session stats file), trigger holds off and retries next poll cycle instead of firing blind with no dedup memory",
       "reason": "quota_triggered_windows.json dedup is keyed on quota_reset_at; firing without it present means the dedup guard never engages, causing re-announcement on every poll cycle. Mirrors the soft 75% warning which already gates on reset_at."
-    },
-    {
-      "decision": "Phase 3.15-S0 (hard context budget cap) is the immediate priority for fixing context-trigger cascade, not the full S1\u2013S7 pipeline",
-      "reason": "S0 is a minimal, isolated fix that works on today's full-dump injection without depending on S1\u2013S7; it directly prevents new companions from starting with already-high context; S1\u2013S7 can follow after S0 is validated"
     },
     {
       "decision": "Signal 4 (git-log clustering) excludes askr's own automated checkpoint/idle commits via --invert-grep",
@@ -95,48 +110,65 @@
     {
       "decision": "Caller context is threaded through five specific call sites (lifecycle.py quota-warning, idle checkpoint, companion-session open, _write_notification; stop.py relaunch-notification and _speak_session_done), each tagged with a source string identifying the code path",
       "reason": "Allows voice_log.jsonl entries to be traced back to their originating mechanism without re-deriving it from code; makes it possible to correlate repeated announcements with specific triggers"
+    },
+    {
+      "decision": "Phase 3.15 context injection targets files_in_play/relational_files when present, ranks decisions/failed-approaches by TF-IDF relevance, caps output at ~30k tokens by dropping lower-priority sections, and gracefully degrades to full-dump for pre-3.11 handovers",
+      "reason": "Targeted injection reduces token waste on irrelevant state, relevance ranking surfaces the most actionable decisions/approaches, token budget prevents context-trigger cascade, and graceful degradation ensures no session breaks on missing targeting signals"
+    },
+    {
+      "decision": "Phase 3.15-S2 (snapshot pulling) degrades to bare file paths when .llm_snapshot doesn't exist, does not block on Phase 3.14",
+      "reason": "Phase 3.14 isn't built yet; graceful degradation allows Phase 3.15 to land and provide value immediately while Phase 3.14 can follow independently"
+    },
+    {
+      "decision": "Phase 3.15-S4 (rejected-decisions filtering) degrades to empty when rejected_decisions.json doesn't exist, does not block on Phase 3.13",
+      "reason": "Phase 3.13 isn't built yet; graceful degradation allows Phase 3.15 to land and provide value immediately; filtering will automatically populate once Phase 3.13 lands"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/clients/voice.py",
-    "askr/session/lifecycle.py",
-    "askr/hooks/stop.py",
-    "tests/test_voice.py"
+    "askr/state/reader.py",
+    "tests/test_context_injection.py",
+    "roadmap.md"
   ],
   "relational_files": [
     {
-      "file": "askr/session/post_tool_use.py",
+      "file": "askr/session/lifecycle.py",
       "relationship": "imported_by",
-      "why": "Handles usage-API refresh that populates quota_reset_at; the quota-trigger fix depends on understanding when reset_at becomes available"
+      "why": "Calls build_context_injection() to populate context for session handover; Phase 3.15 injection is consumed here"
     },
     {
-      "file": "askr/cli/askr.py",
+      "file": "askr/state/writer.py",
       "relationship": "imported_by",
-      "why": "Terminal statusline display; fixed in prior session to use unified 'chat X%' label"
-    },
-    {
-      "file": "extension.js",
-      "relationship": "configures",
-      "why": "IDE extension display; already uses 'chat X%' label; terminal now matches"
+      "why": "Writes handover files that Phase 3.15 reads; files_in_play/relational_files targeting depends on these being populated correctly"
     },
     {
       "file": "tests/test_lifecycle.py",
       "relationship": "tested_by",
-      "why": "Tests lifecycle trigger logic including quota and context triggers; validates dedup behavior"
+      "why": "Tests lifecycle trigger logic; Phase 3.15 context injection affects context-trigger behavior"
+    },
+    {
+      "file": "askr_state/decisions.jsonl",
+      "relationship": "configures",
+      "why": "Source data for Phase 3.15-S3 decision relevance ranking; TF-IDF corpus"
+    },
+    {
+      "file": "askr_state/failed_approaches.jsonl",
+      "relationship": "configures",
+      "why": "Source data for Phase 3.15-S5 failed-approaches injection; first time this file is read back into context"
     }
   ],
   "uncommitted_files": [
     "askr_state/implementation_bippin.jsonl"
   ],
   "blockers": [
-    "Phase 3.13 S2 (rejected_decisions.json persistence) not yet built \u2014 blocks Phase 3.15-S4 (rejected-decisions filter)"
+    "Phase 3.13 S2 (rejected_decisions.json persistence) not yet built \u2014 Phase 3.15-S4 degrades gracefully but full filtering blocked",
+    "Phase 3.14 (.llm_snapshot generation) not yet built \u2014 Phase 3.15-S2 degrades to bare paths but full snapshot pulling blocked"
   ],
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "stop",
-    "timestamp": "2026-07-09T18:35:22.529984+00:00",
+    "timestamp": "2026-07-10T00:47:47.480810+00:00",
     "developer": "bippin"
   }
 }
