@@ -358,7 +358,78 @@ class TurnElapsedSecondsTests(unittest.TestCase):
             self.assertGreaterEqual(elapsed, 85)
 
 
+def _write_agent_dispatch(tmpdir, tool_use_id="toolu_agent1", completed=True, extra_id=None):
+    """Build a transcript: an assistant turn dispatches an Agent subagent,
+    optionally followed by a later turn containing its task-notification."""
+    path = os.path.join(tmpdir, "transcript.jsonl")
+    with open(path, "w") as f:
+        f.write(json.dumps({
+            "type": "assistant",
+            "message": {"content": [
+                {"type": "tool_use", "id": tool_use_id, "name": "Agent", "input": {}},
+            ]},
+        }) + "\n")
+        f.write(json.dumps({
+            "type": "user",
+            "message": {"content": [
+                {"type": "tool_result", "tool_use_id": tool_use_id,
+                 "content": "Async agent launched successfully. agentId: abc123"},
+            ]},
+        }) + "\n")
+        if completed:
+            f.write(json.dumps({
+                "type": "user",
+                "message": {"content": (
+                    f"<task-notification>\n<task-id>abc123</task-id>\n"
+                    f"<tool-use-id>{extra_id or tool_use_id}</tool-use-id>\n"
+                    f"<status>completed</status>\n</task-notification>"
+                )},
+            }) + "\n")
+    return path
+
+
+class HasOutstandingSubagentTests(unittest.TestCase):
+    def test_no_transcript_returns_false(self):
+        self.assertFalse(stop_module._has_outstanding_subagent(""))
+        self.assertFalse(stop_module._has_outstanding_subagent("/no/such/file.jsonl"))
+
+    def test_no_agent_dispatch_returns_false(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_transcript(tmpdir, ["2026-07-09T00:00:00Z"])
+            self.assertFalse(stop_module._has_outstanding_subagent(path))
+
+    def test_dispatched_and_completed_returns_false(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_agent_dispatch(tmpdir, completed=True)
+            self.assertFalse(stop_module._has_outstanding_subagent(path))
+
+    def test_dispatched_but_not_yet_completed_returns_true(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_agent_dispatch(tmpdir, completed=False)
+            self.assertTrue(stop_module._has_outstanding_subagent(path))
+
+    def test_notification_for_a_different_tool_use_id_does_not_clear_it(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_agent_dispatch(tmpdir, tool_use_id="toolu_agent1",
+                                          completed=True, extra_id="toolu_someone_else")
+            self.assertTrue(stop_module._has_outstanding_subagent(path))
+
+
 class SpeakSessionDoneGatingTests(unittest.TestCase):
+    def test_stays_silent_while_subagent_outstanding_even_with_completed_goal(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_agent_dispatch(tmpdir, completed=False)
+            with patch("askr.clients.voice.announce") as mock_announce:
+                stop_module._speak_session_done(["ship OAuth"], transcript_path=path)
+                mock_announce.assert_not_called()
+
+    def test_speaks_once_subagent_has_reported_back(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = _write_agent_dispatch(tmpdir, completed=True)
+            with patch("askr.clients.voice.announce") as mock_announce:
+                stop_module._speak_session_done(["ship OAuth"], transcript_path=path)
+                mock_announce.assert_called_once_with("ship OAuth", prefix="Done.")
+
     def test_completed_goal_always_speaks_even_on_fast_turn(self):
         with patch("askr.clients.voice.announce") as mock_announce:
             stop_module._speak_session_done(["ship OAuth"], transcript_path="")
