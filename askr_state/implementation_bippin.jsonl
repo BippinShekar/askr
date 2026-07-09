@@ -2556,3 +2556,4 @@
 {"ts": "2026-07-09T09:01:30Z", "session_id": "480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc", "type": "command", "detail": "source venv/bin/activate 2>/dev/null; python -m pytest tests/ -q 2>&1 | tail -10"}
 {"ts": "2026-07-09T09:01:39Z", "session_id": "480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc", "type": "command", "detail": "git -C /Users/bippin/Desktop/askr add askr/cli/askr.py && git -C /Users/bippin/D"}
 {"ts": "2026-07-09T09:01:42Z", "session_id": "480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc", "type": "command", "detail": "git -C /Users/bippin/Desktop/askr status --short"}
+{"ts": "2026-07-09T09:01:47Z", "session_id": "480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc", "type": "command", "detail": "git -C /Users/bippin/Desktop/askr add askr_state/decisions.jsonl askr_state/hand"}

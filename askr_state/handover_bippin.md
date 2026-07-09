@@ -1,61 +1,42 @@
 # Handover: bippin
 
-Last updated: 2026-07-09 13:59
+Last updated: 2026-07-09 14:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-The askr system implemented a Phase 5 approval gate for autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) that holds dangerous sessions pending explicit approval, added IDE popup handlers for task_approval_pending and guard_warning notifications, and fixed critical transcript-truncation bugs, race conditions in lifecycle triggers, false-positive idle-trigger fires, phantom-session warnings, and cross-process voice serialization.
+The askr system implemented a Phase 5 approval gate for autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) that holds dangerous sessions pending explicit approval, added IDE popup handlers for task_approval_pending and guard_warning notifications, fixed critical transcript-truncation bugs, race conditions in lifecycle triggers, false-positive idle-trigger fires, phantom-session warnings, cross-process voice serialization, and unified terminal/IDE statusline labeling for context-window percentage display.
 
 ## Discussion
-This session completed the Phase 5 approval gate by wiring _launch_gate_check() into _start_claude() (quota/goal paths) and _open_companion_session() (context path), holding dangerous sessions' autonomous relaunches pending `askr launch approve`. The gate mirrors the existing task-approval model but covers the session's own continuation rather than queued teammate work. Simultaneously, the IDE extension's checkNotification() was updated to render task_approval_pending and guard_warning as purpose-built popups with Approve/Discard buttons, closing the gap where these notifications were falling through to generic fallback handling. All 188 tests pass; git history confirms two feature commits (lifecycle gate + IDE handlers) plus checkpoint entries. The roadmap was updated to reflect Phase 5 completion and the new dangerous_autolaunch_pending notification type.
+This session completed a small labeling fix: the terminal statusLine and CLI output were displaying context-window percentage as 'ctx:X%' while the IDE extension already showed 'chat X%'. Both surfaces measure the same metric; the session unified the label to 'chat' across both terminal and CLI output to match the extension. During investigation, the session also diagnosed root causes for repeated quota/context warnings: the quota dedup memory (quota_triggered_windows.json) remains empty when quota_reset_at is not yet populated from a usage-API refresh, allowing the hard trigger to re-fire on every poll cycle; the context trigger spawns new companion sessions with fresh dedup slates, cascading when injected context is already high at startup (Phase 3.15 smart context injection not yet shipped). A third issue was identified: talk-only research sessions fall back to weak git-log clustering (0.50 confidence) when no strong signals fire, leaving next_actions unpopulated for the next session.
 
 ## Accomplishments
-- [x] Implemented Phase 5 approval gate for autonomous session relaunch: _launch_gate_check() wired into _start_claude() (quota-trigger, goal-autolaunch) and _open_companion_session() (context-trigger); dangerous sessions held pending `askr launch approve`; checkpointing still happens either way, only new-terminal spawn is held
-- [x] Added IDE popup handlers in extension.js checkNotification(): task_approval_pending renders warning with Approve/Discard buttons, guard_warning renders informational popup, dangerous_autolaunch_pending renders Approve button; all run appropriate CLI commands in new terminal
-- [x] Updated roadmap.md to reflect Phase 5 completion and document dangerous_autolaunch_pending notification type as part of the new launch gate
-- [x] Verified all 188 tests passing after lifecycle and IDE changes; no regressions introduced
+- [x] Fixed terminal statusline label to match IDE extension: unified 'chat X%' label for per-chat context-window percentage across all UI surfaces
+- [x] Diagnosed root cause of repeated quota-trigger announcements: dedup memory (quota_triggered_windows.json) remains empty when quota_reset_at is not yet populated from usage-API refresh
+- [x] Diagnosed root cause of repeated context-trigger announcements: companion session relaunch creates new session_id, resetting dedup slate; cascades when injected context is already high at startup
+- [x] Identified weak signal fallback in talk-only research sessions: next_actions not reliably populated when no strong signals fire, leaving next session without concrete instruction
 
 ## Next Actions
-1. Commit final implementation_bippin.jsonl checkpoint entry and push to main
-   *Why: Session work is complete and tested; final checkpoint entry documents the launch gate and IDE handler implementation*
-2. Restart daemon with `askr launch --restart` and verify approval gate flow under normal operation: trigger a quota/context/goal relaunch on a dangerous session and confirm it holds pending approval
-   *Why: New gate logic needs validation in live environment to confirm approval flow works end-to-end and no regressions in checkpoint/notification timing*
-3. Test IDE popup rendering: verify task_approval_pending, guard_warning, and dangerous_autolaunch_pending notifications display correctly in VS Code and button actions execute expected CLI commands
-   *Why: IDE handlers are new code paths; visual rendering and button action execution must be validated in the actual extension environment*
+1. Implement fix A: don't fire the quota hard-trigger when quota_reset_at is empty — wait for a real usage-API reading instead of firing blind with no dedup memory
+   *Why: Small, isolated, safe fix that mirrors how the soft 75% warning already gates on reset_at; eliminates repeated 'quota at X%' announcements during the initial session window before first usage-API refresh*
+2. Prioritize Phase 3.15 (smart context injection) — implement selective context inclusion instead of full-dump at session start to prevent companion sessions from starting with already-high context
+   *Why: Root cause of context-trigger cascade; already on pre-launch roadmap; fixes the architectural gap that allows new companion sessions to immediately re-trigger the context warning*
+3. Investigate why Signal 3 (handover_next_actions) isn't reliably catching talk-only research sessions; audit recent handover JSON next_actions quality and strengthen weak-signal fallback
+   *Why: Talk-only sessions currently fall back to 0.50 confidence (git-log clustering), leaving next session without actionable instruction; this is Phase 3.13 S2-S5 gap (rejected/decided context doesn't persist strongly across session boundaries)*
 
 ## Decisions
-- Both quota-trigger and context-trigger wait for Stop-hook signal before checkpointing or launching companion sessions — Eliminates race conditions where checkpoint could capture half-finished turns; authoritative turn-completion signal is the only safe synchronization point for trigger actions
-- Idle trigger is suppressed while a turn is actively in progress via _turn_currently_active() gate; turn-start markers are written by user_prompt_submit.py and compared against most recent turn-stop marker — _last_turn_stop() only measures elapsed time since the PREVIOUS turn's Stop event and has no knowledge of whether a new turn has started; idle_secs would grow through an entire in-progress turn, firing false positives during normal thinking gaps. Turn-start markers provide authoritative signal of active user interaction.
-- Abandoned turn-start markers (older than MAX_TURN_ACTIVE_SECS = 30 min with no matching stop) are treated as inactive rather than permanently blocking idle-checkpoint — Crashed or closed sessions should not permanently disable the idle-checkpoint safety net; 30 minutes is a reasonable upper bound for a single turn's processing time
-- Companion-session handover only claims a previous session is still running when a live process is actually found; otherwise directs new session to pick up from Next Action directly — Unconditionally warning about phantom sessions that don't exist leaves new sessions deferring to non-existent work; the claim must be grounded in actual process detection
 - All voice output across independent processes (daemon trigger thread, per-turn background handover async pings, hook processes) is serialized via cross-process flock to prevent concurrent `say` invocations from overlapping — Multiple independent OS processes call speak()/speak_signature() with no coordination; concurrent invocations play on top of each other and audibly garble into nonsense. A shared lock file ensures only one process speaks at a time, and speak_signature's prefix+body pair is locked as one atomic unit to prevent interleaving.
 - Autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) is gated on dangerous session permissions: when triggering session has --dangerously-skip-permissions or equivalent unrestricted Bash/rm access, relaunch is held pending explicit `askr launch approve` — Companion sessions inherit the exact same zero-friction permission state from their triggering session; without a gate, a dangerous session's autonomous relaunch would bypass approval entirely. Checkpointing still happens either way; only the new-terminal spawn is held, mirroring the task-approval model.
 - IDE notifications task_approval_pending and guard_warning are rendered as purpose-built popups with context-specific actions (Approve/Discard buttons for task_approval_pending, informational-only for guard_warning) rather than generic fallback messages — Generic fallback handling left users with no way to act on these notifications; purpose-built cases provide clear action paths and match the non-blocking design intent in roadmap Phase 3.5
-
-## User-Rejected Approaches
-- **Manual post-generation truncation of LLM outputs to fit context windows** — "Rejected; requires instead that token limits be enforced via max_tokens parameter on API calls" (domain: clients/claude.py, checkpoint.py)
-
-## Failed Approaches
-- [2026-07-02] Treating any entry with 'type': 'user' as a real user message in _turn_elapsed_seconds — Tool_result entries also have 'type': 'user' but represent system responses, not user input; this caused the gate to almost never fire — Semantic confusion between user-initiated turns and system-generated responses; required adding explicit turn-start markers to distinguish active user interaction from background processing
-- [2026-07-04] Debouncing continuous per-turn checkpoints to reduce frequency while keeping the hook active — User rejected the entire continuous-checkpoint model; the problem is not frequency but the fundamental design of checkpointing on every turn, which blocks user interaction — User rejected the underlying model; frequency reduction does not address the core architectural issue
-- [2026-07-04] Reusing `_execute_trigger()` for all three trigger types (quota, context, idle) — Idle conditions have different semantics than quota/context emergencies; code-path reuse caused misannouncement and unwanted session auto-launch — Idle trigger has fundamentally different semantics (background safety net vs. emergency response); shared code path caused incorrect behavior and false announcements
-- [2026-07-06] Treating any entry with 'type': 'user' as a real user message in _turn_elapsed_seconds() — Tool_result entries also have 'type': 'user' but represent system responses, not user input; this caused the gate to almost never fire — Duplicate of 2026-07-02 failure; semantic confusion persisted until turn-start markers were added
-- [2026-07-06] Reusing _execute_trigger() for all three trigger types (quota, context, idle) — Idle conditions have different semantics than quota/context emergencies; code-path reuse caused misannouncement and unwanted session auto-launch — Duplicate of 2026-07-04 failure; architectural separation required
+- Terminal statusline and CLI output use unified label 'chat X%' for per-chat context-window percentage, matching IDE extension display — Both surfaces measure the same metric; using identical labels eliminates user confusion and provides consistent terminology across all UI surfaces
 
 ## Files In Play
-- `askr/session/lifecycle.py`
 - `askr/cli/askr.py`
-- `askr/ide/vscode-extension/extension.js`
-- `roadmap.md`
 
 ## Relational Files
-- `askr/session/checkpoint.py` (configures): Roadmap documents implementation status of checkpoint.py features (transcript truncation fixes, plan tool-call preservation, handover LLM input integrity)
-- `askr/session/lifecycle.py` (configures): Roadmap documents implementation status of lifecycle.py trigger semantics (quota/context/idle trigger synchronization, turn-start markers, phantom-session detection, launch gate for dangerous sessions)
-- `askr/clients/voice.py` (configures): Roadmap documents implementation status of voice.py cross-process serialization for speak() and speak_signature()
-- `askr_state/decisions.jsonl` (imported_by): Roadmap references decisions.jsonl auto-population (Phase 3.17); this session added decision entries documenting launch gate and IDE handler architectural choices
-- `tests/test_launch_gate.py` (tested_by): New test file validating _launch_gate_check() behavior across quota-trigger, context-trigger, and goal-autolaunch paths; all 6 tests passing
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
+- `askr/lifecycle.py` (imported_by): Contains quota-trigger and context-trigger logic; quota_reset_at population and dedup key handling at lines 1400-1414, 1612; context-trigger dedup at lines 761-769
+- `askr/session/post_tool_use.py` (imported_by): Handles usage-API refresh that populates quota_reset_at; lines 73-88 show the condition where fresh stats files lack reset_at
+- `askr/session/stop.py` (imported_by): Contains Stop-hook outcomes direction_proposal and direction_confirm; lines 302-318 show confidence gating and weak signal fallback
+- `~/.config/askr/quota_triggered_windows.json` (configures): Dedup memory for quota hard-trigger; remains empty when quota_reset_at is not yet populated, allowing re-fires on every poll cycle
+- `~/.config/askr/companioned_sessions.json` (configures): Tracks 57 distinct session IDs; context-trigger dedup is keyed by session_id, resetting on companion session relaunch
