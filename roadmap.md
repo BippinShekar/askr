@@ -360,9 +360,9 @@ The confirmation notification fires only when the top signal is weak (no uncommi
 
 ---
 
-## Phase 3.13 — User-Rejection Tracking
+## Phase 3.13 — User-Rejection Tracking ✅
 *Target: pre-stress-test*
-*Last audited against code: 2026-07-09*
+*Last audited against code: 2026-07-10*
 
 **Goal:** Track decisions Claude proposed that the user rejected. Separate from failed_approaches (technical dead ends) and decisions (settled choices). Feeds the implementation guard so it can catch re-suggestion of vetoed approaches across sessions.
 
@@ -370,21 +370,20 @@ The confirmation notification fires only when the top signal is weak (no uncommi
 
 **What this is NOT:** Failed approaches (technical dead ends Claude tried and they broke). This is specifically: Claude proposed an approach, the user said no for a reason (style, architecture, preference, prior decision), and that veto must persist cross-session.
 
-**New artifact:** `rejected_decisions.json` — cumulative, cross-session, append-only. Each entry: `{what_was_proposed, user_signal, domain, context_file, date, confidence}`.
+**New artifact:** `askr_state/rejected_decisions.jsonl` — cumulative, cross-session, append-only, one JSON object per line (matches `decisions.jsonl`'s established format rather than the originally-proposed single-JSON-array file, for the same file-locking/dedup/append reasons `decisions.jsonl` already uses JSONL). Each entry: `{at, dev, what_was_proposed, user_signal, domain, confidence, source}` — `at`/`dev`/`source` added at write time mirroring `decisions.jsonl`'s shape; `context_file`/`date` from the original spec are covered by `domain` (file/area scope) and `at` respectively.
 
 | Stage | Change | Status |
 |---|---|---|
 | S1 | Handover LLM prompt extracts suggestion/rejection pairs from transcript with confidence score | ✅ Done — `user_rejected_decisions[]` field in handover LLM prompt, written into `handover_<dev>.json`/`.md` (`checkpoint.py:286,331,720`) |
-| S2 | `checkpoint.py` — `_write_rejections_from_handover()` appends above-threshold entries to `rejected_decisions.json` | 🔲 Todo — rejections only live inside the per-dev handover, no standalone cumulative cross-session file |
-| S3 | `pre_tool_use.py` guard — query `rejected_decisions.json` by domain/file before allowing writes | 🔲 Todo — blocked on S2 |
-| S4 | Mid-session: `post_tool_use.py` also scans last user message in real time for high-confidence rejection signals, writes immediately (not just at checkpoint) | 🔲 Todo |
-| S5 | CLAUDE.md guard directive updated: check `rejected_decisions.json` before any edit | 🔲 Todo — blocked on S2 |
+| S2 | `checkpoint.py` — `_write_rejections_from_handover()` appends above-threshold entries to `rejected_decisions.jsonl` | ✅ Done — `checkpoint.py:476` (writer, dedup via substring match on `what_was_proposed`, confidence >= 0.7 enforced defense-in-depth), `checkpoint.py:732` (`_tail_rejected_decisions_jsonl`, ground-truth self-healing for the degraded fallback handover, mirrors `_tail_decisions_jsonl`), wired at `checkpoint.py:984` |
+| S3 | `pre_tool_use.py` guard — query `rejected_decisions.jsonl` by domain/file before allowing writes | ✅ Done — `guard.py:108` (`_load_rejected_decisions`, substring match between `domain` and the file being written either direction), wired into `_load_context` (`guard.py:175`) and the Haiku prompt's new USER-REJECTED DECISIONS section (`guard.py:221`); reaches both `pre_tool_use.py`'s synchronous call and `guard_runner.py`'s async path since both go through `guard.run_guard_check` |
+| S4 | Mid-session: `post_tool_use.py` also scans last user message in real time for high-confidence rejection signals, writes immediately (not just at checkpoint) | ✅ Done — `post_tool_use.py:300` (`_REJECTION_RE`, mirrors `stop.py`'s `_DECISION_RE` style), `post_tool_use.py:313` (`_read_transcript_tail`, bounded to last 64KB — not a full-file read — since this runs on every tool call, unlike Stop's once-per-turn), `post_tool_use.py:396` (`_detect_and_save_rejection`, dedup'd, writes with `source: "realtime_regex"` and a fixed 0.75 confidence), wired at `post_tool_use.py:469` |
+| S5 | CLAUDE.md guard directive updated: check `rejected_decisions.jsonl` before any edit | ✅ Done — `CLAUDE.md:27` and the `_CLAUDE_MD_GUARD_SECTION` template in `askr.py:242` (kept in sync so a future `askr init` run reports "unchanged" instead of reverting this) |
 
-**Current gap:** rejections are captured (S1) but don't survive past one handover cycle — nothing persists them cross-session or checks them before an edit, so a vetoed approach can still resurface in a later session.
-
-**Honest risks:**
-- "No, that's wrong" about the user's own code is structurally identical to rejecting Claude's suggestion. Extraction must classify the target of rejection, not just the rejection signal. Confidence threshold of 0.8 before writing — under-capture is acceptable, false positives in the guard erode trust faster than missed captures.
-- Real-time detection in S4 (post_tool_use) runs on every tool call — must be fast. Cap at simple pattern matching for real-time; full LLM extraction only at checkpoint.
+**Honest risks (unchanged from original spec, still true in the shipped code):**
+- "No, that's wrong" about the user's own code is structurally identical to rejecting Claude's suggestion. S1 (LLM extraction) classifies the target via the handover prompt's rules; S4 (regex, real-time) cannot classify — it is a plain pattern match and will occasionally misfire on this ambiguity. Accepted per the original design call: under-capture is fine, false positives in the guard erode trust faster than missed captures. S4's confidence is fixed at 0.75 and its `source` field (`realtime_regex` vs `checkpoint`) lets downstream consumers weight it differently if this turns out to matter in practice.
+- S4 runs on every tool call. Kept fast by being regex-only (no LLM) and bounded to a 64KB transcript tail (`_read_transcript_tail`) rather than a full-file read, so cost stays flat regardless of session length.
+- S3's domain-matching is a simple substring check, not a path resolver — a `domain` written as a broad area description ("auth flow") rather than a file path won't match a specific `file_path` at guard time. Accepted as a pragmatic v1 scoping call; Phase 3.15's relevance-matching machinery (TF-IDF) could later replace this if under-matching proves to be a real problem.
 
 ---
 
@@ -641,7 +640,7 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 | Verified fixed | P4-1 `_drain_task_queue` race (read-archive-truncate with no lock) | Confirmed fixed — wrapped in `file_lock()` |
 | Verified fixed | Handover generation could bleed sibling-repo work into this repo's `askr_state/` | Fixed in `checkpoint.py` — `project_path` now passed explicitly into the LLM prompt |
 
-**Remaining open items post re-audit (updated 2026-07-10):** Phase 3.13 S2-S5 (persisted rejection tracking — in progress), Phase 3.14 (snapshot-as-architecture — still not built; 3.15 shipped without depending on it by degrading gracefully), Phase 3.9 (behavioral preference persistence), and an unproven real overnight unattended run (Phase 2). Session-launch-time `--dangerously-skip-permissions` gate and IDE popup rendering for `task_approval_pending`/`guard_warning`/`dangerous_autolaunch_pending` (Phase 5) — done, see above. Phase 3.15 (smart context injection) — done, see above.
+**Remaining open items post re-audit (updated 2026-07-10):** Phase 3.14 (snapshot-as-architecture — still not built; 3.15 shipped without depending on it by degrading gracefully), Phase 3.9 (behavioral preference persistence), and an unproven real overnight unattended run (Phase 2). Session-launch-time `--dangerously-skip-permissions` gate and IDE popup rendering for `task_approval_pending`/`guard_warning`/`dangerous_autolaunch_pending` (Phase 5) — done, see above. Phase 3.15 (smart context injection) — done, see above. Phase 3.13 (persisted rejection tracking) — done, see above.
 
 ---
 
