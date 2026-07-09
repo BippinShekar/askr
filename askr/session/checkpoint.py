@@ -473,6 +473,68 @@ def _write_decisions_from_handover(handover, state_dir: str, developer: str):
         log_error("checkpoint._write_decisions_from_handover", str(e))
 
 
+def _write_rejections_from_handover(handover, state_dir: str, developer: str):
+    """Append new user-rejected decisions from handover JSON to
+    rejected_decisions.jsonl (one JSON object per line) — mirrors
+    _write_decisions_from_handover exactly.
+
+    These are approaches CLAUDE PROPOSED that the user explicitly vetoed —
+    distinct from decisions.jsonl (settled architectural choices) and
+    failed_approaches.md (technical dead ends Claude tried that broke). The
+    handover LLM prompt already enforces confidence >= 0.7 before including an
+    entry (checkpoint.py's user_rejected_decisions schema); the check here is
+    defense-in-depth, not the primary gate.
+    """
+    if not isinstance(handover, dict):
+        return
+    try:
+        rejections = handover.get("user_rejected_decisions", [])
+        if not rejections:
+            return
+
+        path = os.path.join(state_dir, "rejected_decisions.jsonl")
+        from askr.state.writer import file_lock
+
+        with file_lock(path):
+            existing_text = ""
+            if os.path.exists(path):
+                with open(path) as f:
+                    existing_text = f.read().lower()
+
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            new_entries = []
+            for r in rejections:
+                proposed = r.get("what_was_proposed", "").strip()
+                signal   = r.get("user_signal", "").strip()
+                domain   = r.get("domain", "").strip()
+                try:
+                    confidence = float(r.get("confidence", 0))
+                except (TypeError, ValueError):
+                    confidence = 0.0
+                if not proposed or len(proposed) < 10:
+                    continue
+                if confidence < 0.7:
+                    continue
+                if proposed.lower() in existing_text:
+                    continue
+                new_entries.append(json.dumps({
+                    "at": ts, "dev": developer,
+                    "what_was_proposed": proposed,
+                    "user_signal": signal,
+                    "domain": domain,
+                    "confidence": confidence,
+                    "source": "checkpoint",
+                }))
+
+            if new_entries:
+                with open(path, "a") as f:
+                    f.write("\n".join(new_entries) + "\n")
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._write_rejections_from_handover", str(e))
+
+
 def _infer_and_queue_tasks(transcript_text: str, state_dir: str, developer: str):
     """
     Scan transcript for natural task assignments ("lochan should handle X",
@@ -667,6 +729,31 @@ def _tail_decisions_jsonl(state_dir: str, n: int = 5) -> list:
     return out
 
 
+def _tail_rejected_decisions_jsonl(state_dir: str, n: int = 5) -> list:
+    """Ground truth recent user-rejected decisions — same self-healing rationale
+    as _tail_decisions_jsonl: rejected_decisions.jsonl is append-only and never
+    gutted, unlike handover.json's user_rejected_decisions array."""
+    path = os.path.join(state_dir, "rejected_decisions.jsonl")
+    try:
+        with open(path) as f:
+            lines = [l.strip() for l in f if l.strip()]
+    except Exception:
+        return []
+    out = []
+    for line in lines[-n:]:
+        try:
+            d = json.loads(line)
+            out.append({
+                "what_was_proposed": d.get("what_was_proposed", ""),
+                "user_signal": d.get("user_signal", ""),
+                "domain": d.get("domain", ""),
+                "confidence": d.get("confidence", 0),
+            })
+        except Exception:
+            pass
+    return out
+
+
 def _tail_failed_approaches(state_dir: str, n: int = 5) -> list:
     """Ground truth recent failed approaches from the cumulative append-only log."""
     path = os.path.join(state_dir, "failed_approaches.md")
@@ -717,7 +804,7 @@ def _build_fallback_handover_dict(entries: list, existing_handover: dict, trigge
     base.setdefault("in_progress", [])
     base.setdefault("accomplishments", [])
     base["decisions"] = _tail_decisions_jsonl(state_dir) if state_dir else base.get("decisions", [])
-    base.setdefault("user_rejected_decisions", [])
+    base["user_rejected_decisions"] = _tail_rejected_decisions_jsonl(state_dir) if state_dir else base.get("user_rejected_decisions", [])
     base["failed_approaches"] = _tail_failed_approaches(state_dir) if state_dir else base.get("failed_approaches", [])
     base["files_in_play"] = sorted(set(files_changed) | set(base.get("files_in_play") or []))
     base.setdefault("relational_files", [])
@@ -894,6 +981,7 @@ def _run_light_handover(
 
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
+    _write_rejections_from_handover(summary, state_dir, developer)
 
     completed_goals = []
     try:
