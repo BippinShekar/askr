@@ -607,22 +607,25 @@ def main():
     _extract_and_save_decisions(transcript_path, get_state_dir())
 
     if session_id:
-        try:
-            from askr.session.registry import deregister_session
-            deregister_session(session_id)
-        except Exception:
-            pass
-        # Clear this session from the "already got a companion" set — it's gone
-        # now, no point keeping it around (and it stops the set from growing
-        # forever across every session that ever crossed the context trigger).
-        try:
-            from askr.session.lifecycle import _load_companioned_sessions, _save_companioned_sessions
-            companioned = _load_companioned_sessions()
-            if session_id in companioned:
-                companioned.discard(session_id)
-                _save_companioned_sessions(companioned)
-        except Exception:
-            pass
+        # NOTE (found 2026-07-09): this used to also call registry.deregister_session()
+        # and discard session_id from companioned_sessions here, on the theory that
+        # Stop firing meant "the session is over." It doesn't — this file's own
+        # docstring says so: Stop fires after EVERY assistant turn, not just at
+        # session end. That meant a session's registry entry (askr_state/sessions/
+        # <id>.json) got deleted after its very first reply, and update_heartbeat()
+        # is a no-op on a missing file — so the entry never came back for the rest
+        # of a session's life, making get_active_sessions() blind to it almost the
+        # entire time. Worse: companioned_sessions lost the session's "already got
+        # a companion" flag after that same first reply, so the daemon's context
+        # trigger re-opened a fresh companion every TRIGGER_COOLDOWN (5 min) for as
+        # long as context stayed above CONTEXT_TRIGGER — which is always true once
+        # crossed. That's the direct cause of the repeated "context high, opening a
+        # companion" voice announcements. Both the registry and companioned_sessions
+        # already self-heal correctly elsewhere via liveness/staleness checks
+        # (registry._is_alive: PID + heartbeat age; lifecycle's poll loop now prunes
+        # companioned_sessions against live stats) — neither needs eager per-turn
+        # cleanup here, and doing it here was actively wrong.
+
         # Prune the quota-warning dedup set of any reset window that's already
         # passed — it's keyed by quota_reset_at (account-wide window), not
         # session_id, so there's nothing session-specific to discard here;

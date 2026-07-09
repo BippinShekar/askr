@@ -259,6 +259,50 @@ class QuotaTriggeredWindowsRoundTripTests(unittest.TestCase):
                 self.assertEqual(lifecycle._load_quota_triggered_windows(), set())
 
 
+class PruneCompanionedSessionsTests(unittest.TestCase):
+    """
+    Regression coverage for the 2026-07-09 fix: companioned_sessions must only
+    lose an entry once the session is genuinely stale (absent from live stats),
+    never just because one turn ended — that was the bug behind repeated
+    "context high, opening a companion" voice announcements.
+    """
+
+    def test_live_session_is_kept(self):
+        companioned = {"session-a"}
+        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")):
+                result = lifecycle._prune_companioned_sessions(companioned, all_stats)
+        self.assertEqual(result, {"session-a"})
+
+    def test_stale_session_absent_from_stats_is_dropped(self):
+        companioned = {"session-a", "session-b"}
+        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]  # session-b gone
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")):
+                result = lifecycle._prune_companioned_sessions(companioned, all_stats)
+        self.assertEqual(result, {"session-a"})
+
+    def test_no_stale_entries_skips_disk_write(self):
+        companioned = {"session-a"}
+        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]
+        path = os.path.join(tempfile.mkdtemp(), "c.json")
+        with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", path):
+            lifecycle._prune_companioned_sessions(companioned, all_stats)
+        self.assertFalse(os.path.exists(path))  # nothing changed, nothing written
+
+    def test_stop_hook_no_longer_clears_companioned_session_mid_session(self):
+        # The bug: stop.py used to discard session_id from companioned_sessions
+        # on every Stop firing (i.e. every turn), not just at true session end.
+        # Assert the removed call sites are gone for good (checking the actual
+        # call syntax, not just the word — this module's own comments now
+        # document the removed bug and mention these names in prose).
+        import inspect
+        source = inspect.getsource(stop_module.main)
+        self.assertNotIn("deregister_session(session_id)", source)
+        self.assertNotIn("_load_companioned_sessions()", source)
+
+
 def _write_transcript(tmpdir, user_timestamps):
     path = os.path.join(tmpdir, "transcript.jsonl")
     with open(path, "w") as f:

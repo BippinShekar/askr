@@ -1373,6 +1373,32 @@ def _save_companioned_sessions(sessions: set):
         _log(f"WARN: failed to persist companioned sessions: {e}")
 
 
+def _prune_companioned_sessions(companioned_sessions: set, all_stats: list) -> set:
+    """
+    Drop entries whose session_id no longer appears in currently-live stats
+    (all_stats is already staleness-filtered by _read_all_stats' SESSION_STALE_SECS
+    window, so "not present" means genuinely stale, not just mid-turn).
+
+    Found 2026-07-09: a per-turn Stop-hook cleanup used to discard a session's
+    entry here on every Stop firing — but Stop fires after every assistant turn,
+    not just at session end, so it wiped the "already got a companion" flag
+    after a session's very first reply. The context trigger then reopened a
+    fresh companion every TRIGGER_COOLDOWN (5 min) for as long as the session
+    stayed above CONTEXT_TRIGGER — which is always true once crossed, since
+    context never decreases within a session. That was the direct cause of
+    repeated "context high, opening a companion" voice announcements. This
+    replaces that eager per-turn discard with liveness-based pruning, keyed on
+    the same staleness signal the rest of the daemon already trusts.
+    """
+    live_session_ids = {s.get("session_id") for s in all_stats if s.get("session_id")}
+    stale = companioned_sessions - live_session_ids
+    if not stale:
+        return companioned_sessions
+    pruned = companioned_sessions - stale
+    _save_companioned_sessions(pruned)
+    return pruned
+
+
 def _load_quota_warned_windows() -> set:
     """quota_reset_at timestamps already given the QUOTA_WARNING_TRIGGER heads-up.
 
@@ -1517,6 +1543,8 @@ def run_daemon():
                 # for a second project that spikes while the first is being handled.
                 all_stats = _read_all_stats()
                 triggered_this_cycle = False
+
+                companioned_sessions = _prune_companioned_sessions(companioned_sessions, all_stats)
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
