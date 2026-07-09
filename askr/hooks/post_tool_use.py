@@ -9,6 +9,7 @@ Also runs the session monitor + forecast and writes stats for StatusLine.
 
 import sys
 import os
+import re
 import json
 from datetime import datetime, timezone
 
@@ -280,6 +281,169 @@ def _check_guard_resolution(tool_name: str, file_path: str):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Phase 3.13 S4 — real-time user-rejection detection
+#
+# Fast, regex-only pattern match on the most recent user message — deliberately
+# NOT an LLM call, since this runs on every tool call (see stop.py's
+# _extract_and_save_decisions/_DECISION_RE for the equivalent per-turn pattern
+# this mirrors). Full LLM extraction with confidence scoring only happens at
+# checkpoint (checkpoint.py's user_rejected_decisions schema, S2).
+#
+# Honest risk (roadmap.md Phase 3.13): "No, that's wrong" about the user's OWN
+# code is structurally identical to rejecting a Claude proposal. A regex
+# cannot tell them apart. Under-capture is fine; false positives here erode
+# trust faster than missed captures — the confidence bar is kept high on
+# purpose (explicit rejection phrasing only, not vague disagreement).
+# ---------------------------------------------------------------------------
+
+_REJECTION_RE = re.compile(
+    r"(?i)\b("
+    r"no,? that'?s wrong|don'?t do that|that'?s not (?:right|correct|it)|"
+    r"not what i (?:asked|wanted|meant)|please don'?t (?:do|use) that|"
+    r"stop doing that|revert (?:that|this)|undo that|"
+    r"that'?s (?:incorrect|not it)|wrong approach|"
+    r"no,? (?:don'?t|do not) (?:do|use) that|that is not (?:right|correct)"
+    r")\b"
+)
+
+_REJECTION_CONFIDENCE = 0.75  # regex-only signal — below the 0.7+ LLM bar's ceiling, never treated as user_approved
+
+
+def _read_transcript_tail(transcript_path: str, tail_bytes: int = 65536) -> list:
+    """Read only the tail of the transcript for fast, bounded-cost parsing.
+
+    PostToolUse fires on every tool call, so a full-file read (already
+    accepted in stop.py's once-per-turn Stop hook) would add up fast here.
+    Bounded to the last `tail_bytes` regardless of transcript size.
+    """
+    if not transcript_path or not os.path.exists(transcript_path):
+        return []
+    try:
+        size = os.path.getsize(transcript_path)
+        with open(transcript_path, "rb") as f:
+            if size > tail_bytes:
+                f.seek(size - tail_bytes)
+                f.readline()  # drop the partial line left by the seek
+            raw = f.read()
+        entries = []
+        for line in raw.decode("utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                pass
+        return entries
+    except Exception:
+        return []
+
+
+def _last_user_text_and_prior_assistant(entries: list) -> tuple[str, str]:
+    """Returns (last_user_text, preceding_assistant_text) from tail entries.
+
+    Tool results are logged as type "user" too (they're the next turn in the
+    API sense) — skip those, we only want text the human actually typed. This
+    mirrors stop.py's _turn_elapsed_seconds tool_result filter.
+    """
+    last_user_idx = -1
+    last_user_text = ""
+    for i in range(len(entries) - 1, -1, -1):
+        entry = entries[i]
+        if entry.get("type") != "user":
+            continue
+        content = entry.get("message", {}).get("content")
+        if isinstance(content, list) and any(
+            isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+        ):
+            continue
+        text = ""
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    text = b.get("text", "")
+                    break
+        if text and text.strip():
+            last_user_idx = i
+            last_user_text = text.strip()
+            break
+
+    if last_user_idx < 0:
+        return "", ""
+
+    prior_assistant_text = ""
+    for i in range(last_user_idx - 1, -1, -1):
+        entry = entries[i]
+        if entry.get("type") != "assistant":
+            continue
+        content = entry.get("message", {}).get("content", [])
+        if isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    t = b.get("text", "").strip()
+                    if t:
+                        prior_assistant_text = t
+                        break
+        if prior_assistant_text:
+            break
+
+    return last_user_text, prior_assistant_text
+
+
+def _detect_and_save_rejection(transcript_path: str, state_dir: str, file_path: str, developer: str):
+    """Scan the most recent user message for a high-confidence rejection
+    signal and, if found, write it immediately to rejected_decisions.jsonl
+    (don't wait for checkpoint). No-op on any failure — never blocks the hook.
+    """
+    try:
+        entries = _read_transcript_tail(transcript_path)
+        if not entries:
+            return
+        last_user_text, prior_assistant_text = _last_user_text_and_prior_assistant(entries)
+        if not last_user_text:
+            return
+
+        sentences = re.split(r'(?<=[.!?])\s+', last_user_text)
+        matched = None
+        for s in sentences:
+            s = s.strip()
+            if 5 < len(s) < 250 and _REJECTION_RE.search(s):
+                matched = s
+                break
+        if not matched:
+            return
+
+        what_was_proposed = prior_assistant_text[:150] if prior_assistant_text else "(see session transcript)"
+        domain = file_path or "unknown"
+
+        rejections_path = os.path.join(state_dir, "rejected_decisions.jsonl")
+        from askr.state.writer import file_lock
+        with file_lock(rejections_path):
+            existing_text = ""
+            if os.path.exists(rejections_path):
+                with open(rejections_path) as f:
+                    existing_text = f.read().lower()
+            if matched.lower() in existing_text:
+                return  # already recorded — avoid duplicate writes across multiple tool calls in the same turn
+
+            entry = {
+                "at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "dev": developer,
+                "what_was_proposed": what_was_proposed,
+                "user_signal": matched,
+                "domain": domain,
+                "confidence": _REJECTION_CONFIDENCE,
+                "source": "realtime_regex",
+            }
+            with open(rejections_path, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
 def main():
     try:
         payload = json.loads(sys.stdin.read())
@@ -289,9 +453,10 @@ def main():
     if not os.path.isdir(get_state_dir()):
         return
 
-    tool_name  = payload.get("tool_name", "")
-    tool_input = payload.get("tool_input", {})
-    session_id = payload.get("session_id", "")
+    tool_name       = payload.get("tool_name", "")
+    tool_input      = payload.get("tool_input", {})
+    session_id      = payload.get("session_id", "")
+    transcript_path = payload.get("transcript_path", "")
 
     file_path = tool_input.get("file_path") or tool_input.get("path", "")
     _check_guard_resolution(tool_name, file_path)
@@ -300,6 +465,8 @@ def main():
     activity = _extract_activity(tool_name, tool_input)
 
     dev = load_developer()
+
+    _detect_and_save_rejection(transcript_path, get_state_dir(), file_path, dev)
 
     if activity:
         entry_type, detail = activity
