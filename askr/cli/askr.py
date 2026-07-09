@@ -239,7 +239,8 @@ _CLAUDE_MD_GUARD_SECTION = """\
 Before editing any file:
 1. Check `askr_state/decisions.jsonl` for settled decisions that affect that file's domain.
 2. Check `askr_state/failed_approaches.md` for approaches already tried and rejected.
-3. If your planned change contradicts a settled decision or repeats a rejected approach, say so explicitly before implementing — do not proceed silently.
+3. Check `askr_state/rejected_decisions.jsonl` for approaches the user already explicitly vetoed for that file's domain — do not re-propose them.
+4. If your planned change contradicts a settled decision, repeats a rejected approach, or matches a user-rejected decision, say so explicitly before implementing — do not proceed silently.
 <!-- askr:guard-end -->"""
 
 
