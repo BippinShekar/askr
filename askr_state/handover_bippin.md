@@ -1,42 +1,49 @@
 # Handover: bippin
 
-Last updated: 2026-07-09 14:33
+Last updated: 2026-07-09 19:46
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-The askr system implemented a Phase 5 approval gate for autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) that holds dangerous sessions pending explicit approval, added IDE popup handlers for task_approval_pending and guard_warning notifications, fixed critical transcript-truncation bugs, race conditions in lifecycle triggers, false-positive idle-trigger fires, phantom-session warnings, cross-process voice serialization, and unified terminal/IDE statusline labeling for context-window percentage display.
+The askr system implemented a Phase 5 approval gate for autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) that holds dangerous sessions pending explicit approval, added IDE popup handlers for task_approval_pending and guard_warning notifications, fixed critical transcript-truncation bugs, race conditions in lifecycle triggers, false-positive idle-trigger fires, phantom-session warnings, cross-process voice serialization, unified terminal/IDE statusline labeling for context-window percentage display, and eliminated repeated quota-trigger announcements by gating the hard trigger on populated quota_reset_at.
 
 ## Discussion
-This session completed a small labeling fix: the terminal statusLine and CLI output were displaying context-window percentage as 'ctx:X%' while the IDE extension already showed 'chat X%'. Both surfaces measure the same metric; the session unified the label to 'chat' across both terminal and CLI output to match the extension. During investigation, the session also diagnosed root causes for repeated quota/context warnings: the quota dedup memory (quota_triggered_windows.json) remains empty when quota_reset_at is not yet populated from a usage-API refresh, allowing the hard trigger to re-fire on every poll cycle; the context trigger spawns new companion sessions with fresh dedup slates, cascading when injected context is already high at startup (Phase 3.15 smart context injection not yet shipped). A third issue was identified: talk-only research sessions fall back to weak git-log clustering (0.50 confidence) when no strong signals fire, leaving next_actions unpopulated for the next session.
+This session diagnosed and fixed the root cause of repeated "quota at X%" voice announcements: quota_triggered_windows.json (the dedup memory keyed on quota_reset_at) remained empty when reset_at was unpopulated from a fresh per-session stats file, allowing the hard trigger to re-fire on every poll cycle. The session also diagnosed the context-trigger cascade (repeated "context past X%" announcements spawning new companion sessions) as a consequence of Phase 3.15 smart context injection not yet being shipped — the current full-dump injection starts new companions with already-high context, crossing the 60% threshold repeatedly with fresh dedup slates. A third issue was identified: talk-only research sessions fall back to weak git-log clustering (0.50 confidence) when no strong signals fire, leaving next_actions unpopulated for the next session. The quota-trigger fix (commit 13de575) is now live; Phase 3.15-S0 (hard context budget cap) is the direct fix for the cascade bug and is the top priority for the next session.
 
 ## Accomplishments
-- [x] Fixed terminal statusline label to match IDE extension: unified 'chat X%' label for per-chat context-window percentage across all UI surfaces
-- [x] Diagnosed root cause of repeated quota-trigger announcements: dedup memory (quota_triggered_windows.json) remains empty when quota_reset_at is not yet populated from usage-API refresh
-- [x] Diagnosed root cause of repeated context-trigger announcements: companion session relaunch creates new session_id, resetting dedup slate; cascades when injected context is already high at startup
-- [x] Identified weak signal fallback in talk-only research sessions: next_actions not reliably populated when no strong signals fire, leaving next session without concrete instruction
+- [x] Fixed repeated quota-trigger announcements by gating hard trigger on populated quota_reset_at
+- [x] Diagnosed root cause of context-trigger cascade (Phase 3.15 smart injection not yet shipped)
+- [x] Diagnosed direction-inference quality gap for talk-only research sessions (Signal 3 weak signal fallback)
+- [x] Unified terminal/CLI statusline label to 'chat X%' matching IDE extension
 
 ## Next Actions
-1. Implement fix A: don't fire the quota hard-trigger when quota_reset_at is empty — wait for a real usage-API reading instead of firing blind with no dedup memory
-   *Why: Small, isolated, safe fix that mirrors how the soft 75% warning already gates on reset_at; eliminates repeated 'quota at X%' announcements during the initial session window before first usage-API refresh*
-2. Prioritize Phase 3.15 (smart context injection) — implement selective context inclusion instead of full-dump at session start to prevent companion sessions from starting with already-high context
-   *Why: Root cause of context-trigger cascade; already on pre-launch roadmap; fixes the architectural gap that allows new companion sessions to immediately re-trigger the context warning*
-3. Investigate why Signal 3 (handover_next_actions) isn't reliably catching talk-only research sessions; audit recent handover JSON next_actions quality and strengthen weak-signal fallback
-   *Why: Talk-only sessions currently fall back to 0.50 confidence (git-log clustering), leaving next session without actionable instruction; this is Phase 3.13 S2-S5 gap (rejected/decided context doesn't persist strongly across session boundaries)*
+1. Implement Phase 3.15-S0: hard context budget cap (~15% of window, ≈30k tokens) on today's existing full-dump injection, truncating by priority (rejections > decisions > architecture > failed approaches) when over budget
+   *Why: Direct fix for tonight's companion-cascade bug; doesn't depend on any other Phase 3.15 stages; works on current dump as-is; will prevent new companion sessions from starting with already-high context*
+2. Investigate why Signal 3 (handover_next_actions) isn't reliably catching talk-only research sessions, causing 0.50 confidence fallback to weak git-log clustering
+   *Why: Research-only sessions lose concrete next_actions for the following session; needs audit of recent handover JSON next_actions quality and Stop-hook signal firing conditions*
+3. Implement Phase 3.13 S2–S5: persist rejected-decision tracking (rejected_decisions.json) across session boundaries
+   *Why: Unblocks Phase 3.15-S4 (rejected-decisions filter); addresses the broader gap that rejected/decided context doesn't persist strongly enough across session boundaries*
+4. Implement Phase 3.15 S1–S3, S5–S7 (full smart context injection pipeline) after S0 is live and tested
+   *Why: Completes the context-injection overhaul; S1 pulls from files_in_play/relational_files instead of full dump; S3 ranks decisions by relevance; S5 adds failed-approaches semantic matching*
+5. Run an unattended overnight session to validate that quota-trigger, context-trigger, and direction-inference fixes hold under real load
+   *Why: Pre-launch validation; more likely to succeed now that quota-repeat, context-cascade, and direction-inference issues are addressed*
 
 ## Decisions
-- All voice output across independent processes (daemon trigger thread, per-turn background handover async pings, hook processes) is serialized via cross-process flock to prevent concurrent `say` invocations from overlapping — Multiple independent OS processes call speak()/speak_signature() with no coordination; concurrent invocations play on top of each other and audibly garble into nonsense. A shared lock file ensures only one process speaks at a time, and speak_signature's prefix+body pair is locked as one atomic unit to prevent interleaving.
-- Autonomous session relaunch (quota-trigger, context-trigger, goal-autolaunch) is gated on dangerous session permissions: when triggering session has --dangerously-skip-permissions or equivalent unrestricted Bash/rm access, relaunch is held pending explicit `askr launch approve` — Companion sessions inherit the exact same zero-friction permission state from their triggering session; without a gate, a dangerous session's autonomous relaunch would bypass approval entirely. Checkpointing still happens either way; only the new-terminal spawn is held, mirroring the task-approval model.
-- IDE notifications task_approval_pending and guard_warning are rendered as purpose-built popups with context-specific actions (Approve/Discard buttons for task_approval_pending, informational-only for guard_warning) rather than generic fallback messages — Generic fallback handling left users with no way to act on these notifications; purpose-built cases provide clear action paths and match the non-blocking design intent in roadmap Phase 3.5
+- Gate session launch on dangerous permissions — Companion sessions inherit the exact same zero-friction permission state from their triggering session; without a gate, a dangerous session's autonomous relaunch would bypass approval entirely
+- IDE notifications task_approval_pending and guard_warning are rendered as purpose-built popups with context-specific actions rather than generic fallback messages — Generic fallback handling left users with no way to act on these notifications; purpose-built cases provide clear action paths and match the non-blocking design intent
 - Terminal statusline and CLI output use unified label 'chat X%' for per-chat context-window percentage, matching IDE extension display — Both surfaces measure the same metric; using identical labels eliminates user confusion and provides consistent terminology across all UI surfaces
+- Quota hard-trigger gates on populated quota_reset_at before firing; if reset_at is unknown (fresh per-session stats file), trigger holds off and retries next poll cycle instead of firing blind with no dedup memory — quota_triggered_windows.json dedup is keyed on quota_reset_at; firing without it present means the dedup guard never engages, causing re-announcement on every poll cycle. Mirrors the soft 75% warning which already gates on reset_at.
+- Phase 3.15-S0 (hard context budget cap) is the immediate priority for fixing context-trigger cascade, not the full S1–S7 pipeline — S0 is a minimal, isolated fix that works on today's full-dump injection without depending on S1–S7; it directly prevents new companions from starting with already-high context; S1–S7 can follow after S0 is validated
 
 ## Files In Play
-- `askr/cli/askr.py`
+- `askr/session/lifecycle.py`
 
 ## Relational Files
-- `askr/lifecycle.py` (imported_by): Contains quota-trigger and context-trigger logic; quota_reset_at population and dedup key handling at lines 1400-1414, 1612; context-trigger dedup at lines 761-769
-- `askr/session/post_tool_use.py` (imported_by): Handles usage-API refresh that populates quota_reset_at; lines 73-88 show the condition where fresh stats files lack reset_at
-- `askr/session/stop.py` (imported_by): Contains Stop-hook outcomes direction_proposal and direction_confirm; lines 302-318 show confidence gating and weak signal fallback
-- `~/.config/askr/quota_triggered_windows.json` (configures): Dedup memory for quota hard-trigger; remains empty when quota_reset_at is not yet populated, allowing re-fires on every poll cycle
-- `~/.config/askr/companioned_sessions.json` (configures): Tracks 57 distinct session IDs; context-trigger dedup is keyed by session_id, resetting on companion session relaunch
+- `askr/session/post_tool_use.py` (imported_by): Handles usage-API refresh that populates quota_reset_at; the quota-trigger fix depends on understanding when reset_at becomes available
+- `askr/session/stop.py` (imported_by): Implements Stop-hook signal logic that determines direction_proposal vs direction_confirm; relevant to Signal 3 gap investigation
+- `askr/cli/askr.py` (imported_by): Terminal statusline display; fixed this session to use unified 'chat X%' label
+- `extension.js` (configures): IDE extension display; already uses 'chat X%' label; terminal now matches
+
+## Blockers
+- Phase 3.13 S2 (rejected_decisions.json persistence) not yet built — blocks Phase 3.15-S4 (rejected-decisions filter)
