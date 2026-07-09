@@ -96,10 +96,21 @@ class TestContextCutAutoLaunch(unittest.TestCase):
             patch("askr.session.lifecycle._read_session_arc", return_value=arc),
             patch("askr.state.config.load_developer", return_value="bippin"),
             patch("askr.hooks.stop.os.makedirs"),
-            # speak() shells out to real macOS `say` if voice_notifications happens
-            # to be enabled in the developer's own global config — never let a test's
-            # runtime depend on that ambient machine state.
-            patch("askr.clients.voice.speak"),
+            # Found 2026-07-10: patching speak() alone is NOT enough. announce()
+            # (what stop.py actually calls) dispatches to speak() or
+            # speak_signature() depending on load_voice_mode() — which this test
+            # never mocks, so it reads whatever's actually configured on the
+            # machine running the suite. "dual" is the default mode, which routes
+            # through speak_signature(), left completely unpatched here. On a
+            # machine with voice_notifications enabled, every run of every test
+            # using this helper was actually shelling out to real macOS `say` and
+            # speaking this fixture's fake "Context at 100%... Opening new chat."
+            # text aloud, repeatedly, once per full test-suite run — the exact
+            # phenomenon a 2026-07-09 incident report described as an unfixed
+            # voice bug. It wasn't unfixed; it was the test suite. Patch the
+            # single function stop.py actually calls, not one of its two
+            # possible internal dispatch targets.
+            patch("askr.clients.voice.announce"),
         ]
 
         with contextlib.ExitStack() as stack:
@@ -286,7 +297,8 @@ class TestContextCutAutoLaunch(unittest.TestCase):
                     patch("askr.session.lifecycle._write_launch_mode"),
                     patch("askr.hooks.stop.os.makedirs"),
                     patch("askr.hooks.stop._live_stats", return_value={"quota_pct": 92.0}),
-                    patch("askr.clients.voice.speak"),
+                    # See the long comment in _run_relaunch above — same bug, same fix.
+                    patch("askr.clients.voice.announce"),
                 ]
                 with contextlib.ExitStack() as stack:
                     for p in patches:

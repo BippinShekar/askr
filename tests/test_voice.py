@@ -23,6 +23,30 @@ from askr.session import lifecycle
 from askr.hooks import stop as stop_module
 
 
+class _IsolatedVoiceLogMixin:
+    """
+    Redirects voice._VOICE_LOG_PATH to a per-test temp file. Without this,
+    every test below that exercises speak()/speak_signature()/announce()
+    (even with subprocess.run mocked, so no real speech) still writes real
+    entries into the actual ~/.config/askr/voice_log.jsonl — polluting the
+    exact file that feature exists to make debugging trustworthy. Found
+    2026-07-10 while diagnosing a "voice issue isn't fixed" report that
+    turned out to be test-suite noise, not a real dedup bug.
+    """
+    def setUp(self):
+        super().setUp()
+        self._voice_log_tmp = tempfile.TemporaryDirectory()
+        self._voice_log_patch = patch.object(
+            voice, "_VOICE_LOG_PATH", os.path.join(self._voice_log_tmp.name, "voice_log.jsonl")
+        )
+        self._voice_log_patch.start()
+
+    def tearDown(self):
+        self._voice_log_patch.stop()
+        self._voice_log_tmp.cleanup()
+        super().tearDown()
+
+
 class VoiceConfigRoundTripTests(unittest.TestCase):
     def test_default_is_disabled(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -46,7 +70,7 @@ class VoiceConfigRoundTripTests(unittest.TestCase):
                 self.assertTrue(state_config.load_voice_enabled())
 
 
-class SpeakGatingTests(unittest.TestCase):
+class SpeakGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
     def test_disabled_never_touches_subprocess(self):
         with patch("askr.state.config.load_voice_enabled", return_value=False), \
              patch("subprocess.run") as mock_run:
@@ -119,7 +143,7 @@ class SpeakGatingTests(unittest.TestCase):
             mock_run.assert_not_called()
 
 
-class SpeakSignatureTests(unittest.TestCase):
+class SpeakSignatureTests(_IsolatedVoiceLogMixin, unittest.TestCase):
     def test_speaks_prefix_then_body_in_their_own_voices(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
              patch("platform.system", return_value="Darwin"), \
@@ -505,7 +529,7 @@ class HasOutstandingSubagentTests(unittest.TestCase):
             self.assertTrue(stop_module._has_outstanding_subagent(path))
 
 
-class SpeakSessionDoneGatingTests(unittest.TestCase):
+class SpeakSessionDoneGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
     def test_stays_silent_while_subagent_outstanding_even_with_completed_goal(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = _write_agent_dispatch(tmpdir, completed=False)
@@ -572,7 +596,7 @@ class SpeakSessionDoneGatingTests(unittest.TestCase):
                     self.assertEqual(second_args, ["/usr/bin/say", "-v", "Ralph", "ship OAuth"])
 
 
-class AnnounceTests(unittest.TestCase):
+class AnnounceTests(_IsolatedVoiceLogMixin, unittest.TestCase):
     def test_dual_mode_speaks_prefix_then_message(self):
         with patch("askr.state.config.load_voice_mode", return_value="dual"), \
              patch("askr.state.config.load_voice_prefix", return_value="Good News"), \
