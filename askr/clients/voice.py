@@ -1,11 +1,14 @@
 import fcntl
+import json
 import os
 import platform
 import re
 import shutil
 import subprocess
+from datetime import datetime, timezone
 
 _VOICE_LOCK_PATH = os.path.expanduser("~/.config/askr/voice.lock")
+_VOICE_LOG_PATH  = os.path.expanduser("~/.config/askr/voice_log.jsonl")
 
 _EMOJI_RE = re.compile(
     "["
@@ -88,19 +91,51 @@ def _release_voice_lock(fd):
         pass
 
 
-def speak(text: str, voice: str = "") -> tuple[bool, str]:
+def _log_voice_event(text: str, spoken: bool, reason: str, context: dict = None):
+    """
+    Append-only log of every spoken-output attempt — not just successful
+    ones. Found 2026-07-09: repeated/missing voice announcements were
+    diagnosed purely by reading code and inferring a mechanism, with no way
+    to confirm which of several candidate call sites actually fired, how
+    many times, or why a promised follow-up (e.g. "opening a new chat")
+    never visibly happened. This makes that a disk lookup instead of a guess:
+    every call records the exact text, whether `say` actually ran (vs. was
+    gated off — disabled, non-macOS, no `say` binary, or a subprocess
+    failure — each with its own `reason`), and whatever caller context
+    (source/session_id/project_path) was passed in.
+    """
+    try:
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "text": text,
+            "spoken": spoken,
+            "reason": reason,
+        }
+        if context:
+            entry.update({k: v for k, v in context.items() if v})
+        os.makedirs(os.path.dirname(_VOICE_LOG_PATH), exist_ok=True)
+        with open(_VOICE_LOG_PATH, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
+def speak(text: str, voice: str = "", context: dict = None) -> tuple[bool, str]:
     """
     Speak text aloud via macOS's native `say` command.
     Gated by the user's voice_notifications preference. Returns (True, "") on
     success, (False, reason) on failure — never raises, since a broken TTS
     call should never take down a hook. `voice` selects a specific macOS
-    voice (e.g. "Zarvox"); empty uses the system default.
+    voice (e.g. "Zarvox"); empty uses the system default. `context` is an
+    optional dict (source/session_id/project_path/...) recorded alongside
+    this call in voice_log.jsonl for debugging — see _log_voice_event.
     """
     if not text:
         return False, "empty text"
 
     say_bin, reason = _say_preconditions()
     if not say_bin:
+        _log_voice_event(text, False, reason, context)
         return False, reason
 
     lock_fd = _acquire_voice_lock()
@@ -110,14 +145,16 @@ def speak(text: str, voice: str = "") -> tuple[bool, str]:
             cmd += ["-v", voice]
         cmd.append(humanize_for_speech(text))
         subprocess.run(cmd, timeout=30, check=False)
+        _log_voice_event(text, True, "", context)
         return True, ""
     except Exception as e:
+        _log_voice_event(text, False, str(e), context)
         return False, str(e)
     finally:
         _release_voice_lock(lock_fd)
 
 
-def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) -> tuple[bool, str]:
+def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, context: dict = None) -> tuple[bool, str]:
     """
     Speak a short branded prefix in one voice immediately followed by the
     detail in a second voice — askr's two-tone "sonic logo" for the
@@ -125,10 +162,11 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) 
 
     Locked as a single unit so another process's announcement can never land
     between the prefix and body — that interleaving would sound just as
-    garbled as two full announcements overlapping.
+    garbled as two full announcements overlapping. `context` — see speak().
     """
     say_bin, reason = _say_preconditions()
     if not say_bin:
+        _log_voice_event(f"{prefix} {body}".strip(), False, reason, context)
         return False, reason
 
     lock_fd = _acquire_voice_lock()
@@ -137,23 +175,25 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str) 
             subprocess.run([say_bin, "-v", prefix_voice, humanize_for_speech(prefix)], timeout=30, check=False)
         if body:
             subprocess.run([say_bin, "-v", body_voice, humanize_for_speech(body)], timeout=30, check=False)
+        _log_voice_event(f"{prefix} {body}".strip(), True, "", context)
         return True, ""
     except Exception as e:
+        _log_voice_event(f"{prefix} {body}".strip(), False, str(e), context)
         return False, str(e)
     finally:
         _release_voice_lock(lock_fd)
 
 
-def announce(message: str, prefix: str = "Askr.") -> tuple[bool, str]:
+def announce(message: str, prefix: str = "Askr.", context: dict = None) -> tuple[bool, str]:
     """
     The single entry point every askr hook/daemon should call to speak —
     keeps all spoken output on the same voice(s) instead of some call sites
     using the configured sonic logo and others falling back to the system
     default. Honors the user's voice_mode: "dual" speaks `prefix` then
     `message` as the two-tone signature; "single" speaks `message` alone in
-    one configured voice.
+    one configured voice. `context` — see speak().
     """
     from askr.state.config import load_voice_mode, load_voice_single, load_voice_prefix, load_voice_body
     if load_voice_mode() == "single":
-        return speak(message, voice=load_voice_single())
-    return speak_signature(prefix, message, load_voice_prefix(), load_voice_body())
+        return speak(message, voice=load_voice_single(), context=context)
+    return speak_signature(prefix, message, load_voice_prefix(), load_voice_body(), context=context)

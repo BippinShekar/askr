@@ -170,6 +170,96 @@ class SpeakSignatureTests(unittest.TestCase):
             mock_run.assert_not_called()
 
 
+class VoiceLogTests(unittest.TestCase):
+    """
+    Every spoken-output attempt — successful or gated off — must land in
+    voice_log.jsonl with its text, timestamp, whether it actually played,
+    why not if it didn't, and whatever caller context was passed in. Added
+    2026-07-09 after a repeated-announcement incident that could only be
+    diagnosed by reading code and guessing at the mechanism, with no way to
+    confirm from disk which call site actually fired or how many times.
+    """
+
+    def _read_log(self, path):
+        with open(path) as f:
+            return [json.loads(line) for line in f if line.strip()]
+
+    def test_successful_speak_is_logged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=True), \
+                 patch("platform.system", return_value="Darwin"), \
+                 patch("shutil.which", return_value="/usr/bin/say"), \
+                 patch("subprocess.run"):
+                voice.speak("hello world", context={"source": "test.case", "project_path": "/tmp/proj"})
+            entries = self._read_log(log_path)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["text"], "hello world")
+            self.assertTrue(entries[0]["spoken"])
+            self.assertEqual(entries[0]["source"], "test.case")
+            self.assertEqual(entries[0]["project_path"], "/tmp/proj")
+            self.assertIn("ts", entries[0])
+
+    def test_gated_off_speak_is_still_logged_with_reason(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=False):
+                voice.speak("hello world", context={"source": "test.case"})
+            entries = self._read_log(log_path)
+            self.assertEqual(len(entries), 1)
+            self.assertFalse(entries[0]["spoken"])
+            self.assertIn("disabled", entries[0]["reason"])
+
+    def test_empty_text_is_not_logged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=True):
+                voice.speak("")
+            self.assertFalse(os.path.exists(log_path))
+
+    def test_speak_signature_logs_combined_prefix_and_body(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=True), \
+                 patch("platform.system", return_value="Darwin"), \
+                 patch("shutil.which", return_value="/usr/bin/say"), \
+                 patch("subprocess.run"):
+                voice.speak_signature("Done.", "ship OAuth", "Good News", "Zarvox")
+            entries = self._read_log(log_path)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["text"], "Done. ship OAuth")
+
+    def test_context_none_still_logs_without_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=False):
+                voice.speak("hello")
+            entries = self._read_log(log_path)
+            self.assertEqual(len(entries), 1)
+            self.assertNotIn("source", entries[0])
+
+    def test_announce_forwards_context_through_to_log(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = os.path.join(tmpdir, "voice_log.jsonl")
+            with patch.object(voice, "_VOICE_LOG_PATH", log_path), \
+                 patch("askr.state.config.load_voice_enabled", return_value=True), \
+                 patch("askr.state.config.load_voice_mode", return_value="single"), \
+                 patch("askr.state.config.load_voice_single", return_value="Zarvox"), \
+                 patch("platform.system", return_value="Darwin"), \
+                 patch("shutil.which", return_value="/usr/bin/say"), \
+                 patch("subprocess.run"):
+                voice.announce("hi", context={"source": "test.announce", "session_id": "sess-1"})
+            entries = self._read_log(log_path)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["source"], "test.announce")
+            self.assertEqual(entries[0]["session_id"], "sess-1")
+
+
 class HumanizeForSpeechTests(unittest.TestCase):
     def test_empty_string_passthrough(self):
         self.assertEqual(voice.humanize_for_speech(""), "")
@@ -428,12 +518,18 @@ class SpeakSessionDoneGatingTests(unittest.TestCase):
             path = _write_agent_dispatch(tmpdir, completed=True)
             with patch("askr.clients.voice.announce") as mock_announce:
                 stop_module._speak_session_done(["ship OAuth"], transcript_path=path)
-                mock_announce.assert_called_once_with("ship OAuth", prefix="Done.")
+                mock_announce.assert_called_once()
+                args, kwargs = mock_announce.call_args
+                self.assertEqual(args[0], "ship OAuth")
+                self.assertEqual(kwargs["prefix"], "Done.")
 
     def test_completed_goal_always_speaks_even_on_fast_turn(self):
         with patch("askr.clients.voice.announce") as mock_announce:
             stop_module._speak_session_done(["ship OAuth"], transcript_path="")
-            mock_announce.assert_called_once_with("ship OAuth", prefix="Done.")
+            mock_announce.assert_called_once()
+            args, kwargs = mock_announce.call_args
+            self.assertEqual(args[0], "ship OAuth")
+            self.assertEqual(kwargs["prefix"], "Done.")
 
     def test_fast_turn_no_goals_stays_silent(self):
         with tempfile.TemporaryDirectory() as tmpdir:

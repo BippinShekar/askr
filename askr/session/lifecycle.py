@@ -896,7 +896,7 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
             payload["prompt"] = f"Read the handover and start on the Next Action immediately. Work on: {goal}. Work autonomously."
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
-        _speak(msg)
+        _speak(msg, source=f"lifecycle._write_notification.{trigger}", project_path=project_path)
     except Exception:
         pass
 
@@ -969,7 +969,8 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
     idle_minutes = round(IDLE_TRIGGER_SECS / 60)
-    _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.")
+    _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.",
+           source="lifecycle._execute_idle_checkpoint", project_path=project_path)
 
 
 def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: str = None):
@@ -1218,7 +1219,8 @@ def _open_companion_session(project_path: str, session_id: str = None):
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
     # Speak only once the fallback spawn is actually dispatched, so the announcement
     # never lands before something has genuinely started happening.
-    _speak(companion_message)
+    _speak(companion_message, source="lifecycle._open_companion_session",
+           project_path=project_path, session_id=session_id or "")
 
 
 _TURN_STOP_DIR  = os.path.expanduser("~/.config/askr/turn_stops")
@@ -1504,10 +1506,10 @@ def _last_turn_stop(session_id: str):
         return None, None
 
 
-def _speak(message: str):
+def _speak(message: str, source: str = "", project_path: str = "", session_id: str = ""):
     try:
         from askr.clients.voice import announce
-        announce(message)
+        announce(message, context={"source": source, "project_path": project_path, "session_id": session_id})
     except Exception:
         pass
 
@@ -1613,7 +1615,9 @@ def run_daemon():
                         _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] resets={reset_at}")
                         quota_warned_windows.add(reset_at)
                         _save_quota_warned_windows(quota_warned_windows)
-                        _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.")
+                        _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.",
+                               source="lifecycle.quota_warning_headsup", project_path=project_path,
+                               session_id=session_id or "")
 
                     if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
                         # This exact session already got a companion. Since we never kill

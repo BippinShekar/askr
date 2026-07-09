@@ -337,7 +337,10 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
             json.dump(payload, f)
         try:
             from askr.clients.voice import announce
-            announce(payload["message"])
+            announce(payload["message"], context={
+                "source": f"stop._write_relaunch_notification_if_pending.{payload['type']}",
+                "project_path": project_path,
+            })
         except Exception:
             pass
 
@@ -546,7 +549,7 @@ def _has_outstanding_subagent(transcript_path: str) -> bool:
         return False
 
 
-def _speak_session_done(completed_goals: list, transcript_path: str = ""):
+def _speak_session_done(completed_goals: list, transcript_path: str = "", session_id: str = ""):
     """
     Spoken 'done' ping — deliberately gated differently from the Discord card
     above (which fires on completed_goals or >=5min TOTAL session duration,
@@ -573,7 +576,7 @@ def _speak_session_done(completed_goals: list, transcript_path: str = ""):
             body = random.choice(_GENERIC_DONE_PHRASES)
         else:
             return
-        announce(body, prefix="Done.")
+        announce(body, prefix="Done.", context={"source": "stop._speak_session_done", "session_id": session_id})
     except Exception:
         pass
 
@@ -634,7 +637,7 @@ def _run_background_handover(payload_path: str):
             transcript_path=ctx.get("transcript_path", ""),
             session_id=ctx.get("session_id", ""),
         )
-        _speak_session_done(result.get("completed_goals", []), ctx.get("transcript_path", ""))
+        _speak_session_done(result.get("completed_goals", []), ctx.get("transcript_path", ""), ctx.get("session_id", ""))
         _advance_launch_goal()
     except Exception as e:
         from askr.utils.logger import log_error
