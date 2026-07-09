@@ -362,6 +362,7 @@ The confirmation notification fires only when the top signal is weak (no uncommi
 
 ## Phase 3.13 — User-Rejection Tracking
 *Target: pre-stress-test*
+*Last audited against code: 2026-07-09*
 
 **Goal:** Track decisions Claude proposed that the user rejected. Separate from failed_approaches (technical dead ends) and decisions (settled choices). Feeds the implementation guard so it can catch re-suggestion of vetoed approaches across sessions.
 
@@ -373,11 +374,13 @@ The confirmation notification fires only when the top signal is weak (no uncommi
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | Handover LLM prompt extracts suggestion/rejection pairs from transcript with confidence score | 🔲 Todo |
-| S2 | `checkpoint.py` — `_write_rejections_from_handover()` appends above-threshold entries to `rejected_decisions.json` | 🔲 Todo |
-| S3 | `pre_tool_use.py` guard — query `rejected_decisions.json` by domain/file before allowing writes | 🔲 Todo |
+| S1 | Handover LLM prompt extracts suggestion/rejection pairs from transcript with confidence score | ✅ Done — `user_rejected_decisions[]` field in handover LLM prompt, written into `handover_<dev>.json`/`.md` (`checkpoint.py:286,331,720`) |
+| S2 | `checkpoint.py` — `_write_rejections_from_handover()` appends above-threshold entries to `rejected_decisions.json` | 🔲 Todo — rejections only live inside the per-dev handover, no standalone cumulative cross-session file |
+| S3 | `pre_tool_use.py` guard — query `rejected_decisions.json` by domain/file before allowing writes | 🔲 Todo — blocked on S2 |
 | S4 | Mid-session: `post_tool_use.py` also scans last user message in real time for high-confidence rejection signals, writes immediately (not just at checkpoint) | 🔲 Todo |
-| S5 | CLAUDE.md guard directive updated: check `rejected_decisions.json` before any edit | 🔲 Todo |
+| S5 | CLAUDE.md guard directive updated: check `rejected_decisions.json` before any edit | 🔲 Todo — blocked on S2 |
+
+**Current gap:** rejections are captured (S1) but don't survive past one handover cycle — nothing persists them cross-session or checks them before an edit, so a vetoed approach can still resurface in a later session.
 
 **Honest risks:**
 - "No, that's wrong" about the user's own code is structurally identical to rejecting Claude's suggestion. Extraction must classify the target of rejection, not just the rejection signal. Confidence threshold of 0.8 before writing — under-capture is acceptable, false positives in the guard erode trust faster than missed captures.
@@ -443,8 +446,9 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ---
 
-## Phase 3.16 — Emergency Handover Fix
+## Phase 3.16 — Emergency Handover Fix ✅
 *Target: pre-stress-test*
+*Last audited against code: 2026-07-09*
 
 **Goal:** PreCompact generates a real, LLM-quality handover — not boilerplate. All trigger types go through the same handover path. SIGTERM fires only after the handover is complete — no fixed timeout, dynamic wait.
 
@@ -454,19 +458,20 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | Remove `if trigger_type == "emergency"` branch in `create_checkpoint` | 🔲 Todo |
-| S2 | Mechanical handover written first from transcript + `edit_cursor.json` (instant, no LLM) — safety net | 🔲 Todo |
-| S3 | Haiku call runs, LLM handover overwrites mechanical version on success | 🔲 Todo |
-| S4 | SIGTERM sent only after file write + close completes. No fixed sleep. | 🔲 Todo |
-| S5 | Update `HOOK_TIMEOUTS["PreCompact"]` from 60 to 120 in `askr.py` — ceiling, not target | 🔲 Todo |
+| S1 | Remove `if trigger_type == "emergency"` branch in `create_checkpoint` | ✅ Done — confirmed removed, `checkpoint.py:820-827` |
+| S2 | Mechanical handover written first from transcript + `edit_cursor.json` (instant, no LLM) — safety net | ✅ Done |
+| S3 | Haiku call runs, LLM handover overwrites mechanical version on success | ✅ Done — PreCompact routes through the same LLM handover path as normal checkpoints |
+| S4 | SIGTERM sent only after file write + close completes. No fixed sleep. | ✅ Done |
+| S5 | Update `HOOK_TIMEOUTS["PreCompact"]` from 60 to 120 in `askr.py` — ceiling, not target | ✅ Done |
 
 **Honest risk:**
 - If the Haiku call hangs indefinitely (API outage, network timeout), the hook blocks until Claude Code's 120s ceiling kills it. The mechanical handover written in S2 survives this — it's on disk before the LLM call starts. The next session gets the mechanical version, which is sparse but not the current useless boilerplate.
 
 ---
 
-## Phase 3.17 — Auto-Populate decisions.md
+## Phase 3.17 — Auto-Populate decisions.md ✅
 *Target: pre-stress-test*
+*Last audited against code: 2026-07-09*
 
 **Goal:** decisions.md is never empty. Every checkpoint extracts settled decisions from the same LLM pass that generates the handover and writes them automatically.
 
@@ -474,8 +479,8 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 | Stage | Change | Status |
 |---|---|---|
-| S1 | Handover LLM prompt adds `decisions[]` field to JSON output | 🔲 Todo |
-| S2 | `checkpoint.py` — `_write_decisions_from_handover()` appends new decisions to `decisions.md` with dedup | 🔲 Todo |
+| S1 | Handover LLM prompt adds `decisions[]` field to JSON output | ✅ Done — `checkpoint.py:285` |
+| S2 | `checkpoint.py` — `_write_decisions_from_handover()` appends new decisions to `decisions.md` with dedup | ✅ Done — `checkpoint.py:425`, dedup via `_tail_decisions_jsonl`; git log confirms `decisions.jsonl` is committed automatically by askr's own `askr: idle`/`askr: checkpoint` commits |
 
 **Honest risks:** Low. The only risk is over-extraction — every observation becomes a "decision." Mitigate with a tight prompt definition: a decision is a choice between alternatives that rules something out, not a factual statement.
 
@@ -483,7 +488,7 @@ If file B changes and file A imports B, file A's snapshot entry is now stale. Th
 
 ## Phase 4 - Team Scale
 *Target: pre-launch*
-*Last audited against code: 2026-06-17*
+*Last audited against code: 2026-07-09*
 
 **Goal:** Multiple developers, shared state, concurrent sessions without conflicts.
 
@@ -514,8 +519,8 @@ Implemented as `askr_state/tasks/queue_<dev>.jsonl`, drained at `session_start.p
 | `session_start.py` — drain queue, inject tasks into session context before first prompt | ✅ Done |
 | Drained tasks archived with completion timestamp (`_drain_task_queue`, `session_start.py:179`) | ✅ Done |
 | `askr task list [<dev>]` — show pending queue for a developer (`askr.py:1286`) | ✅ Done |
-| **Approval gate (Phase 5) in place before dangerous-permission sessions run queued tasks** | ❌ **Not done — this shipped without the gate it explicitly required. Treat as the top priority blocker for any cross-dev queuing while either session has skip-permissions on.** |
-| Drain-then-truncate sequence is race-free under concurrent queue writes | ❌ **Not done — found 2026-06-17: `_drain_task_queue` reads, archives, then truncates the queue file with no lock. A task queued in that window is silently destroyed, no error.** |
+| **Approval gate (Phase 5) in place before dangerous-permission sessions run queued tasks** | ✅ Done — `permission_gate.py` (`is_dangerous_session`) invoked at `session_start.py:403`, writes `task_approval_pending` notification. Built 2026-07-02; this row was stale (contradicted the Phase 5 section below). |
+| Drain-then-truncate sequence is race-free under concurrent queue writes | ✅ Done — `_drain_task_queue` wrapped in `file_lock()` (`session_start.py:170-191`) |
 
 **Stage P4-2: `askr team` CLI** — ✅ **Built** (`cmd_team()`, `askr.py:1305`). Shows all developer handovers, last-seen, next action, live context % in one view.
 
@@ -533,7 +538,7 @@ Implemented as `askr_state/tasks/queue_<dev>.jsonl`, drained at `session_start.p
 
 ## Phase 5 - Hardening
 *Target: 1–2 months post-launch*
-*Last audited against code: 2026-06-17*
+*Last audited against code: 2026-07-09*
 
 **Goal:** Zero misfires. Trust is the product. Works on any machine, any project type.
 
@@ -544,7 +549,7 @@ Implemented as `askr_state/tasks/queue_<dev>.jsonl`, drained at `session_start.p
 | Per-project config file (thresholds, Discord webhook, context trigger %) | ✅ Done — `askr_state/config.json` (gitignored as of 2026-06-17; was briefly committed with a live webhook secret in history — rotate that webhook if not already done) |
 | Linux support (replace launchd with systemd) | 🔲 Todo |
 | Windows/WSL support | 🔲 Todo |
-| Test suite for all hook scripts | 🔲 Todo — 15 tests exist, thin coverage relative to daemon/hook surface area |
+| Test suite for all hook scripts | 🔲 Todo — grown to 188 tests across 13 files (up from 15); guard/permission-gate paths now covered (`test_guard_runner.py`, `test_pre_tool_use_guard.py`, `test_permission_gate.py`, `test_task_approval_gate.py`) but hook entrypoints themselves (`session_start.py`, `stop.py`, `user_prompt_submit.py`) still lack dedicated test files |
 | `askr doctor` — diagnose common setup issues (venv missing, hooks not firing, JSONL not found) | 🔲 Todo |
 
 **Approval Gate for Queued Tasks** — ✅ **Core enforcement built 2026-07-02.** Stage P4-1 above shipped the dangerous half (queue + auto-inject) without it; that gap is now closed at the enforcement layer. IDE popup rendering is still open (see below).
@@ -556,6 +561,8 @@ Trigger (any one condition is sufficient):
 - `Bash(*)` or unrestricted Bash in `allowedTools`
 - Any `rm` / delete pattern in `permissions.allow`
 
+**Scope note (2026-07-09 audit):** this gate covers *queued-task execution* under dangerous permissions — it does not gate *session launch itself*. Nothing currently stops a session from launching with `--dangerously-skip-permissions` in the first place; that remains an open gap, tracked below as a pre-launch item.
+
 Behavior when triggered + queued tasks exist: surface confirmation before any queued task executes. IDE popup if Cursor is open; Discord notification if headless. Tasks are blocked, not silently dropped.
 
 | Feature | Status |
@@ -565,7 +572,8 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 | `askr task approve` / `askr task discard` — resolve held tasks; approve is one-shot, doesn't disable the gate permanently | ✅ Done |
 | Headless path: Discord notification (`task_approval_pending`) with task list + approve/discard instructions | ✅ Done |
 | Non-dangerous sessions: queued tasks auto-run without gate (by design) | ✅ Done — unchanged existing path |
-| IDE popup listing queued tasks + current permission state | 🔲 Todo — `notification.json` type `task_approval_pending` is written correctly, but the Cursor extension (`extension.js`) whitelists known notification types and doesn't render this one yet. Note: `guard_warning` (Phase 3.5) has the same gap — it isn't in the extension's type whitelist either, so that IDE popup may not actually be rendering today. Worth auditing together. |
+| IDE popup listing queued tasks + current permission state | 🔲 Todo — confirmed 2026-07-09: `extension.js` `checkNotification()` has explicit cases for `context`, `goal_launch`, `goal_check`, `reload_extension`, `direction_proposal`, `direction_confirm`/`direction_needed`, with a generic fallback for everything else. `task_approval_pending` and `guard_warning` both fall through to that generic popup — neither gets a purpose-built UI. |
+| Gate session launch itself on `--dangerously-skip-permissions` (distinct from the queued-task gate above) | 🔲 Todo — confirmed 2026-07-09: no code path prevents a session from launching with `--dangerously-skip-permissions`; only tasks queued *into* such a session are gated. |
 
 ---
 
@@ -614,23 +622,23 @@ Behavior when triggered + queued tasks exist: surface confirmation before any qu
 
 ---
 
-## Phase 7.1 — Pre-Launch Audit (2026-07-02)
+## Phase 7.1 — Pre-Launch Audit (2026-07-02, re-audited 2026-07-09)
 
-**Context:** Repo is already public on GitHub. Audit found a live secret leak and confirmed several roadmap-flagged gaps are still open in code, not just doc. Full items also filed as backlog goals so they survive regardless of handover summarization.
+**Context:** Repo is already public on GitHub. Original audit found a live secret leak and confirmed several roadmap-flagged gaps were open in code, not just doc. Re-audited 2026-07-09 against current code — most items have since shipped.
 
 | Severity | Finding | Status |
 |---|---|---|
-| P0 | Discord webhook committed in plaintext at `50eba93`, still in `origin/main` history on the **public** repo — untracked going forward (`7735e19`) but never scrubbed from history | Webhook rotated 2026-07-02; history scrub (git filter-repo + force-push) still pending, needs explicit go-ahead per push safety policy |
-| P0 | `Formula/askr.rb` cannot install askr: placeholder sha256, tag `v1.0.0` doesn't exist, only copies root `*.py` (misses entire `askr/` package), never creates `bin/askr` | Open — see backlog goal |
-| P1 | Zero gate anywhere in `askr/` on `--dangerously-skip-permissions` sessions — confirmed via full-repo grep, matches roadmap Phase 5 claim | Open — Phase 5 approval gate, unbuilt |
-| P1 | `pre_tool_use.py` cross-repo boundary check (fixed 2026-07-01) only covers Write/Edit/MultiEdit — Bash tool calls can still cross repo boundaries undetected | Open |
-| P1 | PreCompact emergency handover still hardcoded boilerplate, doesn't route through LLM handover path (roadmap Phase 3.16, confirmed still true in code) | Open |
-| P1 | `pre_tool_use.py`/`guard_runner.py` — zero test coverage on the guard, the most security-critical path in the hook system | Open |
-| P1 | README.md describes Phase 3 (notifications) and Phase 3.5 (guard) as "Coming Next" — both are built and running; misleads new external readers | Open |
-| Verified fixed | P4-1 `_drain_task_queue` race (read-archive-truncate with no lock, found 2026-06-17) | Confirmed fixed — now wrapped in `file_lock()` |
-| Verified fixed | Handover generation could bleed sibling-repo work into this repo's `askr_state/` (found + fixed 2026-07-01) | Fixed in `checkpoint.py` — `project_path` now passed explicitly into the LLM prompt |
+| — | Discord webhook committed in plaintext at `50eba93` | Closed — webhook rotated 2026-07-02, old token is dead. Not a live risk; history scrub not needed. |
+| P0 | `Formula/askr.rb` cannot install askr: placeholder sha256, tag `v1.0.0` doesn't exist, only copies root `*.py` (misses entire `askr/` package), never creates `bin/askr` | ✅ Fixed — real tag `v0.1.0`, real pinned sha256, installs full `askr/` package + `bin/askr` entry point |
+| P1 | Zero gate anywhere in `askr/` on `--dangerously-skip-permissions` sessions | Split into two distinct gaps on re-audit: queued-task execution under dangerous permissions is now gated (`permission_gate.py`, Phase 5, done 2026-07-02); **session launch itself is still ungated** — see Phase 4 P4-1 note above. |
+| P1 | `pre_tool_use.py` cross-repo boundary check only covers Write/Edit/MultiEdit — Bash tool calls can still cross repo boundaries undetected | ✅ Fixed — `find_cross_repo_bash_path()` + dedicated Bash branch, `pre_tool_use.py:208,274` |
+| P1 | PreCompact emergency handover still hardcoded boilerplate, doesn't route through LLM handover path | ✅ Fixed — see Phase 3.16 above |
+| P1 | `pre_tool_use.py`/`guard_runner.py` — zero test coverage on the guard | ✅ Fixed — `test_guard_runner.py`, `test_pre_tool_use_guard.py`, `test_permission_gate.py` |
+| P1 | README.md describes Phase 3 (notifications) and Phase 3.5 (guard) as "Coming Next" | ✅ Fixed — README no longer claims this; documents the real remaining `guard_warning`/`task_approval_pending` IDE gap instead |
+| Verified fixed | P4-1 `_drain_task_queue` race (read-archive-truncate with no lock) | Confirmed fixed — wrapped in `file_lock()` |
+| Verified fixed | Handover generation could bleed sibling-repo work into this repo's `askr_state/` | Fixed in `checkpoint.py` — `project_path` now passed explicitly into the LLM prompt |
 
-All P0/P1 items above also live in `askr_state/goals.jsonl` backlog (`askr goal add ... --backlog`) so they don't depend on next_actions[]'s 3-5 item summarization cap to survive into the next session.
+**Remaining open items post re-audit:** session-launch-time `--dangerously-skip-permissions` gate, IDE popup rendering for `task_approval_pending`/`guard_warning` (Phase 5), Phase 3.13 S2-S5 (persisted rejection tracking), Phase 3.14/3.15 (snapshot-as-architecture, smart context injection), Phase 3.9 (behavioral preference persistence), and an unproven real overnight unattended run (Phase 2).
 
 ---
 
