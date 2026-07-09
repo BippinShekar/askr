@@ -1609,11 +1609,25 @@ def run_daemon():
                         # thread — and re-speak the same "Quota at X%" line — every 5 minutes
                         # for as long as the wait lasts.
                         _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
+                    elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER and not reset_at:
+                        # Real bug found 2026-07-09: this branch used to fire unconditionally
+                        # on quota_pct alone, while the dedup two branches up can only engage
+                        # when reset_at is truthy. A fresh per-session stats file (new session_id,
+                        # or a companion askr itself just opened) starts with reset_at=None until
+                        # its first successful usage-API refresh in post_tool_use.py — during that
+                        # window quota_pct can still read a stale-but-real 90%+ from ANOTHER
+                        # source, so this condition was true with nothing to dedup on, and kept
+                        # re-firing (and re-speaking "Quota at X%") every poll cycle for as long
+                        # as reset_at stayed empty. quota_triggered_windows.json was confirmed
+                        # empty in production despite repeated announcements — proof the guard
+                        # never actually engaged. Skip and retry next cycle instead: without a
+                        # real reset_at we can't safely promise "waiting for reset" anyway.
+                        _log(f"quota={quota_pct:.1f}% >= trigger but reset_at not yet known — "
+                             f"skipping this cycle, will retry [{project_path}]")
                     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
                         _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
-                        if reset_at:
-                            quota_triggered_windows.add(reset_at)
-                            _save_quota_triggered_windows(quota_triggered_windows)
+                        quota_triggered_windows.add(reset_at)
+                        _save_quota_triggered_windows(quota_triggered_windows)
                         # _execute_trigger can block for hours in _wait_for_reset — run it off
                         # the poll-loop thread so other open projects don't go unmonitored for
                         # the whole quota window (this was the root cause of triggers/warnings
