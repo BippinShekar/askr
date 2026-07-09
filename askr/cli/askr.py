@@ -936,10 +936,11 @@ def _statusline_text() -> str:
 
         # session_start.py writes this file immediately on startup with
         # turns=0 so a same-session fallback never lands on a stale sibling
-        # session's stats — but that means "ctx:0%" before the first message
+        # session's stats — but that means "chat:0%" before the first message
         # looks like a measured reading instead of "no usage data yet".
-        # Distinguish the two.
-        ctx_part   = f"ctx:{ctx_pct}%" if s.get("turns", 0) > 0 else "ctx:–"
+        # Distinguish the two. Label matches the IDE extension's "chat X%" —
+        # same per-chat-window metric, same word, so the two surfaces agree.
+        ctx_part   = f"chat:{ctx_pct}%" if s.get("turns", 0) > 0 else "chat:–"
         quota_part = f"quota:{quota_pct:.0f}%" if quota_pct is not None else ""
         reset_part = _reset_countdown(reset_at) if reset_at else ""
 
@@ -1606,7 +1607,7 @@ def cmd_team():
         dev_project = h.get("session_metadata", {}).get("project_path", current_project)
         stats = stats_by_project.get(dev_project) or stats_by_project.get(current_project, {})
         ctx_pct = stats.get("context_pct")
-        ctx_str = f"ctx:{ctx_pct:.0%}" if ctx_pct else "idle"
+        ctx_str = f"chat:{ctx_pct:.0%}" if ctx_pct else "idle"
 
         blocker_str = f"  [red]⚠ {blockers[0][:50]}[/red]" if blockers else ""
 
