@@ -304,6 +304,37 @@ function checkNotification() {
         terminal.sendText(`claude${toolsFlag}`);
         setTimeout(() => { terminal.sendText(safeInput, false); terminal.sendText('\r', false); }, 4000);
       });
+    } else if (n.type === 'guard_warning') {
+      // Non-blocking by design (Phase 3.5) — informational only, no action needed.
+      vscode.window.showWarningMessage(`Askr guard: ${n.summary || n.message}`);
+    } else if (n.type === 'task_approval_pending') {
+      // Phase 5 approval gate — a teammate's queued task is held because this
+      // session has dangerous permissions (--dangerously-skip-permissions,
+      // unrestricted Bash, or an rm pattern in permissions.allow).
+      const dev = (n.developer || '').replace(/"/g, '').replace(/`/g, '');
+      const count = (n.tasks || []).length;
+      vscode.window.showWarningMessage(
+        `Askr: ${count} queued task(s) held for ${dev} — ${(n.reasons || []).join('; ')}`,
+        'Approve', 'Discard'
+      ).then(action => {
+        if (!action) return;
+        const terminal = vscode.window.createTerminal({ name: 'askr — task approval' });
+        terminal.show();
+        terminal.sendText(action === 'Approve' ? `askr task approve ${dev}` : `askr task discard ${dev}`);
+      });
+    } else if (n.type === 'dangerous_autolaunch_pending') {
+      // Same gate, applied to askr's own autonomous relaunch instead of a
+      // teammate's queued task — see roadmap.md Phase 5.
+      const dev = (n.developer || '').replace(/"/g, '').replace(/`/g, '');
+      vscode.window.showWarningMessage(
+        `Askr: autonomous relaunch held for ${dev} — ${(n.reasons || []).join('; ')}`,
+        'Approve'
+      ).then(action => {
+        if (action !== 'Approve') return;
+        const terminal = vscode.window.createTerminal({ name: 'askr — launch approval' });
+        terminal.show();
+        terminal.sendText('askr launch approve');
+      });
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
