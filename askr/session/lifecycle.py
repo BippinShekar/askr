@@ -444,6 +444,12 @@ def _notify_launch_held(project_path: str, developer: str, reasons: list[str]):
         send_message(f"\U0001F6D1 **[askr] Autonomous relaunch held — approval needed**\n{message}")
     except Exception:
         pass
+    # Found 2026-07-11: this function had no voice call at all. Combined with
+    # skip_permissions_only previously not existing (see is_dangerous_session),
+    # a relaunch being held was completely silent — no voice, nothing but a
+    # Discord message and an IDE popup nobody was watching. From the user's
+    # side that's indistinguishable from "the trigger system stopped working."
+    _speak(message, source="lifecycle._notify_launch_held", project_path=project_path)
 
 
 def _launch_gate_check(project_path: str, developer: str) -> bool:
@@ -457,10 +463,17 @@ def _launch_gate_check(project_path: str, developer: str) -> bool:
     goal trigger inherits the exact same zero-friction permission state from
     whatever session triggered it. That's the same risk class, just without
     a teammate in the loop — so it gets the same hold-until-approved gate.
+
+    skip_permissions_only=True: unlike the cross-dev queue gate, broad
+    allowedTools (Phase 3.8's deliberate steady state for any actively-used
+    project) is not itself an escalation here — only an actual
+    --dangerously-skip-permissions launch flag is. See is_dangerous_session's
+    docstring for the 2026-07-11 incident this fixes: the wider check fired
+    on effectively every real project, holding every relaunch silently.
     """
     try:
         from askr.session.permission_gate import is_dangerous_session
-        dangerous, reasons = is_dangerous_session(project_path)
+        dangerous, reasons = is_dangerous_session(project_path, skip_permissions_only=True)
     except Exception:
         return True
     if not dangerous:
