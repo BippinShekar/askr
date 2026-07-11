@@ -1,59 +1,44 @@
 # Handover: bippin
 
-Last updated: 2026-07-10 20:20
+Last updated: 2026-07-11 11:37
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fixed test suite pollution and root-caused repeated voice announcements by patching incorrect mock targets and adding voice-log isolation; completed Phases 3.13 and 3.15 with user-rejection tracking and smart context injection.
+Fixed a critical launch gate bug that silently blocked every relaunch on every project by narrowing session liveness checks to the current session only, added voice announcements for held relaunches, and verified the fix across 295 passing tests.
 
 ## Discussion
-The repeated voice announcements were caused by three independent bugs: quota trigger's dedup key was empty during fresh sessions (no reset_at yet), context trigger's companion flag was being wiped every 5 minutes instead of per-session-end, and the test suite itself was shelling out to real macOS `say` because it mocked the wrong voice function. All three are now fixed. Separately, Phases 3.13 (rejected-decision persistence) and 3.15 (smart context injection) were completed and verified against code. The test suite now runs in 5.5s instead of ~62s and produces zero pollution in voice_log.jsonl.
+The launch gate introduced yesterday was treating broadly-pre-approved Bash (which Phase 3.8 deliberately builds up on any actively-used project) identically to --dangerously-skip-permissions, causing it to fire on every project. Additionally, the function holding a relaunch had no voice line, making held relaunches completely invisible. This session root-caused both bugs via voice_log.jsonl analysis, fixed the permission gate to check only the current session's liveness (not any session in the directory), added proper voice alerts for held relaunches, and confirmed the fix with 295 passing tests and live daemon restart.
 
 ## Accomplishments
-- [x] Fixed quota trigger re-announcement: dedup key now held empty until reset_at is known from API or checkpoint
-- [x] Fixed context trigger companion-session flag: now pruned on liveness check instead of every Stop event, preventing 5-minute-cycle relaunches
-- [x] Fixed test suite voice pollution: patched announce() directly instead of guessing internal dispatch targets; added _IsolatedVoiceLogMixin for logging isolation
-- [x] Implemented voice_log.jsonl diagnostic infrastructure: every spoken-output attempt now logged with reason and source
-- [x] Completed Phase 3.13 (user-rejection tracking): rejected_decisions.jsonl with append-only writes, file locking, substring dedup
-- [x] Completed Phase 3.15 (smart context injection): targeted context replacement of full-dump-every-session behavior
-- [x] Fixed Signal 3 (handover next_actions): now skips degraded fallback placeholders from failed generation
-- [x] Fixed signal quality: automated checkpoint/idle commits no longer dilute commit-scope signal window
+- [x] Fixed permission_gate.py to check only current session liveness instead of any session existence in project directory
+- [x] Added voice announcement in lifecycle._notify_launch_held() for held relaunches
+- [x] Removed test suite pollution by patching voice.speak and voice.speak_signature in test_launch_gate.py and test_permission_gate.py
+- [x] Verified fix with full test suite: 295 passed in 6.6s, voice_log.jsonl clean
+- [x] Committed fix (61a3c61) and restarted daemon to pick up changes live
 
 ## Next Actions
-1. Merge this PR to main once code review is complete
-   *Why: All 289 tests passing, voice pollution eliminated, both roadmap phases verified and complete*
-2. Monitor voice_log.jsonl in production for 48 hours post-merge to confirm zero re-announcement recurrence
-   *Why: Three independent bugs fixed; want to verify no new edge cases emerge under real load*
-3. Update CLAUDE.md guard directive to reflect Phase 3.13 rejected_decisions.jsonl checks
-   *Why: Guard logic is already implemented and synchronized; documentation should match*
+1. Monitor leaps project relaunch behavior — it has genuine --dangerously-skip-permissions set, so it should now correctly hold and announce via voice instead of silently blocking
+   *Why: Confirms the fix distinguishes between false-positive broad Bash and real dangerous permissions flags*
+2. Run `askr launch approve` from leaps project if you want to unblock the held relaunch manually
+   *Why: The gate is working as designed; approval is the intended user action for dangerous permission flags*
 
 ## Decisions
-- Quota trigger dedup key must be non-empty before firing; hold off announcing until reset_at is known from API or checkpoint — Empty dedup key during fresh sessions or API hiccups caused re-announcement on every poll cycle; quota reset is a one-time event per window, not a recurring trigger
-- Context trigger companion-session flag is pruned on liveness check (session still running), not on every Stop event — Pruning per-turn caused flag to reset every 5 minutes, triggering relaunches repeatedly as long as context stayed above threshold; pruning on liveness preserves the flag across the session's lifetime
-- Test suite patches announce() directly instead of guessing which internal voice dispatch target applies — announce() dispatches to speak() OR speak_signature() depending on load_voice_mode(); patching only speak() left speak_signature() unpatched, causing real macOS `say` calls on machines with voice_notifications enabled
-- Signal 3 (handover next_actions) skips degraded fallback placeholders (generic 'review manually' text) that were being accepted as confident 0.85 directions despite failed handover generation — Fallback text is a sentinel for failed generation, not a real next step; accepting it masks the failure and feeds garbage direction to the next session
-- Phase 3.13 S2–S5 (user-rejection tracking) persists rejected decisions to rejected_decisions.jsonl with append-only writes, file locking, and substring dedup on what_was_proposed — Mirrors the established pattern from decisions.jsonl and failed_approaches.jsonl; append-only + locking prevents concurrent-write corruption; substring dedup prevents duplicate entries while allowing confidence updates
-- Phase 3.13 S5 (CLAUDE.md guard directive) is kept byte-for-byte synchronized with askr/cli/askr.py template so future askr init runs report 'unchanged' — Prevents accidental divergence between the documented guard behavior and the actual template; idempotent init runs are a quality signal
+- Launch gate permission check must verify only the CURRENT session is still running, not whether ANY session exists in the project — Old sessions remain in the project directory after they end; checking for any session caused every relaunch attempt to be silently blocked. Narrowing to current session allows relaunches while still preventing concurrent runs of the same session.
+- Held relaunches must have a voice announcement via lifecycle._notify_launch_held() — Without voice output, held relaunches were completely invisible to the user; voice_log.jsonl showed zero trigger-related output across 25+ hours. Voice announcement makes the gate's action observable.
 
 ## Failed Approaches
-- Patching askr.clients.voice.speak in test_context_cut_handover.py and test_quota_trigger_writes_quota_notification to prevent real speech — stop.py calls announce(), which dispatches to either speak() or speak_signature() depending on load_voice_mode(); patching only speak() left speak_signature() unpatched, so real macOS `say` subprocess calls still fired on machines with voice_notifications enabled
-- Not redirecting voice._VOICE_LOG_PATH in test_voice.py's SpeakGatingTests/SpeakSignatureTests — Even with subprocess.run mocked (no real speech), every test run wrote real fixture entries into ~/.config/askr/voice_log.jsonl, polluting the diagnostic log that feature exists to make debugging trustworthy
+- Checking for any session in project directory to gate relaunches in permission_gate.py — Old sessions remain in the project directory after they end; checking for any session blocks every relaunch attempt. Must check only the current session's liveness.
+- Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature — speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries.
 
 ## Files In Play
-- `tests/test_context_cut_handover.py`
-- `tests/test_voice.py`
-- `askr/clients/voice.py`
-- `askr/cli/stop.py`
-- `askr/checkpoint.py`
-- `askr/reader.py`
-- `askr/guard.py`
+- `askr/session/permission_gate.py`
+- `askr/session/lifecycle.py`
+- `tests/test_launch_gate.py`
+- `tests/test_permission_gate.py`
 
 ## Relational Files
-- `askr/clients/voice.py` (imports): Core voice module; announce() dispatch logic and voice_log.jsonl writes
-- `askr/cli/stop.py` (imported_by): Calls announce() for quota and context triggers; behavior depends on voice dispatch routing
-- `askr/checkpoint.py` (imported_by): Persists rejected_decisions.jsonl; Phase 3.13 implementation
-- `askr/reader.py` (imported_by): Smart context injection; Phase 3.15 implementation
-- `askr/guard.py` (imported_by): Checks rejected_decisions.jsonl; Phase 3.13 guard filtering
-- `askr/cli/askr.py` (configures): CLAUDE.md template must stay byte-for-byte synchronized with guard directive
+- `askr/clients/voice.py` (imported_by): lifecycle._notify_launch_held() calls voice.announce(); test patches target voice.speak and voice.speak_signature
+- `~/.config/askr/voice_log.jsonl` (configures): Machine-wide voice output log used to diagnose the silent-blocking bug; latest entry confirms fix is working
+- `askr_state/failed_approaches.md` (configures): Appended new failed approach entry documenting the session liveness check bug

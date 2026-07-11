@@ -1,37 +1,25 @@
 {
-  "task": "Fixed test suite pollution and root-caused repeated voice announcements by patching incorrect mock targets and adding voice-log isolation; completed Phases 3.13 and 3.15 with user-rejection tracking and smart context injection.",
-  "discussion_summary": "The repeated voice announcements were caused by three independent bugs: quota trigger's dedup key was empty during fresh sessions (no reset_at yet), context trigger's companion flag was being wiped every 5 minutes instead of per-session-end, and the test suite itself was shelling out to real macOS `say` because it mocked the wrong voice function. All three are now fixed. Separately, Phases 3.13 (rejected-decision persistence) and 3.15 (smart context injection) were completed and verified against code. The test suite now runs in 5.5s instead of ~62s and produces zero pollution in voice_log.jsonl.",
+  "task": "Fixed a critical launch gate bug that silently blocked every relaunch on every project by narrowing session liveness checks to the current session only, added voice announcements for held relaunches, and verified the fix across 295 passing tests.",
+  "discussion_summary": "The launch gate introduced yesterday was treating broadly-pre-approved Bash (which Phase 3.8 deliberately builds up on any actively-used project) identically to --dangerously-skip-permissions, causing it to fire on every project. Additionally, the function holding a relaunch had no voice line, making held relaunches completely invisible. This session root-caused both bugs via voice_log.jsonl analysis, fixed the permission gate to check only the current session's liveness (not any session in the directory), added proper voice alerts for held relaunches, and confirmed the fix with 295 passing tests and live daemon restart.",
   "accomplishments": [
     {
-      "what": "Fixed quota trigger re-announcement: dedup key now held empty until reset_at is known from API or checkpoint",
+      "what": "Fixed permission_gate.py to check only current session liveness instead of any session existence in project directory",
       "done": true
     },
     {
-      "what": "Fixed context trigger companion-session flag: now pruned on liveness check instead of every Stop event, preventing 5-minute-cycle relaunches",
+      "what": "Added voice announcement in lifecycle._notify_launch_held() for held relaunches",
       "done": true
     },
     {
-      "what": "Fixed test suite voice pollution: patched announce() directly instead of guessing internal dispatch targets; added _IsolatedVoiceLogMixin for logging isolation",
+      "what": "Removed test suite pollution by patching voice.speak and voice.speak_signature in test_launch_gate.py and test_permission_gate.py",
       "done": true
     },
     {
-      "what": "Implemented voice_log.jsonl diagnostic infrastructure: every spoken-output attempt now logged with reason and source",
+      "what": "Verified fix with full test suite: 295 passed in 6.6s, voice_log.jsonl clean",
       "done": true
     },
     {
-      "what": "Completed Phase 3.13 (user-rejection tracking): rejected_decisions.jsonl with append-only writes, file locking, substring dedup",
-      "done": true
-    },
-    {
-      "what": "Completed Phase 3.15 (smart context injection): targeted context replacement of full-dump-every-session behavior",
-      "done": true
-    },
-    {
-      "what": "Fixed Signal 3 (handover next_actions): now skips degraded fallback placeholders from failed generation",
-      "done": true
-    },
-    {
-      "what": "Fixed signal quality: automated checkpoint/idle commits no longer dilute commit-scope signal window",
+      "what": "Committed fix (61a3c61) and restarted daemon to pick up changes live",
       "done": true
     }
   ],
@@ -39,96 +27,57 @@
   "next_actions": [
     {
       "order": 1,
-      "action": "Merge this PR to main once code review is complete",
-      "why": "All 289 tests passing, voice pollution eliminated, both roadmap phases verified and complete"
+      "action": "Monitor leaps project relaunch behavior \u2014 it has genuine --dangerously-skip-permissions set, so it should now correctly hold and announce via voice instead of silently blocking",
+      "why": "Confirms the fix distinguishes between false-positive broad Bash and real dangerous permissions flags"
     },
     {
       "order": 2,
-      "action": "Monitor voice_log.jsonl in production for 48 hours post-merge to confirm zero re-announcement recurrence",
-      "why": "Three independent bugs fixed; want to verify no new edge cases emerge under real load"
-    },
-    {
-      "order": 3,
-      "action": "Update CLAUDE.md guard directive to reflect Phase 3.13 rejected_decisions.jsonl checks",
-      "why": "Guard logic is already implemented and synchronized; documentation should match"
+      "action": "Run `askr launch approve` from leaps project if you want to unblock the held relaunch manually",
+      "why": "The gate is working as designed; approval is the intended user action for dangerous permission flags"
     }
   ],
   "decisions": [
     {
-      "decision": "Quota trigger dedup key must be non-empty before firing; hold off announcing until reset_at is known from API or checkpoint",
-      "reason": "Empty dedup key during fresh sessions or API hiccups caused re-announcement on every poll cycle; quota reset is a one-time event per window, not a recurring trigger"
+      "decision": "Launch gate permission check must verify only the CURRENT session is still running, not whether ANY session exists in the project",
+      "reason": "Old sessions remain in the project directory after they end; checking for any session caused every relaunch attempt to be silently blocked. Narrowing to current session allows relaunches while still preventing concurrent runs of the same session."
     },
     {
-      "decision": "Context trigger companion-session flag is pruned on liveness check (session still running), not on every Stop event",
-      "reason": "Pruning per-turn caused flag to reset every 5 minutes, triggering relaunches repeatedly as long as context stayed above threshold; pruning on liveness preserves the flag across the session's lifetime"
-    },
-    {
-      "decision": "Test suite patches announce() directly instead of guessing which internal voice dispatch target applies",
-      "reason": "announce() dispatches to speak() OR speak_signature() depending on load_voice_mode(); patching only speak() left speak_signature() unpatched, causing real macOS `say` calls on machines with voice_notifications enabled"
-    },
-    {
-      "decision": "Signal 3 (handover next_actions) skips degraded fallback placeholders (generic 'review manually' text) that were being accepted as confident 0.85 directions despite failed handover generation",
-      "reason": "Fallback text is a sentinel for failed generation, not a real next step; accepting it masks the failure and feeds garbage direction to the next session"
-    },
-    {
-      "decision": "Phase 3.13 S2\u2013S5 (user-rejection tracking) persists rejected decisions to rejected_decisions.jsonl with append-only writes, file locking, and substring dedup on what_was_proposed",
-      "reason": "Mirrors the established pattern from decisions.jsonl and failed_approaches.jsonl; append-only + locking prevents concurrent-write corruption; substring dedup prevents duplicate entries while allowing confidence updates"
-    },
-    {
-      "decision": "Phase 3.13 S5 (CLAUDE.md guard directive) is kept byte-for-byte synchronized with askr/cli/askr.py template so future askr init runs report 'unchanged'",
-      "reason": "Prevents accidental divergence between the documented guard behavior and the actual template; idempotent init runs are a quality signal"
+      "decision": "Held relaunches must have a voice announcement via lifecycle._notify_launch_held()",
+      "reason": "Without voice output, held relaunches were completely invisible to the user; voice_log.jsonl showed zero trigger-related output across 25+ hours. Voice announcement makes the gate's action observable."
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [
     {
-      "approach": "Patching askr.clients.voice.speak in test_context_cut_handover.py and test_quota_trigger_writes_quota_notification to prevent real speech",
-      "reason": "stop.py calls announce(), which dispatches to either speak() or speak_signature() depending on load_voice_mode(); patching only speak() left speak_signature() unpatched, so real macOS `say` subprocess calls still fired on machines with voice_notifications enabled"
+      "approach": "Checking for any session in project directory to gate relaunches in permission_gate.py",
+      "reason": "Old sessions remain in the project directory after they end; checking for any session blocks every relaunch attempt. Must check only the current session's liveness."
     },
     {
-      "approach": "Not redirecting voice._VOICE_LOG_PATH in test_voice.py's SpeakGatingTests/SpeakSignatureTests",
-      "reason": "Even with subprocess.run mocked (no real speech), every test run wrote real fixture entries into ~/.config/askr/voice_log.jsonl, polluting the diagnostic log that feature exists to make debugging trustworthy"
+      "approach": "Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature",
+      "reason": "speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries."
     }
   ],
   "files_in_play": [
-    "tests/test_context_cut_handover.py",
-    "tests/test_voice.py",
-    "askr/clients/voice.py",
-    "askr/cli/stop.py",
-    "askr/checkpoint.py",
-    "askr/reader.py",
-    "askr/guard.py"
+    "askr/session/permission_gate.py",
+    "askr/session/lifecycle.py",
+    "tests/test_launch_gate.py",
+    "tests/test_permission_gate.py"
   ],
   "relational_files": [
     {
       "file": "askr/clients/voice.py",
-      "relationship": "imports",
-      "why": "Core voice module; announce() dispatch logic and voice_log.jsonl writes"
-    },
-    {
-      "file": "askr/cli/stop.py",
       "relationship": "imported_by",
-      "why": "Calls announce() for quota and context triggers; behavior depends on voice dispatch routing"
+      "why": "lifecycle._notify_launch_held() calls voice.announce(); test patches target voice.speak and voice.speak_signature"
     },
     {
-      "file": "askr/checkpoint.py",
-      "relationship": "imported_by",
-      "why": "Persists rejected_decisions.jsonl; Phase 3.13 implementation"
-    },
-    {
-      "file": "askr/reader.py",
-      "relationship": "imported_by",
-      "why": "Smart context injection; Phase 3.15 implementation"
-    },
-    {
-      "file": "askr/guard.py",
-      "relationship": "imported_by",
-      "why": "Checks rejected_decisions.jsonl; Phase 3.13 guard filtering"
-    },
-    {
-      "file": "askr/cli/askr.py",
+      "file": "~/.config/askr/voice_log.jsonl",
       "relationship": "configures",
-      "why": "CLAUDE.md template must stay byte-for-byte synchronized with guard directive"
+      "why": "Machine-wide voice output log used to diagnose the silent-blocking bug; latest entry confirms fix is working"
+    },
+    {
+      "file": "askr_state/failed_approaches.md",
+      "relationship": "configures",
+      "why": "Appended new failed approach entry documenting the session liveness check bug"
     }
   ],
   "uncommitted_files": [],
@@ -136,7 +85,7 @@
   "completed_goals": [],
   "session_metadata": {
     "trigger_type": "context",
-    "timestamp": "2026-07-10T20:20:00.000000+00:00",
+    "timestamp": "2026-07-11T06:07:35.407430+00:00",
     "developer": "bippin"
   }
 }
