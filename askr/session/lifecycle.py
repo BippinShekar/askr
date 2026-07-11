@@ -1181,9 +1181,10 @@ def _turn_currently_active(session_id: str) -> bool:
 
 def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     """
-    Block until the current Claude reply finishes — the user must always get
-    their complete reply before askr acts on their session (opening a companion
-    window, or reading the transcript for a checkpoint).
+    Block until the current Claude reply finishes AND no new one has started —
+    the user must always get a genuinely quiet moment before askr acts on
+    their session (opening a companion window, or reading the transcript for
+    a checkpoint).
 
     "Reply finished" is detected via the Stop hook's own completion signal
     (askr/hooks/stop.py writes ~/.config/askr/turn_stops/<session_id>.json when it
@@ -1193,6 +1194,15 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     acting while the original turn was still very much in progress. The Stop
     hook firing is the only authoritative "turn is done" signal.
 
+    Found 2026-07-11: that alone isn't enough. This only watched for the ONE
+    turn that was active when the trigger fired — if the user sent a new
+    message in the gap between that turn ending and this function actually
+    returning (a real possibility: rapid back-and-forth chat), a companion
+    would open the instant the new turn started, which looks and feels
+    identical to being interrupted mid-reply. Now also requires
+    _turn_currently_active() to be false — no turn in flight right now, not
+    just "the turn we were originally watching is done."
+
     Returns True if a live session was found and waited on, False if no live
     process was detected for this project (nothing to wait for).
     """
@@ -1201,9 +1211,9 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
         return False
 
     POLL          = 5    # polling interval (seconds)
-    MAX_WAIT_SECS = 600  # hard cap; only hit if the Stop hook never fires (runaway turn)
+    MAX_WAIT_SECS = 600  # hard cap; only hit if the user never has a quiet moment
 
-    _log("waiting for current reply to finish (watching for Stop hook signal)...")
+    _log("waiting for a genuinely quiet moment (watching for Stop hook signal, no new turn started)...")
 
     wait_start = time.time()
     waited = 0
@@ -1216,12 +1226,12 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
             _log("claude session ended while waiting")
             break
 
-        if _turn_stopped_since(session_id, wait_start):
-            _log("Stop hook fired — reply finished")
+        if _turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id):
+            _log("Stop hook fired and no new turn active — reply finished")
             break
 
         if waited >= MAX_WAIT_SECS:
-            _log(f"WARN: waited {MAX_WAIT_SECS}s, Stop hook never fired — proceeding anyway")
+            _log(f"WARN: waited {MAX_WAIT_SECS}s without a quiet moment — proceeding anyway")
             break
 
     return True
