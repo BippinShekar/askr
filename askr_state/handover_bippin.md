@@ -1,66 +1,49 @@
 # Handover: bippin
 
-Last updated: 2026-07-11 14:50
+Last updated: 2026-07-11 18:55
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fixed a critical launch gate bug that silently blocked every relaunch on every project, added voice announcements for held relaunches, verified the fix across 295 passing tests, reverted the self-continuation launch gate entirely after determining it was overly broad and unnecessary, then identified and fixed a separate timing bug in the 60% context companion trigger that could open mid-run if a new turn started in the gap between the watched turn finishing and the companion actually opening.
+Fixed a critical PID-based session liveness check in the companioned_sessions dedup to prevent duplicate companion openings after machine sleep, updated all related tests, and verified 296 passing tests across the full suite.
 
 ## Discussion
-The launch gate introduced yesterday was treating broadly-pre-approved Bash identically to --dangerously-skip-permissions, causing it to fire on every project. This was root-caused via voice_log.jsonl analysis, fixed by checking only the current session's liveness, and verified with 295 passing tests. The self-continuation gate was then reverted entirely as overly broad and unnecessary — the original Phase 5 permission gate only applies to teammates' queued tasks with elevated permissions. However, a separate bug existed in `_wait_for_turn_to_finish`: it only waited for the one turn active when the 60% context trigger fired, then opened the companion the instant that turn's Stop event landed. If a new message arrived in that gap (normal in active back-and-forth), the companion would pop up right as the next turn started, appearing to interrupt. This session fixed the timing logic to also require no turn currently be in flight before acting, added 5 new tests, verified 288 total passing, and restarted the daemon live.
+The companioned_sessions dedup was pruning entries based on stats file staleness (10 minutes without tool calls), but stats files stop updating during machine sleep, not just session termination. After waking from sleep longer than 10 minutes, a live suspended session would appear brand new to the dedup, causing the 60% context companion trigger to fire again for the same session. The fix replaces stats-based pruning with PID-based liveness checks: a suspended process keeps a valid PID indefinitely and only fails the check once genuinely terminated. This is the third distinct bug in the companion-opening flow, separate from the turn-wait timing fix and the self-continuation gate revert.
 
 ## Accomplishments
-- [x] Fixed permission_gate.py to check only current session liveness instead of any session existence in project directory
-- [x] Added voice announcement in lifecycle._notify_launch_held() for held relaunches
-- [x] Removed test suite pollution by patching voice.speak and voice.speak_signature in test_launch_gate.py and test_permission_gate.py
-- [x] Verified fix with full test suite: 295 passed in 6.6s, voice_log.jsonl clean
-- [x] Committed fix (61a3c61) and restarted daemon to pick up changes live
-- [x] Reverted self-continuation launch gate entirely from lifecycle.py, permission_gate.py, askr.py, and vscode-extension/extension.js
-- [x] Removed dead dangerous_autolaunch_pending case from IDE extension
-- [x] Updated roadmap.md to reflect removal of self-continuation gate and clarify Phase 5 teammate-task gate remains
-- [x] Verified revert with full test suite: 283 passed in 2.9s
-- [x] Committed revert (79ebf94) and restarted daemon live
-- [x] Identified timing bug in _wait_for_turn_to_finish: it only waited for the one turn active when trigger fired, then opened companion immediately after that turn's Stop event, allowing new turns to start in the gap
-- [x] Fixed _wait_for_turn_to_finish to also check that no turn is currently active before opening companion, preventing mid-run interruptions
-- [x] Created test_turn_wait.py with 5 new tests covering the timing fix
-- [x] Verified timing fix with full test suite: 288 passed
-- [x] Committed timing fix (b7951a7) and restarted daemon live
+- [x] Implemented PID-based session liveness checking in registry.py to replace stats-file staleness pruning
+- [x] Updated lifecycle.py to use registry.is_session_pid_alive() for companioned_sessions dedup pruning
+- [x] Created new test_registry.py with 7 passing tests for PID-based liveness logic
+- [x] Rewrote PruneCompanionedSessionsTests in test_voice.py to mock registry.is_session_pid_alive instead of stats
+- [x] Verified full test suite: 296 tests passing, all pruning tests passing
+- [x] Committed and pushed all changes; restarted daemon
 
 ## Next Actions
-1. Monitor companion opening behavior during active back-and-forth sessions — companion should open at 60% context only when no turn is currently in flight, never interrupting mid-run
-   *Why: Confirms the timing fix prevents the mid-run opening bug while preserving the core 60% context trigger functionality*
-2. Verify self-continuation relaunches proceed without any permission gate, matching pre-yesterday behavior
-   *Why: Confirms the self-continuation gate revert is working correctly*
-3. Verify Phase 5 teammate-task permission gate still fires correctly when a teammate's queued task runs in a session with elevated permissions
-   *Why: The only permission gate that should remain active is the original Phase 5 one for unrelated tasks; confirm it still works as designed*
+1. Monitor daemon behavior across multiple Mac sleep/wake cycles to confirm PID-based pruning prevents duplicate companion openings
+   *Why: This is the third distinct bug in the companion flow; empirical validation across real sleep cycles is critical before considering the issue fully resolved*
+2. Review the companion-opening flow end-to-end (trigger → wait logic → dedup → open) to identify any remaining edge cases or timing windows
+   *Why: Three separate bugs in this flow suggest the overall design may have other latent issues; a comprehensive audit could prevent future regressions*
 
 ## Decisions
-- Launch gate permission check must verify only the CURRENT session is still running, not whether ANY session exists in the project — Old sessions remain in the project directory after they end; checking for any session caused every relaunch attempt to be silently blocked. Narrowing to current session allows relaunches while still preventing concurrent runs of the same session.
-- Held relaunches must have a voice announcement via lifecycle._notify_launch_held() — Without voice output, held relaunches were completely invisible to the user; voice_log.jsonl showed zero trigger-related output across 25+ hours. Voice announcement makes the gate's action observable.
 - Self-continuation launch gate (a session relaunching itself) should not exist — only Phase 5 teammate-task gate applies — Self-continuation relaunches are the normal case and should never be gated; the original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). The self-continuation gate was overly broad and broke the expected relaunch workflow.
 - The 60% context companion trigger is core functionality and must remain; the bug was in timing, not in the trigger's existence — The companion-before-hard-wall feature is the entire point of askr. The bug was that _wait_for_turn_to_finish only waited for one specific turn, allowing new turns to start in the gap between that turn finishing and the companion actually opening. The fix is to also require no turn currently be in flight, not to remove the trigger.
 - Companion opening must check both that the watched turn has finished AND that no new turn is currently active before proceeding — The previous logic only checked the first condition, allowing the companion to open right as a new turn started if the user sent a message in the gap. Checking both conditions prevents mid-run interruptions while preserving the 60% context trigger.
+- Companioned_sessions dedup pruning must check whether a session's actual process is still alive (PID-based), not whether its stats file has gone stale — Stats files stop updating whenever the machine sleeps, not just when a session ends. A suspended process keeps a valid PID the whole time it's asleep — it only fails that check once it's genuinely gone. PID-based checking prevents the dedup from forgetting live sessions after Mac sleep.
 
 ## Failed Approaches
-- Checking for any session in project directory to gate relaunches in permission_gate.py — Old sessions remain in the project directory after they end; checking for any session blocks every relaunch attempt. Must check only the current session's liveness.
 - Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature — speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries.
 - Gating self-continuation relaunches (a session relaunching itself) with a permission gate — Self-continuation is the normal case and should never be gated. The original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). Gating self-continuation broke the expected relaunch workflow and was unnecessary.
 - Assuming the permission gate was responsible for the mid-run companion opening bug — The permission gate revert did not fix the issue. Root cause was a separate timing bug in _wait_for_turn_to_finish: it only waited for the one turn active when the trigger fired, then opened the companion immediately after that turn's Stop event, allowing new turns to start in the gap.
+- Pruning companioned_sessions dedup based on whether a session's stats file had gone stale (10 minutes without a tool call) — Stats files stop updating whenever the machine sleeps, not just when a session ends. After waking from sleep longer than 10 minutes, a live session looks brand new to the dedup, causing the context trigger to fire again for the same session. Must use PID-based liveness check instead.
 
 ## Files In Play
+- `askr/session/registry.py`
 - `askr/session/lifecycle.py`
-- `askr/session/permission_gate.py`
-- `askr/cli/askr.py`
-- `askr/ide/vscode-extension/extension.js`
-- `roadmap.md`
-- `tests/test_permission_gate.py`
-- `tests/test_turn_wait.py`
+- `tests/test_registry.py`
+- `tests/test_voice.py`
 
 ## Relational Files
-- `askr/clients/voice.py` (imported_by): lifecycle._notify_launch_held() calls voice.announce(); test patches target voice.speak and voice.speak_signature
-- `~/.config/askr/voice_log.jsonl` (configures): Machine-wide voice output log used to diagnose the silent-blocking bug; latest entry confirms fix is working
-
-## Uncommitted Files
-- `askr_state/implementation_bippin.jsonl`
+- `askr/session/registry.py` (imported_by): lifecycle.py now calls registry.is_session_pid_alive() for dedup pruning
+- `tests/test_registry.py` (tested_by): New test file covering PID-based liveness logic with 7 passing tests
+- `tests/test_voice.py` (tested_by): PruneCompanionedSessionsTests rewritten to mock registry.is_session_pid_alive instead of stats
