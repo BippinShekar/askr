@@ -208,3 +208,5 @@
 {"id": "17005dc2", "text": "Map companion-opening flow end-to-end; document timing windows", "status": "discarded", "date": "2026-07-11", "added": "2026-07-11T13:25:20Z", "auto_suggested": true, "done_at": "2026-07-11T13:29:55Z"}
 {"id": "9f328f98", "text": "Audit lifecycle.py: _prune_dead_pids() and is_session_pid_alive() logic", "status": "open", "date": "2026-07-11", "added": "2026-07-11T13:30:16Z", "auto_suggested": true, "done_at": null}
 {"id": "c22e32f4", "text": "Run 3+ Mac sleep/wake cycles, log daemon.log and companioned_sessions.json state", "status": "open", "date": "2026-07-11", "added": "2026-07-11T13:30:16Z", "auto_suggested": true, "done_at": null}
+{"id": "9f328f98", "text": "Audit lifecycle.py: _prune_dead_pids() and is_session_pid_alive() logic", "status": "done", "date": "2026-07-11", "added": "2026-07-11T13:30:16Z", "auto_suggested": true, "done_at": "2026-07-11T13:37:40Z"}
+{"id": "c22e32f4", "text": "Run 3+ Mac sleep/wake cycles, log daemon.log and companioned_sessions.json state", "status": "discarded", "date": "2026-07-11", "added": "2026-07-11T13:30:16Z", "auto_suggested": true, "done_at": "2026-07-11T13:37:40Z"}
