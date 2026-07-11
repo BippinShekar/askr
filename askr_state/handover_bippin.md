@@ -1,49 +1,46 @@
 # Handover: bippin
 
-Last updated: 2026-07-11 18:55
+Last updated: 2026-07-11 18:59
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Fixed a critical PID-based session liveness check in the companioned_sessions dedup to prevent duplicate companion openings after machine sleep, updated all related tests, and verified 296 passing tests across the full suite.
+Investigated daemon lifecycle, PID pruning, and companion session management across Mac sleep/wake cycles to diagnose timing issues in session continuity.
 
 ## Discussion
-The companioned_sessions dedup was pruning entries based on stats file staleness (10 minutes without tool calls), but stats files stop updating during machine sleep, not just session termination. After waking from sleep longer than 10 minutes, a live suspended session would appear brand new to the dedup, causing the 60% context companion trigger to fire again for the same session. The fix replaces stats-based pruning with PID-based liveness checks: a suspended process keeps a valid PID indefinitely and only fails the check once genuinely terminated. This is the third distinct bug in the companion-opening flow, separate from the turn-wait timing fix and the self-continuation gate revert.
+This session focused on understanding the daemon's behavior during system sleep/wake events and how the companioned_sessions state file tracks live sessions. The assistant examined daemon logs, PID files, process state, and the lifecycle.py module to map the companion-opening flow and identify where sessions are being lost or incorrectly pruned. Key findings: daemon.log shows multiple daemon starts, companioned_sessions.json exists but its state management during sleep cycles needs verification, and the PID pruning logic may not correctly distinguish between truly dead processes and those temporarily suspended by Mac sleep.
 
 ## Accomplishments
-- [x] Implemented PID-based session liveness checking in registry.py to replace stats-file staleness pruning
-- [x] Updated lifecycle.py to use registry.is_session_pid_alive() for companioned_sessions dedup pruning
-- [x] Created new test_registry.py with 7 passing tests for PID-based liveness logic
-- [x] Rewrote PruneCompanionedSessionsTests in test_voice.py to mock registry.is_session_pid_alive instead of stats
-- [x] Verified full test suite: 296 tests passing, all pruning tests passing
-- [x] Committed and pushed all changes; restarted daemon
+- [x] Examined daemon.log tail and identified multiple daemon start events across 2026-07-11
+- [x] Located and inspected companioned_sessions.json state file at ~/.config/askr/companioned_sessions.json
+- [x] Traced daemon PID lifecycle (8852) and verified process state via lsof and ps commands
+- [x] Identified lifecycle.py as central to session pruning and companion-opening logic
+- [x] Created two new open goals for testing PID pruning across sleep/wake cycles and mapping companion-opening flow
+
+## In Progress
+- `askr/session/lifecycle.py`: Audit and fix daemon PID pruning logic to handle Mac sleep/wake cycles correctly; ensure companioned_sessions state survives system suspension
 
 ## Next Actions
-1. Monitor daemon behavior across multiple Mac sleep/wake cycles to confirm PID-based pruning prevents duplicate companion openings
-   *Why: This is the third distinct bug in the companion flow; empirical validation across real sleep cycles is critical before considering the issue fully resolved*
-2. Review the companion-opening flow end-to-end (trigger → wait logic → dedup → open) to identify any remaining edge cases or timing windows
-   *Why: Three separate bugs in this flow suggest the overall design may have other latent issues; a comprehensive audit could prevent future regressions*
+1. Read and fully audit askr/session/lifecycle.py to understand _prune_dead_pids(), is_session_pid_alive(), and companion session state management
+   *Why: Session loss during Mac sleep suggests PID pruning is incorrectly marking suspended processes as dead; need to understand current logic before fixing*
+2. Execute controlled test: trigger 3+ Mac sleep/wake cycles while daemon is running, capture daemon.log and companioned_sessions.json state at each cycle boundary
+   *Why: Reproducing the issue under controlled conditions will reveal exactly when and how sessions are lost, enabling targeted fix*
+3. Map companion-opening flow end-to-end: trace from lifecycle trigger → companioned_sessions read/write → session launch → timing windows relative to daemon lifecycle
+   *Why: Understanding the full flow will clarify race conditions and state consistency issues during concurrent session opens*
+4. Fix PID pruning to distinguish between dead processes and Mac-suspended processes (check process state flags, not just existence)
+   *Why: Current logic likely treats suspended PIDs as dead, causing false pruning of valid companion sessions*
 
 ## Decisions
-- Self-continuation launch gate (a session relaunching itself) should not exist — only Phase 5 teammate-task gate applies — Self-continuation relaunches are the normal case and should never be gated; the original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). The self-continuation gate was overly broad and broke the expected relaunch workflow.
-- The 60% context companion trigger is core functionality and must remain; the bug was in timing, not in the trigger's existence — The companion-before-hard-wall feature is the entire point of askr. The bug was that _wait_for_turn_to_finish only waited for one specific turn, allowing new turns to start in the gap between that turn finishing and the companion actually opening. The fix is to also require no turn currently be in flight, not to remove the trigger.
-- Companion opening must check both that the watched turn has finished AND that no new turn is currently active before proceeding — The previous logic only checked the first condition, allowing the companion to open right as a new turn started if the user sent a message in the gap. Checking both conditions prevents mid-run interruptions while preserving the 60% context trigger.
-- Companioned_sessions dedup pruning must check whether a session's actual process is still alive (PID-based), not whether its stats file has gone stale — Stats files stop updating whenever the machine sleeps, not just when a session ends. A suspended process keeps a valid PID the whole time it's asleep — it only fails that check once it's genuinely gone. PID-based checking prevents the dedup from forgetting live sessions after Mac sleep.
-
-## Failed Approaches
-- Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature — speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries.
-- Gating self-continuation relaunches (a session relaunching itself) with a permission gate — Self-continuation is the normal case and should never be gated. The original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). Gating self-continuation broke the expected relaunch workflow and was unnecessary.
-- Assuming the permission gate was responsible for the mid-run companion opening bug — The permission gate revert did not fix the issue. Root cause was a separate timing bug in _wait_for_turn_to_finish: it only waited for the one turn active when the trigger fired, then opened the companion immediately after that turn's Stop event, allowing new turns to start in the gap.
-- Pruning companioned_sessions dedup based on whether a session's stats file had gone stale (10 minutes without a tool call) — Stats files stop updating whenever the machine sleeps, not just when a session ends. After waking from sleep longer than 10 minutes, a live session looks brand new to the dedup, causing the context trigger to fire again for the same session. Must use PID-based liveness check instead.
+- Daemon PID and companioned_sessions state are stored in ~/.config/askr/ (out-of-repo config directory) — Allows daemon to persist across repo changes and multiple project instances; keeps state separate from versioned code
 
 ## Files In Play
-- `askr/session/registry.py`
 - `askr/session/lifecycle.py`
-- `tests/test_registry.py`
-- `tests/test_voice.py`
 
 ## Relational Files
-- `askr/session/registry.py` (imported_by): lifecycle.py now calls registry.is_session_pid_alive() for dedup pruning
-- `tests/test_registry.py` (tested_by): New test file covering PID-based liveness logic with 7 passing tests
-- `tests/test_voice.py` (tested_by): PruneCompanionedSessionsTests rewritten to mock registry.is_session_pid_alive instead of stats
+- `askr/session/registry.py` (imported_by): Session registry likely interacts with lifecycle for session state tracking
+- `askr_state/goals.jsonl` (configures): Tracks open goals for daemon PID pruning and companion-opening flow testing
+- `askr_state/implementation_bippin.jsonl` (configures): Records session commands and investigation steps for audit trail
+
+## Blockers
+- Cannot fully test PID pruning behavior without executing controlled Mac sleep/wake cycles in real environment

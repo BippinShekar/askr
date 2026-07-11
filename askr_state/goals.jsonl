@@ -202,3 +202,7 @@
 {"id": "fd330cf5", "text": "Audit lifecycle.py trigger semantics to separate idle from quota/context logic", "status": "open", "date": "2026-07-08", "added": "2026-07-08T14:57:37Z", "auto_suggested": true, "done_at": null}
 {"id": "259ef84c", "text": "Restart daemon with `askr launch --restart` and verify voice/git-save timing", "status": "discarded", "date": "2026-07-08", "added": "2026-07-08T14:57:37Z", "auto_suggested": true, "done_at": "2026-07-08T15:00:04Z"}
 {"id": "fd330cf5", "text": "Audit lifecycle.py trigger semantics to separate idle from quota/context logic", "status": "discarded", "date": "2026-07-08", "added": "2026-07-08T14:57:37Z", "auto_suggested": true, "done_at": "2026-07-08T15:00:04Z"}
+{"id": "ebf469fc", "text": "Test daemon PID pruning across 3+ Mac sleep/wake cycles", "status": "open", "date": "2026-07-11", "added": "2026-07-11T13:25:20Z", "auto_suggested": true, "done_at": null}
+{"id": "17005dc2", "text": "Map companion-opening flow end-to-end; document timing windows", "status": "open", "date": "2026-07-11", "added": "2026-07-11T13:25:20Z", "auto_suggested": true, "done_at": null}
+{"id": "ebf469fc", "text": "Test daemon PID pruning across 3+ Mac sleep/wake cycles", "status": "discarded", "date": "2026-07-11", "added": "2026-07-11T13:25:20Z", "auto_suggested": true, "done_at": "2026-07-11T13:29:55Z"}
+{"id": "17005dc2", "text": "Map companion-opening flow end-to-end; document timing windows", "status": "discarded", "date": "2026-07-11", "added": "2026-07-11T13:25:20Z", "auto_suggested": true, "done_at": "2026-07-11T13:29:55Z"}
