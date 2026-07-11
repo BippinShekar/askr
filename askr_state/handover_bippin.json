@@ -1,6 +1,6 @@
 {
-  "task": "Fixed a critical launch gate bug that silently blocked every relaunch on every project by narrowing session liveness checks to the current session only, added voice announcements for held relaunches, and verified the fix across 295 passing tests.",
-  "discussion_summary": "The launch gate introduced yesterday was treating broadly-pre-approved Bash (which Phase 3.8 deliberately builds up on any actively-used project) identically to --dangerously-skip-permissions, causing it to fire on every project. Additionally, the function holding a relaunch had no voice line, making held relaunches completely invisible. This session root-caused both bugs via voice_log.jsonl analysis, fixed the permission gate to check only the current session's liveness (not any session in the directory), added proper voice alerts for held relaunches, and confirmed the fix with 295 passing tests and live daemon restart.",
+  "task": "Fixed a critical launch gate bug that silently blocked every relaunch on every project, added voice announcements for held relaunches, verified the fix across 295 passing tests, then reverted the self-continuation launch gate entirely after determining it was overly broad and unnecessary.",
+  "discussion_summary": "The launch gate introduced yesterday was treating broadly-pre-approved Bash (which Phase 3.8 deliberately builds up on any actively-used project) identically to --dangerously-skip-permissions, causing it to fire on every project. This session root-caused both bugs via voice_log.jsonl analysis, fixed the permission gate to check only the current session's liveness, added proper voice alerts for held relaunches, and confirmed the fix with 295 passing tests. However, upon reflection, the self-continuation launch gate (a session relaunching itself) was overly broad and unnecessary \u2014 the original Phase 5 permission gate only applies to teammates' queued tasks with elevated permissions. This session reverted the self-continuation gate entirely, leaving only the Phase 5 teammate-task gate in place, tested the revert across 283 tests, updated roadmap.md, and restarted the daemon live.",
   "accomplishments": [
     {
       "what": "Fixed permission_gate.py to check only current session liveness instead of any session existence in project directory",
@@ -21,19 +21,39 @@
     {
       "what": "Committed fix (61a3c61) and restarted daemon to pick up changes live",
       "done": true
+    },
+    {
+      "what": "Reverted self-continuation launch gate entirely from lifecycle.py, permission_gate.py, askr.py, and vscode-extension/extension.js",
+      "done": true
+    },
+    {
+      "what": "Removed dead dangerous_autolaunch_pending case from IDE extension",
+      "done": true
+    },
+    {
+      "what": "Updated roadmap.md to reflect removal of self-continuation gate and clarify Phase 5 teammate-task gate remains",
+      "done": true
+    },
+    {
+      "what": "Verified revert with full test suite: 283 passed in 2.9s",
+      "done": true
+    },
+    {
+      "what": "Committed revert (79ebf94) and restarted daemon live",
+      "done": true
     }
   ],
   "in_progress": [],
   "next_actions": [
     {
       "order": 1,
-      "action": "Monitor leaps project relaunch behavior \u2014 it has genuine --dangerously-skip-permissions set, so it should now correctly hold and announce via voice instead of silently blocking",
-      "why": "Confirms the fix distinguishes between false-positive broad Bash and real dangerous permissions flags"
+      "action": "Monitor self-continuation relaunch behavior across projects \u2014 relaunches should now proceed without any permission gate, matching pre-yesterday behavior",
+      "why": "Confirms the revert is working and self-continuation relaunches are no longer gated"
     },
     {
       "order": 2,
-      "action": "Run `askr launch approve` from leaps project if you want to unblock the held relaunch manually",
-      "why": "The gate is working as designed; approval is the intended user action for dangerous permission flags"
+      "action": "Verify Phase 5 teammate-task permission gate still fires correctly when a teammate's queued task runs in a session with elevated permissions",
+      "why": "The only permission gate that should remain active is the original Phase 5 one for unrelated tasks; confirm it still works as designed"
     }
   ],
   "decisions": [
@@ -44,6 +64,10 @@
     {
       "decision": "Held relaunches must have a voice announcement via lifecycle._notify_launch_held()",
       "reason": "Without voice output, held relaunches were completely invisible to the user; voice_log.jsonl showed zero trigger-related output across 25+ hours. Voice announcement makes the gate's action observable."
+    },
+    {
+      "decision": "Self-continuation launch gate (a session relaunching itself) should not exist \u2014 only Phase 5 teammate-task gate applies",
+      "reason": "Self-continuation relaunches are the normal case and should never be gated; the original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). The self-continuation gate was overly broad and broke the expected relaunch workflow."
     }
   ],
   "user_rejected_decisions": [],
@@ -55,12 +79,18 @@
     {
       "approach": "Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature",
       "reason": "speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries."
+    },
+    {
+      "approach": "Gating self-continuation relaunches (a session relaunching itself) with a permission gate",
+      "reason": "Self-continuation is the normal case and should never be gated. The original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). Gating self-continuation broke the expected relaunch workflow and was unnecessary."
     }
   ],
   "files_in_play": [
-    "askr/session/permission_gate.py",
     "askr/session/lifecycle.py",
-    "tests/test_launch_gate.py",
+    "askr/session/permission_gate.py",
+    "askr/cli/askr.py",
+    "askr/ide/vscode-extension/extension.js",
+    "roadmap.md",
     "tests/test_permission_gate.py"
   ],
   "relational_files": [
@@ -73,19 +103,16 @@
       "file": "~/.config/askr/voice_log.jsonl",
       "relationship": "configures",
       "why": "Machine-wide voice output log used to diagnose the silent-blocking bug; latest entry confirms fix is working"
-    },
-    {
-      "file": "askr_state/failed_approaches.md",
-      "relationship": "configures",
-      "why": "Appended new failed approach entry documenting the session liveness check bug"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr_state/implementation_bippin.jsonl"
+  ],
   "blockers": [],
   "completed_goals": [],
   "session_metadata": {
-    "trigger_type": "context",
-    "timestamp": "2026-07-11T06:07:35.407430+00:00",
+    "trigger_type": "stop",
+    "timestamp": "2026-07-11T06:21:06.666021+00:00",
     "developer": "bippin"
   }
 }
