@@ -322,19 +322,6 @@ function checkNotification() {
         terminal.show();
         terminal.sendText(action === 'Approve' ? `askr task approve ${dev}` : `askr task discard ${dev}`);
       });
-    } else if (n.type === 'dangerous_autolaunch_pending') {
-      // Same gate, applied to askr's own autonomous relaunch instead of a
-      // teammate's queued task — see roadmap.md Phase 5.
-      const dev = (n.developer || '').replace(/"/g, '').replace(/`/g, '');
-      vscode.window.showWarningMessage(
-        `Askr: autonomous relaunch held for ${dev} — ${(n.reasons || []).join('; ')}`,
-        'Approve'
-      ).then(action => {
-        if (action !== 'Approve') return;
-        const terminal = vscode.window.createTerminal({ name: 'askr — launch approval' });
-        terminal.show();
-        terminal.sendText('askr launch approve');
-      });
     } else {
       // Quota exhausted — daemon will auto-resume after reset, just inform
       vscode.window.showInformationMessage(`Askr: ${n.message}`);

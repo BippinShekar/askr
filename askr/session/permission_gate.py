@@ -82,29 +82,19 @@ def _permissions_allow_has_delete(project_path: str) -> bool:
         return False
 
 
-def is_dangerous_session(project_path: str, skip_permissions_only: bool = False) -> tuple[bool, list[str]]:
+def is_dangerous_session(project_path: str) -> tuple[bool, list[str]]:
     """Returns (dangerous, reasons) — reasons is empty iff dangerous is False.
 
-    skip_permissions_only: when True, only --dangerously-skip-permissions counts.
-    Found 2026-07-11: the autonomous-relaunch gate (lifecycle.py's
-    _launch_gate_check) reused this three-signal check unchanged, but
-    "unrestricted Bash in allowedTools" is not an escalation for that gate's
-    purpose — it's the NORMAL steady state Phase 3.8 deliberately builds up
-    for any actively-used project, precisely so Bash stops prompting. That
-    made the gate fire on effectively every real project (confirmed: both
-    askr and leaps had bare "Bash" in allowedTools), holding every
-    autonomous relaunch silently for over a day. --dangerously-skip-permissions
-    is the actually-meaningful signal for that case: it bypasses Claude
-    Code's own permission system entirely, which broad allowedTools does
-    not. The cross-dev queued-task gate (session_start.py) keeps all three
-    signals — a teammate's task inheriting broad-but-still-prompted Bash
-    access is a different, still-valid concern.
+    Used ONLY by the cross-dev task queue gate (session_start.py) — is a
+    teammate's queued task about to run frictionlessly in this session. Do
+    not reuse this for a session's own continuation of its own work: that
+    was tried 2026-07-11 and reverted. A session relaunching itself isn't a
+    new task from anyone else, so its own permission state (however broad)
+    isn't an escalation to gate on — it's just the same person's own work.
     """
     reasons = []
     if _claude_launch_args_dangerous(project_path):
         reasons.append("--dangerously-skip-permissions in session launch args")
-    if skip_permissions_only:
-        return (len(reasons) > 0, reasons)
     if _allowed_tools_unrestricted(project_path):
         reasons.append("unrestricted Bash in .claude/settings.json allowedTools")
     if _permissions_allow_has_delete(project_path):
