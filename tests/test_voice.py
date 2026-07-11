@@ -375,50 +375,47 @@ class QuotaTriggeredWindowsRoundTripTests(unittest.TestCase):
 
 class PruneCompanionedSessionsTests(unittest.TestCase):
     """
-    Regression coverage for two incidents:
+    Regression coverage for three incidents, each fixing the previous fix's
+    blind spot — see lifecycle._prune_companioned_sessions' docstring for
+    the full history (2026-07-09, then twice on 2026-07-11).
 
-    2026-07-09: companioned_sessions must only lose an entry once the session
-    is genuinely gone, never just because one turn ended — that was the bug
-    behind repeated "context high, opening a companion" voice announcements.
-
-    2026-07-11: "genuinely gone" must mean the process actually exited (PID
-    liveness), not "stats haven't updated in SESSION_STALE_SECS" — that
-    staleness window also lapses when the Mac sleeps or a window sits idle,
-    so waking the machine after a nap made a still-open session look brand
-    new to this dedup and re-fired a companion for the same window.
+    The current rule: only drop an entry with POSITIVE proof of death
+    (registry.is_session_confirmed_dead). Absence of proof — no registry
+    entry, sleeping Mac, whatever — must never be treated as proof of death.
     """
 
     def test_live_session_is_kept(self):
         companioned = {"session-a"}
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
-                 patch("askr.session.registry.is_session_pid_alive", return_value=True):
+                 patch("askr.session.registry.is_session_confirmed_dead", return_value=False):
                 result = lifecycle._prune_companioned_sessions(companioned)
         self.assertEqual(result, {"session-a"})
 
-    def test_session_with_dead_pid_is_dropped(self):
+    def test_confirmed_dead_session_is_dropped(self):
         companioned = {"session-a", "session-b"}
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
-                 patch("askr.session.registry.is_session_pid_alive", side_effect=lambda sid: sid == "session-a"):
+                 patch("askr.session.registry.is_session_confirmed_dead", side_effect=lambda sid: sid == "session-b"):
                 result = lifecycle._prune_companioned_sessions(companioned)
         self.assertEqual(result, {"session-a"})
 
-    def test_sleeping_mac_does_not_prune_a_still_alive_session(self):
-        # The exact 2026-07-11 scenario: PID is alive (process merely
-        # suspended, not exited) even though stats would have gone stale.
+    def test_unregistered_session_is_never_pruned(self):
+        # The exact 2026-07-11 (second) scenario: no registry entry at all
+        # (registration silently failed, or predates it existing) — must be
+        # treated as "unknown," never as "confirmed dead."
         companioned = {"session-a"}
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
-                 patch("askr.session.registry.is_session_pid_alive", return_value=True):
+                 patch("askr.session.registry.is_session_confirmed_dead", return_value=False):
                 result = lifecycle._prune_companioned_sessions(companioned)
         self.assertEqual(result, {"session-a"})
 
-    def test_no_stale_entries_skips_disk_write(self):
+    def test_no_confirmed_dead_entries_skips_disk_write(self):
         companioned = {"session-a"}
         path = os.path.join(tempfile.mkdtemp(), "c.json")
         with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", path), \
-             patch("askr.session.registry.is_session_pid_alive", return_value=True):
+             patch("askr.session.registry.is_session_confirmed_dead", return_value=False):
             lifecycle._prune_companioned_sessions(companioned)
         self.assertFalse(os.path.exists(path))  # nothing changed, nothing written
 

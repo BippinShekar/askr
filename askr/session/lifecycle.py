@@ -1325,29 +1325,35 @@ def _save_companioned_sessions(sessions: set):
 
 def _prune_companioned_sessions(companioned_sessions: set) -> set:
     """
-    Drop entries whose registered process has actually exited — PID
-    liveness (registry.is_session_pid_alive), not stats freshness.
+    Drop only entries with POSITIVE proof their session has exited —
+    registry.is_session_confirmed_dead. Never prune on "we don't know."
 
-    Found 2026-07-09: a per-turn Stop-hook cleanup used to discard a session's
-    entry here on every Stop firing — but Stop fires after every assistant turn,
-    not just at session end, so it wiped the "already got a companion" flag
-    after a session's very first reply. The context trigger then reopened a
-    fresh companion every TRIGGER_COOLDOWN (5 min) for as long as the session
-    stayed above CONTEXT_TRIGGER — which is always true once crossed, since
-    context never decreases within a session. Replaced with liveness-based
-    pruning against _read_all_stats' SESSION_STALE_SECS (10 min) window.
+    Three incidents, same underlying lesson, each fixing the previous fix's
+    blind spot:
 
-    Found 2026-07-11: that fix had the same failure mode one level up. Stats
-    go stale not just when a session ends but whenever the Mac sleeps or a
-    window just sits idle — no tool calls, no PostToolUse writes, stats age
-    out at 10 minutes regardless of why. Waking the machine after any nap
-    longer than that made a still-open session look brand new to this dedup,
-    re-firing a companion for the exact same window. PID liveness survives
-    sleep (a suspended process's PID stays valid until it truly exits) where
-    a freshness window does not — see registry.is_session_pid_alive.
+    2026-07-09: a per-turn Stop-hook cleanup discarded a session's entry
+    here on every Stop firing — but Stop fires after every assistant turn,
+    not just at session end, so the "already got a companion" flag was wiped
+    after a session's very first reply. Fixed with liveness-based pruning
+    against _read_all_stats' SESSION_STALE_SECS (10 min) window.
+
+    2026-07-11 (first): that pruned on stats staleness, which lapses
+    whenever the Mac sleeps or a window sits idle, not just when a session
+    ends. Waking the machine after any longer nap re-fired a companion for
+    a window never closed. Fixed by checking the session registry's
+    recorded PID instead.
+
+    2026-07-11 (second): the registry itself isn't reliable — registration
+    is wrapped in a bare except and silently no-ops for sessions that
+    started before it existed or during any hook gap. Of the dozens of
+    distinct sessions active in one day, exactly one had a registry entry.
+    Treating "no entry" as "dead" pruned nearly every companioned session
+    on the very next poll cycle regardless of actual liveness. Fixed by
+    requiring POSITIVE proof of death (is_session_confirmed_dead) — no
+    entry, or no confirmable PID, now means "leave it alone," not "gone."
     """
-    from askr.session.registry import is_session_pid_alive
-    stale = {sid for sid in companioned_sessions if not is_session_pid_alive(sid)}
+    from askr.session.registry import is_session_confirmed_dead
+    stale = {sid for sid in companioned_sessions if is_session_confirmed_dead(sid)}
     if not stale:
         return companioned_sessions
     pruned = companioned_sessions - stale

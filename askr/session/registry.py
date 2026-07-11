@@ -91,21 +91,37 @@ def _is_alive(entry: dict) -> bool:
     return True
 
 
-def is_session_pid_alive(session_id: str) -> bool:
+def is_session_confirmed_dead(session_id: str) -> bool:
     """
-    True if the session's registered PID is still running — PID liveness
-    only, no heartbeat freshness requirement (unlike _is_alive, used for "is
-    this a sibling worth surfacing right now").
+    True ONLY when there is positive proof this session's process has
+    exited — a registered PID that no longer responds to signal 0. False
+    for everything else, including "no registry entry at all." Unknown is
+    not dead.
 
-    Answers a narrower question: has this process actually exited? A
-    suspended process (the Mac went to sleep, or this window just sat idle)
-    keeps a valid PID the whole time and only fails this check once it's
-    truly gone. Heartbeat freshness lapses the moment tool calls stop,
-    whether from the session ending or the machine merely sleeping — using
-    it to prune lifecycle.py's companioned_sessions dedup caused a real
-    incident 2026-07-11: waking the Mac after any nap longer than
-    SESSION_STALE_SECS made a still-open window look brand new, re-firing a
-    companion for the exact same session.
+    This function exists specifically for pruning lifecycle.py's
+    companioned_sessions dedup, and its asymmetry is deliberate: the cost
+    of never pruning a session we can't confirm dead (a stale id sitting
+    harmlessly in a small JSON set forever) is trivial next to the cost of
+    wrongly pruning one that's still alive (a companion re-fires on a
+    session the user never touched, closed, or finished with).
+
+    History of getting this wrong, both 2026-07-11:
+    - First pass pruned against stats freshness (SESSION_STALE_SECS, 10
+      min). Stats go stale whenever the Mac sleeps or a window sits idle,
+      not just when a session ends — waking the machine after any longer
+      nap re-triggered a companion for a session that was never closed.
+    - Second pass (this function's predecessor, is_session_pid_alive)
+      fixed that by checking the registry's recorded PID instead — but
+      treated "no registry entry" the same as "confirmed dead." Session
+      registration (register_session(), called from SessionStart) is
+      wrapped in a bare except Exception: pass and silently no-ops for
+      sessions that started before it existed, or during any gap where the
+      hook didn't fire as expected. Confirmed directly: of the dozens of
+      distinct sessions active today, exactly one had a registry entry —
+      including this very multi-hour conversation, unambiguously alive,
+      which had none. Every unregistered session was being pruned on the
+      very next poll cycle after being companioned, regardless of
+      liveness, sleep, or anything else.
     """
     if not session_id:
         return False
@@ -113,15 +129,15 @@ def is_session_pid_alive(session_id: str) -> bool:
         with open(_session_file(session_id)) as f:
             entry = json.load(f)
     except Exception:
-        return False
+        return False  # no entry — unknown, not confirmed dead
     pid = entry.get("pid")
     if not pid:
         return False
     try:
         os.kill(pid, 0)
-        return True
+        return False  # alive
     except OSError:
-        return False
+        return True  # confirmed dead
 
 
 def get_active_sessions(exclude_session_id: str = "") -> list[dict]:
