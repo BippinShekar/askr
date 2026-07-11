@@ -375,34 +375,51 @@ class QuotaTriggeredWindowsRoundTripTests(unittest.TestCase):
 
 class PruneCompanionedSessionsTests(unittest.TestCase):
     """
-    Regression coverage for the 2026-07-09 fix: companioned_sessions must only
-    lose an entry once the session is genuinely stale (absent from live stats),
-    never just because one turn ended — that was the bug behind repeated
-    "context high, opening a companion" voice announcements.
+    Regression coverage for two incidents:
+
+    2026-07-09: companioned_sessions must only lose an entry once the session
+    is genuinely gone, never just because one turn ended — that was the bug
+    behind repeated "context high, opening a companion" voice announcements.
+
+    2026-07-11: "genuinely gone" must mean the process actually exited (PID
+    liveness), not "stats haven't updated in SESSION_STALE_SECS" — that
+    staleness window also lapses when the Mac sleeps or a window sits idle,
+    so waking the machine after a nap made a still-open session look brand
+    new to this dedup and re-fired a companion for the same window.
     """
 
     def test_live_session_is_kept(self):
         companioned = {"session-a"}
-        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")):
-                result = lifecycle._prune_companioned_sessions(companioned, all_stats)
+            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
+                 patch("askr.session.registry.is_session_pid_alive", return_value=True):
+                result = lifecycle._prune_companioned_sessions(companioned)
         self.assertEqual(result, {"session-a"})
 
-    def test_stale_session_absent_from_stats_is_dropped(self):
+    def test_session_with_dead_pid_is_dropped(self):
         companioned = {"session-a", "session-b"}
-        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]  # session-b gone
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")):
-                result = lifecycle._prune_companioned_sessions(companioned, all_stats)
+            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
+                 patch("askr.session.registry.is_session_pid_alive", side_effect=lambda sid: sid == "session-a"):
+                result = lifecycle._prune_companioned_sessions(companioned)
+        self.assertEqual(result, {"session-a"})
+
+    def test_sleeping_mac_does_not_prune_a_still_alive_session(self):
+        # The exact 2026-07-11 scenario: PID is alive (process merely
+        # suspended, not exited) even though stats would have gone stale.
+        companioned = {"session-a"}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", os.path.join(tmpdir, "c.json")), \
+                 patch("askr.session.registry.is_session_pid_alive", return_value=True):
+                result = lifecycle._prune_companioned_sessions(companioned)
         self.assertEqual(result, {"session-a"})
 
     def test_no_stale_entries_skips_disk_write(self):
         companioned = {"session-a"}
-        all_stats = [{"session_id": "session-a", "context_pct": 0.7}]
         path = os.path.join(tempfile.mkdtemp(), "c.json")
-        with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", path):
-            lifecycle._prune_companioned_sessions(companioned, all_stats)
+        with patch.object(lifecycle, "_COMPANIONED_SESSIONS_PATH", path), \
+             patch("askr.session.registry.is_session_pid_alive", return_value=True):
+            lifecycle._prune_companioned_sessions(companioned)
         self.assertFalse(os.path.exists(path))  # nothing changed, nothing written
 
     def test_stop_hook_no_longer_clears_companioned_session_mid_session(self):

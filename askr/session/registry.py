@@ -91,6 +91,39 @@ def _is_alive(entry: dict) -> bool:
     return True
 
 
+def is_session_pid_alive(session_id: str) -> bool:
+    """
+    True if the session's registered PID is still running — PID liveness
+    only, no heartbeat freshness requirement (unlike _is_alive, used for "is
+    this a sibling worth surfacing right now").
+
+    Answers a narrower question: has this process actually exited? A
+    suspended process (the Mac went to sleep, or this window just sat idle)
+    keeps a valid PID the whole time and only fails this check once it's
+    truly gone. Heartbeat freshness lapses the moment tool calls stop,
+    whether from the session ending or the machine merely sleeping — using
+    it to prune lifecycle.py's companioned_sessions dedup caused a real
+    incident 2026-07-11: waking the Mac after any nap longer than
+    SESSION_STALE_SECS made a still-open window look brand new, re-firing a
+    companion for the exact same session.
+    """
+    if not session_id:
+        return False
+    try:
+        with open(_session_file(session_id)) as f:
+            entry = json.load(f)
+    except Exception:
+        return False
+    pid = entry.get("pid")
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
 def get_active_sessions(exclude_session_id: str = "") -> list[dict]:
     """Return entries for all live sibling sessions (excluding our own)."""
     sessions_dir = _sessions_dir()

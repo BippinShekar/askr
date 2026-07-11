@@ -1323,11 +1323,10 @@ def _save_companioned_sessions(sessions: set):
         _log(f"WARN: failed to persist companioned sessions: {e}")
 
 
-def _prune_companioned_sessions(companioned_sessions: set, all_stats: list) -> set:
+def _prune_companioned_sessions(companioned_sessions: set) -> set:
     """
-    Drop entries whose session_id no longer appears in currently-live stats
-    (all_stats is already staleness-filtered by _read_all_stats' SESSION_STALE_SECS
-    window, so "not present" means genuinely stale, not just mid-turn).
+    Drop entries whose registered process has actually exited — PID
+    liveness (registry.is_session_pid_alive), not stats freshness.
 
     Found 2026-07-09: a per-turn Stop-hook cleanup used to discard a session's
     entry here on every Stop firing — but Stop fires after every assistant turn,
@@ -1335,13 +1334,20 @@ def _prune_companioned_sessions(companioned_sessions: set, all_stats: list) -> s
     after a session's very first reply. The context trigger then reopened a
     fresh companion every TRIGGER_COOLDOWN (5 min) for as long as the session
     stayed above CONTEXT_TRIGGER — which is always true once crossed, since
-    context never decreases within a session. That was the direct cause of
-    repeated "context high, opening a companion" voice announcements. This
-    replaces that eager per-turn discard with liveness-based pruning, keyed on
-    the same staleness signal the rest of the daemon already trusts.
+    context never decreases within a session. Replaced with liveness-based
+    pruning against _read_all_stats' SESSION_STALE_SECS (10 min) window.
+
+    Found 2026-07-11: that fix had the same failure mode one level up. Stats
+    go stale not just when a session ends but whenever the Mac sleeps or a
+    window just sits idle — no tool calls, no PostToolUse writes, stats age
+    out at 10 minutes regardless of why. Waking the machine after any nap
+    longer than that made a still-open session look brand new to this dedup,
+    re-firing a companion for the exact same window. PID liveness survives
+    sleep (a suspended process's PID stays valid until it truly exits) where
+    a freshness window does not — see registry.is_session_pid_alive.
     """
-    live_session_ids = {s.get("session_id") for s in all_stats if s.get("session_id")}
-    stale = companioned_sessions - live_session_ids
+    from askr.session.registry import is_session_pid_alive
+    stale = {sid for sid in companioned_sessions if not is_session_pid_alive(sid)}
     if not stale:
         return companioned_sessions
     pruned = companioned_sessions - stale
@@ -1494,7 +1500,7 @@ def run_daemon():
                 all_stats = _read_all_stats()
                 triggered_this_cycle = False
 
-                companioned_sessions = _prune_companioned_sessions(companioned_sessions, all_stats)
+                companioned_sessions = _prune_companioned_sessions(companioned_sessions)
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
