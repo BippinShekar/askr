@@ -381,8 +381,13 @@ def main():
 
     if session_id:
         try:
-            from askr.session.registry import register_session
-            register_session(session_id, developer)
+            from askr.utils.retry import import_retry
+
+            def _register():
+                from askr.session.registry import register_session
+                register_session(session_id, developer)
+
+            import_retry(_register)
         except Exception:
             pass
 
@@ -461,8 +466,13 @@ def main():
 
     if session_id:
         try:
-            from askr.session.registry import get_active_sessions
-            siblings = get_active_sessions(exclude_session_id=session_id)
+            from askr.utils.retry import import_retry
+
+            def _get_siblings():
+                from askr.session.registry import get_active_sessions
+                return get_active_sessions(exclude_session_id=session_id)
+
+            siblings = import_retry(_get_siblings)
             if siblings:
                 lines = []
                 for s in siblings:

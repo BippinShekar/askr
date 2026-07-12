@@ -1352,7 +1352,16 @@ def _prune_companioned_sessions(companioned_sessions: set) -> set:
     requiring POSITIVE proof of death (is_session_confirmed_dead) — no
     entry, or no confirmable PID, now means "leave it alone," not "gone."
     """
-    from askr.session.registry import is_session_confirmed_dead
+    from askr.utils.retry import import_retry
+    try:
+        def _import_check():
+            from askr.session.registry import is_session_confirmed_dead
+            return is_session_confirmed_dead
+        is_session_confirmed_dead = import_retry(_import_check)
+    except ImportError:
+        # Same fail-safe rule as everywhere else in this function: if we
+        # can't even confirm the check itself, don't prune this cycle.
+        return companioned_sessions
     stale = {sid for sid in companioned_sessions if is_session_confirmed_dead(sid)}
     if not stale:
         return companioned_sessions

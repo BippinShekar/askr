@@ -484,8 +484,13 @@ def main():
                 with open(_TURN_COUNTER_PATH) as f:
                     counter_data = json.load(f)
             if counter_data.get("count", 0) % 5 == 0:
-                from askr.session.registry import update_heartbeat
-                update_heartbeat(session_id)
+                from askr.utils.retry import import_retry
+
+                def _heartbeat():
+                    from askr.session.registry import update_heartbeat
+                    update_heartbeat(session_id)
+
+                import_retry(_heartbeat)
         except Exception:
             pass
 

@@ -23,6 +23,17 @@ def _session_file(session_id: str) -> str:
     return os.path.join(_sessions_dir(), f"{session_id}.json")
 
 
+def _atomic_write_json(path: str, data: dict):
+    """Write via temp-file + os.replace so a concurrent reader (get_active_sessions,
+    is_session_confirmed_dead) never observes a partially-written file. os.replace
+    is atomic on POSIX and Windows, unlike git checkout's truncate-in-place — this
+    is a separate race from the .py import race and doesn't fix that one."""
+    tmp_path = f"{path}.tmp.{os.getpid()}"
+    with open(tmp_path, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp_path, path)
+
+
 def register_session(session_id: str, developer: str, pid=None):
     """Write this session's registry entry. Called at session start."""
     if not session_id:
@@ -37,8 +48,7 @@ def register_session(session_id: str, developer: str, pid=None):
         "started_at": now,
         "last_heartbeat": now,
     }
-    with open(_session_file(session_id), "w") as f:
-        json.dump(entry, f, indent=2)
+    _atomic_write_json(_session_file(session_id), entry)
 
 
 def update_heartbeat(session_id: str):
@@ -52,8 +62,7 @@ def update_heartbeat(session_id: str):
         with open(path) as f:
             entry = json.load(f)
         entry["last_heartbeat"] = datetime.now(timezone.utc).isoformat()
-        with open(path, "w") as f:
-            json.dump(entry, f, indent=2)
+        _atomic_write_json(path, entry)
     except Exception:
         pass
 
