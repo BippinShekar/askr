@@ -1,101 +1,89 @@
 {
-  "task": "Fixed PID pruning logic in lifecycle.py to correctly distinguish between dead processes and Mac-suspended processes, preventing false pruning of valid companion sessions during sleep/wake cycles.",
-  "discussion_summary": "This session completed the core fix for session loss during Mac sleep/wake cycles. The root cause was identified in is_session_pid_alive() \u2014 it was treating process lookup failures as definitive proof of death, when in fact Mac sleep suspends processes without killing them. The assistant replaced the unsafe logic with a fail-safe approach: unknown process state is never treated as dead, only explicit confirmation of process termination triggers pruning. Additionally, a critical secondary bug was discovered and fixed: session registration (register_session, called from SessionStart) was silently failing for nearly every session due to an unhandled exception wrapped in bare except: pass, causing the registry to contain only 1 entry out of dozens of active sessions. The pruning fix made this gap visible by preventing false pruning, which exposed why the daemon was re-firing companions repeatedly. All 296 tests pass; changes committed and daemon restarted.",
+  "task": "Verified end-to-end that atomic JSON writes in registry.py and import_retry wrapping in hooks prevent concurrent corruption, and confirmed Smart Context Injection correctly surfaces relevant files, decisions, and goals to new sessions.",
+  "discussion_summary": "This session executed the actual session_start.py hook in production code paths (same venv, same JSON-over-stdin contract from .claude/settings.json) to verify both the atomic-write fix (#1) and Smart Context Injection work correctly under real conditions. The hook ran clean with no corruption, no leftover temp files, and correctly injected ~16.5k chars of targeted context (relevant files, TF-IDF-matched decisions including a June 17 decision that atomic writes should be standard, and auto-suggested goals). Discovered that the atomic-write gap in registry.py was a pre-existing violation of an already-settled decision, not a novel oversight. The concurrent-git-pull race reproduction (goal #2) remains untested under actual load.",
   "accomplishments": [
     {
-      "what": "Replaced unsafe PID-based pruning logic with fail-safe semantics in is_session_pid_alive()",
+      "what": "Wrapped registry.py imports in import_retry() in session_start.py, post_tool_use.py, and lifecycle.py to handle concurrent git checkout races",
       "done": true
     },
     {
-      "what": "Updated _prune_companioned_sessions() to require positive proof of process death before pruning any session",
+      "what": "Implemented _atomic_write_json() in registry.py using temp-file + os.replace() for register_session() and update_heartbeat() writes",
       "done": true
     },
     {
-      "what": "Updated test_registry.py and test_voice.py to match corrected pruning semantics",
+      "what": "Executed live end-to-end test of session_start.py hook in production code paths, verified no corruption and correct atomic write behavior",
       "done": true
     },
     {
-      "what": "Verified all 296 tests pass with new logic",
-      "done": true
-    },
-    {
-      "what": "Identified root cause: session registration silently failing for ~97% of active sessions due to unhandled exception in bare except: pass",
-      "done": true
-    },
-    {
-      "what": "Committed fix (71f4821) and restarted daemon",
+      "what": "Confirmed Smart Context Injection correctly surfaces relevant files, TF-IDF-matched decisions, and auto-suggested goals to new sessions",
       "done": true
     }
   ],
-  "in_progress": [],
+  "in_progress": [
+    {
+      "file": null,
+      "what": "Concurrent-git-pull race reproduction under load (goal #2) \u2014 not yet executed this session",
+      "last_line": 0
+    }
+  ],
   "next_actions": [
     {
       "order": 1,
-      "action": "Investigate why register_session() fails silently for nearly every session (unhandled exception in bare except: pass wrapper)",
-      "why": "This is the underlying gap that made the PID pruning bug's impact so severe. Fixing it would prevent similar silent failures in the future. Marked as follow-up post-Monday release."
+      "action": "Reproduce the concurrent-git-pull race condition under load to verify the import_retry fix actually survives the exact race scenario, not just normal conditions",
+      "why": "End-to-end hook test proved the fix doesn't break anything, but hasn't proven it survives the actual race under concurrent load \u2014 this is goal #2 and the final verification step"
     },
     {
       "order": 2,
-      "action": "Consider implementing a reliable spawn record / parent\u2192child relationship graph for task breakdown",
-      "why": "User proposed this as a structural improvement, but it depends on #1 being reliable first. Depends on session registration being fixed. Deferred pending Monday release."
+      "action": "Commit the atomic-write and import_retry changes once race reproduction confirms they work",
+      "why": "Changes are verified safe but not yet committed; race test should pass before merging to main"
     },
     {
       "order": 3,
-      "action": "Run 3+ Mac sleep/wake cycles with updated daemon to verify session continuity is restored",
-      "why": "Validate that the fail-safe pruning logic prevents session loss during system sleep events in real-world conditions."
+      "action": "Review whether other JSON stats writes in the codebase (beyond registry.py) should also use _atomic_write_json() to enforce the June 17 decision consistently",
+      "why": "The June 17 decision says atomic writes should be standard for all JSON stats writes, but only registry.py was fixed this session \u2014 other files may have the same gap"
     }
   ],
   "decisions": [
     {
-      "decision": "Companioned_sessions dedup pruning must check whether a session's actual process is still alive (PID-based), not whether its stats file has gone stale",
-      "reason": "Stats files stop updating whenever the machine sleeps, not just when a session ends. A suspended process keeps a valid PID the whole time it's asleep \u2014 it only fails that check once it's genuinely gone. PID-based checking prevents the dedup from forgetting live sessions after Mac sleep."
+      "decision": "Use import_retry() wrapper around registry imports in hooks to handle concurrent git checkout races that can corrupt the import cache",
+      "reason": "Concurrent git pull can truncate .py files mid-import, causing ImportError or AttributeError; import_retry() retries the import with exponential backoff"
     },
     {
-      "decision": "Self-continuation launch gate (a session relaunching itself) should not exist \u2014 only Phase 5 teammate-task gate applies",
-      "reason": "Self-continuation relaunches are the normal case and should never be gated; the original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). The self-continuation gate was overly broad and broke the expected relaunch workflow."
-    },
-    {
-      "decision": "Daemon PID and companioned_sessions state are stored in ~/.config/askr/ (out-of-repo config directory)",
-      "reason": "Allows daemon to persist across repo changes and multiple project instances; keeps state separate from versioned code"
-    },
-    {
-      "decision": "is_session_pid_alive() uses fail-safe semantics: unknown process state is never treated as dead; only explicit termination confirmation triggers pruning",
-      "reason": "Mac sleep suspends processes without killing them; treating unknown state as dead causes false pruning of valid companion sessions. Fail-safe approach prevents data loss."
+      "decision": "Use temp-file + os.replace() pattern for all JSON registry writes (register_session, update_heartbeat)",
+      "reason": "os.replace() is atomic on POSIX and Windows, preventing concurrent readers (get_active_sessions, is_session_confirmed_dead) from observing partially-written files; separate from the .py import race"
     }
   ],
   "user_rejected_decisions": [],
   "failed_approaches": [],
   "files_in_play": [
-    "askr/session/lifecycle.py",
     "askr/session/registry.py",
-    "tests/test_registry.py",
-    "tests/test_voice.py"
+    "askr/hooks/session_start.py",
+    "askr/hooks/post_tool_use.py",
+    "askr/session/lifecycle.py"
   ],
   "relational_files": [
     {
-      "file": "askr/session/registry.py",
+      "file": "askr/utils/retry.py",
       "relationship": "imported_by",
-      "why": "Contains session registration logic that is silently failing; identified as root cause of pruning bug"
+      "why": "Provides import_retry() wrapper used in all hook and lifecycle imports of registry"
     },
     {
-      "file": "tests/test_registry.py",
-      "relationship": "tested_by",
-      "why": "Tests for registry and pruning logic; updated to match new fail-safe semantics"
+      "file": "askr_state/decisions.jsonl",
+      "relationship": "configures",
+      "why": "Contains the June 17 decision that atomic writes should be standard for all JSON stats writes; this session's fix enforces that decision in registry.py"
     },
     {
-      "file": "tests/test_voice.py",
-      "relationship": "tested_by",
-      "why": "Contains pruning tests; updated to match corrected is_session_pid_alive() behavior"
+      "file": "askr_state/handover_bippin.json",
+      "relationship": "configures",
+      "why": "Smart Context Injection reads files_in_play and relational_files from handover to determine what context to inject into new sessions"
     }
   ],
   "uncommitted_files": [],
   "blockers": [],
-  "completed_goals": [
-    "Audit lifecycle.py: _prune_dead_pids() and is_session_pid_alive() logic"
-  ],
+  "completed_goals": [],
   "session_metadata": {
     "trigger_type": "context",
-    "timestamp": "2026-07-11T13:48:27.486783+00:00",
+    "timestamp": "2026-07-12T13:32:57.762250+00:00",
     "developer": "bippin"
   }
 }
