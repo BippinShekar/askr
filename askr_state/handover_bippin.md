@@ -1,44 +1,33 @@
 # Handover: bippin
 
-Last updated: 2026-07-12 19:03
+Last updated: 2026-07-14 04:25
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Verified end-to-end that atomic JSON writes in registry.py and import_retry wrapping in hooks prevent concurrent corruption, and confirmed Smart Context Injection correctly surfaces relevant files, decisions, and goals to new sessions.
-
-## Discussion
-This session executed the actual session_start.py hook in production code paths (same venv, same JSON-over-stdin contract from .claude/settings.json) to verify both the atomic-write fix (#1) and Smart Context Injection work correctly under real conditions. The hook ran clean with no corruption, no leftover temp files, and correctly injected ~16.5k chars of targeted context (relevant files, TF-IDF-matched decisions including a June 17 decision that atomic writes should be standard, and auto-suggested goals). Discovered that the atomic-write gap in registry.py was a pre-existing violation of an already-settled decision, not a novel oversight. The concurrent-git-pull race reproduction (goal #2) remains untested under actual load.
-
-## Accomplishments
-- [x] Wrapped registry.py imports in import_retry() in session_start.py, post_tool_use.py, and lifecycle.py to handle concurrent git checkout races
-- [x] Implemented _atomic_write_json() in registry.py using temp-file + os.replace() for register_session() and update_heartbeat() writes
-- [x] Executed live end-to-end test of session_start.py hook in production code paths, verified no corruption and correct atomic write behavior
-- [x] Confirmed Smart Context Injection correctly surfaces relevant files, TF-IDF-matched decisions, and auto-suggested goals to new sessions
-
-## In Progress
-- `None`: Concurrent-git-pull race reproduction under load (goal #2) — not yet executed this session
+Unknown — transcript unavailable
 
 ## Next Actions
-1. Reproduce the concurrent-git-pull race condition under load to verify the import_retry fix actually survives the exact race scenario, not just normal conditions
-   *Why: End-to-end hook test proved the fix doesn't break anything, but hasn't proven it survives the actual race under concurrent load — this is goal #2 and the final verification step*
-2. Commit the atomic-write and import_retry changes once race reproduction confirms they work
-   *Why: Changes are verified safe but not yet committed; race test should pass before merging to main*
-3. Review whether other JSON stats writes in the codebase (beyond registry.py) should also use _atomic_write_json() to enforce the June 17 decision consistently
-   *Why: The June 17 decision says atomic writes should be standard for all JSON stats writes, but only registry.py was fixed this session — other files may have the same gap*
+1. Inspect /private/tmp/claude-501/-Users-bippin-Desktop-askr/480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc/scratchpad/commit_msg6.txt — last file modified this session (handover generation failed/truncated — verify manually)
+   *Why: handover generation failed this session*
 
 ## Decisions
-- Use import_retry() wrapper around registry imports in hooks to handle concurrent git checkout races that can corrupt the import cache — Concurrent git pull can truncate .py files mid-import, causing ImportError or AttributeError; import_retry() retries the import with exponential backoff
 - Use temp-file + os.replace() pattern for all JSON registry writes (register_session, update_heartbeat) — os.replace() is atomic on POSIX and Windows, preventing concurrent readers (get_active_sessions, is_session_confirmed_dead) from observing partially-written files; separate from the .py import race
+- Do not open a new session when context is >70% full if the current session's Claude is still generating, awaiting user input, or has active subagents — Opening a new session mid-conversation breaks the user's flow and loses context continuity; session switching should only occur when the conversation is idle and context is exhausted
+- Extract has_outstanding_subagent() into a shared checkpoint.py module instead of duplicating it in stop.py and lifecycle.py — Both stop.py (gates the spoken 'Done' ping) and lifecycle.py (gates session switching) need identical subagent detection logic; shared module eliminates duplication and ensures consistency
+- Require a grace period of SESSION_STALE_SECS (30 seconds) to elapse after the last turn-stop marker before allowing session switching in _wait_for_turn_to_finish() — Stop fires immediately after Claude finishes generating and all tool results land, but Claude may still be processing or generating the next response; grace period ensures Claude has truly finished before session switching is allowed, preventing premature session creation
+- Require a grace period of TURN_QUIET_GRACE_SECS (90 seconds) of real silence since the Stop signal before allowing session switching in _wait_for_turn_to_finish() — Stop fires immediately after Claude finishes generating text or tool results land, but Claude may still be processing or generating the next response; grace period ensures Claude has truly finished and the turn is idle before session switching is allowed, preventing premature session creation when Claude is mid-generation or when a plain-text question has just been asked
+
+## Failed Approaches
+- [2026-07-11] Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature — speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries.
+- [2026-07-11] Gating self-continuation relaunches (a session relaunching itself) with a permission gate — Self-continuation is the normal case and should never be gated. The original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). Gating self-continuation broke the expected relaunch workflow and was unnecessary.
+- [2026-07-11] Assuming the permission gate was responsible for the mid-run companion opening bug — The permission gate revert did not fix the issue. Root cause was a separate timing bug in _wait_for_turn_to_finish: it only waited for the one turn active when the trigger fired, then opened the companion immediately after that turn's Stop event, allowing new turns to start in the gap.
+- [2026-07-11] Pruning companioned_sessions dedup based on whether a session's stats file had gone stale (10 minutes without a tool call) — Stats files stop updating whenever the machine sleeps, not just when a session ends. After waking from sleep longer than 10 minutes, a live session looks brand new to the dedup, causing the context trigger to fire again for the same session. Must use PID-based liveness check instead.
+- [2026-07-11] Assumed register_session() was failing due to an unhandled exception in bare except: pass wrapper — The actual failure was at import time (ImportError: cannot import name 'register_session'), not at function execution time. The import itself was failing due to git checkout rewriting the file mid-import.
 
 ## Files In Play
-- `askr/session/registry.py`
-- `askr/hooks/session_start.py`
-- `askr/hooks/post_tool_use.py`
-- `askr/session/lifecycle.py`
-
-## Relational Files
-- `askr/utils/retry.py` (imported_by): Provides import_retry() wrapper used in all hook and lifecycle imports of registry
-- `askr_state/decisions.jsonl` (configures): Contains the June 17 decision that atomic writes should be standard for all JSON stats writes; this session's fix enforces that decision in registry.py
-- `askr_state/handover_bippin.json` (configures): Smart Context Injection reads files_in_play and relational_files from handover to determine what context to inject into new sessions
+- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
+- `/Users/bippin/Desktop/askr/tests/test_registry.py`
+- `/Users/bippin/Desktop/askr/tests/test_voice.py`
+- `/private/tmp/claude-501/-Users-bippin-Desktop-askr/480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc/scratchpad/commit_msg6.txt`
