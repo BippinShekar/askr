@@ -1,33 +1,44 @@
 # Handover: bippin
 
-Last updated: 2026-07-14 04:25
+Last updated: 2026-07-15 02:07
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Unknown — transcript unavailable
+Diagnosed and identified root cause of askr's false 100% context-window saturation: Anthropic silently upgraded Claude Code sessions to Sonnet 5 (1M-token context window) while askr's hardcoded model registry still assumes 200K, causing premature saturation reporting and blocking auto-compaction.
+
+## Discussion
+askr's context-window accounting in monitor.py hardcodes all models to 200K tokens via _MODEL_CONTEXT_WINDOWS and _DEFAULT_CONTEXT_WINDOW. Anthropic recently upgraded Claude Code to default Sonnet 5 on all paid plans (including Pro), which ships with a 1M-token context window — a 5x increase. When sessions run on Sonnet 5, askr's math divides real token usage by the wrong 200K denominator, hitting its own fake 100% saturation around 200K real tokens, while the actual session (on a real 1M window) is only ~20% full and never approaches Claude Code's real compaction threshold (~85-92% of 1M ≈ 850K-920K tokens). This explains why sessions sit at askr's reported 100% for hours/days with zero compaction — the saturation is false, and there's nothing to compact yet.
+
+## Accomplishments
+- [x] Root-caused false 100% context saturation: identified Sonnet 5's 1M-token window vs. askr's hardcoded 200K assumption
+- [x] Confirmed timing: Claude Code auto-updated silently across versions 2.1.187 → 2.1.209, defaulting sessions to Sonnet 5 without user intervention
+- [x] Ruled out unrelated Anthropic CLI bug (2.1.208 fix for native Claude Code indicator) as cause — askr computes its own accounting independently
+
+## In Progress
+- `askr/session/monitor.py` (line 125): Update _MODEL_CONTEXT_WINDOWS to include claude-sonnet-5 with 1_000_000 token window; add entries for other Sonnet-5/Opus-4.8-family models
 
 ## Next Actions
-1. Inspect /private/tmp/claude-501/-Users-bippin-Desktop-askr/480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc/scratchpad/commit_msg6.txt — last file modified this session (handover generation failed/truncated — verify manually)
-   *Why: handover generation failed this session*
+1. Add 'claude-sonnet-5': 1_000_000 to _MODEL_CONTEXT_WINDOWS dict in askr/session/monitor.py:120-125, replacing or supplementing the hardcoded 200K default
+   *Why: Fixes the immediate false saturation: askr will now correctly compute context_pct against the real 1M window, allowing sessions to reach ~85-92% before triggering auto-compaction, matching Claude Code's actual behavior*
+2. Audit _MODEL_CONTEXT_WINDOWS for completeness: add all current Sonnet-5, Opus-4.8, and Haiku-4.5 variants with their correct context windows per current Anthropic documentation
+   *Why: Prevents this regression from recurring when Anthropic ships new model versions or updates context windows; hardcoding 200K as fallback is fragile*
+3. Test the fix: run a long session on Sonnet 5 and verify context_pct tracks correctly (should reach ~85-92% before compaction, not stick at 100% prematurely)
+   *Why: Confirms the fix resolves the user's observed symptom of false 100% saturation with zero compaction*
+4. Consider adding a model-detection mechanism (e.g., env var, config flag, or API introspection) to dynamically fetch context windows instead of hardcoding, to future-proof against silent Anthropic platform changes
+   *Why: Reduces brittleness; this exact scenario (silent model upgrade) just happened and will likely happen again*
 
 ## Decisions
-- Use temp-file + os.replace() pattern for all JSON registry writes (register_session, update_heartbeat) — os.replace() is atomic on POSIX and Windows, preventing concurrent readers (get_active_sessions, is_session_confirmed_dead) from observing partially-written files; separate from the .py import race
-- Do not open a new session when context is >70% full if the current session's Claude is still generating, awaiting user input, or has active subagents — Opening a new session mid-conversation breaks the user's flow and loses context continuity; session switching should only occur when the conversation is idle and context is exhausted
-- Extract has_outstanding_subagent() into a shared checkpoint.py module instead of duplicating it in stop.py and lifecycle.py — Both stop.py (gates the spoken 'Done' ping) and lifecycle.py (gates session switching) need identical subagent detection logic; shared module eliminates duplication and ensures consistency
-- Require a grace period of SESSION_STALE_SECS (30 seconds) to elapse after the last turn-stop marker before allowing session switching in _wait_for_turn_to_finish() — Stop fires immediately after Claude finishes generating and all tool results land, but Claude may still be processing or generating the next response; grace period ensures Claude has truly finished before session switching is allowed, preventing premature session creation
-- Require a grace period of TURN_QUIET_GRACE_SECS (90 seconds) of real silence since the Stop signal before allowing session switching in _wait_for_turn_to_finish() — Stop fires immediately after Claude finishes generating text or tool results land, but Claude may still be processing or generating the next response; grace period ensures Claude has truly finished and the turn is idle before session switching is allowed, preventing premature session creation when Claude is mid-generation or when a plain-text question has just been asked
+- Root cause is Anthropic's silent upgrade of Claude Code to Sonnet 5 (1M context), not a user configuration change or daemon liveness issue — User confirmed no model/plan changes; CLI auto-updated silently across versions 2.1.187–2.1.209; Sonnet 5 ships with 1M window on all paid plans; askr's hardcoded 200K denominator produces exactly the observed symptom
 
 ## Failed Approaches
-- [2026-07-11] Allowing test_launch_gate.py and test_permission_gate.py to patch only voice.speak without also patching voice.speak_signature — speak_signature() is the fallback when voice mode is enabled; patching only speak() left real macOS `say` subprocess calls firing and polluting voice_log.jsonl with test fixture entries.
-- [2026-07-11] Gating self-continuation relaunches (a session relaunching itself) with a permission gate — Self-continuation is the normal case and should never be gated. The original Phase 5 gate already handles the actual threat (unrelated teammate tasks with elevated permissions). Gating self-continuation broke the expected relaunch workflow and was unnecessary.
-- [2026-07-11] Assuming the permission gate was responsible for the mid-run companion opening bug — The permission gate revert did not fix the issue. Root cause was a separate timing bug in _wait_for_turn_to_finish: it only waited for the one turn active when the trigger fired, then opened the companion immediately after that turn's Stop event, allowing new turns to start in the gap.
-- [2026-07-11] Pruning companioned_sessions dedup based on whether a session's stats file had gone stale (10 minutes without a tool call) — Stats files stop updating whenever the machine sleeps, not just when a session ends. After waking from sleep longer than 10 minutes, a live session looks brand new to the dedup, causing the context trigger to fire again for the same session. Must use PID-based liveness check instead.
-- [2026-07-11] Assumed register_session() was failing due to an unhandled exception in bare except: pass wrapper — The actual failure was at import time (ImportError: cannot import name 'register_session'), not at function execution time. The import itself was failing due to git checkout rewriting the file mid-import.
+- Attributed false saturation to Anthropic CLI bug (2.1.208 fix for native Claude Code context-window indicator reset) — User correctly noted that askr's chat:100% is computed independently from Claude Code's native indicator; the CLI bug is irrelevant to askr's own accounting logic
+- Hypothesized 1M context window was a Max/Team/Enterprise plan feature — User is on Pro plan; Anthropic recently made 1M context standard for Sonnet 5 on all paid plans, not plan-gated
 
 ## Files In Play
-- `/Users/bippin/Desktop/askr/askr/session/lifecycle.py`
-- `/Users/bippin/Desktop/askr/tests/test_registry.py`
-- `/Users/bippin/Desktop/askr/tests/test_voice.py`
-- `/private/tmp/claude-501/-Users-bippin-Desktop-askr/480fab6a-2c98-42e9-a7cc-a4f4c32bc5fc/scratchpad/commit_msg6.txt`
+- `askr/session/monitor.py`
+
+## Relational Files
+- `askr/session/checkpoint.py` (imported_by): Refactored in recent commits to centralize has_outstanding_subagent logic; monitor.py may import utilities from here
+- `askr/hooks/stop.py` (imported_by): Recent commits moved has_outstanding_subagent from stop.py to checkpoint.py; monitor.py may have similar shared utilities
