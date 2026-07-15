@@ -1569,6 +1569,16 @@ def run_daemon():
                     quota_pct = stats.get("quota_pct")
                     reset_at  = stats.get("quota_reset_at", "")
 
+                    # Cache-miss population only — instant no-op on every cycle once a
+                    # model is cached. On a genuine miss this makes one live Models API
+                    # call (OAuth, fails open) so the *next* hook-computed context_pct
+                    # for this session uses the model's real window instead of the
+                    # conservative default. See askr/session/model_windows.py.
+                    model = stats.get("model")
+                    if model:
+                        from askr.session.model_windows import ensure_cached
+                        ensure_cached(model)
+
                     proj_last = last_trigger_at.get(project_path, 0.0)
                     in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
                     session_id = stats.get("session_id")

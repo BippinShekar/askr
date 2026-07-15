@@ -1385,7 +1385,8 @@ def _notify_discord_goals_completed(goals: list):
 def _context_history_for_session(project_path: str) -> list[float]:
     """Read per-turn context % from the active JSONL."""
     try:
-        from askr.session.monitor import _find_active_jsonl, _total_context_tokens, _MODEL_CONTEXT_WINDOWS, _DEFAULT_CONTEXT_WINDOW
+        from askr.session.monitor import _find_active_jsonl, _total_context_tokens
+        from askr.session.model_windows import get_context_window
         jsonl_path = _find_active_jsonl(project_path)
         if not jsonl_path:
             return []
@@ -1409,7 +1410,7 @@ def _context_history_for_session(project_path: str) -> list[float]:
                 usage = msg.get("usage", {})
                 if usage:
                     tokens = _total_context_tokens(usage)
-                    window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
+                    window = get_context_window(model)
                     history.append(tokens / window if window > 0 else 0.0)
         return history
     except Exception:

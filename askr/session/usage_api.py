@@ -20,7 +20,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 _USAGE_URL      = "https://api.anthropic.com/api/oauth/usage"
+_MODELS_URL     = "https://api.anthropic.com/v1/models"
 _OAUTH_BETA     = "oauth-2025-04-20"
+_ANTHROPIC_VER  = "2023-06-01"
 _KEYCHAIN_SVC   = "Claude Code-credentials"
 _CREDS_FALLBACK = os.path.expanduser("~/.claude/.credentials.json")
 
@@ -133,3 +135,39 @@ def get_quota_status() -> Optional[QuotaStatus]:
         seven_day_pct=float(seven_util) if seven_util is not None else 0.0,
         seven_day_reset=seven_reset_dt,
     )
+
+
+def fetch_model_context_window(model_id: str) -> Optional[int]:
+    """
+    Look up a model's real context window (max_input_tokens) from the Models
+    API, authenticated via Claude Code's own OAuth session — same credential
+    source as get_quota_status() above, no separate ANTHROPIC_API_KEY needed.
+
+    Never raises — network/auth/unknown-model failures all return None so the
+    caller (the daemon's cache-population pass) can fail open. Callers must
+    not put this on a hot path; it's a real HTTP call. The daemon calls this
+    only on a genuine cache miss (a model string never seen before).
+    """
+    token = _get_access_token()
+    if not token:
+        return None
+
+    try:
+        req = urllib.request.Request(
+            f"{_MODELS_URL}/{model_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "anthropic-version": _ANTHROPIC_VER,
+                "anthropic-beta": _OAUTH_BETA,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+    except Exception:
+        return None
+
+    window = data.get("max_input_tokens")
+    try:
+        return int(window) if window else None
+    except (TypeError, ValueError):
+        return None

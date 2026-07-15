@@ -116,15 +116,6 @@ def get_max_context_for_project(project_path: str) -> float:
     return max_ctx
 
 
-_MODEL_CONTEXT_WINDOWS = {
-    "claude-sonnet-4-6": 200_000,
-    "claude-opus-4-8":   200_000,
-    "claude-haiku-4-5-20251001": 200_000,
-    "claude-opus-4-5":   200_000,
-}
-_DEFAULT_CONTEXT_WINDOW = 200_000
-
-
 @dataclass
 class SessionStats:
     session_id:     str
@@ -224,8 +215,9 @@ def get_session_stats(project_path: str, session_id: str = None) -> Optional[Ses
         tokens_per_turn.append(_total_context_tokens(usage))
         output_tokens += usage.get("output_tokens", 0)
 
+    from askr.session.model_windows import get_context_window
     context_tokens = tokens_per_turn[-1] if tokens_per_turn else 0
-    context_window = _MODEL_CONTEXT_WINDOWS.get(model, _DEFAULT_CONTEXT_WINDOW)
+    context_window = get_context_window(model)
     context_pct    = context_tokens / context_window if context_window > 0 else 0.0
     # Backstop only — a real single session can't exceed its own context
     # window (the API enforces that). If this ever fires, something upstream
