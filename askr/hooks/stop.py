@@ -27,6 +27,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
+from askr.session.checkpoint import has_outstanding_subagent as _has_outstanding_subagent
 
 _CHECKPOINT_PENDING = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
@@ -504,49 +505,6 @@ _GENERIC_DONE_PHRASES = [
     "Back whenever you're ready.",
 ]
 
-
-def _has_outstanding_subagent(transcript_path: str) -> bool:
-    """
-    True if this turn dispatched an Agent-tool subagent (a fork or fresh
-    background agent) whose result hasn't landed yet.
-
-    Found 2026-07-09: when the main turn calls the Agent tool, the tool_result
-    returned in THIS turn is just an immediate "launched successfully" ack —
-    the subagent's real output arrives later as a separate turn, triggered by
-    a <task-notification> block containing <tool-use-id>{the original Agent
-    tool_use's id}</tool-use-id>. Stop fires normally right after the launch
-    ack, same as any other tool call, so by every existing signal the turn
-    looks complete — but the subagent's findings still feed into this same
-    logical unit of work. Announcing "Done." at that point is misleading, not
-    just premature: real completion is still pending.
-    """
-    if not transcript_path or not os.path.exists(transcript_path):
-        return False
-    try:
-        dispatched_ids = set()
-        completed_ids = set()
-        with open(transcript_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except Exception:
-                    continue
-                if obj.get("type") == "assistant":
-                    for block in obj.get("message", {}).get("content", []):
-                        if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Agent":
-                            tool_id = block.get("id", "")
-                            if tool_id:
-                                dispatched_ids.add(tool_id)
-                elif obj.get("type") == "user":
-                    content = obj.get("message", {}).get("content", "")
-                    text = content if isinstance(content, str) else json.dumps(content)
-                    completed_ids.update(re.findall(r"<tool-use-id>([^<]+)</tool-use-id>", text))
-        return bool(dispatched_ids - completed_ids)
-    except Exception:
-        return False
 
 
 def _speak_session_done(completed_goals: list, transcript_path: str = "", session_id: str = ""):

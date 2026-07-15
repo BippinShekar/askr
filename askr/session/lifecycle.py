@@ -145,6 +145,16 @@ MAX_TURN_ACTIVE_SECS = 1800  # if a turn-start marker is older than this with no
                            # treat the turn as abandoned (crashed session, closed terminal) rather
                            # than "still active" forever — otherwise a turn that never signals Stop
                            # would permanently suppress the idle-checkpoint safety net.
+TURN_QUIET_GRACE_SECS = 90  # found 2026-07-14: Stop fires the instant Claude's reply finishes
+                           # generating, even when that reply is a plain-text question waiting on
+                           # the user (no tool call involved, so _turn_currently_active() has
+                           # nothing to key off — from the turn markers' view the session is
+                           # already "quiet"). A companion opening ~5s after Claude asks something
+                           # is functionally the same interruption as opening mid-reply. Require
+                           # this much real silence since the last Stop before treating the turn
+                           # boundary as safe — long enough for a human to notice and start typing,
+                           # far short of IDLE_TRIGGER_SECS (10 min), which answers a different
+                           # question ("has this session been abandoned").
 
 
 # ---------------------------------------------------------------------------
@@ -1203,6 +1213,22 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     _turn_currently_active() to be false — no turn in flight right now, not
     just "the turn we were originally watching is done."
 
+    Found 2026-07-13: still not enough. Stop fires as soon as the main turn's
+    own generation ends, even if that turn dispatched an Agent-tool subagent
+    (fork or background agent) whose result is still pending — by every
+    turn-marker signal the session looks quiet, but the user is mid-flow,
+    waiting on that subagent to report back into the same conversation.
+    Popping a companion window open in that gap is exactly as disruptive as
+    interrupting a still-generating reply. Now also requires
+    has_outstanding_subagent() to be false against the live transcript.
+
+    Found 2026-07-14: still not enough. A plain-text question at the end of a
+    reply ("should I do X?") involves no tool call, so Stop fires the instant
+    it's generated — _turn_currently_active() goes false immediately, same as
+    any other finished turn, even though the user hasn't had a chance to read
+    it yet, let alone answer. Now also requires TURN_QUIET_GRACE_SECS of real
+    silence since that Stop signal, not just "Stop already fired."
+
     Returns True if a live session was found and waited on, False if no live
     process was detected for this project (nothing to wait for).
     """
@@ -1210,10 +1236,14 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
         _log("claude process not found for this project — nothing to wait for")
         return False
 
+    from askr.session.monitor import _find_active_jsonl
+    from askr.session.checkpoint import has_outstanding_subagent
+
     POLL          = 5    # polling interval (seconds)
     MAX_WAIT_SECS = 600  # hard cap; only hit if the user never has a quiet moment
 
-    _log("waiting for a genuinely quiet moment (watching for Stop hook signal, no new turn started)...")
+    _log("waiting for a genuinely quiet moment (Stop hook fired, no new turn, no outstanding "
+         f"subagent, {TURN_QUIET_GRACE_SECS}s of silence since)...")
 
     wait_start = time.time()
     waited = 0
@@ -1226,8 +1256,12 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
             _log("claude session ended while waiting")
             break
 
-        if _turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id):
-            _log("Stop hook fired and no new turn active — reply finished")
+        _, stop_idle_secs = _last_turn_stop(session_id)
+        if (_turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id)
+                and not has_outstanding_subagent(_find_active_jsonl(project_path) or "")
+                and stop_idle_secs is not None and stop_idle_secs >= TURN_QUIET_GRACE_SECS):
+            _log("Stop hook fired, no new turn active, no outstanding subagent, "
+                 f"{stop_idle_secs:.0f}s quiet — reply finished")
             break
 
         if waited >= MAX_WAIT_SECS:
