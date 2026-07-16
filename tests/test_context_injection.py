@@ -32,9 +32,19 @@ class ReaderTestBase(unittest.TestCase):
         self._patch = patch("askr.state.reader.state_path",
                              side_effect=lambda name: os.path.join(self.state_dir, name))
         self._patch.start()
+        # Isolate the Phase 3.14 snapshot lookup too — without this it falls
+        # through to the real project's own .llm_snapshot/summary.json (found
+        # via get_state_dir()'s cwd-relative project-root walk, since tests
+        # run from the repo root), leaking real snapshot content into what's
+        # supposed to be an empty/isolated fixture.
+        self._snap_dir = os.path.join(self.state_dir, "_no_snapshot")
+        self._snapshot_patch = patch("askr.state.reader.snapshot_path",
+                                      side_effect=lambda name: os.path.join(self._snap_dir, name))
+        self._snapshot_patch.start()
 
     def tearDown(self):
         self._patch.stop()
+        self._snapshot_patch.stop()
         self._tmp.cleanup()
 
     def _own_handover(self, **overrides):
@@ -90,17 +100,22 @@ class TargetedModeTests(ReaderTestBase):
         self._own_handover(files_in_play=["askr/auth.py"])
         snapshot_dir = os.path.join(self.state_dir, "..", "snapshot")
         os.makedirs(snapshot_dir, exist_ok=True)
-        snapshot_path = os.path.join(snapshot_dir, "summary.json")
-        with open(snapshot_path, "w") as f:
+        snapshot_file = os.path.join(snapshot_dir, "summary.json")
+        with open(snapshot_file, "w") as f:
             json.dump([{"file": "askr/auth.py", "purpose": "handles OAuth token refresh"}], f)
 
-        with patch("askr.utils.config.SNAPSHOT_DIR", snapshot_dir):
+        # snapshot_path() (askr/state/reader.py) is the real seam now — it's
+        # project-root-anchored via get_state_dir(), not the bare cwd-relative
+        # SNAPSHOT_DIR constant this test used to patch directly.
+        with patch("askr.state.reader.snapshot_path",
+                    side_effect=lambda name: os.path.join(snapshot_dir, name)):
             result = reader.build_context_injection("dev")
         self.assertIn("handles OAuth token refresh", result)
 
     def test_missing_snapshot_degrades_to_bare_path(self):
         self._own_handover(files_in_play=["askr/auth.py"])
-        with patch("askr.utils.config.SNAPSHOT_DIR", "/no/such/dir"):
+        with patch("askr.state.reader.snapshot_path",
+                    side_effect=lambda name: os.path.join("/no/such/dir", name)):
             result = reader.build_context_injection("dev")
         self.assertIn("askr/auth.py", result)
 

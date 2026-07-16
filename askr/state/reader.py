@@ -225,14 +225,28 @@ def load_rejected_decisions() -> list[dict]:
     return entries
 
 
+def snapshot_path(filename: str) -> str:
+    """Project-root-anchored path into .llm_snapshot/ — same root state_path()
+    uses for askr_state/. SNAPSHOT_DIR (askr/utils/config.py) is a bare
+    '.llm_snapshot' string resolved cwd-relative everywhere else in the qa/
+    subsystem, which is fine there (always invoked already-cwd'd into the
+    project). reader.py doesn't have that guarantee — load_architecture()
+    runs from hook/daemon contexts — so this anchors off get_state_dir()'s
+    project-root walk instead of trusting ambient cwd. Also makes this
+    properly patchable in tests, the same way state_path() already is."""
+    from askr.state.config import get_state_dir
+    from askr.utils.config import SNAPSHOT_DIR
+    project_root = os.path.dirname(get_state_dir())
+    return os.path.join(project_root, SNAPSHOT_DIR, filename)
+
+
 def _load_snapshot_entries() -> dict:
     """file path -> snapshot entry (purpose/key_components/dependencies) from
     .llm_snapshot/summary.json, or {} if no snapshot exists yet (Phase 3.14
     isn't built — this degrades to bare file paths rather than blocking on it,
     per roadmap.md's Phase 3.15 S2 note)."""
     try:
-        from askr.utils.config import SNAPSHOT_DIR
-        with open(os.path.join(SNAPSHOT_DIR, "summary.json")) as f:
+        with open(snapshot_path("summary.json")) as f:
             entries = _json.load(f)
         return {e.get("file"): e for e in entries if e.get("file")}
     except Exception:
