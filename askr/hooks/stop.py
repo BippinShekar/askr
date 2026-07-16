@@ -568,12 +568,36 @@ def _spawn_background_handover(developer: str, transcript_path: str, session_id:
         log_error("stop._spawn_background_handover", str(e))
 
 
+def _sync_snapshot_after_checkpoint():
+    """
+    Phase 3.14 S3: after the checkpoint step (create_handover_only, above)
+    completes, re-scan whatever the last commit(s) changed — plus, via the
+    reverse-dependency index built in S1/S7, whatever imports those changed
+    files (a changed file's importers are now stale too; this is "not
+    optional" per roadmap.md) — and merge the result into
+    .llm_snapshot/summary.json. Runs in this same detached background
+    process, same as the handover call above, so a Haiku batch call never
+    blocks a turn. sync_snapshot_incremental() itself no-ops cheaply when
+    HEAD hasn't moved since the last sync (the common case — askr's own
+    automated commits are rare, not per-turn) and swallows its own git/LLM
+    failures, but this call is still wrapped so a bug here can never take
+    down the handover/speak/advance-goal steps around it.
+    """
+    try:
+        from askr.qa.snapshot import sync_snapshot_incremental
+        sync_snapshot_incremental()
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("stop._sync_snapshot_after_checkpoint", str(e))
+
+
 def _run_background_handover(payload_path: str):
     """
     Entry point for the detached child _spawn_background_handover() spawns.
-    Runs the actual (slow) handover generation, then the two things that
-    depend on its result: the spoken "done" ping (goal-completion is worth
-    announcing in real time) and advancing launch_mode's next-goal pointer.
+    Runs the actual (slow) handover generation, then the things that depend
+    on its result: the spoken "done" ping (goal-completion is worth
+    announcing in real time), advancing launch_mode's next-goal pointer, and
+    the incremental snapshot/architecture sync (Phase 3.14 S3).
     Nothing waits on this process; it exits whenever it exits.
     """
     try:
@@ -600,6 +624,8 @@ def _run_background_handover(payload_path: str):
     except Exception as e:
         from askr.utils.logger import log_error
         log_error("stop._run_background_handover", str(e))
+
+    _sync_snapshot_after_checkpoint()
 
 
 def main():

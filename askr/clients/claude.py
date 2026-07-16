@@ -21,6 +21,14 @@ _MODE_MAX_TOKENS = {
                          # mid-JSON on real sessions (usage.log: out=2000 exactly, json.loads
                          # failed, fell back to the mechanical/generic handover)
     "guard":       500,  # JSON response: {"clean":..,"issues":[..],"summary":..} — 300 truncates
+    "snapshot_batch": 8192,  # Phase 3.14 S2 — one JSON object per changed file in a single
+                         # response; generous static budget since a batch can hold many files
+                         # (input side is what's split into <=2 calls at ~150k tokens — see
+                         # qa/snapshot.py's _split_into_batches — not this). Anthropic's Haiku
+                         # 4.5 max output is 8192; a batch response that still doesn't fit is
+                         # covered by update_snapshot_batch's own fallback: any file whose entry
+                         # is missing/empty (whether truncated out or never generated) gets
+                         # discarded and individually re-scanned via _summarize_file.
 }
 
 
