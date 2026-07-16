@@ -289,6 +289,20 @@ def _generate_handover_with_llm(
             goals_list = "\n".join(f"- {g}" for g in open_goals)
             goals_section = f"\nOPEN GOALS (check which were completed):\n{goals_list}\n"
 
+        persisted_prefs_section = ""
+        try:
+            from askr.state.behavior_prefs import read_all_persisted_rules
+            persisted = read_all_persisted_rules(project_path)
+            already_persisted = persisted.get("global", []) + persisted.get("project", [])
+            if already_persisted:
+                persisted_list = "\n".join(f"- {r}" for r in already_persisted)
+                persisted_prefs_section = (
+                    "\nALREADY-PERSISTED BEHAVIORAL RULES (do not re-suggest these "
+                    f"or close paraphrases):\n{persisted_list}\n"
+                )
+        except Exception:
+            pass
+
         now_iso = datetime.now(timezone.utc).isoformat()
         uncommitted_json = json.dumps(uncommitted_files)
 
@@ -316,7 +330,7 @@ TRACKED FILE EDITS — ground truth from PostToolUse hook (exact line numbers, n
 
 UNCOMMITTED FILES — from git status (do not change this field):
 {chr(10).join(uncommitted_files) if uncommitted_files else "(none)"}
-{goals_section}
+{goals_section}{persisted_prefs_section}
 Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
 
 {{
@@ -336,6 +350,7 @@ Output ONLY valid JSON. No markdown fences, no explanation, no preamble. Schema:
   "uncommitted_files": {uncommitted_json},
   "blockers": ["specific blocker"],
   "completed_goals": [],
+  "behavioral_preferences": [{{"rule": "concise imperative instruction", "confidence": 0.9, "scope": "global"}}],
   "session_metadata": {{"trigger_type": "{trigger_type}", "timestamp": "{now_iso}"}}
 }}
 
@@ -376,6 +391,17 @@ Rules:
 - uncommitted_files: already set above from git — copy it verbatim, do not change.
 - user_rejected_decisions: only where the USER rejected a proposal. Confidence >= 0.7 to include.
 - completed_goals: list exact goal strings from OPEN GOALS completed THIS SESSION only. Conservative.
+- behavioral_preferences: ONLY persistent behavioral preferences the user explicitly stated that
+  should apply to EVERY future session (e.g. "always build in stages", "never use emojis in
+  output", "commit clean, no AI co-author on commits") — NOT one-off task instructions specific
+  to this session's work (e.g. "fix the bug in stop.py", "add a test for X" are NOT behavioral
+  preferences). scope="global" if the instruction is about how Claude/askr should behave or
+  communicate in general (tone, process, git hygiene) regardless of project; scope="project" if
+  it is specific to conventions of THIS repository (this project's test style, file layout,
+  tooling). Only include an instruction stated as an explicit, general, standing rule — never
+  infer one from a single ambiguous or contextual remark. confidence >= 0.85 only when the
+  instruction is unambiguous and clearly meant to persist. Do not re-suggest anything listed
+  under ALREADY-PERSISTED BEHAVIORAL RULES above, even if reworded. Empty array [] if none.
 - Empty array [] for sections with nothing to report. Never null."""
 
         raw = call_claude(
@@ -579,6 +605,54 @@ def _write_rejections_from_handover(handover, state_dir: str, developer: str):
     except Exception as e:
         from askr.utils.logger import log_error
         log_error("checkpoint._write_rejections_from_handover", str(e))
+
+
+def _write_behavioral_preferences_from_handover(handover, state_dir: str, developer: str, project_path: str):
+    """
+    Surface high-confidence, not-yet-persisted behavioral preference candidates
+    from this turn's handover LLM response (behavioral_preferences field in
+    _generate_handover_with_llm's schema) via behavior_prefs.deliver_candidates.
+
+    Runs on every turn via _run_light_handover — same cadence as decisions and
+    rejected-decision extraction above — rather than as a separate detached
+    LLM call, per roadmap Phase 3.9: this extends the existing per-session
+    handover pass instead of adding a second call_claude invocation.
+
+    The confidence gate and persisted/pending dedup happen here as a second,
+    independent check — same defense-in-depth reasoning as
+    _write_rejections_from_handover's confidence re-check — so a prompt
+    regression can't silently start writing to CLAUDE.md unchecked.
+    """
+    if not isinstance(handover, dict):
+        return
+    try:
+        candidates = handover.get("behavioral_preferences", [])
+        if not candidates:
+            return
+
+        from askr.state.behavior_prefs import (
+            filter_high_confidence, dedup_candidates, deliver_candidates,
+        )
+
+        cleaned = []
+        for c in candidates:
+            rule = (c.get("rule") or "").strip()
+            if not rule or len(rule) < 8:
+                continue
+            scope = c.get("scope") if c.get("scope") in ("global", "project") else "project"
+            try:
+                confidence = float(c.get("confidence", 0))
+            except (TypeError, ValueError):
+                confidence = 0.0
+            cleaned.append({"rule": rule, "scope": scope, "confidence": confidence})
+
+        high_confidence = filter_high_confidence(cleaned)
+        surfaced = dedup_candidates(high_confidence, project_path)
+        if surfaced:
+            deliver_candidates(surfaced, project_path)
+    except Exception as e:
+        from askr.utils.logger import log_error
+        log_error("checkpoint._write_behavioral_preferences_from_handover", str(e))
 
 
 def _infer_and_queue_tasks(transcript_text: str, state_dir: str, developer: str):
@@ -1040,6 +1114,7 @@ def _run_light_handover(
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
     _write_rejections_from_handover(summary, state_dir, developer)
+    _write_behavioral_preferences_from_handover(summary, state_dir, developer, project_path)
 
     completed_goals = []
     try:

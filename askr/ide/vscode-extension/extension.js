@@ -243,6 +243,36 @@ function checkNotification() {
           goals.forEach(g => terminal.sendText(`askr goal discard "${g}"`));
         }
       });
+    } else if (n.type === 'behavior_confirm') {
+      // High-confidence behavioral preference(s) detected from this session's
+      // conversation (askr Phase 3.9). Ask the user before touching CLAUDE.md —
+      // if this notification is never claimed, checkpoint.py's fallback worker
+      // auto-persists it headless after FALLBACK_DELAY_SECONDS and posts to
+      // Discord instead. Mirrors goal_check's aggregate Keep/Discard-over-a-
+      // batch pattern.
+      const rules = n.rules || [];
+      const preview = rules
+        .map(r => `"${r.rule.length > 60 ? r.rule.slice(0, 60) + '…' : r.rule}"`)
+        .join(', ');
+      const summary = rules.length === 1
+        ? `Detected preference: ${preview}`
+        : `Detected ${rules.length} preferences: ${preview}`;
+      vscode.window.showInformationMessage(
+        `Askr: ${summary}`,
+        'Keep', 'Discard'
+      ).then(action => {
+        if (!action) return;  // dismissed — stays in `askr prefs pending` untouched
+        const terminal = vscode.window.createTerminal({ name: 'askr — preferences' });
+        terminal.show();
+        rules.forEach(r => {
+          const safeRule = r.rule.replace(/"/g, '').replace(/`/g, '');
+          if (action === 'Keep') {
+            terminal.sendText(`askr prefs keep "${safeRule}" --scope ${r.scope || 'project'}`);
+          } else {
+            terminal.sendText(`askr prefs discard "${safeRule}"`);
+          }
+        });
+      });
     } else if (n.type === 'reload_extension') {
       vscode.window.showInformationMessage(
         'Askr updated — reload the window to activate new changes.',

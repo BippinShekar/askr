@@ -252,16 +252,16 @@ The problem: every tool that claims to "remember" preferences still requires man
 
 | Feature | Status |
 |---|---|
-| Stop hook scans user messages from session JSONL for behavioral instructions | 🔲 Todo |
-| Haiku call extracts structured rules — filters task-specific instructions vs. persistent preferences | 🔲 Todo |
-| Diff against existing CLAUDE.md — never re-surface already-persisted rules | 🔲 Todo |
-| LLM classifies global (`~/.claude/CLAUDE.md`) vs. project-specific rule scope | 🔲 Todo |
-| `behavior_confirm` notification type in extension — Keep / Discard buttons | 🔲 Todo |
-| Headless path: auto-write + Discord "Detected and persisted: X. `askr prefs remove` to undo." | 🔲 Todo |
-| `askr prefs` CLI — list all persisted behavioral rules across global + project CLAUDE.md | 🔲 Todo |
-| `askr prefs remove "rule"` — delete a specific rule from CLAUDE.md | 🔲 Todo |
-| `askr prefs pending` — list rules detected but not yet confirmed (Cursor was closed mid-session) | 🔲 Todo |
-| Conservative detection — only fire notification when confidence is high; silent if ambiguous | 🔲 Todo |
+| Stop hook scans user messages from session JSONL for behavioral instructions | ✅ Done |
+| Haiku call extracts structured rules — filters task-specific instructions vs. persistent preferences | ✅ Done |
+| Diff against existing CLAUDE.md — never re-surface already-persisted rules | ✅ Done |
+| LLM classifies global (`~/.claude/CLAUDE.md`) vs. project-specific rule scope | ✅ Done |
+| `behavior_confirm` notification type in extension — Keep / Discard buttons | ✅ Done |
+| Headless path: auto-write + Discord "Detected and persisted: X. `askr prefs remove` to undo." | ✅ Done |
+| `askr prefs` CLI — list all persisted behavioral rules across global + project CLAUDE.md | ✅ Done |
+| `askr prefs remove "rule"` — delete a specific rule from CLAUDE.md | ✅ Done |
+| `askr prefs pending` — list rules detected but not yet confirmed (Cursor was closed mid-session) | ✅ Done |
+| Conservative detection — only fire notification when confidence is high; silent if ambiguous | ✅ Done |
 
 **Done when:** You tell Claude "always build in stages and commit each stage" once. Askr detects it, asks you to confirm, writes it to CLAUDE.md. Every subsequent session — including overnight autonomous ones — follows that rule without you repeating it.
 
