@@ -59,7 +59,7 @@ class EmergencyCheckpointRoutingTests(unittest.TestCase):
              patch.object(checkpoint, "_generate_project_brief"), \
              patch.object(checkpoint, "_regenerate_architecture_md"), \
              patch.object(checkpoint, "_infer_and_queue_tasks"), \
-             patch.object(checkpoint, "git_commit_push"), \
+             patch.object(checkpoint, "git_commit_push", return_value=(True, "")), \
              patch.object(checkpoint, "_notify_discord_checkpoint"), \
              patch("askr.state.analytics.record_session_end", return_value=0):
 
@@ -93,7 +93,7 @@ class EmergencyCheckpointRoutingTests(unittest.TestCase):
              patch.object(checkpoint, "_generate_project_brief"), \
              patch.object(checkpoint, "_regenerate_architecture_md"), \
              patch.object(checkpoint, "_infer_and_queue_tasks"), \
-             patch.object(checkpoint, "git_commit_push"), \
+             patch.object(checkpoint, "git_commit_push", return_value=(True, "")), \
              patch.object(checkpoint, "_notify_discord_checkpoint"), \
              patch("askr.state.analytics.record_session_end", return_value=0):
 

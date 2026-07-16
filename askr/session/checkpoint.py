@@ -880,7 +880,17 @@ def _log_push_failure(developer: str, detail: str):
         pass
 
 
-def git_commit_push(state_dir: str, developer: str, trigger_type: str):
+def git_commit_push(state_dir: str, developer: str, trigger_type: str) -> tuple[bool, str]:
+    """
+    Returns (success, error_detail). success=True covers both "pushed cleanly"
+    and "nothing to commit" — both mean a caller's "state saved to git" claim
+    is true. success=False means a commit may exist locally but never reached
+    the remote — callers MUST check this before announcing a push succeeded
+    (voice, Discord, notification.json). See checkpoint_error.log for the
+    documented history of this being silently wrong: unresolved merge
+    conflicts, network failures, rebase conflicts on askr's own files — every
+    one of them previously still told the user "state saved to git".
+    """
     cwd = os.path.dirname(os.path.normpath(state_dir))
     try:
         subprocess.run(["git", "add", state_dir], capture_output=True, cwd=cwd)
@@ -889,7 +899,7 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
             capture_output=True, text=True, cwd=cwd,
         )
         if not result.stdout.strip():
-            return
+            return True, ""
         ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
         label = "checkpoint" if trigger_type in ("context", "quota", "manual") else trigger_type
         subprocess.run(
@@ -917,12 +927,14 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str):
                 ["git", "push", "--quiet"], capture_output=True, text=True, timeout=30, cwd=cwd,
             )
             if push.returncode == 0:
-                return
+                return True, ""
             last_err = push.stderr or push.stdout
 
         _log_push_failure(developer, last_err or "unknown error")
+        return False, (last_err or "unknown error").strip()[:300]
     except Exception as e:
         _log_push_failure(developer, str(e))
+        return False, str(e)[:300]
 
 
 # ---------------------------------------------------------------------------
@@ -1143,7 +1155,9 @@ def create_checkpoint(
             pass
         result["duration_seconds"] = session_duration
 
-        git_commit_push(state_dir, developer, trigger_type)
+        git_pushed, git_push_error = git_commit_push(state_dir, developer, trigger_type)
+        result["git_pushed"] = git_pushed
+        result["git_push_error"] = git_push_error
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
@@ -1470,6 +1484,16 @@ def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
         if completed_goals:
             caption += "\n" + "  ".join(f"✓ {g}" for g in completed_goals[:3])
 
+        # git_pushed reflects the REAL push outcome (git_commit_push's return
+        # value, threaded through create_checkpoint's result dict) — never
+        # claim a push succeeded just because the checkpoint itself did. See
+        # git_commit_push's docstring for why this distinction is load-bearing.
+        if result.get("git_pushed", False):
+            push_line = "State saved to git. Handover ready."
+        else:
+            err = (result.get("git_push_error") or "unknown error")[:200]
+            push_line = f"⚠️ Checkpoint saved LOCALLY but push to git FAILED: {err}"
+
         if img_path:
             sent = send_file(img_path, caption)
             try:
@@ -1477,12 +1501,14 @@ def _notify_discord_checkpoint(trigger_type: str, developer: str, result: dict):
             except Exception:
                 pass
             if not sent:
-                send_message(caption + "\nState saved to git. Handover ready.")
+                send_message(caption + "\n" + push_line)
         else:
-            send_message(caption + "\nState saved to git. Handover ready.")
+            send_message(caption + "\n" + push_line)
     except Exception:
         try:
             from askr.clients.discord import send_message
-            send_message(f"**[askr] Checkpoint** — {developer}\nState saved to git.")
+            pushed = result.get("git_pushed", False)
+            note = "State saved to git." if pushed else "⚠️ Push to git FAILED — checkpoint is local only."
+            send_message(f"**[askr] Checkpoint** — {developer}\n{note}")
         except Exception:
             pass

@@ -805,14 +805,21 @@ def _read_session_arc(developer: str, n: int = 5) -> str:
         return ""
 
 
-def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = "", handover_path: str = ""):
+def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover_ready: bool = False, project_path: str = "", handover_path: str = "", git_pushed: bool = True):
     try:
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         pct_str = f"{round(pct * 100)}%" if trigger == "context" else f"{round(pct)}%"
+        # git_pushed must reflect the real git_commit_push() outcome, threaded up
+        # through create_checkpoint()'s result dict — never claim a push succeeded
+        # just because the checkpoint step itself completed. This used to be an
+        # unconditional claim regardless of push outcome; checkpoint_error.log
+        # has a documented history of pushes silently failing while this still
+        # told the user "state saved to git".
+        save_clause = "state saved to git" if git_pushed else "checkpoint saved LOCALLY — git push FAILED, see checkpoint_error.log"
         if trigger == "context":
-            msg = f"Context at {pct_str} — state saved to git. Opening new chat."
+            msg = f"Context at {pct_str} — {save_clause}. Opening new chat."
         else:
-            msg = f"Quota at {pct_str} — state saved to git. Waiting for reset, then resuming."
+            msg = f"Quota at {pct_str} — {save_clause}. Waiting for reset, then resuming."
         payload = {
             "type": trigger,
             "message": msg,
@@ -901,8 +908,13 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
     idle_minutes = round(IDLE_TRIGGER_SECS / 60)
-    _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.",
-           source="lifecycle._execute_idle_checkpoint", project_path=project_path)
+    if result.get("git_pushed", False):
+        _speak(f"Been quiet for {idle_minutes} minutes — state saved to git.",
+               source="lifecycle._execute_idle_checkpoint", project_path=project_path)
+    else:
+        _speak(f"Been quiet for {idle_minutes} minutes — checkpoint saved locally, "
+               "but the git push failed. Check checkpoint_error.log.",
+               source="lifecycle._execute_idle_checkpoint", project_path=project_path)
 
 
 def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: str = None):
@@ -952,7 +964,8 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: s
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
-    _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""))
+    _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""),
+                         git_pushed=result.get("git_pushed", False))
     # Never kill the user's live session — just prepare a companion one. The old
     # kill-then-relaunch design could yank a running session out from under the
     # user mid-task; askr now only ever adds a fresh session, never removes theirs.

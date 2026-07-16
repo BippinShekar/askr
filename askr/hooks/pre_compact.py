@@ -154,7 +154,7 @@ def main():
         _mark_emergency_spoken()
 
     from askr.session.checkpoint import create_checkpoint
-    create_checkpoint(
+    checkpoint_result = create_checkpoint(
         trigger_type="emergency",
         developer=developer,
         transcript_path=transcript_path,
@@ -164,9 +164,18 @@ def main():
     # each have their own PreCompact hook and handle themselves independently.
     pid = _find_session_pid(transcript_path)
     if not pid:
-        print(json.dumps({
-            "custom_instructions": "Askr has checkpointed state to git. A new session will resume from the handover."
-        }))
+        # git_pushed reflects the real push outcome — never unconditionally claim
+        # "checkpointed state to git" here. The next session reads this verbatim;
+        # telling it state was pushed when it wasn't could send it looking for a
+        # handover on the remote that was never actually pushed.
+        if checkpoint_result.get("git_pushed", False):
+            instructions = "Askr has checkpointed state to git. A new session will resume from the handover."
+        else:
+            instructions = ("Askr checkpointed state LOCALLY, but the git push failed "
+                             "(see ~/.config/askr/checkpoint_error.log). The handover exists "
+                             "on disk but has not reached the remote — check git status before "
+                             "assuming another machine can resume from it.")
+        print(json.dumps({"custom_instructions": instructions}))
         return
 
     # If quota is high, mark checkpoint_pending as quota-type so the Stop hook
