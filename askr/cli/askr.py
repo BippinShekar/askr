@@ -1148,6 +1148,86 @@ def cmd_goal(args: list[str]):
         console.print("  [dim]use: add / done / discard[/dim]\n")
 
 
+def cmd_prefs(args: list[str]):
+    """
+    askr prefs               - list persisted behavioral preferences (global + project)
+    askr prefs remove "..."  - delete a specific rule from CLAUDE.md
+    askr prefs pending       - list detected-but-unconfirmed candidates
+    askr prefs keep "..." --scope global|project  - confirm a pending candidate (extension-invoked)
+    askr prefs discard "..." - drop a pending candidate without persisting (extension-invoked)
+    """
+    from askr.state import behavior_prefs as bp
+
+    if not args:
+        rules = bp.read_all_persisted_rules(os.getcwd())
+        console.print("\n  [bold]askr prefs[/bold]  [dim]behavioral preferences persisted to CLAUDE.md[/dim]\n")
+        if rules["global"]:
+            console.print("  [bold]global[/bold]  [dim](~/.claude/CLAUDE.md)[/dim]")
+            for r in rules["global"]:
+                console.print(f"  [dim]-[/dim] {r}")
+            console.print()
+        if rules["project"]:
+            console.print("  [bold]project[/bold]  [dim](./CLAUDE.md)[/dim]")
+            for r in rules["project"]:
+                console.print(f"  [dim]-[/dim] {r}")
+            console.print()
+        if not rules["global"] and not rules["project"]:
+            console.print("  [dim]none persisted yet[/dim]\n")
+        return
+
+    sub = args[0]
+
+    if sub == "remove":
+        if len(args) < 2:
+            console.print('\n  [red]usage: askr prefs remove "rule text"[/red]\n')
+            return
+        text = args[1]
+        scope = bp.remove_rule(text, os.getcwd())
+        if scope:
+            console.print(f"\n  [yellow]✓[/yellow] removed from {scope}: [bold]{text}[/bold]\n")
+        else:
+            console.print(f"\n  [yellow]not found:[/yellow] {text}\n")
+
+    elif sub == "pending":
+        pending = bp.load_pending()
+        console.print("\n  [bold]askr prefs pending[/bold]  [dim]detected, not yet confirmed[/dim]\n")
+        if not pending:
+            console.print("  [dim]none[/dim]\n")
+            return
+        for p in pending:
+            console.print(
+                f"  [dim]-[/dim] {p.get('rule')}  "
+                f"[dim]({p.get('scope')}, confidence {p.get('confidence')})[/dim]"
+            )
+        console.print()
+
+    elif sub == "keep":
+        if len(args) < 2:
+            console.print('\n  [red]usage: askr prefs keep "rule text" --scope global|project[/red]\n')
+            return
+        text = args[1]
+        scope = "project"
+        if "--scope" in args:
+            idx = args.index("--scope")
+            if idx + 1 < len(args) and args[idx + 1] in ("global", "project"):
+                scope = args[idx + 1]
+        bp.write_rule(text, scope, os.getcwd())
+        bp.remove_pending(text)
+        console.print(f"\n  [green]✓[/green] persisted to {scope}: [bold]{text}[/bold]\n")
+
+    elif sub == "discard":
+        if len(args) < 2:
+            console.print('\n  [red]usage: askr prefs discard "rule text"[/red]\n')
+            return
+        text = args[1]
+        bp.remove_pending(text)
+        console.print(f"\n  [yellow]✓[/yellow] discarded: [bold]{text}[/bold]\n")
+
+    else:
+        console.print(f"\n  [yellow]unknown: askr prefs {sub}[/yellow]")
+        console.print("  [dim]use: remove / pending / keep / discard[/dim]\n")
+
+
 def cmd_launch(args: list):
     """
     askr launch — show daemon status and session info.
@@ -1714,6 +1794,9 @@ def main():
         console.print("  [dim]askr goals               - show today's goals[/dim]")
         console.print("  [dim]askr goal add \"...\"      - add a goal for today[/dim]")
         console.print("  [dim]askr goal done \"...\"     - mark a goal complete[/dim]")
+        console.print("  [dim]askr prefs               - show persisted behavioral preferences[/dim]")
+        console.print("  [dim]askr prefs remove \"...\"  - remove a persisted preference[/dim]")
+        console.print("  [dim]askr prefs pending       - show detected-but-unconfirmed preferences[/dim]")
         console.print("  [dim]askr launch              - show daemon status (always-on via launchd)[/dim]")
         console.print("  [dim]askr launch --stop       - stop daemon manually[/dim]")
         console.print("  [dim]askr launch --restart    - restart daemon now[/dim]")
@@ -1735,6 +1818,8 @@ def main():
         cmd_goals()
     elif cmd == "goal":
         cmd_goal(rest)
+    elif cmd == "prefs":
+        cmd_prefs(rest)
     elif cmd == "launch":
         cmd_launch(rest)
     elif cmd == "uninstall":
