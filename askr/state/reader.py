@@ -176,6 +176,17 @@ def load_implementation_log(developer: str = None, type_filter: str = None, limi
 
 
 def load_architecture() -> str:
+    """Phase 3.14 S6: generated on demand from .llm_snapshot/summary.json
+    entries — kept current after every turn by
+    qa.snapshot.sync_snapshot_incremental() — rather than read from a
+    separately Haiku-maintained architecture.md file. Falls back to the
+    legacy file if no snapshot exists yet, matching the graceful-degradation
+    pattern _load_snapshot_entries already uses (Phase 3.15 S2 note) so this
+    works whether or not Phase 3.14 has run on this checkout."""
+    entries = list(_load_snapshot_entries().values())
+    if entries:
+        from askr.qa.snapshot import render_architecture_md
+        return render_architecture_md(entries)
     return _read(state_path("architecture.md"))
 
 
