@@ -1508,6 +1508,202 @@ def _speak(message: str, source: str = "", project_path: str = "", session_id: s
         pass
 
 
+def _evaluate_session_triggers(
+    stats: dict,
+    session_first_seen: dict,
+    quota_warned_windows: set,
+    companioned_sessions: set,
+    last_trigger_at: dict,
+    quota_triggered_windows: set,
+    idle_triggered: dict,
+) -> None:
+    """
+    Evaluate all three triggers (context, quota, idle) for one session's stats
+    entry. Mutates the passed-in state containers in place and persists them
+    via the existing _save_* helpers — exactly what the inline code in
+    run_daemon() used to do, just extracted so it's actually unit-testable
+    (nothing inside an infinite `while True:` loop can be exercised directly).
+
+    Found 2026-07-16: previously a single if/elif/elif chain, so the FIRST
+    matching branch won and every branch after it was skipped for the whole
+    cycle. Context trips at 60% — far below quota's 90% or any real idle gap
+    — so in a real working session context fires first, marks
+    already_companioned, and that first branch matches forever afterward
+    (ctx_pct essentially never drops back below CONTEXT_TRIGGER once it's
+    climbed). Quota and idle became structurally unreachable for that session
+    for as long as it kept running — confirmed in production: a session sat
+    "already has a companion open" for 24+ hours while quota climbed from 57%
+    to 89% underneath it, Trigger B never once evaluated. Each trigger type
+    now gets its own independent if-block and its own cooldown key, so
+    tripping one can never block the others from firing on a later cycle.
+    """
+    project_path = stats.get("project_path")
+    if not project_path:
+        # Same bug class as the sibling-repo leak fixed 2026-07-02 in
+        # get_state_dir(): falling back to a single globally-stored path
+        # here could apply a trigger/checkpoint to the WRONG project when
+        # multiple projects are active at once. Every writer of a stats
+        # file populates project_path, so this should never actually hit —
+        # skip rather than guess if it somehow does.
+        _log("WARN: stats entry missing project_path — skipping rather than "
+             "guessing which project it belongs to")
+        return
+    ctx_pct   = stats.get("context_pct", 0)
+    ctx_label = stats.get("context_label", "ok")
+    quota_pct = stats.get("quota_pct")
+    reset_at  = stats.get("quota_reset_at", "")
+
+    # Cache-miss population only — instant no-op on every cycle once a
+    # model is cached. On a genuine miss this makes one live Models API
+    # call (OAuth, fails open) so the *next* hook-computed context_pct
+    # for this session uses the model's real window instead of the
+    # conservative default. See askr/session/model_windows.py.
+    model = stats.get("model")
+    if model:
+        from askr.session.model_windows import ensure_cached
+        ensure_cached(model)
+
+    session_id = stats.get("session_id")
+    already_companioned = bool(session_id) and session_id in companioned_sessions
+    turn_stop_ts, idle_secs = _last_turn_stop(session_id)
+
+    # Grace period: give a newly-observed session a moment before evaluating
+    # any trigger against it. Quota is account-wide, so a brand-new chat can
+    # otherwise inherit an already-high % from prior usage and get interrupted
+    # (or hear the 75% warning) before the user has even sent a first message.
+    if session_id:
+        first_seen = session_first_seen.setdefault(session_id, time.time())
+        if (time.time() - first_seen) < ACTIVITY_GRACE_SECS:
+            _log(f"activity grace period — skipping trigger checks for new session "
+                 f"{session_id[:8]} [{project_path}]")
+            return
+
+    # Pre-emptive heads-up, independent of the trigger/cooldown state below —
+    # it doesn't checkpoint or open anything, just speaks once per quota window
+    # (keyed by the account's real reset time, not session_id — the 5h window
+    # doesn't reset just because a new chat session started).
+    if (reset_at and quota_pct is not None
+            and QUOTA_WARNING_TRIGGER <= quota_pct < QUOTA_TRIGGER
+            and reset_at not in quota_warned_windows):
+        _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] resets={reset_at}")
+        quota_warned_windows.add(reset_at)
+        _save_quota_warned_windows(quota_warned_windows)
+        _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.",
+               source="lifecycle.quota_warning_headsup", project_path=project_path,
+               session_id=session_id or "")
+
+    ctx_cooldown_key   = f"{project_path}::context"
+    quota_cooldown_key = f"{project_path}::quota"
+    logged_something = False
+
+    # --- Context (Trigger A) ---
+    if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
+        # This exact session already got a companion. Since we never kill
+        # it, it stays above CONTEXT_TRIGGER for as long as it keeps
+        # running — the per-project cooldown alone would just expire and
+        # re-fire against this same session every 300s forever, stacking
+        # up an unbounded number of companion terminals. One companion
+        # per session, period, until that session actually ends.
+        _log(f"session {session_id[:8]} already has a companion open — not spawning another (ctx={ctx_pct:.1%})")
+        logged_something = True
+    elif ctx_pct >= CONTEXT_TRIGGER and (time.time() - last_trigger_at.get(ctx_cooldown_key, 0.0)) < TRIGGER_COOLDOWN:
+        remaining = int(TRIGGER_COOLDOWN - (time.time() - last_trigger_at.get(ctx_cooldown_key, 0.0)))
+        _log(f"context cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} project={project_path}")
+        logged_something = True
+    elif ctx_pct >= CONTEXT_TRIGGER:
+        _log(f"Trigger A: context={ctx_pct:.1%} — opening companion session [{project_path}] (existing session left running)")
+        logged_something = True
+        if session_id:
+            companioned_sessions.add(session_id)
+            _save_companioned_sessions(companioned_sessions)
+        # _open_companion_session_for_trigger can block for up to 600s waiting
+        # for the current turn to finish — run it off the poll-loop thread so
+        # other projects keep getting monitored while this one waits.
+        found = bool(_find_all_claude_pids_by_project(project_path))
+        threading.Thread(
+            target=_open_companion_session_for_trigger,
+            args=(project_path, session_id),
+            daemon=True,
+        ).start()
+        if found:
+            # Full cooldown — companion opened alongside a live session
+            last_trigger_at[ctx_cooldown_key] = time.time()
+        else:
+            # No live claude process — short cooldown so we retry quickly
+            # rather than waiting the full 5 minutes
+            last_trigger_at[ctx_cooldown_key] = time.time() - TRIGGER_COOLDOWN + TRIGGER_MISS_COOLDOWN
+            _log(f"no live session found — retry in {TRIGGER_MISS_COOLDOWN}s")
+        _save_trigger_state(last_trigger_at)
+
+    # --- Quota (Trigger B) — independent of context's state above ---
+    if quota_pct is not None and quota_pct >= QUOTA_TRIGGER and reset_at and reset_at in quota_triggered_windows:
+        # Already fired the hard trigger for this reset window — quota stays
+        # >=90% for the whole 5h window, so without this the per-project
+        # cooldown alone would spawn a fresh _execute_trigger thread — and
+        # re-speak the same "Quota at X%" line — every 5 minutes for as long
+        # as the wait lasts.
+        _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
+        logged_something = True
+    elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER and not reset_at:
+        # Real bug found 2026-07-09: this branch used to fire unconditionally
+        # on quota_pct alone, while the dedup case above can only engage
+        # when reset_at is truthy. A fresh per-session stats file (new session_id,
+        # or a companion askr itself just opened) starts with reset_at=None until
+        # its first successful usage-API refresh in post_tool_use.py — during that
+        # window quota_pct can still read a stale-but-real 90%+ from ANOTHER
+        # source, so this condition was true with nothing to dedup on, and kept
+        # re-firing (and re-speaking "Quota at X%") every poll cycle for as long
+        # as reset_at stayed empty. quota_triggered_windows.json was confirmed
+        # empty in production despite repeated announcements — proof the guard
+        # never actually engaged. Skip and retry next cycle instead: without a
+        # real reset_at we can't safely promise "waiting for reset" anyway.
+        _log(f"quota={quota_pct:.1f}% >= trigger but reset_at not yet known — "
+             f"skipping this cycle, will retry [{project_path}]")
+        logged_something = True
+    elif (quota_pct is not None and quota_pct >= QUOTA_TRIGGER
+            and (time.time() - last_trigger_at.get(quota_cooldown_key, 0.0)) >= TRIGGER_COOLDOWN):
+        _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
+        logged_something = True
+        quota_triggered_windows.add(reset_at)
+        _save_quota_triggered_windows(quota_triggered_windows)
+        # _execute_trigger can block for hours in _wait_for_reset — run it off
+        # the poll-loop thread so other open projects don't go unmonitored for
+        # the whole quota window (this was the root cause of triggers/warnings
+        # stacking up and firing all at once when the loop finally woke up).
+        threading.Thread(
+            target=_execute_trigger,
+            args=("quota", stats, project_path, session_id),
+            daemon=True,
+        ).start()
+        last_trigger_at[quota_cooldown_key] = time.time()
+        _save_trigger_state(last_trigger_at)
+
+    # --- Idle (Trigger C) — independent of context's and quota's state above ---
+    if (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
+            and idle_triggered.get(project_path) != turn_stop_ts
+            and not _turn_currently_active(session_id)):
+        _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
+        logged_something = True
+        idle_triggered[project_path] = turn_stop_ts
+        _save_idle_triggered(idle_triggered)
+        # _execute_idle_checkpoint(), not _execute_trigger() — the latter
+        # is built for "quota exhausted, hand off to a fresh session" and
+        # unconditionally auto-launches a new claude session, which genuine
+        # inactivity should never do on its own. Off-thread, same as
+        # Trigger B, so other open projects don't go unmonitored.
+        threading.Thread(
+            target=_execute_idle_checkpoint,
+            args=(stats, project_path),
+            daemon=True,
+        ).start()
+        last_trigger_at[project_path] = time.time()
+        _save_trigger_state(last_trigger_at)
+
+    if not logged_something:
+        q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
+        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str} project={project_path}")
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -1560,168 +1756,16 @@ def run_daemon():
                 # independently. Triggers are handled sequentially; pre-compact is the backstop
                 # for a second project that spikes while the first is being handled.
                 all_stats = _read_all_stats()
-                triggered_this_cycle = False
 
                 companioned_sessions = _prune_companioned_sessions(companioned_sessions)
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
-                    project_path = stats.get("project_path")
-                    if not project_path:
-                        # Same bug class as the sibling-repo leak fixed 2026-07-02 in
-                        # get_state_dir(): falling back to a single globally-stored path
-                        # here could apply a trigger/checkpoint to the WRONG project when
-                        # multiple projects are active at once. Every writer of a stats
-                        # file populates project_path, so this should never actually hit —
-                        # skip rather than guess if it somehow does.
-                        _log("WARN: stats entry missing project_path — skipping rather than "
-                             "guessing which project it belongs to")
-                        continue
-                    ctx_pct   = stats.get("context_pct", 0)
-                    ctx_label = stats.get("context_label", "ok")
-                    quota_pct = stats.get("quota_pct")
-                    reset_at  = stats.get("quota_reset_at", "")
-
-                    # Cache-miss population only — instant no-op on every cycle once a
-                    # model is cached. On a genuine miss this makes one live Models API
-                    # call (OAuth, fails open) so the *next* hook-computed context_pct
-                    # for this session uses the model's real window instead of the
-                    # conservative default. See askr/session/model_windows.py.
-                    model = stats.get("model")
-                    if model:
-                        from askr.session.model_windows import ensure_cached
-                        ensure_cached(model)
-
-                    proj_last = last_trigger_at.get(project_path, 0.0)
-                    in_cooldown = (time.time() - proj_last) < TRIGGER_COOLDOWN
-                    session_id = stats.get("session_id")
-                    already_companioned = bool(session_id) and session_id in companioned_sessions
-                    turn_stop_ts, idle_secs = _last_turn_stop(session_id)
-
-                    # Grace period: give a newly-observed session a moment before evaluating
-                    # any trigger against it. Quota is account-wide, so a brand-new chat can
-                    # otherwise inherit an already-high % from prior usage and get interrupted
-                    # (or hear the 75% warning) before the user has even sent a first message.
-                    if session_id:
-                        first_seen = session_first_seen.setdefault(session_id, time.time())
-                        if (time.time() - first_seen) < ACTIVITY_GRACE_SECS:
-                            _log(f"activity grace period — skipping trigger checks for new session "
-                                 f"{session_id[:8]} [{project_path}]")
-                            continue
-
-                    # Pre-emptive heads-up, independent of the trigger/cooldown state below —
-                    # it doesn't checkpoint or open anything, just speaks once per quota window
-                    # (keyed by the account's real reset time, not session_id — the 5h window
-                    # doesn't reset just because a new chat session started).
-                    if (reset_at and quota_pct is not None
-                            and QUOTA_WARNING_TRIGGER <= quota_pct < QUOTA_TRIGGER
-                            and reset_at not in quota_warned_windows):
-                        _log(f"quota warning: {quota_pct:.1f}% (real API) [{project_path}] resets={reset_at}")
-                        quota_warned_windows.add(reset_at)
-                        _save_quota_warned_windows(quota_warned_windows)
-                        _speak(f"Quota at {round(quota_pct)} percent. Consider wrapping up soon.",
-                               source="lifecycle.quota_warning_headsup", project_path=project_path,
-                               session_id=session_id or "")
-
-                    if already_companioned and ctx_pct >= CONTEXT_TRIGGER:
-                        # This exact session already got a companion. Since we never kill
-                        # it, it stays above CONTEXT_TRIGGER for as long as it keeps
-                        # running — the per-project cooldown alone would just expire and
-                        # re-fire against this same session every 300s forever, stacking
-                        # up an unbounded number of companion terminals. One companion
-                        # per session, period, until that session actually ends.
-                        _log(f"session {session_id[:8]} already has a companion open — not spawning another (ctx={ctx_pct:.1%})")
-                    elif in_cooldown:
-                        remaining = int(TRIGGER_COOLDOWN - (time.time() - proj_last))
-                        _log(f"cooldown: {remaining}s remaining — ctx={ctx_pct:.1%} project={project_path}")
-                    elif ctx_pct >= CONTEXT_TRIGGER:
-                        _log(f"Trigger A: context={ctx_pct:.1%} — opening companion session [{project_path}] (existing session left running)")
-                        if session_id:
-                            companioned_sessions.add(session_id)
-                            _save_companioned_sessions(companioned_sessions)
-                        # _open_companion_session_for_trigger can block for up to 600s waiting
-                        # for the current turn to finish — run it off the poll-loop thread so
-                        # other projects keep getting monitored while this one waits.
-                        found = bool(_find_all_claude_pids_by_project(project_path))
-                        threading.Thread(
-                            target=_open_companion_session_for_trigger,
-                            args=(project_path, session_id),
-                            daemon=True,
-                        ).start()
-                        if found:
-                            # Full cooldown — companion opened alongside a live session
-                            last_trigger_at[project_path] = time.time()
-                        else:
-                            # No live claude process — short cooldown so we retry quickly
-                            # rather than waiting the full 5 minutes
-                            last_trigger_at[project_path] = time.time() - TRIGGER_COOLDOWN + TRIGGER_MISS_COOLDOWN
-                            _log(f"no live session found — retry in {TRIGGER_MISS_COOLDOWN}s")
-                        _save_trigger_state(last_trigger_at)
-                        triggered_this_cycle = True
-                        break  # re-scan all projects next cycle after handling this one
-                    elif (quota_pct is not None and quota_pct >= QUOTA_TRIGGER
-                            and reset_at and reset_at in quota_triggered_windows):
-                        # Already fired the hard trigger for this reset window — quota stays
-                        # >=90% for the whole 5h window, so without this the per-project
-                        # TRIGGER_COOLDOWN (300s) alone would spawn a fresh _execute_trigger
-                        # thread — and re-speak the same "Quota at X%" line — every 5 minutes
-                        # for as long as the wait lasts.
-                        _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
-                    elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER and not reset_at:
-                        # Real bug found 2026-07-09: this branch used to fire unconditionally
-                        # on quota_pct alone, while the dedup two branches up can only engage
-                        # when reset_at is truthy. A fresh per-session stats file (new session_id,
-                        # or a companion askr itself just opened) starts with reset_at=None until
-                        # its first successful usage-API refresh in post_tool_use.py — during that
-                        # window quota_pct can still read a stale-but-real 90%+ from ANOTHER
-                        # source, so this condition was true with nothing to dedup on, and kept
-                        # re-firing (and re-speaking "Quota at X%") every poll cycle for as long
-                        # as reset_at stayed empty. quota_triggered_windows.json was confirmed
-                        # empty in production despite repeated announcements — proof the guard
-                        # never actually engaged. Skip and retry next cycle instead: without a
-                        # real reset_at we can't safely promise "waiting for reset" anyway.
-                        _log(f"quota={quota_pct:.1f}% >= trigger but reset_at not yet known — "
-                             f"skipping this cycle, will retry [{project_path}]")
-                    elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER:
-                        _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
-                        quota_triggered_windows.add(reset_at)
-                        _save_quota_triggered_windows(quota_triggered_windows)
-                        # _execute_trigger can block for hours in _wait_for_reset — run it off
-                        # the poll-loop thread so other open projects don't go unmonitored for
-                        # the whole quota window (this was the root cause of triggers/warnings
-                        # stacking up and firing all at once when the loop finally woke up).
-                        threading.Thread(
-                            target=_execute_trigger,
-                            args=("quota", stats, project_path, session_id),
-                            daemon=True,
-                        ).start()
-                        last_trigger_at[project_path] = time.time()
-                        _save_trigger_state(last_trigger_at)
-                        triggered_this_cycle = True
-                        break
-                    elif (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
-                            and idle_triggered.get(project_path) != turn_stop_ts
-                            and not _turn_currently_active(session_id)):
-                        _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
-                        idle_triggered[project_path] = turn_stop_ts
-                        _save_idle_triggered(idle_triggered)
-                        # _execute_idle_checkpoint(), not _execute_trigger() — the latter
-                        # is built for "quota exhausted, hand off to a fresh session" and
-                        # unconditionally auto-launches a new claude session, which genuine
-                        # inactivity should never do on its own. Off-thread, same as
-                        # Trigger B, so other open projects don't go unmonitored.
-                        threading.Thread(
-                            target=_execute_idle_checkpoint,
-                            args=(stats, project_path),
-                            daemon=True,
-                        ).start()
-                        last_trigger_at[project_path] = time.time()
-                        _save_trigger_state(last_trigger_at)
-                        triggered_this_cycle = True
-                        break
-                    else:
-                        q_str = f"quota={quota_pct:.1f}%" if quota_pct is not None else "quota=?"
-                        _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str} project={project_path}")
+                    _evaluate_session_triggers(
+                        stats, session_first_seen, quota_warned_windows,
+                        companioned_sessions, last_trigger_at,
+                        quota_triggered_windows, idle_triggered,
+                    )
 
                 time.sleep(POLL_ACTIVE)
             else:
