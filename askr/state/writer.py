@@ -145,6 +145,92 @@ def write_handover(content, developer: str = None, state_dir: str = None) -> str
         return path
 
 
+def scratch_handover_path(developer: str, session_id: str, state_dir: str = None) -> str:
+    """Per-session scratch handover path — the per-turn light write's target,
+    not the shared canonical handover_<dev>.json/.md. See writer/checkpoint
+    docs for the 2026-07-16 fix this supports: create_handover_only() runs on
+    EVERY turn of EVERY concurrently-active session and used to write straight
+    to the shared file, so N sessions x M turns each meant the canonical
+    handover flip-flopped between sessions' content constantly, with no
+    merge — confirmed in production as a degraded, single-session handover
+    hiding 21 uncommitted files' worth of sibling sessions' work. Scratch
+    files are per-session so no session can ever clobber another's; the
+    canonical file is only ever written by the smart-merge step in
+    create_checkpoint(), which reads every fresh sibling scratch before
+    writing."""
+    _path = (lambda name: os.path.join(state_dir, name)) if state_dir else state_path
+    return _path(f"handover_{developer}_{session_id}.scratch.json")
+
+
+def write_session_scratch_handover(content: dict, developer: str, session_id: str, state_dir: str = None) -> str:
+    """Write this session's own latest handover-shaped summary to its scratch
+    file — JSON only, nobody reads this directly, it's staging for the next
+    smart-merge. Same atomic temp-file + os.replace() pattern as the rest of
+    askr's JSON state writes (commit 9e8828b) so a concurrent merge read never
+    sees a half-written file."""
+    if state_dir:
+        os.makedirs(state_dir, exist_ok=True)
+    else:
+        ensure_state_dir()
+    path = scratch_handover_path(developer, session_id, state_dir)
+    tmp_path = f"{path}.tmp.{os.getpid()}"
+    with open(tmp_path, "w") as f:
+        _json.dump(content, f, indent=2)
+    os.replace(tmp_path, path)
+    return path
+
+
+def load_fresh_sibling_scratches(developer: str, exclude_session_id: str, state_dir: str = None,
+                                  max_age_secs: int = 3600) -> list:
+    """
+    Every OTHER session's scratch handover that's still fresh enough to be
+    worth merging — the smart-merge step in create_checkpoint() reads these
+    alongside the current canonical handover so a real trigger (context,
+    quota, or idle — now independently evaluated per session, see
+    lifecycle._evaluate_session_triggers) incorporates ALL concurrently
+    active sessions' work, not just whichever one happened to fire the
+    trigger. max_age_secs default (1h) is generous — a scratch file older
+    than that belongs to a session that's genuinely gone, not just idle for
+    one poll cycle.
+    """
+    import glob
+    _dir = state_dir or os.path.dirname(state_path("."))
+    pattern = os.path.join(_dir, f"handover_{developer}_*.scratch.json")
+    now = time.time()
+    results = []
+    for path in glob.glob(pattern):
+        if path.endswith(f"handover_{developer}_{exclude_session_id}.scratch.json"):
+            continue
+        try:
+            if now - os.path.getmtime(path) > max_age_secs:
+                continue
+            with open(path) as f:
+                results.append(_json.load(f))
+        except Exception:
+            continue
+    return results
+
+
+def cleanup_stale_scratches(developer: str, state_dir: str = None, max_age_secs: int = 3600) -> int:
+    """Delete scratch handovers whose owning session has been gone longer than
+    max_age_secs. Called opportunistically from the merge step — cheap, and
+    keeps askr_state/ from accumulating dead scratch files forever. Returns
+    the number of files removed."""
+    import glob
+    _dir = state_dir or os.path.dirname(state_path("."))
+    pattern = os.path.join(_dir, f"handover_{developer}_*.scratch.json")
+    now = time.time()
+    removed = 0
+    for path in glob.glob(pattern):
+        try:
+            if now - os.path.getmtime(path) > max_age_secs:
+                os.remove(path)
+                removed += 1
+        except Exception:
+            continue
+    return removed
+
+
 def write_current_task(objective: str, developer: str = None):
     dev = developer or load_developer()
     path = state_path(f"current_task_{dev}.md")

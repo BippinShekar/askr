@@ -263,13 +263,24 @@ def _generate_handover_with_llm(
     session_id: str = "",
     existing_handover: dict = None,
     project_path: str = "",
+    sibling_summaries: list = None,
 ) -> Optional[dict]:
     """
     Call Haiku to update the project state document from this session's transcript.
 
     If existing_handover is provided (the current project state), Haiku merges it
     with what this session did — producing a living project state, not a session diary.
-    This makes parallel sessions composable: each session end ADDS to project knowledge.
+
+    sibling_summaries (2026-07-16): the docstring above used to claim "this makes
+    parallel sessions composable" — true for SEQUENTIAL sessions (each one sees
+    the previous one's canonical output as existing_handover), false for
+    CONCURRENT ones, since two sessions racing to checkpoint just overwrote each
+    other with no visibility into what the other was doing. Confirmed in
+    production: 3 parallel sessions, 21 uncommitted files, a canonical handover
+    describing only one of them. sibling_summaries carries the OTHER currently-
+    active sessions' own scratch handovers (see writer.load_fresh_sibling_scratches)
+    so this one call can reconcile everyone's work into a single coherent state
+    document, instead of only ever seeing its own transcript plus stale history.
     """
     if not transcript_text.strip():
         return None
@@ -318,10 +329,37 @@ EXISTING PROJECT STATE (accumulated from prior sessions — update this, do not 
             except Exception:
                 pass
 
+        sibling_section = ""
+        if sibling_summaries:
+            try:
+                sibling_blocks = []
+                for i, sib in enumerate(sibling_summaries, 1):
+                    sib_task = sib.get("task", "")
+                    sib_accomplishments = [a.get("what", "") for a in sib.get("accomplishments", []) if a.get("done")]
+                    sib_next = [n.get("action", "") for n in sib.get("next_actions", [])]
+                    sib_files = sib.get("files_in_play", [])
+                    sibling_blocks.append(
+                        f"Session {i}:\n"
+                        f"  task: {sib_task}\n"
+                        f"  accomplishments: {sib_accomplishments}\n"
+                        f"  next_actions: {sib_next}\n"
+                        f"  files_in_play: {sib_files}"
+                    )
+                sibling_section = f"""
+OTHER SESSIONS CURRENTLY ACTIVE ON THIS SAME PROJECT (running in parallel with this one right
+now — reconcile ALL of this into ONE coherent state document below, do not describe only the
+session transcript that follows; nothing above this line should be silently dropped just
+because it came from a sibling session rather than this one):
+{chr(10).join(sibling_blocks)}
+
+"""
+            except Exception:
+                pass
+
         prompt = f"""A Claude Code session just ended. Update the project state document to reflect what this session accomplished.
 
 THIS REPOSITORY'S ROOT PATH: {project_path or "(unknown)"}
-{existing_state_section}
+{existing_state_section}{sibling_section}
 SESSION TRANSCRIPT (this session only):
 {transcript_text}
 
@@ -954,6 +992,19 @@ def _log_push_failure(developer: str, detail: str):
         pass
 
 
+def _log_merge_failure(developer: str, detail: str):
+    """Same error log as push failures — both are 'a safety step silently
+    failed' events worth surfacing in the same place. A merge failure with
+    sibling scratches present means the canonical handover was deliberately
+    left untouched rather than degraded; this is where that gets recorded."""
+    try:
+        os.makedirs(os.path.dirname(_PUSH_ERROR_LOG), exist_ok=True)
+        with open(_PUSH_ERROR_LOG, "a") as f:
+            f.write(f"{datetime.now(timezone.utc).isoformat()} handover merge failed [{developer}]: {detail.strip()[:500]}\n")
+    except Exception:
+        pass
+
+
 def git_commit_push(state_dir: str, developer: str, trigger_type: str) -> tuple[bool, str]:
     """
     Returns (success, error_detail). success=True covers both "pushed cleanly"
@@ -1021,12 +1072,32 @@ def _run_light_handover(
     transcript_path: str = "",
     state_dir: Optional[str] = None,
     session_id: str = "",
+    write_target: str = "canonical",
+    sibling_summaries: list = None,
+    merge_required: bool = False,
 ):
     """
     Shared core for both create_handover_only() and create_checkpoint(): generate
     and write the handover, then extract decisions/failed_approaches/completed
     goals from that same LLM response. No git commit/push, no Discord/voice, no
     project-brief or architecture regen here — callers layer those on top.
+
+    write_target ("canonical" | "scratch"): canonical writes to the shared
+    handover_<dev>.json/.md (create_checkpoint's real triggers only); scratch
+    writes to this session's own handover_<dev>_<session_id>.scratch.json
+    (create_handover_only's every-turn light path) — see writer.py's
+    write_session_scratch_handover for why this split exists.
+
+    sibling_summaries: other currently-active sessions' scratch content to
+    reconcile into this call's LLM generation — only meaningful when
+    write_target="canonical"; create_handover_only never passes this.
+
+    merge_required: if True (create_checkpoint passing non-empty
+    sibling_summaries) and the LLM call fails, this returns (None, None, "")
+    instead of falling back to a mechanical summary — a degraded fallback
+    here would silently drop every sibling's work from the canonical file,
+    which is worse than just leaving the canonical file untouched and
+    retrying on the next trigger with the scratch files still intact.
 
     Returns (result_dict, summary_dict, transcript_text) — the latter two let
     create_checkpoint() reuse this call's output for architecture regen and task
@@ -1102,14 +1173,26 @@ def _run_light_handover(
         session_id=session_id,
         existing_handover=existing_handover,
         project_path=project_path,
+        sibling_summaries=sibling_summaries,
     )
     if llm_summary:
         summary = llm_summary
+    elif merge_required:
+        # A merge with real sibling data to reconcile failed — falling back to
+        # a mechanical summary here would silently drop every sibling's work
+        # from the canonical file. Leave canonical untouched; the scratch
+        # files are still intact for the next trigger to retry with.
+        _log_merge_failure(developer, "LLM handover generation failed with sibling_summaries present")
+        return {"trigger": trigger_type, "merge_failed": True, "project_path": project_path,
+                "state_dir": state_dir}, None, transcript_text
     else:
         summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type, state_dir=state_dir)
 
-    from askr.state.writer import write_handover
-    handover_path = write_handover(summary, developer, state_dir=state_dir)
+    from askr.state.writer import write_handover, write_session_scratch_handover
+    if write_target == "scratch":
+        handover_path = write_session_scratch_handover(summary, developer, session_id, state_dir=state_dir)
+    else:
+        handover_path = write_handover(summary, developer, state_dir=state_dir)
 
     _append_failed_approaches(summary, state_dir)
     _write_decisions_from_handover(summary, state_dir, developer)
@@ -1174,7 +1257,10 @@ def create_handover_only(
     resolved_state_dir = state_dir or _get_state_dir()
     from askr.state.writer import file_lock
     with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
-        result, _, _ = _run_light_handover(trigger_type, developer, transcript_path, resolved_state_dir, session_id)
+        result, _, _ = _run_light_handover(
+            trigger_type, developer, transcript_path, resolved_state_dir, session_id,
+            write_target="scratch",
+        )
 
     try:
         os.makedirs(os.path.dirname(_RESULT_PATH), exist_ok=True)
@@ -1211,13 +1297,30 @@ def create_checkpoint(
     """
     from askr.state.config import get_state_dir as _get_state_dir
     resolved_state_dir = state_dir or _get_state_dir()
-    from askr.state.writer import file_lock
+    from askr.state.writer import file_lock, load_fresh_sibling_scratches, cleanup_stale_scratches
     with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
+        # Real trigger (context/quota/idle) — the moment to reconcile every
+        # OTHER currently-active session's own scratch handover into the one
+        # canonical file, not just this session's own transcript. See
+        # writer.load_fresh_sibling_scratches and _generate_handover_with_llm's
+        # sibling_summaries param.
+        siblings = load_fresh_sibling_scratches(developer, session_id, resolved_state_dir)
         result, summary, transcript_text = _run_light_handover(
-            trigger_type, developer, transcript_path, resolved_state_dir, session_id
+            trigger_type, developer, transcript_path, resolved_state_dir, session_id,
+            write_target="canonical", sibling_summaries=siblings, merge_required=bool(siblings),
         )
         state_dir    = result["state_dir"]
         project_path = result["project_path"]
+
+        if result.get("merge_failed"):
+            # Canonical handover deliberately left untouched — see
+            # _run_light_handover's merge_required docstring. Sibling scratch
+            # files are still intact for the next trigger to retry with. Code
+            # changes on disk are unrelated to whether the merge succeeded, so
+            # still commit/push those below rather than losing that too.
+            _log_merge_failure(developer, "checkpoint proceeding without a fresh canonical handover")
+        else:
+            cleanup_stale_scratches(developer, state_dir)
 
         _regenerate_architecture_md(project_path, state_dir)
         _infer_and_queue_tasks(transcript_text, state_dir, developer)
