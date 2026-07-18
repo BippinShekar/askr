@@ -295,11 +295,41 @@ def _install_claude_md() -> str:
     return "created" if not existed else "updated"
 
 
+def _home_is_temp_sandbox() -> bool:
+    """
+    True if the resolved HOME lives inside the OS temp directory — e.g. a
+    test or a one-off debugging invocation ran with HOME overridden to a
+    tempfile.mkdtemp() sandbox. Found 2026-07-16: exactly this pattern
+    registered a real launchd job (label com.askr.daemon is global, not
+    sandboxed by HOME) pointing at a temp StandardOutPath. Because KeepAlive
+    respawns reuse launchd's cached job definition rather than re-reading the
+    plist file, the daemon silently logged into a throwaway temp file for
+    days — alive, polling, doing nothing anyone could see. Refusing to
+    register here can't undo a bad registration already in launchd, but it
+    stops a fresh one from being created the same way again.
+    """
+    import tempfile
+    home = os.path.realpath(os.path.expanduser("~"))
+    tmp  = os.path.realpath(tempfile.gettempdir())
+    return home == tmp or home.startswith(tmp + os.sep)
+
+
 def _install_launchd() -> tuple[bool, str]:
     """
     Install and load a launchd agent so the lifecycle daemon starts at login.
     Returns (success, plist_path).
     """
+    if _home_is_temp_sandbox():
+        msg = (f"refusing to register launchd job — HOME ({os.path.expanduser('~')}) "
+               "resolves inside the OS temp directory, which looks like a test or "
+               "debugging sandbox rather than a real user session")
+        try:
+            from askr.utils.display import console
+            console.print(f"\n  [bold red]✗[/bold red] {msg}\n")
+        except Exception:
+            pass
+        return False, msg
+
     plist_label = "com.askr.daemon"
     plist_path  = os.path.expanduser(f"~/Library/LaunchAgents/{plist_label}.plist")
     log_path    = os.path.expanduser("~/.config/askr/daemon.log")
@@ -960,6 +990,37 @@ def _statusline_text() -> str:
         return "askr ·"
 
 
+_DAEMON_LOG_PATH = os.path.expanduser("~/.config/askr/daemon.log")
+_DAEMON_LOG_STALE_SECS = 120  # daemon polls every ~15s while a session is active
+
+
+def _daemon_liveness_warning() -> str | None:
+    """
+    Dead-man's-switch: only call this when a session is genuinely active (fresh
+    stats file) — hooks write stats independent of the daemon, so a fresh stats
+    file proves a session exists but proves nothing about the daemon itself.
+    If daemon.log hasn't moved in _DAEMON_LOG_STALE_SECS while a session is
+    active, the daemon may be alive but silently stuck — found 2026-07-16, a
+    stale launchd job kept polling for days with stdout redirected to a dead
+    temp file, invisible until someone went looking. Returns a printable Rich
+    string, or None if daemon.log looks healthy.
+    """
+    import time as _time
+    try:
+        log_age = _time.time() - os.path.getmtime(_DAEMON_LOG_PATH)
+    except Exception:
+        return "  [yellow]⚠ daemon.log not found[/yellow] — daemon may never have started"
+
+    if log_age > _DAEMON_LOG_STALE_SECS:
+        mins = int(log_age // 60)
+        return (
+            f"  [bold red]⚠ daemon may be stuck[/bold red]  session is active but "
+            f"daemon.log hasn't updated in {mins}m — try: [bold]launchctl unload[/bold] "
+            f"then [bold]load[/bold] ~/Library/LaunchAgents/com.askr.daemon.plist"
+        )
+    return None
+
+
 def cmd_status(args: list = None):
     args = args or []
 
@@ -1002,6 +1063,9 @@ def cmd_status(args: list = None):
             if stats_age > 600:
                 console.print(f"  [dim]context[/dim]     [dim]no active session[/dim]")
             else:
+                warning = _daemon_liveness_warning()
+                if warning:
+                    console.print(warning)
                 ctx_pct    = int(round(s.get("context_pct", 0) * 100))
                 ctx_tokens = s.get("context_tokens", 0)
                 ctx_window = s.get("context_window", 200000)
