@@ -85,7 +85,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             quota_triggered_windows=set(),
             idle_triggered={},
         )
-        self.assertIn(lifecycle._execute_trigger, self._thread_targets())
+        self.assertIn(lifecycle._execute_quota_trigger, self._thread_targets())
 
     def test_idle_fires_even_when_context_already_companioned(self):
         """Same bug, idle side: point 2 from the design conversation — a session
@@ -123,7 +123,7 @@ class TriggerIndependenceTests(unittest.TestCase):
         )
         targets = self._thread_targets()
         self.assertIn(lifecycle._open_companion_session_for_trigger, targets)
-        self.assertIn(lifecycle._execute_trigger, targets)
+        self.assertIn(lifecycle._execute_quota_trigger, targets)
 
     def test_context_cooldown_does_not_block_quota(self):
         """Per-trigger-type cooldown keys: context being in its own cooldown
@@ -145,7 +145,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             quota_triggered_windows=set(),
             idle_triggered={},
         )
-        self.assertIn(lifecycle._execute_trigger, self._thread_targets())
+        self.assertIn(lifecycle._execute_quota_trigger, self._thread_targets())
 
     def test_quota_already_fired_for_window_does_not_refire(self):
         stats = _stats(quota_pct=95.0, quota_reset_at="2026-01-01T00:00:00Z")
@@ -158,7 +158,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             quota_triggered_windows={"2026-01-01T00:00:00Z"},
             idle_triggered={},
         )
-        self.assertNotIn(lifecycle._execute_trigger, self._thread_targets())
+        self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
 
     def test_quota_without_reset_at_skips_rather_than_firing_blind(self):
         stats = _stats(quota_pct=95.0, quota_reset_at="")
@@ -171,7 +171,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             quota_triggered_windows=set(),
             idle_triggered={},
         )
-        self.assertNotIn(lifecycle._execute_trigger, self._thread_targets())
+        self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
 
     def test_activity_grace_period_skips_all_triggers(self):
         import time

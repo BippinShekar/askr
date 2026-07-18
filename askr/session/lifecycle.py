@@ -77,8 +77,8 @@ _COMPANIONED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/companioned_sess
 # stores warned quota_reset_at timestamps, not session ids — see _load/_save below.
 _QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_sessions.json")
 # quota_reset_at timestamps that already had the 90% hard trigger fired — same
-# dedup shape as _QUOTA_WARNED_SESSIONS_PATH, but for _execute_trigger (which
-# checkpoints, speaks, and waits for reset) rather than the pre-trigger heads-up.
+# dedup shape as _QUOTA_WARNED_SESSIONS_PATH, but for _execute_quota_trigger
+# (which checkpoints, speaks, and waits for reset) rather than the pre-trigger heads-up.
 _QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_triggered_windows.json")
 # project_path -> ISO turn-stop timestamp the idle trigger already fired for.
 # Keyed by the turn-stop timestamp itself (not just a bool) so a brand new
@@ -482,6 +482,53 @@ def _wait_for_reset(reset_at_iso: str):
         time.sleep(300)
 
 
+QUOTA_NOTIFY_TRIGGER   = 99.0  # only surface the companion/voice once quota reads THIS close to
+                               # exhausted — see _execute_quota_trigger's docstring. 90% (the
+                               # trigger threshold above) answers "when do we start preparing";
+                               # this answers "when is it actually time to interrupt the user".
+QUOTA_NOTIFY_POLL_SECS = 60    # how often to re-check the REAL account quota while waiting
+
+
+def _wait_until_quota_near_exhausted(reset_at_iso: str):
+    """
+    Silently poll the real account quota (not the stale snapshot the trigger
+    fired on) until it's genuinely near exhausted or the reset has already
+    passed. The user is never disturbed during this wait — no voice, no
+    window — they keep working right up to the real edge of their quota
+    instead of getting cut off pre-emptively at the 90% trigger threshold.
+
+    Fails open: if the reset time is unparseable or the usage API is
+    unreachable, falls back to _wait_for_reset's own fallback behavior rather
+    than blocking forever on a signal that isn't coming.
+    """
+    from askr.session.usage_api import get_quota_status
+
+    try:
+        reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
+    except Exception:
+        _log("could not parse reset time — skipping the near-exhausted wait, falling back")
+        return
+
+    while True:
+        now = datetime.now(timezone.utc)
+        if now >= reset_at:
+            _log("quota reset already passed while waiting to notify — proceeding")
+            return
+
+        status = get_quota_status()
+        if status is not None and status.five_hour_pct >= QUOTA_NOTIFY_TRIGGER:
+            _log(f"quota now at {status.five_hour_pct:.1f}% (real API) — near exhausted, notifying")
+            return
+
+        pct_str = f"{status.five_hour_pct:.1f}%" if status is not None else "unknown"
+        remaining = (reset_at - now).total_seconds()
+        sleep_for = min(QUOTA_NOTIFY_POLL_SECS, max(remaining, 0))
+        if sleep_for <= 0:
+            continue
+        _log(f"quota={pct_str}, not near exhausted yet — checking again in {int(sleep_for)}s")
+        time.sleep(sleep_for)
+
+
 def _get_next_goal(state_dir: str = None) -> str:
     try:
         from askr.state.goals import load_today_goals, load_open_goals
@@ -867,7 +914,7 @@ def _write_resumed_marker(trigger: str, saved_seconds: int):
 
 def _execute_idle_checkpoint(stats: dict, project_path: str):
     """
-    Genuine-inactivity trigger — deliberately NOT _execute_trigger(), which is
+    Genuine-inactivity trigger — deliberately NOT _execute_quota_trigger(), which is
     built for "quota exhausted, hand off to a fresh session": it labels its
     announcement as a quota message unconditionally for any non-"context"
     trigger (a real bug this idle trigger tripped — "Quota at 41%... waiting
@@ -917,7 +964,31 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
                source="lifecycle._execute_idle_checkpoint", project_path=project_path)
 
 
-def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: str = None):
+def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = None):
+    """
+    Found 2026-07-16: this used to wait up to 10 minutes for a quiet moment
+    (TURN_QUIET_GRACE_SECS + MAX_WAIT_SECS, both UX-only — see
+    _wait_for_turn_to_finish) before doing ANYTHING, including the checkpoint
+    itself, then immediately spoke the "state saved, waiting for reset"
+    reassurance right at the 90% trigger point. Two separate problems:
+
+    1. A user who reads-and-replies within 90 seconds (completely normal,
+       fast usage) could keep the daemon waiting the full 10 minutes before
+       it ever saved anything, while quota kept climbing straight through the
+       real 100% wall underneath it — the wait gated pure safety (saving
+       state) behind a UX nicety (not popping a window open mid-read) that
+       has nothing to do with it.
+    2. Speaking the reassurance at 90% cuts the user off ~10% of their
+       remaining quota early for no reason — a request already in flight
+       when the account crosses the real limit completes normally; only the
+       NEXT request gets rejected.
+
+    Fixed with three phases: (1) checkpoint the instant the turn genuinely
+    finishes, correctness-only wait, no UX grace; (2) silently poll real
+    quota until it's actually near exhausted, user undisturbed the whole
+    time; (3) only then surface the companion + voice, and wait for the
+    actual reset before launching the companion for real.
+    """
     from askr.state.config import load_developer
     from askr.session.safe_pause import is_safe_to_pause
     from askr.session.checkpoint import create_checkpoint
@@ -927,7 +998,7 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: s
         return
 
     developer = load_developer()
-    _log(f"trigger={trigger} — checking safe pause")
+    _log("trigger=quota — checking safe pause")
 
     for attempt in range(1, SAFE_RETRY_LIMIT + 1):
         safe, reason = is_safe_to_pause(project_path)
@@ -940,51 +1011,55 @@ def _execute_trigger(trigger: str, stats: dict, project_path: str, session_id: s
         _log(f"unsafe after {SAFE_RETRY_LIMIT} retries — skipping this cycle")
         return
 
-    # Quota/context % is polled on its own clock, independent of whether Claude is
-    # mid-reply. Without this wait, the checkpoint below can capture a half-finished
-    # turn (broken handover) and the companion session can pop open mid-answer —
-    # is_safe_to_pause() only checks processes/file-locks, never turn state.
-    _wait_for_turn_to_finish(project_path, session_id)
+    # Phase 1: checkpoint the instant the turn genuinely finishes. Correctness
+    # only — no TURN_QUIET_GRACE_SECS — so this can never be starved by fast
+    # typing. is_safe_to_pause() above only checks processes/file-locks, never
+    # turn state, so this is still needed to avoid reading a half-finished turn.
+    _wait_for_turn_to_finish(project_path, session_id, require_quiet_grace=False)
 
     state_dir = os.path.join(project_path, "askr_state")
     if not os.path.isdir(state_dir):
         _log(f"WARN: no askr_state/ in {project_path} — skipping checkpoint (run 'askr init' there first)")
         return
 
-    _log("safe to pause — creating checkpoint")
+    _log("safe to pause — creating checkpoint (silent, no notification yet)")
     from askr.session.monitor import _find_active_jsonl
     transcript_path = _find_active_jsonl(project_path) or ""
-    result = create_checkpoint(trigger_type=trigger, developer=developer,
+    result = create_checkpoint(trigger_type="quota", developer=developer,
                                 transcript_path=transcript_path, state_dir=state_dir)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
 
+    # Phase 2: silently wait for quota to actually be near exhausted (or the
+    # reset to have already passed). The user keeps working, undisturbed.
+    reset_at = stats.get("quota_reset_at")
+    if reset_at:
+        _wait_until_quota_near_exhausted(reset_at)
+
+    # Phase 3: now it's actually time to interrupt.
     next_goal = _get_next_goal(state_dir)
     _write_launch_mode(next_goal)
-    pct = stats.get("context_pct", 0.0) if trigger == "context" else stats.get("quota_pct", 0.0)
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
-    _write_notification(trigger, next_goal, pct, handover_has_content, project_path, result.get("handover_path", ""),
-                         git_pushed=result.get("git_pushed", False))
+    _write_notification("quota", next_goal, stats.get("quota_pct", 0.0), handover_has_content,
+                         project_path, handover_path, git_pushed=result.get("git_pushed", False))
     # Never kill the user's live session — just prepare a companion one. The old
     # kill-then-relaunch design could yank a running session out from under the
     # user mid-task; askr now only ever adds a fresh session, never removes theirs.
 
-    if trigger == "quota":
-        reset_at = stats.get("quota_reset_at")
-        if reset_at:
-            _wait_for_reset(reset_at)
-        else:
-            time.sleep(300)
+    if reset_at:
+        _wait_for_reset(reset_at)
+    else:
+        time.sleep(300)
 
     _log("starting companion claude session (existing session, if any, left running)")
     launched = _start_claude(project_path, force=True)
     if launched:
-        _notify_discord_resumed(trigger, next_goal)
+        _notify_discord_resumed("quota", next_goal)
     try:
         from askr.state.analytics import today_summary
         saved = today_summary().get("total_seconds", 0)
-        _write_resumed_marker(trigger, saved)
+        _write_resumed_marker("quota", saved)
     except Exception:
         pass
 
@@ -1202,7 +1277,7 @@ def _turn_currently_active(session_id: str) -> bool:
     return start_mtime > os.path.getmtime(stop_marker)
 
 
-def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
+def _wait_for_turn_to_finish(project_path: str, session_id: str = None, require_quiet_grace: bool = True) -> bool:
     """
     Block until the current Claude reply finishes AND no new one has started —
     the user must always get a genuinely quiet moment before askr acts on
@@ -1242,6 +1317,19 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     it yet, let alone answer. Now also requires TURN_QUIET_GRACE_SECS of real
     silence since that Stop signal, not just "Stop already fired."
 
+    Found 2026-07-16: TURN_QUIET_GRACE_SECS is a UX nicety (don't yank a
+    companion window open while the user's still reading) with no bearing on
+    whether it's SAFE to read the transcript — that only needs the turn to
+    have genuinely stopped, which _turn_currently_active() already tells you
+    instantly. But the quota trigger's checkpoint used to sit behind this same
+    90s/600s wait, meaning a user who reads-and-replies within 90 seconds
+    (completely normal, fast usage) could keep quota climbing straight through
+    the real 100% wall before anything was ever saved — the UX-only wait was
+    gating pure safety. require_quiet_grace=False skips straight to the
+    correctness-only condition (turn stopped, no outstanding subagent) with no
+    grace period, for callers where disturbing the user was never the concern
+    — just reading a transcript that's actually finished generating.
+
     Returns True if a live session was found and waited on, False if no live
     process was detected for this project (nothing to wait for).
     """
@@ -1255,8 +1343,11 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
     POLL          = 5    # polling interval (seconds)
     MAX_WAIT_SECS = 600  # hard cap; only hit if the user never has a quiet moment
 
-    _log("waiting for a genuinely quiet moment (Stop hook fired, no new turn, no outstanding "
-         f"subagent, {TURN_QUIET_GRACE_SECS}s of silence since)...")
+    if require_quiet_grace:
+        _log("waiting for a genuinely quiet moment (Stop hook fired, no new turn, no outstanding "
+             f"subagent, {TURN_QUIET_GRACE_SECS}s of silence since)...")
+    else:
+        _log("waiting for the current turn to genuinely finish (no UX grace — correctness only)...")
 
     wait_start = time.time()
     waited = 0
@@ -1270,11 +1361,19 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None) -> bool:
             break
 
         _, stop_idle_secs = _last_turn_stop(session_id)
-        if (_turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id)
-                and not has_outstanding_subagent(_find_active_jsonl(project_path) or "")
-                and stop_idle_secs is not None and stop_idle_secs >= TURN_QUIET_GRACE_SECS):
-            _log("Stop hook fired, no new turn active, no outstanding subagent, "
-                 f"{stop_idle_secs:.0f}s quiet — reply finished")
+        turn_genuinely_done = (
+            _turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id)
+            and not has_outstanding_subagent(_find_active_jsonl(project_path) or "")
+        )
+        if require_quiet_grace:
+            turn_genuinely_done = (
+                turn_genuinely_done and stop_idle_secs is not None
+                and stop_idle_secs >= TURN_QUIET_GRACE_SECS
+            )
+        if turn_genuinely_done:
+            _log("Stop hook fired, no new turn active, no outstanding subagent"
+                 + (f", {stop_idle_secs:.0f}s quiet" if require_quiet_grace else "")
+                 + " — reply finished")
             break
 
         if waited >= MAX_WAIT_SECS:
@@ -1444,12 +1543,13 @@ def _save_quota_warned_windows(windows: set):
 def _load_quota_triggered_windows() -> set:
     """quota_reset_at timestamps that already had the 90% hard trigger fired.
 
-    Without this, TRIGGER_COOLDOWN (300s) is the only gate on the quota branch
-    below — but quota stays >=90% for the whole 5h window until reset, so every
-    poll cycle after cooldown expires spawns another _execute_trigger thread,
-    each of which re-announces the same 'Quota at X% — state saved' line and
-    re-checkpoints, for as long as the wait lasts. Keyed by the account's real
-    reset window, same as _load_quota_warned_windows, not by session_id."""
+    Without this, the per-trigger-type cooldown is the only gate on the quota
+    branch below — but quota stays >=90% for the whole 5h window until reset,
+    so every poll cycle after cooldown expires spawns another
+    _execute_quota_trigger thread, each of which re-announces the same
+    'Quota at X% — state saved' line and re-checkpoints, for as long as the
+    wait lasts. Keyed by the account's real reset window, same as
+    _load_quota_warned_windows, not by session_id."""
     try:
         with open(_QUOTA_TRIGGERED_WINDOWS_PATH) as f:
             return set(json.load(f))
@@ -1639,7 +1739,7 @@ def _evaluate_session_triggers(
     if quota_pct is not None and quota_pct >= QUOTA_TRIGGER and reset_at and reset_at in quota_triggered_windows:
         # Already fired the hard trigger for this reset window — quota stays
         # >=90% for the whole 5h window, so without this the per-project
-        # cooldown alone would spawn a fresh _execute_trigger thread — and
+        # cooldown alone would spawn a fresh _execute_quota_trigger thread — and
         # re-speak the same "Quota at X%" line — every 5 minutes for as long
         # as the wait lasts.
         _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
@@ -1666,13 +1766,14 @@ def _evaluate_session_triggers(
         logged_something = True
         quota_triggered_windows.add(reset_at)
         _save_quota_triggered_windows(quota_triggered_windows)
-        # _execute_trigger can block for hours in _wait_for_reset — run it off
-        # the poll-loop thread so other open projects don't go unmonitored for
-        # the whole quota window (this was the root cause of triggers/warnings
-        # stacking up and firing all at once when the loop finally woke up).
+        # _execute_quota_trigger can block for hours (near-exhausted poll, then
+        # _wait_for_reset) — run it off the poll-loop thread so other open
+        # projects don't go unmonitored for the whole quota window (this was
+        # the root cause of triggers/warnings stacking up and firing all at
+        # once when the loop finally woke up).
         threading.Thread(
-            target=_execute_trigger,
-            args=("quota", stats, project_path, session_id),
+            target=_execute_quota_trigger,
+            args=(stats, project_path, session_id),
             daemon=True,
         ).start()
         last_trigger_at[quota_cooldown_key] = time.time()
@@ -1686,7 +1787,7 @@ def _evaluate_session_triggers(
         logged_something = True
         idle_triggered[project_path] = turn_stop_ts
         _save_idle_triggered(idle_triggered)
-        # _execute_idle_checkpoint(), not _execute_trigger() — the latter
+        # _execute_idle_checkpoint(), not _execute_quota_trigger() — the latter
         # is built for "quota exhausted, hand off to a fresh session" and
         # unconditionally auto-launches a new claude session, which genuine
         # inactivity should never do on its own. Off-thread, same as
