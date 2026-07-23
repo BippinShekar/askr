@@ -205,6 +205,128 @@ def _resolve_bash_path(candidate: str) -> str:
     return os.path.realpath(os.path.abspath(expanded))
 
 
+_READ_ONLY_COMMANDS = {
+    "ls", "cat", "head", "tail", "less", "more", "grep", "egrep", "fgrep", "rg",
+    "wc", "file", "stat", "du", "df", "tree", "diff", "cmp",
+    "md5", "md5sum", "shasum", "sha1sum", "sha256sum", "cksum",
+    "realpath", "dirname", "basename", "pwd", "readlink",
+    "xxd", "hexdump", "od", "strings", "jq", "yq",
+    "which", "type", "nl", "column", "sort", "uniq", "cut", "tr", "comm",
+    "lsof", "ps", "pgrep", "env", "date", "whoami", "id", "uname",
+    "echo", "printf", "true", "false",
+}
+_WRITE_COMMANDS = {
+    "rm", "mv", "cp", "tee", "dd", "shred", "chmod", "chown", "chgrp",
+    "mkdir", "rmdir", "touch", "ln", "install", "rsync", "truncate", "patch",
+}
+_GIT_READ_SUBCOMMANDS = {
+    "log", "show", "diff", "status", "blame", "ls-files",
+    "rev-parse", "remote", "describe", "shortlog", "reflog", "cat-file",
+}
+_REDIRECT_RE = re.compile(r"^\d*>>?&?\d*$|^&>>?$")
+# Fd-to-fd duplication (`2>&1`, `>&2`, ...) matches _REDIRECT_RE too but never
+# touches a filesystem path — it's the standard "merge stderr into stdout"
+# idiom, not a write. Must be excluded or every `cmd ... 2>&1` (extremely
+# common) gets misclassified as a write.
+_FD_DUP_RE = re.compile(r"^\d*>>?&\d+$")
+_GIT_VALUE_FLAGS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+
+
+def _is_read_only_bash(command: str) -> bool:
+    """True only if every top-level segment of `command` is confidently
+    read-only — used to exempt Bash reads from the cross-repo boundary check
+    below. Write/Edit/MultiEdit are unaffected by this and stay blocked
+    unconditionally cross-repo; those tools have no read mode to exempt.
+
+    Conservative by design, same posture as extract_bash_paths: anything not
+    explicitly recognized as read-only — an unrecognized command, `python -c`,
+    `xargs`, a redirect — falls through to "not read-only" and the existing
+    write-blocking behavior applies unchanged. Known gap: doesn't parse
+    redirects/writes embedded inside a quoted script argument (a `python -c
+    "...open('x','w')..."` or an awk `print > "file"` clause) — those still
+    fall through to "ambiguous" and get blocked, since the leading command
+    (python/awk) itself isn't on the read-only list.
+
+    Tokenizes the ENTIRE command once with shlex (which honors quoting) and
+    splits into segments on operator *tokens* — not a regex split on the raw
+    string, which used to shatter a quoted argument containing a literal `|`
+    (e.g. `grep -E "foo|bar"`) into bogus fragments and misclassify the whole
+    command as a write.
+    """
+    if not command:
+        return True
+    try:
+        all_tokens = shlex.split(command, posix=True)
+    except ValueError:
+        all_tokens = command.split()
+
+    segments, current = [], []
+    for tok in all_tokens:
+        if tok in ("|", ";", "&&", "||", "&"):
+            segments.append(current)
+            current = []
+        else:
+            current.append(tok)
+    segments.append(current)
+
+    for tokens in segments:
+        if not tokens:
+            continue
+        if any(_REDIRECT_RE.match(tok) and not _FD_DUP_RE.match(tok) for tok in tokens):
+            return False
+
+        cmd = None
+        for tok in tokens:
+            if tok.startswith("-") or "=" in tok.split("/", 1)[0]:
+                continue
+            cmd = os.path.basename(tok)
+            break
+        if cmd is None:
+            return False
+
+        if cmd == "find":
+            if any(t in ("-delete", "-exec", "-execdir") for t in tokens):
+                return False
+            continue
+        if cmd == "sed":
+            if any(t == "-i" or t == "--in-place" or t.startswith("-i") for t in tokens):
+                return False
+            continue
+        if cmd == "perl":
+            if any(t == "-i" or t.startswith("-i") for t in tokens):
+                return False
+            continue
+        if cmd in ("curl", "wget"):
+            if any(t in ("-o", "-O", "--output") or t.startswith("-o") for t in tokens):
+                return False
+            continue
+        if cmd == "git":
+            # Skip global flags before the subcommand — including -C/-c, which
+            # (unlike most flags here) consume a separate following token
+            # (`git -C /some/path log`), not just an attached `--flag=value`.
+            sub = None
+            i = 1
+            while i < len(tokens):
+                t = tokens[i]
+                if t in _GIT_VALUE_FLAGS:
+                    i += 2
+                    continue
+                if t.startswith("-"):
+                    i += 1
+                    continue
+                sub = t
+                break
+            if sub in _GIT_READ_SUBCOMMANDS:
+                continue
+            return False  # unrecognized/mutating git subcommand — ambiguous, block
+        if cmd in _READ_ONLY_COMMANDS:
+            continue
+        if cmd in _WRITE_COMMANDS:
+            return False
+        return False  # unrecognized command (python, xargs, bash -c, ...) — ambiguous, block
+    return True
+
+
 def find_cross_repo_bash_path(command: str, project_root: str):
     """Return the first candidate path in `command` that resolves outside
     `project_root`, or None if the command is clean (or unparseable).
@@ -248,6 +370,8 @@ def _handle_bash(tool_input: dict):
             return
         project_root = os.path.dirname(os.path.normpath(_gsd()))
         command = tool_input.get("command", "")
+        if _is_read_only_bash(command):
+            return
         offending = find_cross_repo_bash_path(command, project_root)
         if offending:
             _block_tool(

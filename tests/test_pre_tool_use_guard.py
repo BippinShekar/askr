@@ -164,12 +164,22 @@ class HandleBashTests(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_outside_root_path_triggers_block(self):
+        # A write (rm), not a read — pure reads (cat/ls/tail/grep/...) are
+        # exempted from the cross-repo check by _is_read_only_bash, below.
         with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
-            pre_tool_use._handle_bash({"command": "cat /etc/passwd"})
+            pre_tool_use._handle_bash({"command": "rm /etc/passwd"})
         mock_block.assert_called_once()
         (reason,), _ = mock_block.call_args
         self.assertIn("/etc/passwd", reason)
         self.assertIn(self.project_dir, reason)
+
+    def test_outside_root_read_does_not_block(self):
+        # The actual bug this fixes: a pure read of another repo's log/state
+        # (e.g. diagnosing a sibling project's daemon.log) used to be blocked
+        # identically to a write. Reads must be allowed cross-repo.
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "cat /etc/passwd"})
+        mock_block.assert_not_called()
 
     def test_in_repo_path_does_not_block(self):
         in_repo = os.path.join(self.project_dir, "main.py")
@@ -181,13 +191,53 @@ class HandleBashTests(unittest.TestCase):
         # Exercise the real _block_tool (not mocked) to confirm the Bash path
         # genuinely calls sys.exit(2) rather than merely constructing a message.
         with self.assertRaises(SystemExit) as cm:
-            pre_tool_use._handle_bash({"command": "cat /etc/passwd"})
+            pre_tool_use._handle_bash({"command": "rm /etc/passwd"})
         self.assertEqual(cm.exception.code, 2)
+
+    def test_read_disguised_as_write_via_redirect_still_blocks(self):
+        # `cat` is read-only, but `>` redirects its output to a write target —
+        # the redirect token must still force the write path.
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "cat /tmp/x > /etc/passwd"})
+        mock_block.assert_called_once()
+
+    def test_stderr_merge_redirect_does_not_force_write_classification(self):
+        # Regression: 2>&1 is fd-to-fd duplication (merge stderr into stdout),
+        # not a file write — it must not make an ordinary read command like
+        # `ls ... 2>&1 | head` get misclassified as a write.
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "ls /etc 2>&1"})
+        mock_block.assert_not_called()
+
+    def test_pipe_char_inside_quoted_grep_pattern_does_not_misclassify(self):
+        # Regression: a literal `|` inside a quoted grep -E alternation
+        # pattern used to get treated as a shell pipe by a naive regex split
+        # on the raw string, shattering the command into bogus fragments and
+        # misclassifying an all-read pipeline as a write.
+        cmd = 'grep -i "leaps" /etc/hosts | grep -iE "trigger|companion" | tail -5'
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": cmd})
+        mock_block.assert_not_called()
+
+    def test_sed_in_place_outside_root_blocks(self):
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "sed -i s/a/b/ /etc/hosts"})
+        mock_block.assert_called_once()
+
+    def test_git_log_outside_root_does_not_block(self):
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "git -C /etc log -1"})
+        mock_block.assert_not_called()
+
+    def test_git_commit_outside_root_blocks(self):
+        with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+            pre_tool_use._handle_bash({"command": "git -C /etc commit -am x"})
+        mock_block.assert_called_once()
 
     def test_missing_askr_state_dir_is_noop(self):
         with patch("askr.state.config.get_state_dir", return_value="/nonexistent/askr_state"):
             with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
-                pre_tool_use._handle_bash({"command": "cat /etc/passwd"})
+                pre_tool_use._handle_bash({"command": "rm /etc/passwd"})
             mock_block.assert_not_called()
 
     def test_cwd_inside_nested_worktree_does_not_lock_out_real_root(self):
@@ -370,8 +420,9 @@ class MainBashEndToEndTests(unittest.TestCase):
     def _feed(self, payload):
         sys.stdin = io.StringIO(json.dumps(payload))
 
-    def test_bash_with_outside_root_path_blocks_and_exits_2(self):
-        self._feed({"tool_name": "Bash", "tool_input": {"command": "cat /etc/passwd"}})
+    def test_bash_with_outside_root_write_blocks_and_exits_2(self):
+        # rm, not cat — pure reads are exempt from the cross-repo check now.
+        self._feed({"tool_name": "Bash", "tool_input": {"command": "rm /etc/passwd"}})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             with self.assertRaises(SystemExit) as cm:
@@ -380,6 +431,14 @@ class MainBashEndToEndTests(unittest.TestCase):
         out = json.loads(buf.getvalue())
         self.assertEqual(out["decision"], "block")
         self.assertIn("/etc/passwd", out["reason"])
+
+    def test_bash_with_outside_root_read_does_not_exit_2(self):
+        self._feed({"tool_name": "Bash", "tool_input": {"command": "cat /etc/passwd"}})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                pre_tool_use.main()
+        self.assertEqual(cm.exception.code, 0)
 
     def test_bash_with_in_repo_path_passes_and_exits_0(self):
         in_repo = os.path.join(self.project_dir, "main.py")
