@@ -29,3 +29,8 @@ askr_state/notifications.log
 
 # contains plaintext secrets (Discord webhook) — never committed
 askr_state/config.json
+
+# per-session scratch handovers — staging for the next checkpoint's smart
+# merge, never canonical state; deleted by the session itself after its own
+# checkpoint, or swept once stale by cleanup_stale_scratches
+askr_state/*.scratch.json

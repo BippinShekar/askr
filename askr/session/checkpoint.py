@@ -1297,7 +1297,9 @@ def create_checkpoint(
     """
     from askr.state.config import get_state_dir as _get_state_dir
     resolved_state_dir = state_dir or _get_state_dir()
-    from askr.state.writer import file_lock, load_fresh_sibling_scratches, cleanup_stale_scratches
+    from askr.state.writer import (
+        file_lock, load_fresh_sibling_scratches, cleanup_stale_scratches, scratch_handover_path,
+    )
     with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
         # Real trigger (context/quota/idle) — the moment to reconcile every
         # OTHER currently-active session's own scratch handover into the one
@@ -1320,6 +1322,20 @@ def create_checkpoint(
             # still commit/push those below rather than losing that too.
             _log_merge_failure(developer, "checkpoint proceeding without a fresh canonical handover")
         else:
+            # This session's own scratch is now redundant: its content was just
+            # regenerated from its own transcript (not read back from scratch)
+            # and folded straight into canonical above, so nothing downstream
+            # ever needs this file again. Delete it immediately rather than
+            # waiting on cleanup_stale_scratches' 1hr age sweep — a real trigger
+            # (context/quota/idle) firing for THIS session is the one moment we
+            # know for certain it's done, unlike Stop (which fires every turn,
+            # not just at session end — see hooks/stop.py's own docstring).
+            try:
+                own_scratch = scratch_handover_path(developer, session_id, state_dir)
+                if os.path.exists(own_scratch):
+                    os.remove(own_scratch)
+            except Exception:
+                pass
             cleanup_stale_scratches(developer, state_dir)
 
         _regenerate_architecture_md(project_path, state_dir)

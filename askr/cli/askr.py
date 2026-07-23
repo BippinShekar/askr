@@ -582,6 +582,7 @@ def _update_gitignore():
         "askr_state/architecture.md",
         "askr_state/project_brief.md",
         "askr_state/notifications.log",
+        "askr_state/*.scratch.json",
     ]
     existing = ""
     if os.path.exists(gitignore):
