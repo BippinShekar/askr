@@ -1,43 +1,60 @@
 # Handover: bippin
 
-Last updated: 2026-07-18 18:05
+Last updated: 2026-07-23 22:33
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Refactored quota trigger lifecycle to split notification into three phases: silent polling until quota is genuinely near exhausted, then user-facing notification, then reset wait — fixing a UX bug where users were interrupted at the 90% threshold instead of the real edge of their quota.
+Built autonomous session infrastructure with multi-session persistence, context-aware trigger lifecycle, quota notification split, and per-session scratch handovers; identified and began addressing structured event logging gap needed for overnight autonomous run visualization.
 
 ## Discussion
-The session identified and fixed a critical quota notification UX bug in the lifecycle module. The old `_execute_trigger` function was renamed to `_execute_quota_trigger` and its logic was split into a new three-phase flow: `_wait_until_quota_near_exhausted` silently polls the real account quota (not the stale 90% snapshot) until it's genuinely near exhausted, then the trigger fires the user-facing notification. This prevents users who work quickly from being interrupted pre-emptively. All stale function name references in comments were corrected, and a new test file was created to cover the three-phase quota flow.
+Session 1 diagnosed the missing structured event log as a blocker for autonomous demo visualization and mapped all existing logging locations. This session completed the infrastructure fixes (quota split, session_first_seen persistence, scratch handover cleanup, read-only Bash exemption, shlex tokenization) and committed them. The critical next step is building the structured JSONL event log (askr/state/events.jsonl) to record trigger_fired, companion_spawned, session_ended events with full lineage metadata before the overnight autonomous run, enabling credible session tree visualization and multi-session persistence story.
 
 ## Accomplishments
-- [x] Renamed `_execute_trigger` to `_execute_quota_trigger` throughout lifecycle.py and test files
-- [x] Fixed four stale comment references to old function names in lifecycle.py
-- [x] Implemented `_wait_until_quota_near_exhausted` function to silently poll real account quota until genuinely near exhausted
-- [x] Added QUOTA_NOTIFY_TRIGGER (99.0%) and QUOTA_NOTIFY_POLL_SECS (60) constants for three-phase quota flow
-- [x] Updated test_trigger_independence.py to use new `_execute_quota_trigger` name
-- [x] Created test_quota_notify_split.py to cover new three-phase quota notification flow
+- [x] Split quota notification into three independent phases (silent poll → user notification → reset wait) to prevent interruption at 90% threshold when users can work to genuine quota edge
+- [x] Persisted session_first_seen to disk (alongside trigger_state, companioned_sessions) to prevent grace period reset on daemon restart
+- [x] Implemented per-session scratch handovers with auto-deletion after checkpoint merge to prevent accumulation and accidental commits
+- [x] Exempted read-only Bash commands (cat, ls, tail, grep) from cross-repo block guard while maintaining write/edit security
+- [x] Replaced raw regex split with shlex tokenization for Bash command parsing to honor quoted strings and complex patterns
+- [x] Raised CONTEXT_TRIGGER from 0.60 to 0.70 and QUOTA_HIGH from 85 to 70 for aligned thresholds and more runway before companion spawn
+- [x] Committed all lifecycle.py, checkpoint.py, and guard.py refactors with clear decision log entries
 
 ## Next Actions
-1. Run full test suite (pytest tests/ -q) to verify no regressions from the three-phase quota refactor and confirm test_quota_notify_split.py passes
-   *Why: Session ended mid-test run; need to confirm all tests pass before committing*
-2. Commit the lifecycle.py refactor and new test file with message describing the three-phase quota flow fix
-   *Why: Changes are complete and tested; ready for version control*
-3. Verify the three-phase flow integrates correctly with the idle checkpoint trigger and context trigger (already independently evaluated per commit 793b959)
-   *Why: Ensure quota trigger changes don't interfere with other trigger types*
+1. Build structured JSONL event log at askr/state/events.jsonl recording trigger_fired, companion_spawned, session_ended events with session_id, parent_session_id, trigger_type, context_pct, context_tokens, quota_pct, project_path, timestamp
+   *Why: Without it, overnight autonomous demo must be reverse-engineered from prose logs; with it, exact parent→child relationships and trigger metadata are directly queryable and defensible for the session tree visualization story*
+2. Instrument lifecycle.py trigger firing sites (context, quota, idle) to emit events to structured log with parent_session_id captured from environment or checkpoint state
+   *Why: Enables tracing which trigger type spawned each companion session and what resource state triggered it*
+3. Instrument checkpoint.py companion spawn site to emit event with both session_id and parent_session_id
+   *Why: Closes the lineage loop: records when a companion was created and by which parent session*
+4. Pre-flight check: confirm daemon is running via launchd (askr launch), not just alive in a terminal
+   *Why: Terminal daemons die on logout; launchd-registered daemon persists across reboots and is required for overnight autonomous run*
+5. Pre-flight check: plug into power and run caffeinate if needed; seed goals.jsonl with at least one goal or hand-kick first task
+   *Why: Ensures machine stays awake and daemon has work to trigger on during overnight run*
+6. After overnight run completes, build visualization dashboard querying the structured event log to show session tree, context/quota savings, trigger type distribution, and multi-session persistence story
+   *Why: Transforms raw event data into credible demo narrative for Sarvam hackathon registration and autonomous AI agent story*
 
 ## Decisions
 - Split quota notification into three phases: silent poll → user notification → reset wait — Users working quickly were being interrupted at 90% threshold instead of real quota edge; silent polling lets them work to the genuine limit before notification
-- Use QUOTA_NOTIFY_TRIGGER = 99.0% as the threshold for user-facing notification — Distinguishes between 90% (when preparation starts) and 99% (when user is actually interrupted); answers different UX questions
-- Poll real account quota every 60 seconds during silent wait phase — Balances responsiveness with API load; user won't be interrupted until quota is genuinely near exhausted
+- Gitignore per-session scratch handovers and auto-delete them after checkpoint creation — Scratch files were never cleaned up automatically and could accumulate indefinitely on disk or get committed; deleting immediately after merge prevents this
+- Persist session_first_seen to disk like other trigger state (trigger_state, companioned_sessions) — In-memory dict was reset on every daemon restart, causing grace period to reset for all active sessions and preventing triggers from ever firing
+- Raise CONTEXT_TRIGGER from 0.60 to 0.70 and QUOTA_HIGH from 85 to 70 — Provides more runway before companion session opens; aligns thresholds across trigger types
+- Exempt read-only Bash commands from cross-repo block guard while keeping write/edit commands blocked — Allows diagnostic reads (cat, ls, tail, grep on sibling projects) while maintaining security against accidental writes
+- Use shlex tokenization for Bash command parsing instead of raw regex split — Honors quoted strings and prevents patterns like `grep -E 'pattern|with|pipes'` from being shattered into bogus fragments
+- Build structured JSONL event log before overnight autonomous run to enable credible session lineage visualization — Without it, the demo story must be reverse-engineered from prose logs; with it, the exact parent→child relationships and trigger metadata are directly queryable and defensible
 
 ## Files In Play
 - `askr/session/lifecycle.py`
-- `tests/test_trigger_independence.py`
-- `tests/test_quota_notify_split.py`
+- `askr/session/checkpoint.py`
+- `askr/session/guard.py`
+- `askr/state/analytics.py`
+- `askr/session/monitor.py`
 
 ## Relational Files
-- `askr/session/usage_api.py` (imported_by): _wait_until_quota_near_exhausted calls get_quota_status() to poll real account quota
-- `tests/test_trigger_independence.py` (tested_by): Tests the renamed _execute_quota_trigger function and trigger independence
-- `tests/test_quota_notify_split.py` (tested_by): New test file covering the three-phase quota notification flow
+- `askr/session/lifecycle.py` (imports): Trigger firing sites (context, quota, idle) need instrumentation to emit structured events
+- `askr/session/checkpoint.py` (imports): Companion spawn site needs event emission with session_id and parent_session_id linkage
+- `askr/state/analytics.py` (configures): May need to add event log path configuration and helper functions for structured event emission
+- `askr/session/guard.py` (imported_by): Read-only Bash command exemption logic now in place; no further changes needed
+
+## Blockers
+- Structured JSONL event log not yet built; without it, overnight autonomous run visualization cannot credibly show session lineage and trigger metadata
