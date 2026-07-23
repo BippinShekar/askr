@@ -11,6 +11,21 @@ from askr.utils import env
 env.load()
 
 _WEBHOOK_ENV = "ASKR_DISCORD_WEBHOOK"
+_MAX_LEN = 2000
+
+
+def _truncate(text: str, limit: int = _MAX_LEN) -> str:
+    """Trim to Discord's hard message-length limit at a word boundary, with a
+    visible marker — a bare text[:limit] slice crops mid-word/mid-JSON and
+    reads as garbled rather than intentionally shortened."""
+    if len(text) <= limit:
+        return text
+    marker = "\n… [truncated]"
+    cut = text[: limit - len(marker)]
+    space = cut.rfind(" ")
+    if space > 0:
+        cut = cut[:space]
+    return cut + marker
 
 
 def _get_webhook_url() -> str:
@@ -35,7 +50,7 @@ def send_message(text: str) -> tuple[bool, str]:
     if not url:
         return False, "ASKR_DISCORD_WEBHOOK not set"
 
-    payload = json.dumps({"content": text[:2000]}).encode()
+    payload = json.dumps({"content": _truncate(text)}).encode()
     req = urllib.request.Request(
         url,
         data=payload,
@@ -74,7 +89,7 @@ def send_file(file_path: str, caption: str = "") -> bool:
 
     parts = []
     if caption:
-        cap = caption[:2000].encode()
+        cap = _truncate(caption).encode()
         parts.append(
             f'--{boundary}\r\nContent-Disposition: form-data; name="content"\r\n\r\n'.encode()
             + cap
