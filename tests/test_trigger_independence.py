@@ -3,7 +3,7 @@ Regression tests for the trigger-independence fix (2026-07-16).
 
 context/quota/idle used to be one if/elif/elif chain in run_daemon()'s
 per-session evaluation — the FIRST matching branch won and every branch
-after it was skipped for the whole cycle. Context trips at 60%, far below
+after it was skipped for the whole cycle. Context trips at 70%, far below
 quota's 90% or any real idle gap, so in any real working session context
 fires first, marks the session "already_companioned", and that first branch
 matches forever afterward. Confirmed in production: a session sat "already
@@ -51,6 +51,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             patch.object(lifecycle, "_save_quota_triggered_windows"),
             patch.object(lifecycle, "_save_quota_warned_windows"),
             patch.object(lifecycle, "_save_idle_triggered"),
+            patch.object(lifecycle, "_save_session_first_seen"),
             patch.object(lifecycle, "_last_turn_stop", return_value=(None, 0)),
             patch.object(lifecycle, "_turn_currently_active", return_value=False),
             patch.object(lifecycle, "_find_all_claude_pids_by_project", return_value=[111]),
@@ -72,7 +73,7 @@ class TriggerIndependenceTests(unittest.TestCase):
         """The core bug: a session already past CONTEXT_TRIGGER and already
         companioned must NOT block quota from firing once it crosses 90%."""
         stats = _stats(
-            context_pct=0.70,  # above CONTEXT_TRIGGER (0.60), already companioned below
+            context_pct=0.70,  # at CONTEXT_TRIGGER (0.70), already companioned below
             quota_pct=95.0,
             quota_reset_at="2026-01-01T00:00:00Z",
         )
@@ -108,7 +109,7 @@ class TriggerIndependenceTests(unittest.TestCase):
         """Not elif-chained: a brand-new session crossing both thresholds at
         once should fire both, not just whichever came first in the chain."""
         stats = _stats(
-            context_pct=0.65,
+            context_pct=0.75,
             quota_pct=92.0,
             quota_reset_at="2026-01-01T00:00:00Z",
         )
@@ -131,7 +132,7 @@ class TriggerIndependenceTests(unittest.TestCase):
         to fire."""
         import time
         stats = _stats(
-            context_pct=0.65,
+            context_pct=0.75,
             quota_pct=93.0,
             quota_reset_at="2026-01-01T00:00:00Z",
         )

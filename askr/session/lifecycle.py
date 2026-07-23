@@ -85,6 +85,7 @@ _QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_trigger
 # turn automatically makes the project eligible again — no separate pruning
 # needed, unlike the quota dedup sets above which need reset-window pruning.
 _IDLE_TRIGGERED_PATH = os.path.expanduser("~/.config/askr/idle_triggered.json")
+_SESSION_FIRST_SEEN_PATH = os.path.expanduser("~/.config/askr/session_first_seen.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -129,7 +130,7 @@ POLL_IDLE          = 60    # seconds when no session
 SESSION_STALE_SECS = 600   # 10 min without stats update → session ended
 SAFE_RETRY_LIMIT   = 3
 SAFE_RETRY_WAIT    = 60
-CONTEXT_TRIGGER    = 0.60  # fire at 60% — 40% runway to auto-compact; earlier than 65% to survive extended-thinking spikes
+CONTEXT_TRIGGER    = 0.70  # fire at 70% — 30% runway to auto-compact
 QUOTA_TRIGGER      = 90.0  # fire when 5h quota reaches 90% (real API %)
 QUOTA_WARNING_TRIGGER = 75.0  # heads-up spoken warning before the 90% hard trigger; fires once per session
 TRIGGER_COOLDOWN   = 300   # seconds after a successful kill before re-firing
@@ -1583,6 +1584,33 @@ def _save_idle_triggered(triggered: dict):
         _log(f"WARN: failed to persist idle-triggered state: {e}")
 
 
+def _load_session_first_seen() -> dict:
+    try:
+        with open(_SESSION_FIRST_SEEN_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_session_first_seen(first_seen: dict):
+    try:
+        os.makedirs(os.path.dirname(_SESSION_FIRST_SEEN_PATH), exist_ok=True)
+        with open(_SESSION_FIRST_SEEN_PATH, "w") as f:
+            json.dump(first_seen, f)
+    except Exception as e:
+        _log(f"WARN: failed to persist session-first-seen state: {e}")
+
+
+def _prune_session_first_seen(first_seen: dict) -> dict:
+    """Drop entries older than a day — this dict only exists to answer "was
+    this session observed within the last ACTIVITY_GRACE_SECS (60s)", so
+    nothing about it needs long-term accuracy the way companioned_sessions'
+    liveness-proof pruning does. Purely to keep the file from growing forever
+    across days of daemon uptime."""
+    cutoff = time.time() - 86400
+    return {sid: ts for sid, ts in first_seen.items() if ts >= cutoff}
+
+
 def _last_turn_stop(session_id: str):
     """(iso_mtime_str, seconds_ago) from this session's turn-stop marker
     (written by stop.py's _signal_turn_stopped on every turn), or (None, None)
@@ -1672,7 +1700,19 @@ def _evaluate_session_triggers(
     # otherwise inherit an already-high % from prior usage and get interrupted
     # (or hear the 75% warning) before the user has even sent a first message.
     if session_id:
+        is_new_to_this_dict = session_id not in session_first_seen
         first_seen = session_first_seen.setdefault(session_id, time.time())
+        if is_new_to_this_dict:
+            # Disk-backed so a source-watch self-restart (see run_daemon's
+            # own "source files updated — exiting for launchd restart") never
+            # resets this session's clock back to zero. Confirmed in
+            # production 2026-07-23: restarts recurring faster than
+            # ACTIVITY_GRACE_SECS (60s) during active development kept
+            # re-seeding this as an in-memory-only dict, so a session's
+            # grace period never actually expired and its context/quota/idle
+            # triggers were skipped indefinitely — including, most visibly,
+            # never opening a companion no matter how high context climbed.
+            _save_session_first_seen(session_first_seen)
         if (time.time() - first_seen) < ACTIVITY_GRACE_SECS:
             _log(f"activity grace period — skipping trigger checks for new session "
                  f"{session_id[:8]} [{project_path}]")
@@ -1827,7 +1867,7 @@ def run_daemon():
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
     idle_triggered: dict = _load_idle_triggered()  # project_path → turn-stop ISO ts already fired for, disk-backed
-    session_first_seen: dict = {}  # session_id → epoch first observed by this daemon run, for ACTIVITY_GRACE_SECS
+    session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1859,6 +1899,7 @@ def run_daemon():
                 all_stats = _read_all_stats()
 
                 companioned_sessions = _prune_companioned_sessions(companioned_sessions)
+                session_first_seen = _prune_session_first_seen(session_first_seen)
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):

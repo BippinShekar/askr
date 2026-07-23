@@ -24,7 +24,7 @@ from askr.state.config import get_state_dir, load_developer
 
 _CHECKPOINT_PENDING   = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _LAST_EMERGENCY_SPEAK = os.path.expanduser("~/.config/askr/pre_compact_last_speak.json")
-QUOTA_HIGH            = 85.0  # treat as quota-exhausted if above this
+QUOTA_HIGH            = 70.0  # treat as quota-exhausted if above this
 SPEAK_COOLDOWN_SECS   = 180   # don't re-announce more than once per 3 min
 
 
