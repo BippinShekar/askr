@@ -1559,10 +1559,16 @@ def _approve_held_tasks(dev: str) -> bool:
     return True
 
 
-def _discard_held_tasks(dev: str) -> int:
+def _discard_held_tasks(dev: str, task_id: str = None) -> int:
     """Drain the queue straight to discarded_<dev>.jsonl without ever
     injecting it into a session. Same lock as the queue writer/drainer —
-    without it a task appended mid-discard would be silently lost."""
+    without it a task appended mid-discard would be silently lost.
+
+    task_id, if given, discards only the one matching task (by its "id"
+    field) and leaves the rest of the queue untouched — e.g. a queuer like
+    leaps-bug-reporter dropping just the bug it already fixed, without
+    wiping out every other still-open task held for the same developer.
+    Omitting task_id keeps the original all-or-nothing behavior."""
     from askr.state.writer import file_lock
 
     tasks_dir     = os.path.join(get_state_dir(), "tasks")
@@ -1585,14 +1591,27 @@ def _discard_held_tasks(dev: str) -> int:
         if not tasks:
             return 0
 
+        if task_id:
+            to_discard = [t for t in tasks if t.get("id") == task_id]
+            remaining  = [t for t in tasks if t.get("id") != task_id]
+        else:
+            to_discard = tasks
+            remaining  = []
+
+        if not to_discard:
+            return 0
+
         ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         with open(discard_path, "a") as f:
-            for t in tasks:
+            for t in to_discard:
                 t["discarded_at"] = ts
                 f.write(json.dumps(t) + "\n")
 
-        open(queue_path, "w").close()
-    return len(tasks)
+        with open(queue_path, "w") as f:
+            for t in remaining:
+                f.write(json.dumps(t) + "\n")
+
+    return len(to_discard)
 
 
 def cmd_task(args: list):
@@ -1600,7 +1619,8 @@ def cmd_task(args: list):
     askr task queue <dev> "description"  — add a task to a developer's queue
     askr task list [<dev>]               — show pending tasks for a developer
     askr task approve <dev>              — release tasks held by the permission gate
-    askr task discard <dev>              — drop tasks held by the permission gate
+    askr task discard <dev> [id]         — drop tasks held by the permission gate
+                                            (all of them, or just the one matching [id])
     """
     import subprocess as _sp
     import uuid as _uuid
@@ -1636,7 +1656,7 @@ def cmd_task(args: list):
             console.print(f"  • [{t.get('from','?')}] {t['desc']}")
         if held:
             console.print(f"\n  [yellow]held[/yellow] — session has {'; '.join(reasons)}")
-            console.print(f"  [dim]askr task approve {target_dev}[/dim]  or  [dim]askr task discard {target_dev}[/dim]")
+            console.print(f"  [dim]askr task approve {target_dev}[/dim]  or  [dim]askr task discard {target_dev} [id][/dim]")
         console.print()
 
     elif sub == "approve":
@@ -1647,9 +1667,13 @@ def cmd_task(args: list):
 
     elif sub == "discard":
         target_dev = args[1] if len(args) > 1 else load_developer()
-        n = _discard_held_tasks(target_dev)
+        task_id    = args[2] if len(args) > 2 else None
+        n = _discard_held_tasks(target_dev, task_id)
         if n:
-            console.print(f"\n  [green]✓[/green] discarded {n} task(s) for [bold]{target_dev}[/bold]\n")
+            what = f"task {task_id}" if task_id else f"{n} task(s)"
+            console.print(f"\n  [green]✓[/green] discarded {what} for [bold]{target_dev}[/bold]\n")
+        elif task_id:
+            console.print(f"\n  [dim]{target_dev}: no pending task with id {task_id}[/dim]\n")
         else:
             console.print(f"\n  [dim]{target_dev}: no pending tasks to discard[/dim]\n")
 
@@ -1658,7 +1682,7 @@ def cmd_task(args: list):
         console.print("    [bold]askr task queue <dev> \"description\"[/bold]  — queue a task for a developer")
         console.print("    [bold]askr task list [<dev>][/bold]               — show pending tasks")
         console.print("    [bold]askr task approve [<dev>][/bold]            — release tasks held by the permission gate")
-        console.print("    [bold]askr task discard [<dev>][/bold]            — drop tasks held by the permission gate\n")
+        console.print("    [bold]askr task discard [<dev>] [id][/bold]       — drop tasks held by the permission gate (all, or just [id])\n")
 
 
 def cmd_team():
