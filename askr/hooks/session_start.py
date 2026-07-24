@@ -401,7 +401,12 @@ def main():
         dangerous = False
 
     if dangerous and not _consume_approval_flag(developer):
-        held_tasks = _peek_task_queue(developer)
+        # Exclude tasks a queuer (e.g. leaps-bug-reporter) already marked
+        # "fixed" — they were never drained from the queue file (no per-task
+        # discard existed until now), so without this filter every already-
+        # resolved bug kept inflating the held count and cluttering the
+        # notice indefinitely.
+        held_tasks = [t for t in _peek_task_queue(developer) if t.get("status") != "fixed"]
         if held_tasks:
             _notify_tasks_held(developer, held_tasks, held_reasons)
     else:
