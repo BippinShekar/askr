@@ -1611,6 +1611,22 @@ def _prune_session_first_seen(first_seen: dict) -> dict:
     return {sid: ts for sid, ts in first_seen.items() if ts >= cutoff}
 
 
+def _prune_idle_triggered(idle_triggered: dict) -> dict:
+    """Drop entries older than a day. Purely to keep idle_triggered.json from
+    growing forever now that it's keyed per (project_path, session_id) — see
+    the 2026-07-24 fix note on Trigger C below for why the key changed."""
+    cutoff = time.time() - 86400
+    kept = {}
+    for key, iso_ts in idle_triggered.items():
+        try:
+            ts = datetime.fromisoformat(iso_ts).timestamp()
+        except Exception:
+            continue  # unparseable — drop rather than keep forever
+        if ts >= cutoff:
+            kept[key] = iso_ts
+    return kept
+
+
 def _last_turn_stop(session_id: str):
     """(iso_mtime_str, seconds_ago) from this session's turn-stop marker
     (written by stop.py's _signal_turn_stopped on every turn), or (None, None)
@@ -1820,12 +1836,22 @@ def _evaluate_session_triggers(
         _save_trigger_state(last_trigger_at)
 
     # --- Idle (Trigger C) — independent of context's and quota's state above ---
+    # Keyed by (project_path, session_id), not project_path alone: found
+    # 2026-07-24, multiple concurrent/abandoned sessions left open against the
+    # same project each have their OWN turn_stop_ts. With a project_path-only
+    # key, evaluating session A (fires, stores tsA) then session B (different
+    # tsB != tsA, fires again, overwrites to tsB) in the same poll cycle left
+    # exactly one winner remembered — the next cycle re-evaluates whichever
+    # session lost that race, sees its own tsA no longer matches the stored
+    # tsB, and re-fires. Two long-idle sessions on one project were enough to
+    # thrash forever, re-announcing "been quiet for 10 minutes" every poll.
+    idle_key = f"{project_path}::{session_id}"
     if (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
-            and idle_triggered.get(project_path) != turn_stop_ts
+            and idle_triggered.get(idle_key) != turn_stop_ts
             and not _turn_currently_active(session_id)):
-        _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}]")
+        _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}] session={session_id[:8] if session_id else '?'}")
         logged_something = True
-        idle_triggered[project_path] = turn_stop_ts
+        idle_triggered[idle_key] = turn_stop_ts
         _save_idle_triggered(idle_triggered)
         # _execute_idle_checkpoint(), not _execute_quota_trigger() — the latter
         # is built for "quota exhausted, hand off to a fresh session" and
@@ -1866,7 +1892,7 @@ def run_daemon():
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
-    idle_triggered: dict = _load_idle_triggered()  # project_path → turn-stop ISO ts already fired for, disk-backed
+    idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → turn-stop ISO ts already fired for, disk-backed
     session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
 
     def _on_term(sig, frame):
@@ -1900,6 +1926,7 @@ def run_daemon():
 
                 companioned_sessions = _prune_companioned_sessions(companioned_sessions)
                 session_first_seen = _prune_session_first_seen(session_first_seen)
+                idle_triggered = _prune_idle_triggered(idle_triggered)
 
                 # Sort highest context first so the most urgent project is handled first
                 for stats in sorted(all_stats, key=lambda s: s.get("context_pct", 0), reverse=True):
