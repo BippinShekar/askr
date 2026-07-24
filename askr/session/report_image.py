@@ -7,6 +7,7 @@ askr's value: developer interruptions avoided, context intercepted, etc.
 
 from __future__ import annotations
 import os
+import re
 import tempfile
 from datetime import datetime
 from typing import Optional
@@ -393,3 +394,159 @@ def morning_report_card(
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_BG)
     plt.close(fig)
     return path
+
+
+# ---------------------------------------------------------------------------
+# Held-tasks card
+# ---------------------------------------------------------------------------
+
+_SEVERITY_COLOR = {
+    "CRITICAL": _RED,
+    "HIGH":     _AMBER,
+    "MEDIUM":   _BLUE,
+    "LOW":      _MUTED,
+}
+
+# Matches the "[BUG <id> | <SEVERITY> | <job>]\n..." convention some queuers
+# (e.g. leaps-bug-reporter) use — plain `askr task queue <dev> "..."` tasks
+# won't match this, and fall back to their raw desc/from fields below.
+_BUG_HEADER_RE = re.compile(r"^\[BUG\s+([\w-]+)\s*\|\s*([A-Za-z]+)\s*\|\s*([\w_-]+)\]\s*\n?")
+
+
+def _task_row_fields(task: dict) -> tuple[str, str, str, str]:
+    """(short_id, severity, job, summary) for one row of held_tasks_card.
+    Parses the "[BUG id | SEVERITY | job]\\nReport: ..." convention when
+    present; otherwise falls back to the task's own id/from/desc so a
+    plain `askr task queue` entry still renders a sane row."""
+    desc = task.get("desc", "") or ""
+    m = _BUG_HEADER_RE.match(desc)
+    if m:
+        short_id, severity, job = m.group(1)[:12], m.group(2).upper(), m.group(3)
+        rest = desc[m.end():]
+        # Prefer the "Report: ..." line over whatever comes first (usually
+        # a "User: ..." line) — the report text is the actual summary.
+        summary = ""
+        for line in rest.splitlines():
+            line = line.strip()
+            if line.lower().startswith("report:"):
+                summary = line[len("report:"):].strip()
+                break
+            if line and not summary:
+                summary = line  # fallback: first non-empty line if no Report: found
+    else:
+        short_id = str(task.get("id", "?"))[:12]
+        severity = ""
+        job = task.get("from", "?")
+        summary = desc.splitlines()[0] if desc else ""
+    summary = summary.strip().strip('"')
+    return short_id, severity, job, summary
+
+
+def held_tasks_card(developer: str, tasks: list[dict], reasons: list[str] | None = None) -> Optional[str]:
+    """
+    Render "tasks held — approval needed" as a one-row-per-task table
+    instead of dumping every task's full raw desc into a wall of text.
+
+    Found 2026-07-24: the old Discord message joined every held task's
+    complete, unbounded desc (a full bug-reporter report can run to
+    hundreds/thousands of chars) into one string with no per-task cap.
+    With more than 2-3 verbose tasks held at once that reliably blew past
+    Discord's 2000-char limit — not just truncating one long entry, but
+    silently dropping every task after wherever the cut landed. A fixed
+    one-line-per-row table has no such failure mode: it always fits, and
+    every held task always gets listed.
+
+    Returns temp file path on success, None on failure (caller falls back
+    to a short text message — see _send_fallback_text in session_start.py).
+    """
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.gridspec import GridSpec
+    except ImportError:
+        return None
+
+    rows = [_task_row_fields(t) for t in tasks]
+    n = len(rows)
+    if n == 0:
+        return None
+
+    # Fixed inch heights for header/footer/each row, independent of n — then
+    # size the figure so the axes (0.97..0.03 of fig_h, set by the GridSpec
+    # margins below) is EXACTLY header_in + footer_in + n*row_in inches tall.
+    # That makes the axes-fraction offsets derived from these constants sum
+    # to 1.0 by construction for any n, so rows can never overlap the footer
+    # the way a fixed axes-fraction row height did once n grew past ~10.
+    header_in, footer_in, row_in = 1.35, 0.55, 0.34
+    axes_margin = 0.97 - 0.03
+    fig_h = (header_in + footer_in + n * row_in) / axes_margin
+
+    fig = plt.figure(figsize=(12, fig_h), facecolor=_BG)
+    gs = GridSpec(1, 1, figure=fig, top=0.97, bottom=0.03, left=0.02, right=0.98)
+    ax = fig.add_subplot(gs[0])
+    ax.set_facecolor(_CARD)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    for sp in ax.spines.values():
+        sp.set_edgecolor(_BORDER)
+        sp.set_linewidth(0.8)
+        sp.set_visible(True)
+
+    axes_h_in  = header_in + footer_in + n * row_in
+    header_frac = header_in / axes_h_in
+    row_frac    = row_in / axes_h_in
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ax.text(0.03, 0.98, "askr", color=_RED, fontsize=10, fontweight="bold",
+            va="top", transform=ax.transAxes, fontfamily="monospace")
+    ax.text(0.03, 0.98 - 0.16 * header_frac, "TASKS HELD — APPROVAL NEEDED", color=_WHITE,
+            fontsize=16, fontweight="bold", va="top", transform=ax.transAxes)
+    ax.text(0.972, 0.98, f"{developer}  ·  {ts}", color=_MUTED, fontsize=9,
+            va="top", ha="right", transform=ax.transAxes)
+
+    reason_text = "; ".join(reasons or [])
+    subtitle = f"{n} queued task(s)" + (f" — {reason_text}" if reason_text else "")
+    ax.text(0.03, 0.98 - 0.55 * header_frac, subtitle, color=_MUTED, fontsize=8.5,
+            va="top", transform=ax.transAxes)
+
+    divider_y = 1.0 - header_frac
+    ax.axhline(y=divider_y, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
+
+    top_y = divider_y - row_frac * 0.25
+    for i, (short_id, severity, job, summary) in enumerate(rows):
+        y = top_y - i * row_frac
+        sev_col = _SEVERITY_COLOR.get(severity, _MUTED)
+        if severity:
+            ax.text(0.03, y, severity, color=sev_col, fontsize=8, fontweight="bold",
+                    va="top", transform=ax.transAxes, fontfamily="monospace")
+        ax.text(0.15, y, job[:22], color=_BLUE, fontsize=8.5, va="top",
+                transform=ax.transAxes, fontfamily="monospace")
+        ax.text(0.36, y, summary[:72], color=_TEXT, fontsize=8.5, va="top",
+                transform=ax.transAxes)
+        ax.text(0.972, y, short_id, color=_DIM, fontsize=7.5, va="top",
+                ha="right", transform=ax.transAxes, fontfamily="monospace")
+
+    footer_frac = footer_in / axes_h_in
+    footer_y = footer_frac * 0.55
+    ax.axhline(y=footer_frac * 0.92, color=_BORDER, linewidth=0.8, xmin=0.03, xmax=0.97)
+    ax.text(0.03, footer_y,
+            f"askr task approve {developer}   ·   askr task discard {developer} [id]",
+            color=_MUTED, fontsize=8, va="top", transform=ax.transAxes,
+            fontfamily="monospace")
+
+    fd, path = tempfile.mkstemp(suffix=".png", prefix="askr_tasks_")
+    os.close(fd)
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=_BG)
+    plt.close(fig)
+    return path
+
+
+def held_task_summary_line(task: dict) -> str:
+    """Single-line rendering of a held task, for the text fallback / local
+    notification.json 'message' field — same parsed fields as one row of
+    held_tasks_card, just formatted inline instead of as a table column."""
+    short_id, severity, job, summary = _task_row_fields(task)
+    sev_prefix = f"{severity} " if severity else ""
+    return f"- [{job}] {sev_prefix}{summary[:100]} ({short_id})"

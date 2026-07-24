@@ -254,12 +254,20 @@ def _consume_approval_flag(developer: str) -> bool:
 
 
 def _notify_tasks_held(developer: str, tasks: list[dict], reasons: list[str]):
-    task_list   = "\n".join(f"- [{t.get('from','?')}] {t.get('desc','')}" for t in tasks)
+    from askr.session.report_image import held_tasks_card, held_task_summary_line
+
+    # One short line per task (id/severity/job + a capped summary), never
+    # the full raw desc — see held_tasks_card's docstring for why joining
+    # unbounded desc text here used to blow past Discord's 2000-char limit
+    # and silently drop every task after the cut. Used both for the local
+    # notification.json 'message' (shown as a Cursor/VSCode toast) and as
+    # the Discord text fallback if the table-image render/send fails.
+    task_list   = "\n".join(held_task_summary_line(t) for t in tasks)
     reason_text = "; ".join(reasons)
     message = (
         f"{len(tasks)} queued task(s) held for {developer} — this session has {reason_text}, "
         f"so askr did not run them automatically. "
-        f"Run `askr task approve {developer}` to release them, or `askr task discard {developer}` to drop them.\n\n{task_list}"
+        f"Run `askr task approve {developer}` to release them, or `askr task discard {developer} [id]` to drop them.\n\n{task_list}"
     )
     try:
         payload = {
@@ -276,9 +284,22 @@ def _notify_tasks_held(developer: str, tasks: list[dict], reasons: list[str]):
             json.dump(payload, f)
     except Exception:
         pass
+
+    header  = message.split("\n\n")[0]
+    caption = f"🛑 **[askr] Tasks held — approval needed**\n{header}"
     try:
-        from askr.clients.discord import send_message
-        send_message(f"🛑 **[askr] Tasks held — approval needed**\n{message}")
+        from askr.clients.discord import send_file, send_message
+        img_path = held_tasks_card(developer, tasks, reasons)
+        if img_path:
+            sent = send_file(img_path, caption)
+            try:
+                os.remove(img_path)
+            except Exception:
+                pass
+            if not sent:
+                send_message(f"🛑 **[askr] Tasks held — approval needed**\n{message}")
+        else:
+            send_message(f"🛑 **[askr] Tasks held — approval needed**\n{message}")
     except Exception:
         pass
 
