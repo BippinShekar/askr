@@ -1612,19 +1612,30 @@ def _prune_session_first_seen(first_seen: dict) -> dict:
 
 
 def _prune_idle_triggered(idle_triggered: dict) -> dict:
-    """Drop entries older than a day. Purely to keep idle_triggered.json from
-    growing forever now that it's keyed per (project_path, session_id) — see
-    the 2026-07-24 fix note on Trigger C below for why the key changed."""
+    """Drop entries whose dedup was recorded more than a day ago. Purely to
+    keep idle_triggered.json from growing forever now that it's keyed per
+    (project_path, session_id) — see the 2026-07-24 fix note on Trigger C
+    below for why the key changed.
+
+    Found 2026-07-25: the first cut of this pruned on the AGE OF THE STORED
+    turn_stop_ts, not on when the dedup entry itself was recorded. But
+    turn_stop_ts is deliberately old for exactly the long-abandoned sessions
+    Trigger C exists to catch (it's gated on idle_secs >= IDLE_TRIGGER_SECS,
+    so it's never fresh) — a leaps session idle 14 days got its brand-new
+    dedup entry pruned on the very next poll cycle (~15s later) because a
+    14-day-old timestamp reads as "older than a day," undoing the guard
+    immediately and reintroducing the exact re-fire-every-poll bug the
+    (project_path, session_id) key was meant to fix. Each entry now also
+    carries recorded_at (set when Trigger C actually fires) so pruning
+    tracks dedup age instead of idle age. Legacy entries from before this
+    change are bare ISO strings, not dicts — dropped harmlessly here; if
+    that session is still genuinely idle, Trigger C just re-records it
+    correctly on the next cycle."""
     cutoff = time.time() - 86400
-    kept = {}
-    for key, iso_ts in idle_triggered.items():
-        try:
-            ts = datetime.fromisoformat(iso_ts).timestamp()
-        except Exception:
-            continue  # unparseable — drop rather than keep forever
-        if ts >= cutoff:
-            kept[key] = iso_ts
-    return kept
+    return {
+        key: entry for key, entry in idle_triggered.items()
+        if isinstance(entry, dict) and entry.get("recorded_at", 0) >= cutoff
+    }
 
 
 def _last_turn_stop(session_id: str):
@@ -1846,12 +1857,17 @@ def _evaluate_session_triggers(
     # tsB, and re-fires. Two long-idle sessions on one project were enough to
     # thrash forever, re-announcing "been quiet for 10 minutes" every poll.
     idle_key = f"{project_path}::{session_id}"
+    prev_entry = idle_triggered.get(idle_key)
+    prev_ts = prev_entry.get("turn_stop_ts") if isinstance(prev_entry, dict) else prev_entry
     if (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
-            and idle_triggered.get(idle_key) != turn_stop_ts
+            and prev_ts != turn_stop_ts
             and not _turn_currently_active(session_id)):
         _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}] session={session_id[:8] if session_id else '?'}")
         logged_something = True
-        idle_triggered[idle_key] = turn_stop_ts
+        # Stores recorded_at (when WE fired) alongside turn_stop_ts (the
+        # session's own, deliberately-old idle marker) so pruning can key off
+        # dedup age instead of idle age — see _prune_idle_triggered.
+        idle_triggered[idle_key] = {"turn_stop_ts": turn_stop_ts, "recorded_at": time.time()}
         _save_idle_triggered(idle_triggered)
         # _execute_idle_checkpoint(), not _execute_quota_trigger() — the latter
         # is built for "quota exhausted, hand off to a fresh session" and
@@ -1892,7 +1908,7 @@ def run_daemon():
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
-    idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → turn-stop ISO ts already fired for, disk-backed
+    idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → {"turn_stop_ts", "recorded_at"}, disk-backed
     session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
 
     def _on_term(sig, frame):

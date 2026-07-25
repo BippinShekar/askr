@@ -105,6 +105,38 @@ class TriggerIndependenceTests(unittest.TestCase):
             )
         self.assertIn(lifecycle._execute_idle_checkpoint, self._thread_targets())
 
+    def test_idle_dedup_survives_prune_across_the_next_poll_cycle(self):
+        """Regression for 2026-07-25: _prune_idle_triggered used to key off
+        the AGE OF THE STORED turn_stop_ts, which is deliberately old for any
+        session idle enough to trip Trigger C in the first place (that's the
+        whole point of the trigger). A dedup entry recorded THIS poll for a
+        session idle 14 real days got pruned on the very next poll cycle
+        (~15s later) because a 14-day-old turn_stop_ts read as "stale," which
+        undid the guard immediately and re-fired every single cycle. Pruning
+        must key off recorded_at (when WE recorded the dedup) instead."""
+        old_turn_stop_ts = "2026-07-11T09:03:34.696561+00:00"
+        stats = _stats()
+        idle_triggered = {}
+
+        with patch.object(lifecycle, "_last_turn_stop",
+                           return_value=(old_turn_stop_ts, lifecycle.IDLE_TRIGGER_SECS * 2000)):
+            lifecycle._evaluate_session_triggers(
+                stats, session_first_seen={"sess123": 0.0}, quota_warned_windows=set(),
+                companioned_sessions=set(), last_trigger_at={},
+                quota_triggered_windows=set(), idle_triggered=idle_triggered,
+            )
+            self.assertIn(lifecycle._execute_idle_checkpoint, self._thread_targets())
+
+            # Simulate the next poll cycle's prune step, then re-evaluate.
+            idle_triggered = lifecycle._prune_idle_triggered(idle_triggered)
+            self.mock_thread_cls.reset_mock()
+            lifecycle._evaluate_session_triggers(
+                stats, session_first_seen={"sess123": 0.0}, quota_warned_windows=set(),
+                companioned_sessions=set(), last_trigger_at={},
+                quota_triggered_windows=set(), idle_triggered=idle_triggered,
+            )
+        self.assertNotIn(lifecycle._execute_idle_checkpoint, self._thread_targets())
+
     def test_context_and_quota_can_both_fire_in_the_same_call(self):
         """Not elif-chained: a brand-new session crossing both thresholds at
         once should fire both, not just whichever came first in the chain."""
