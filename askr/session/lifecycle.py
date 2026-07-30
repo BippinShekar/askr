@@ -86,6 +86,16 @@ _QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_trigger
 # needed, unlike the quota dedup sets above which need reset-window pruning.
 _IDLE_TRIGGERED_PATH = os.path.expanduser("~/.config/askr/idle_triggered.json")
 _SESSION_FIRST_SEEN_PATH = os.path.expanduser("~/.config/askr/session_first_seen.json")
+# session_id -> parent_session_id, best-effort lineage for the event log.
+# Populated when a session_id is first observed in session_first_seen by
+# reading whatever parent_session_id launch_mode.json currently holds (written
+# by the SAME daemon process at companion-spawn time, moments earlier — see
+# _write_launch_mode). launch_mode.json holds only one current value, so if
+# multiple companions spawn in quick succession before the next one is
+# observed, an in-between session could inherit the wrong parent. Acceptable:
+# this is best-effort lineage for the event log, not a correctness-critical
+# dedup key.
+_SESSION_PARENT_PATH = os.path.expanduser("~/.config/askr/session_parent.json")
 
 # ---------------------------------------------------------------------------
 # Source self-watch — detect when askr code changes and restart cleanly.
@@ -541,15 +551,18 @@ def _get_next_goal(state_dir: str = None) -> str:
         return ""
 
 
-def _write_launch_mode(goal: str = ""):
+def _write_launch_mode(goal: str = "", parent_session_id: str = None):
     try:
         os.makedirs(os.path.dirname(_LAUNCH_MODE_PATH), exist_ok=True)
+        payload = {
+            "active": True,
+            "goal": goal,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if parent_session_id:
+            payload["parent_session_id"] = parent_session_id
         with open(_LAUNCH_MODE_PATH, "w") as f:
-            json.dump({
-                "active": True,
-                "goal": goal,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, f)
+            json.dump(payload, f)
     except Exception:
         pass
 
@@ -1038,7 +1051,7 @@ def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = Non
 
     # Phase 3: now it's actually time to interrupt.
     next_goal = _get_next_goal(state_dir)
-    _write_launch_mode(next_goal)
+    _write_launch_mode(next_goal, parent_session_id=session_id)
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
@@ -1057,6 +1070,9 @@ def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = Non
     launched = _start_claude(project_path, force=True)
     if launched:
         _notify_discord_resumed("quota", next_goal)
+        from askr.state.writer import append_event
+        append_event("companion_spawned", project_path, parent_session_id=session_id,
+                     trigger_type="quota", quota_pct=stats.get("quota_pct"))
     try:
         from askr.state.analytics import today_summary
         saved = today_summary().get("total_seconds", 0)
@@ -1175,7 +1191,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
         _log(f"companion checkpoint error: {e}")
 
     next_goal = _get_next_goal(state_dir)
-    _write_launch_mode(next_goal)
+    _write_launch_mode(next_goal, parent_session_id=session_id)
     allowed_tools = _load_allowed_tools(project_path)
 
     daemon_prompt = ""
@@ -1232,6 +1248,9 @@ def _open_companion_session(project_path: str, session_id: str = None):
     tools_flag  = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
     safe_prompt = daemon_prompt.replace("'", "").replace('"', "").replace("\\", "")
     _spawn_terminal_app_fallback(project_path, claude_bin, tools_flag, safe_prompt, _NOTIFICATION_PATH)
+    from askr.state.writer import append_event
+    append_event("companion_spawned", project_path, parent_session_id=session_id,
+                 trigger_type="context")
     # Speak only once the fallback spawn is actually dispatched, so the announcement
     # never lands before something has genuinely started happening.
     _speak(companion_message, source="lifecycle._open_companion_session",
@@ -1611,6 +1630,29 @@ def _prune_session_first_seen(first_seen: dict) -> dict:
     return {sid: ts for sid, ts in first_seen.items() if ts >= cutoff}
 
 
+def _load_session_parent() -> dict:
+    try:
+        with open(_SESSION_PARENT_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_session_parent(session_parent: dict):
+    try:
+        os.makedirs(os.path.dirname(_SESSION_PARENT_PATH), exist_ok=True)
+        with open(_SESSION_PARENT_PATH, "w") as f:
+            json.dump(session_parent, f)
+    except Exception as e:
+        _log(f"WARN: failed to persist session-parent state: {e}")
+
+
+def _prune_session_parent(session_parent: dict, session_first_seen: dict) -> dict:
+    """Drop any entry whose session_id has already aged out of
+    session_first_seen (1 day) — same lifetime, no separate timestamp needed."""
+    return {sid: pid for sid, pid in session_parent.items() if sid in session_first_seen}
+
+
 def _prune_idle_triggered(idle_triggered: dict) -> dict:
     """Drop entries whose dedup was recorded more than a day ago. Purely to
     keep idle_triggered.json from growing forever now that it's keyed per
@@ -1671,6 +1713,7 @@ def _evaluate_session_triggers(
     last_trigger_at: dict,
     quota_triggered_windows: set,
     idle_triggered: dict,
+    session_parent: dict = None,
 ) -> None:
     """
     Evaluate all three triggers (context, quota, idle) for one session's stats
@@ -1721,6 +1764,8 @@ def _evaluate_session_triggers(
     session_id = stats.get("session_id")
     already_companioned = bool(session_id) and session_id in companioned_sessions
     turn_stop_ts, idle_secs = _last_turn_stop(session_id)
+    if session_parent is None:
+        session_parent = {}
 
     # Grace period: give a newly-observed session a moment before evaluating
     # any trigger against it. Quota is account-wide, so a brand-new chat can
@@ -1740,6 +1785,20 @@ def _evaluate_session_triggers(
             # triggers were skipped indefinitely — including, most visibly,
             # never opening a companion no matter how high context climbed.
             _save_session_first_seen(session_first_seen)
+            # First time we've seen this session_id at all: if launch_mode.json
+            # currently names a parent (written moments earlier by this same
+            # daemon process at companion-spawn time — see _write_launch_mode),
+            # record the lineage now, while it's still fresh. See
+            # _SESSION_PARENT_PATH docstring for the known best-effort race.
+            if session_id not in session_parent:
+                try:
+                    with open(_LAUNCH_MODE_PATH) as f:
+                        parent = json.load(f).get("parent_session_id")
+                    if parent:
+                        session_parent[session_id] = parent
+                        _save_session_parent(session_parent)
+                except Exception:
+                    pass
         if (time.time() - first_seen) < ACTIVITY_GRACE_SECS:
             _log(f"activity grace period — skipping trigger checks for new session "
                  f"{session_id[:8]} [{project_path}]")
@@ -1780,6 +1839,11 @@ def _evaluate_session_triggers(
     elif ctx_pct >= CONTEXT_TRIGGER:
         _log(f"Trigger A: context={ctx_pct:.1%} — opening companion session [{project_path}] (existing session left running)")
         logged_something = True
+        from askr.state.writer import append_event
+        append_event("trigger_fired", project_path, session_id=session_id,
+                     parent_session_id=session_parent.get(session_id), trigger_type="context",
+                     context_pct=ctx_pct, context_tokens=stats.get("context_tokens"),
+                     quota_pct=quota_pct)
         if session_id:
             companioned_sessions.add(session_id)
             _save_companioned_sessions(companioned_sessions)
@@ -1831,6 +1895,11 @@ def _evaluate_session_triggers(
             and (time.time() - last_trigger_at.get(quota_cooldown_key, 0.0)) >= TRIGGER_COOLDOWN):
         _log(f"Trigger B: quota={quota_pct:.1f}% (real API) [{project_path}]")
         logged_something = True
+        from askr.state.writer import append_event
+        append_event("trigger_fired", project_path, session_id=session_id,
+                     parent_session_id=session_parent.get(session_id), trigger_type="quota",
+                     context_pct=ctx_pct, context_tokens=stats.get("context_tokens"),
+                     quota_pct=quota_pct)
         quota_triggered_windows.add(reset_at)
         _save_quota_triggered_windows(quota_triggered_windows)
         # _execute_quota_trigger can block for hours (near-exhausted poll, then
@@ -1864,6 +1933,11 @@ def _evaluate_session_triggers(
             and not _turn_currently_active(session_id)):
         _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}] session={session_id[:8] if session_id else '?'}")
         logged_something = True
+        from askr.state.writer import append_event
+        append_event("trigger_fired", project_path, session_id=session_id,
+                     parent_session_id=session_parent.get(session_id), trigger_type="idle",
+                     context_pct=ctx_pct, context_tokens=stats.get("context_tokens"),
+                     quota_pct=quota_pct)
         # Stores recorded_at (when WE fired) alongside turn_stop_ts (the
         # session's own, deliberately-old idle marker) so pruning can key off
         # dedup age instead of idle age — see _prune_idle_triggered.
@@ -1910,6 +1984,7 @@ def run_daemon():
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
     idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → {"turn_stop_ts", "recorded_at"}, disk-backed
     session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
+    session_parent: dict = _load_session_parent()  # session_id → parent_session_id, disk-backed, best-effort (see docstring)
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -1942,6 +2017,7 @@ def run_daemon():
 
                 companioned_sessions = _prune_companioned_sessions(companioned_sessions)
                 session_first_seen = _prune_session_first_seen(session_first_seen)
+                session_parent = _prune_session_parent(session_parent, session_first_seen)
                 idle_triggered = _prune_idle_triggered(idle_triggered)
 
                 # Sort highest context first so the most urgent project is handled first
@@ -1950,6 +2026,7 @@ def run_daemon():
                         stats, session_first_seen, quota_warned_windows,
                         companioned_sessions, last_trigger_at,
                         quota_triggered_windows, idle_triggered,
+                        session_parent,
                     )
 
                 time.sleep(POLL_ACTIVE)

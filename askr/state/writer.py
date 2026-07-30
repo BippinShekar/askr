@@ -258,6 +258,44 @@ def append_implementation_entry(entry_type: str, detail: str, developer: str = N
             f.write(_json.dumps(entry) + "\n")
 
 
+def append_event(event_type: str, project_path: str, session_id: str = None,
+                  parent_session_id: str = None, trigger_type: str = None,
+                  context_pct: float = None, context_tokens: int = None,
+                  quota_pct: float = None, state_dir: str = None) -> str:
+    """Append one lifecycle event to events.jsonl — trigger_fired,
+    companion_spawned, session_ended. One row per event, union-merge safe
+    across concurrently-active projects the daemon is polling.
+
+    state_dir defaults to <project_path>/askr_state since the daemon
+    evaluates triggers for whichever project_path a given stats entry names,
+    not the daemon process's own cwd. Fails open (never raises) — event
+    logging is analytics, not correctness-critical, and must never take down
+    a trigger-firing path.
+    """
+    try:
+        _dir = state_dir or os.path.join(project_path, "askr_state")
+        os.makedirs(_dir, exist_ok=True)
+        path = os.path.join(_dir, "events.jsonl")
+
+        entry = {
+            "ts": _now_iso(),
+            "event_type": event_type,
+            "session_id": session_id,
+            "parent_session_id": parent_session_id,
+            "trigger_type": trigger_type,
+            "context_pct": context_pct,
+            "context_tokens": context_tokens,
+            "quota_pct": quota_pct,
+            "project_path": project_path,
+        }
+        with file_lock(path):
+            with open(path, "a") as f:
+                f.write(_json.dumps(entry) + "\n")
+        return path
+    except Exception:
+        return ""
+
+
 def update_architecture(content: str):
     path = state_path("architecture.md")
     _write(path, f"# Architecture\n\nLast updated: {_now()}\n\n{content.strip()}\n")
