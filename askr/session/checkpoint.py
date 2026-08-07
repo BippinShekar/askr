@@ -14,6 +14,7 @@ import os
 import re
 import json
 import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -1062,6 +1063,128 @@ def git_commit_push(state_dir: str, developer: str, trigger_type: str) -> tuple[
         return False, str(e)[:300]
 
 
+_ACCOMPLISHED_CORPUS_TTL_SECS = 300  # re-walk git history at most once per 5 min
+_accomplished_corpus_cache: dict = {}  # (developer, state_dir) -> (fetched_at, corpus)
+
+
+def _load_accomplished_corpus(developer: str, state_dir: str, n: int = 30) -> list:
+    """
+    Structured ground truth for "has this next_action already been done" —
+    walks the last n commits to handover_<dev>.json via `git show <hash>:path`
+    (same technique as lifecycle._read_session_arc; avoids the diff-interleaving
+    problem of parsing `git log -p`) and collects every accomplishments[].what
+    and completed_goals[] string across all of them, deduped.
+
+    This is real per-session structured output, not a commit-message guess —
+    unlike the `git log --oneline -15` window already injected into the LLM
+    prompt below, it isn't bounded by how many *code* commits happened since
+    (checkpoint commits alone can blow through a small window in one session),
+    only by how many past *sessions* happened.
+
+    Cached per (developer, state_dir) for _ACCOMPLISHED_CORPUS_TTL_SECS since
+    it only changes at real checkpoints, not every turn — create_handover_only()
+    runs this on every Stop hook and must not re-walk git history that often.
+
+    Fails closed to [] on any error. Callers must treat an empty corpus as
+    "nothing to match against" (skip filtering), never as "everything is stale."
+    """
+    cache_key = (developer, state_dir)
+    cached = _accomplished_corpus_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < _ACCOMPLISHED_CORPUS_TTL_SECS:
+        return cached[1]
+
+    corpus: list = []
+    try:
+        cwd = os.path.dirname(os.path.normpath(state_dir))
+        rel_path = os.path.relpath(os.path.join(state_dir, f"handover_{developer}.json"), cwd)
+
+        log_result = subprocess.run(
+            ["git", "log", "--format=%H", "-" + str(n), "--", rel_path],
+            capture_output=True, text=True, timeout=10, cwd=cwd,
+        )
+        hashes = [h.strip() for h in log_result.stdout.splitlines() if h.strip()]
+
+        seen = set()
+        for h in hashes:
+            show_result = subprocess.run(
+                ["git", "show", f"{h}:{rel_path}"],
+                capture_output=True, text=True, timeout=10, cwd=cwd,
+            )
+            if show_result.returncode != 0:
+                continue
+            try:
+                data = json.loads(show_result.stdout)
+            except Exception:
+                continue
+
+            for a in (data.get("accomplishments") or []):
+                what = (a.get("what") or "").strip() if isinstance(a, dict) else ""
+                if what and a.get("done", True) and what not in seen:
+                    seen.add(what)
+                    corpus.append(what)
+            for g in (data.get("completed_goals") or []):
+                g = g.strip() if isinstance(g, str) else ""
+                if g and g not in seen:
+                    seen.add(g)
+                    corpus.append(g)
+    except Exception:
+        corpus = []
+
+    _accomplished_corpus_cache[cache_key] = (time.time(), corpus)
+    return corpus
+
+
+_NEXT_ACTION_MATCH_THRESHOLD = 0.65  # overlap coefficient — tuned to favor false negatives
+                                      # (a stale action survives for the LLM's own "remove
+                                      # what this session completed" pass to catch) over
+                                      # false positives (dropping one that's still needed)
+
+
+def _drop_accomplished_next_actions(next_actions: list, corpus: list) -> list:
+    """
+    Deterministic pre-filter: drops any existing next_action whose text
+    overlaps a past session's own recorded accomplishment/completed_goal
+    above _NEXT_ACTION_MATCH_THRESHOLD, before the LLM handover call ever
+    sees it — the LLM no longer has to reliably "remember" a completion from
+    N sessions ago, because the already-done item is simply not in what it's
+    asked to update.
+
+    Uses overlap coefficient (intersection / smaller set), not Jaccard —
+    next_action text is routinely much longer/more descriptive than the terse
+    accomplishment string it corresponds to ("Build structured JSONL event log
+    at askr/state/events.jsonl recording trigger_fired, ..." vs "add
+    structured JSONL event log for trigger/companion lineage"), and Jaccard's
+    union-sized denominator would systematically under-score true matches
+    between a verbose next_action and its terse completion record.
+
+    Empty corpus or empty next_actions is a no-op. Never treat "no corpus" as
+    "nothing survives" — that would be worse than the staleness bug it fixes.
+    """
+    if not corpus or not next_actions:
+        return next_actions
+
+    from askr.state.reader import _tokenize
+    corpus_token_sets = [s for s in (set(_tokenize(c)) for c in corpus) if s]
+    if not corpus_token_sets:
+        return next_actions
+
+    survivors = []
+    for item in next_actions:
+        action_text = item.get("action", "") if isinstance(item, dict) else str(item)
+        action_tokens = set(_tokenize(action_text))
+        if not action_tokens:
+            survivors.append(item)
+            continue
+        best = 0.0
+        for c_tokens in corpus_token_sets:
+            overlap = len(action_tokens & c_tokens) / min(len(action_tokens), len(c_tokens))
+            if overlap > best:
+                best = overlap
+        if best < _NEXT_ACTION_MATCH_THRESHOLD:
+            survivors.append(item)
+    return survivors
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -1165,6 +1288,21 @@ def _run_light_handover(
             existing_handover = raw
     except Exception:
         pass
+
+    # Deterministic staleness filter (see _drop_accomplished_next_actions
+    # docstring) — runs before the LLM call so a next_action completed many
+    # sessions ago is simply absent from what Haiku is asked to update,
+    # rather than relying on it to notice a completion outside the 15-commit
+    # git log window below. Failure-safe: any error leaves existing_handover
+    # exactly as loaded.
+    if existing_handover and existing_handover.get("next_actions"):
+        try:
+            corpus = _load_accomplished_corpus(developer, state_dir)
+            existing_handover["next_actions"] = _drop_accomplished_next_actions(
+                existing_handover["next_actions"], corpus,
+            )
+        except Exception:
+            pass
 
     llm_summary = _generate_handover_with_llm(
         transcript_text,
