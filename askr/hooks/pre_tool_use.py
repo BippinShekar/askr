@@ -416,6 +416,15 @@ def main():
     if "askr_state" in file_path or ".claude" in file_path:
         sys.exit(0)
 
+    # Scratch space (Claude Code's own harness-designated temp dirs) is never project
+    # code — skip the cross-repo check AND the architectural guard trigger pipeline
+    # below entirely. Previously only the cross-repo check exempted scratch paths;
+    # new_file/batch_writes/shared_interface still fired on them, running the guard's
+    # decisions/rejected_decisions matching (a path-blind substring match, see guard.py)
+    # against content that was never in this project's scope to begin with.
+    if _is_scratch_path(os.path.realpath(os.path.abspath(file_path))):
+        sys.exit(0)
+
     # Cross-repo boundary check: block writes to paths outside the current project root.
     # Prevents a session in repo A from silently modifying repo B via handover continuation.
     try:

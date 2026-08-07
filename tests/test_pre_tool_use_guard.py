@@ -719,6 +719,33 @@ class WriteEditGuardPipelineTests(unittest.TestCase):
         self.assertEqual(code, 0)
         mock_guard.assert_not_called()
 
+    # -- scratch path skip (Claude Code's own harness temp dirs) ----------
+
+    def test_write_to_scratch_path_is_skipped_entirely(self):
+        # Regression: a Write to Claude Code's own scratchpad dir (outside
+        # any project root) used to still run through the new_file trigger
+        # and hit the guard's decisions/rejected_decisions matching — a
+        # path-blind substring check that can false-positive on unrelated
+        # scratch content. Scratch paths must never reach the guard at all.
+        path = "/private/tmp/claude-501/some-cwd-slug/session-id/scratchpad/notes.md"
+        with patch("askr.hooks.pre_tool_use._run_guard") as mock_guard:
+            self._feed({"tool_name": "Write", "tool_input": {"file_path": path, "content": "x"}})
+            code = self._run_main()
+        self.assertEqual(code, 0)
+        mock_guard.assert_not_called()
+
+    def test_write_to_scratch_path_does_not_hit_cross_repo_block_either(self):
+        # Scratch paths were already exempt from the cross-repo boundary
+        # block specifically; confirm that's still true now that the skip
+        # happens earlier (no _block_tool call, no [BLOCK] output).
+        path = "/private/tmp/claude-501/some-cwd-slug/session-id/scratchpad/notes.md"
+        buf = io.StringIO()
+        self._feed({"tool_name": "Write", "tool_input": {"file_path": path, "content": "x"}})
+        with contextlib.redirect_stdout(buf):
+            code = self._run_main()
+        self.assertEqual(code, 0)
+        self.assertEqual(buf.getvalue(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
