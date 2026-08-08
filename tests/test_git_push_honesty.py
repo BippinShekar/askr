@@ -206,5 +206,62 @@ class WriteNotificationHonestyTests(unittest.TestCase):
         self.assertIn("FAILED", msg)
 
 
+class VoiceLineShorterThanVisualTests(unittest.TestCase):
+    """
+    2026-08-08: voice used to read the exact same long popup text verbatim —
+    fine for the emergency compaction case (already had its own short line)
+    but not for context/quota, which spoke the full multi-clause sentence.
+    Voice must now be a distinct, shorter line while still preserving the
+    git-push honesty signal (covered separately above).
+    """
+
+    def _notif_and_voice(self, trigger, pct, git_pushed):
+        notif_path = os.path.join(tempfile.mkdtemp(), "n.json")
+        with patch.object(lifecycle, "_speak") as mock_speak, \
+             patch.object(lifecycle, "_NOTIFICATION_PATH", notif_path):
+            lifecycle._write_notification(trigger, pct=pct, git_pushed=git_pushed)
+        with open(notif_path) as f:
+            visual = json.load(f)["message"]
+        voice = mock_speak.call_args[0][0]
+        return visual, voice
+
+    def test_quota_voice_is_shorter_and_distinct_from_visual(self):
+        visual, voice = self._notif_and_voice("quota", 91, True)
+        self.assertNotEqual(visual, voice)
+        self.assertLess(len(voice), len(visual))
+
+    def test_context_voice_is_shorter_and_distinct_from_visual(self):
+        visual, voice = self._notif_and_voice("context", 0.9, True)
+        self.assertNotEqual(visual, voice)
+        self.assertLess(len(voice), len(visual))
+
+    def test_open_companion_session_voice_distinct_from_visual(self):
+        # _open_companion_session builds its own inline notification separate
+        # from _write_notification — same principle, different function.
+        with tempfile.TemporaryDirectory() as tmp:
+            state_dir = os.path.join(tmp, "askr_state")
+            os.makedirs(state_dir)
+            notif_path = os.path.join(tmp, "n.json")
+            with patch.object(lifecycle, "_speak") as mock_speak, \
+                 patch.object(lifecycle, "_NOTIFICATION_PATH", notif_path), \
+                 patch.object(lifecycle, "_pre_kill_update_tools"), \
+                 patch("askr.session.checkpoint.create_checkpoint", return_value={}), \
+                 patch("askr.session.monitor._find_active_jsonl", return_value=""), \
+                 patch.object(lifecycle, "_get_next_goal", return_value=""), \
+                 patch.object(lifecycle, "_load_allowed_tools", return_value=[]), \
+                 patch.object(lifecycle, "_infer_direction", return_value={"confidence": 0.0}), \
+                 patch.object(lifecycle, "_find_all_claude_pids_by_project", return_value=[]), \
+                 patch.object(lifecycle, "_spawn_terminal_app_fallback"), \
+                 patch("askr.state.writer.append_event"), \
+                 patch("askr.state.config.load_developer", return_value="dev"):
+                lifecycle._open_companion_session(tmp, "sess-1")
+
+            with open(notif_path) as f:
+                visual = json.load(f)["message"]
+            voice = mock_speak.call_args[0][0]
+            self.assertNotEqual(visual, voice)
+            self.assertLess(len(voice), len(visual))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -879,10 +879,16 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
         save_clause = "state saved to git" if git_pushed else "checkpoint saved LOCALLY — git push FAILED, see checkpoint_error.log"
         if trigger == "context":
             msg = f"Context at {pct_str} — {save_clause}, full uncompressed memory. Opening new chat."
+            voice_msg = f"Context at {pct_str}. {save_clause}. Opening a companion now with full memory."
         else:
             msg = (f"Quota at {pct_str} — {save_clause}, full uncompressed memory. Askr will resume "
                    f"automatically once your quota resets. Keep working here if you have quota left; "
                    f"we won't interrupt again until then.")
+            # Voice gets its own short line, not the full popup text read verbatim —
+            # but must keep save_clause verbatim: it's the honesty signal tested by
+            # WriteNotificationHonestyTests (voice must never claim "state saved to
+            # git" when the push actually failed).
+            voice_msg = f"Quota at {pct_str}. {save_clause}. Will resume automatically after reset."
         payload = {
             "type": trigger,
             "message": msg,
@@ -898,7 +904,7 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
             payload["prompt"] = f"Read the handover and start on the Next Action immediately. Work on: {goal}. Work autonomously."
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
-        _speak(msg, source=f"lifecycle._write_notification.{trigger}", project_path=project_path)
+        _speak(voice_msg, source=f"lifecycle._write_notification.{trigger}", project_path=project_path)
     except Exception:
         pass
 
@@ -1229,6 +1235,9 @@ def _open_companion_session(project_path: str, session_id: str = None):
         companion_message = ("Context at 70%+ — opening a fresh companion session now with full, "
                               "uncompressed memory, before Claude's native compaction would compress "
                               "it. Your current session keeps running if you'd like to continue there.")
+        # Voice gets its own short line, not the full popup text read verbatim —
+        # matches pre_compact.py's emergency case, which already does this.
+        voice_message = "Context at 70 percent. Opening a companion now with full memory. Your current session keeps running."
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({
@@ -1257,7 +1266,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
                  trigger_type="context")
     # Speak only once the fallback spawn is actually dispatched, so the announcement
     # never lands before something has genuinely started happening.
-    _speak(companion_message, source="lifecycle._open_companion_session",
+    _speak(voice_message, source="lifecycle._open_companion_session",
            project_path=project_path, session_id=session_id or "")
 
 
