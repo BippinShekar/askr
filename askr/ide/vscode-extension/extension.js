@@ -207,6 +207,29 @@ function checkNotification() {
       const launchPrompt = (n.prompt || 'Read the handover and start on the Next Action immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
       terminal.sendText(`claude${toolsFlag}`);
       setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+    } else if (n.type === 'compaction_prevented') {
+      // Emergency PreCompact kill (askr/hooks/pre_compact.py) — the session
+      // was stopped before Claude Code's own compaction could compress it.
+      // Deduped per session_id on the Python side, so this fires once per
+      // affected session, not once per repeated PreCompact trigger.
+      vscode.window.showInformationMessage(`Askr: ${n.message}`);
+      if (n.opened_companion) {
+        const termOpts = { name: 'askr — companion (full memory)' };
+        if (n.project_path) termOpts.cwd = n.project_path;
+        const terminal = vscode.window.createTerminal(termOpts);
+        terminal.show();
+        const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+          ? ` --allowedTools ${n.allowed_tools.join(',')}`
+          : '';
+        const launchPrompt = (n.prompt || 'Read the handover and continue immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
+        terminal.sendText(`claude${toolsFlag}`);
+        setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+      }
+    } else if (n.type === 'quota') {
+      // Quota trigger's own richer message (lifecycle._write_notification) —
+      // no terminal to open here: the daemon opens the companion itself once
+      // the account's quota actually resets, this is purely informational.
+      vscode.window.showInformationMessage(`Askr: ${n.message}`);
     } else if (n.type === 'goal_launch') {
       const goal = n.goal || '';
       const termOpts = { name: `askr — ${goal.slice(0, 40)}` };
@@ -353,7 +376,7 @@ function checkNotification() {
         terminal.sendText(action === 'Approve' ? `askr task approve ${dev}` : `askr task discard ${dev}`);
       });
     } else {
-      // Quota exhausted — daemon will auto-resume after reset, just inform
+      // Any notification type without a dedicated case above — just inform.
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
     }
   } catch {}

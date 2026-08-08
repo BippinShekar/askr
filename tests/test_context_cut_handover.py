@@ -355,6 +355,98 @@ class TestContextCutAutoLaunch(unittest.TestCase):
                 self.assertFalse(os.path.exists(checkpoint_path), "stale/resolved pending flag must be removed")
                 mock_announce.assert_not_called()
 
+    def _run_quota_relaunch(self, checkpoint_path, notification_path, quota_cooldown_path):
+        pending = {
+            "trigger": "quota",
+            "quota_pct": 92.0,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        with open(checkpoint_path, "w") as f:
+            json.dump(pending, f)
+        patches = [
+            patch.object(stop_module, "_CHECKPOINT_PENDING", checkpoint_path),
+            patch.object(stop_module, "_NOTIFICATION_PATH", notification_path),
+            patch.object(stop_module, "_QUOTA_RELAUNCH_LAST_ANNOUNCE", quota_cooldown_path),
+            patch("askr.session.lifecycle._get_next_goal", return_value=""),
+            patch("askr.session.lifecycle._write_launch_mode"),
+            patch("askr.hooks.stop.os.makedirs"),
+            patch("askr.hooks.stop._live_stats", return_value={"quota_pct": 92.0}),
+        ]
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            mock_announce = stack.enter_context(patch("askr.clients.voice.announce"))
+            stop_module._write_relaunch_notification_if_pending({})
+        return mock_announce
+
+    def test_repeated_quota_relaunch_within_cooldown_does_not_reannounce(self):
+        """
+        Root cause of the delayed 91%/92%/93%... voice backlog: checkpoint_pending.json
+        can get rewritten by repeated PreCompact fires faster than a 5-minute staleness
+        window clears it, and each rewrite used to get its own unconditional announce()
+        call — queuing up behind voice.py's single blocking lock and playing out minutes
+        later. A 180s cooldown must suppress the second announcement.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = os.path.join(tmpdir, "checkpoint_pending.json")
+            notification_path = os.path.join(tmpdir, "notification.json")
+            quota_cooldown_path = os.path.join(tmpdir, "quota_relaunch_last_announce.json")
+
+            first = self._run_quota_relaunch(checkpoint_path, notification_path, quota_cooldown_path)
+            first.assert_called_once()
+
+            second = self._run_quota_relaunch(checkpoint_path, notification_path, quota_cooldown_path)
+            second.assert_not_called()
+
+    def test_quota_relaunch_announces_again_after_cooldown_expires(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = os.path.join(tmpdir, "checkpoint_pending.json")
+            notification_path = os.path.join(tmpdir, "notification.json")
+            quota_cooldown_path = os.path.join(tmpdir, "quota_relaunch_last_announce.json")
+
+            stale = datetime.datetime.utcnow() - datetime.timedelta(
+                seconds=stop_module._QUOTA_RELAUNCH_COOLDOWN_SECS + 10
+            )
+            with open(quota_cooldown_path, "w") as f:
+                json.dump({"at": stale.isoformat() + "Z"}, f)
+
+            mock_announce = self._run_quota_relaunch(checkpoint_path, notification_path, quota_cooldown_path)
+            mock_announce.assert_called_once()
+
+    def test_context_relaunch_is_not_gated_by_quota_cooldown(self):
+        """The cooldown is quota-specific — a context-trigger relaunch must
+        announce every time regardless of the quota cooldown file's state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checkpoint_path = os.path.join(tmpdir, "checkpoint_pending.json")
+            notification_path = os.path.join(tmpdir, "notification.json")
+            quota_cooldown_path = os.path.join(tmpdir, "quota_relaunch_last_announce.json")
+            with open(quota_cooldown_path, "w") as f:
+                json.dump({"at": datetime.datetime.utcnow().isoformat() + "Z"}, f)
+
+            pending = _fresh_checkpoint_pending(trigger="context")
+            direction = _direction_coding_high_confidence()
+            with open(checkpoint_path, "w") as f:
+                json.dump(pending, f)
+
+            patches = [
+                patch.object(stop_module, "_CHECKPOINT_PENDING", checkpoint_path),
+                patch.object(stop_module, "_NOTIFICATION_PATH", notification_path),
+                patch.object(stop_module, "_QUOTA_RELAUNCH_LAST_ANNOUNCE", quota_cooldown_path),
+                patch("askr.session.lifecycle._get_next_goal", return_value=""),
+                patch("askr.session.lifecycle._write_launch_mode"),
+                patch("askr.hooks.stop.os.makedirs"),
+                patch("askr.session.lifecycle._infer_direction", return_value=direction),
+                patch("askr.session.lifecycle._read_session_arc", return_value=""),
+                patch("askr.hooks.stop._live_stats", return_value={"context_pct": 0.75}),
+            ]
+            with contextlib.ExitStack() as stack:
+                for p in patches:
+                    stack.enter_context(p)
+                mock_announce = stack.enter_context(patch("askr.clients.voice.announce"))
+                stop_module._write_relaunch_notification_if_pending({})
+
+            mock_announce.assert_called_once()
+
 
 class TestPreCompactHookRegistration(unittest.TestCase):
     """Verify pre_compact.py is registered in .claude/settings.json."""

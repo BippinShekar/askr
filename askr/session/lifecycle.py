@@ -878,9 +878,11 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
         # told the user "state saved to git".
         save_clause = "state saved to git" if git_pushed else "checkpoint saved LOCALLY — git push FAILED, see checkpoint_error.log"
         if trigger == "context":
-            msg = f"Context at {pct_str} — {save_clause}. Opening new chat."
+            msg = f"Context at {pct_str} — {save_clause}, full uncompressed memory. Opening new chat."
         else:
-            msg = f"Quota at {pct_str} — {save_clause}. Waiting for reset, then resuming."
+            msg = (f"Quota at {pct_str} — {save_clause}, full uncompressed memory. Askr will resume "
+                   f"automatically once your quota resets. Keep working here if you have quota left; "
+                   f"we won't interrupt again until then.")
         payload = {
             "type": trigger,
             "message": msg,
@@ -1224,7 +1226,9 @@ def _open_companion_session(project_path: str, session_id: str = None):
         # "is ready" implied the companion already existed — it doesn't yet: the
         # extension (or the Terminal.app fallback below, ~20-30s out) opens it
         # asynchronously after this. Say what's actually happening, not the result.
-        companion_message = "Context high on your current session — opening a fresh companion session now. Your current one keeps running."
+        companion_message = ("Context at 70%+ — opening a fresh companion session now with full, "
+                              "uncompressed memory, before Claude's native compaction would compress "
+                              "it. Your current session keeps running if you'd like to continue there.")
         os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump({

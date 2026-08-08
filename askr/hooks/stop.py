@@ -34,6 +34,40 @@ _NOTIFICATION_PATH  = os.path.expanduser("~/.config/askr/notification.json")
 _TURN_STOP_DIR      = os.path.expanduser("~/.config/askr/turn_stops")
 _BG_HANDOVER_FLAG   = "--background-handover"
 
+_QUOTA_RELAUNCH_LAST_ANNOUNCE = os.path.expanduser("~/.config/askr/quota_relaunch_last_announce.json")
+_QUOTA_RELAUNCH_COOLDOWN_SECS = 180  # matches pre_compact.py's own emergency-speak cooldown
+
+
+def _should_announce_quota_relaunch() -> bool:
+    """
+    checkpoint_pending.json can legitimately get rewritten more than once in
+    quick succession — e.g. a session sitting near the wall re-fires PreCompact
+    on every message the user keeps sending into it (see pre_compact.py's own
+    docstring). Each rewrite is picked up by whichever session's Stop hook
+    runs next; without this, that's an unbounded string of "Quota at N%"
+    announcements queued one after another behind voice.py's single blocking
+    lock, arriving as a stale backlog minutes after the fact. Time-based, not
+    session-based, because the session that PICKS UP the pending flag is
+    rarely the same session_id that wrote it.
+    """
+    try:
+        with open(_QUOTA_RELAUNCH_LAST_ANNOUNCE) as f:
+            last = datetime.fromisoformat(json.load(f).get("at", ""))
+        if (datetime.utcnow() - last.replace(tzinfo=None)).total_seconds() < _QUOTA_RELAUNCH_COOLDOWN_SECS:
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def _mark_quota_relaunch_announced():
+    try:
+        os.makedirs(os.path.dirname(_QUOTA_RELAUNCH_LAST_ANNOUNCE), exist_ok=True)
+        with open(_QUOTA_RELAUNCH_LAST_ANNOUNCE, "w") as f:
+            json.dump({"at": datetime.utcnow().isoformat() + "Z"}, f)
+    except Exception:
+        pass
+
 
 def _signal_turn_stopped(session_id: str):
     """
@@ -337,11 +371,14 @@ def _write_relaunch_notification_if_pending(checkpoint_result: dict) -> bool:
         with open(_NOTIFICATION_PATH, "w") as f:
             json.dump(payload, f)
         try:
-            from askr.clients.voice import announce
-            announce(payload["message"], context={
-                "source": f"stop._write_relaunch_notification_if_pending.{payload['type']}",
-                "project_path": project_path,
-            })
+            if trigger != "quota" or _should_announce_quota_relaunch():
+                from askr.clients.voice import announce
+                announce(payload["message"], context={
+                    "source": f"stop._write_relaunch_notification_if_pending.{payload['type']}",
+                    "project_path": project_path,
+                })
+                if trigger == "quota":
+                    _mark_quota_relaunch_announced()
         except Exception:
             pass
 
