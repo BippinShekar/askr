@@ -184,8 +184,40 @@ def _update_edit_cursor(tool_name: str, tool_input: dict, session_id: str):
         pass
 
 
+_CLAUDE_MD_BULLET_RE = re.compile(r'^-\s+\*\*(.+?)\*\*')
+_MAX_CLAUDE_MD_REMINDER_BULLETS = 10
+
+
+def _load_claude_md_bullets(project_root: str) -> list:
+    """
+    Pull just the bolded lead-in of each top-level CLAUDE.md bullet — both
+    askr-managed fenced sections and any manually-added ones (e.g. a
+    "Code Comment Style" block appended outside the fences) — for periodic
+    re-injection below. Architectural decisions already get this treatment
+    (see the block below); style/behavioral rules decay the same way over a
+    long session, arguably worse since nothing in the session output ever
+    "tests" them the way a wrong architectural guess gets caught and
+    corrected. Same honest limit as that mechanism: defensive against
+    adherence decay, not authoritative — Claude may still ignore it.
+    """
+    try:
+        path = os.path.join(project_root, "CLAUDE.md")
+        if not os.path.exists(path):
+            return []
+        bullets = []
+        with open(path) as f:
+            for line in f:
+                m = _CLAUDE_MD_BULLET_RE.match(line.strip())
+                if m:
+                    bullets.append(m.group(1).strip())
+        return bullets[:_MAX_CLAUDE_MD_REMINDER_BULLETS]
+    except Exception:
+        return []
+
+
 def _maybe_refresh_constraints():
-    """Every N tool uses, print top decisions as a reminder so they don't fade mid-session."""
+    """Every N tool uses, print top decisions and key CLAUDE.md rules as a
+    reminder so they don't fade mid-session."""
     try:
         counter_data = {}
         if os.path.exists(_TURN_COUNTER_PATH):
@@ -203,28 +235,40 @@ def _maybe_refresh_constraints():
         if count % _REFRESH_EVERY_N != 0:
             return
 
-        # Load top 5 decisions (most recent lines from JSONL)
+        reminder_sections = []
+
+        # Top 5 decisions (most recent lines from JSONL)
         decisions_path = state_path("decisions.jsonl")
-        if not os.path.exists(decisions_path):
-            return
-        entries = []
-        with open(decisions_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                    text = d.get("decision", "").strip()
-                    if text:
-                        entries.append(text)
-                except Exception:
-                    pass
-        recent = entries[-5:]
-        if not recent:
+        if os.path.exists(decisions_path):
+            entries = []
+            with open(decisions_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                        text = d.get("decision", "").strip()
+                        if text:
+                            entries.append(text)
+                    except Exception:
+                        pass
+            recent = entries[-5:]
+            if recent:
+                reminder_sections.append("settled decisions:\n" + "\n".join(f"  {l}" for l in recent))
+
+        try:
+            project_root = os.path.dirname(os.path.normpath(get_state_dir()))
+            bullets = _load_claude_md_bullets(project_root)
+            if bullets:
+                reminder_sections.append("CLAUDE.md rules:\n" + "\n".join(f"  - {b}" for b in bullets))
+        except Exception:
+            pass
+
+        if not reminder_sections:
             return
 
-        reminder = "askr reminder — settled decisions:\n" + "\n".join(f"  {l}" for l in recent)
+        reminder = "askr reminder —\n" + "\n".join(reminder_sections)
         print(reminder, flush=True)
     except Exception:
         pass
