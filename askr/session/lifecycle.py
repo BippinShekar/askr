@@ -445,7 +445,25 @@ def _start_claude(project_path: str, initial_prompt: str = "", force: bool = Fal
     tools_flag = f" --allowedTools {','.join(allowed_tools)}" if allowed_tools else ""
 
     goal_part = f" (High-level goal for context: {initial_prompt}.)" if initial_prompt else ""
-    prompt_arg = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
+    # Ground-truth cross-check before trusting the handover's next_actions
+    # blindly — the only one of the three launch paths (this,
+    # _open_companion_session, stop.py's relaunch) that didn't already do
+    # this. Without it, a launch here just says "execute the Next Action,
+    # priority over everything else" with zero verification, even when
+    # _infer_direction() itself now detects staleness (see its own
+    # docstring/comment, 2026-08-09).
+    prompt_arg = ""
+    try:
+        direction = _infer_direction(project_path)
+        if direction["confidence"] >= 0.70:
+            prompt_arg = (
+                f"Continue work on: {direction['direction']}. Read the handover file for "
+                f"the full state.{goal_part} Work autonomously."
+            )
+    except Exception:
+        pass
+    if not prompt_arg:
+        prompt_arg = f"Read the handover file and execute the Next Action listed there immediately.{goal_part} The handover's Next Action takes priority over everything else. Work autonomously."
 
     display_goal = initial_prompt or "autonomous session"
 
@@ -706,6 +724,33 @@ def _infer_direction(project_path: str = "") -> dict:
                 # it were a real next step, pointing autonomous sessions at "review
                 # manually" instead of keep looking for an actual direction.
                 continue
+
+            # Staleness cross-check: has any real (non-askr) commit landed since
+            # THIS handover was written? Confirmed 2026-08-09: a session can do
+            # real work (commit it) and end without ever crossing a real
+            # trigger threshold (context/quota/idle) — its own checkpoint never
+            # fires, so canonical handover_<dev>.json stays exactly as the
+            # PREVIOUS session left it. curr_hash is the newest handover commit
+            # with non-empty next_actions found so far; if commits exist after
+            # it, this next_action may already be resolved by work the handover
+            # itself has no record of. Trusting it blind sent a fresh autonomous
+            # launch to spend several tool calls and minutes re-verifying work
+            # someone already finished — burning real tokens confirming a no-op.
+            # Older handovers in this same scan would only be MORE stale, so
+            # break (not continue) straight to Signal 4's commit-momentum check,
+            # which is grounded in the actual most-recent commits regardless of
+            # handover staleness.
+            try:
+                staleness_check = subprocess.run(
+                    ["git", "log", "--oneline", f"{curr_hash}..HEAD",
+                     "--invert-grep", "--grep=^askr: "],
+                    capture_output=True, text=True, timeout=10, cwd=cwd,
+                )
+                commits_since = [l for l in staleness_check.stdout.splitlines() if l.strip()]
+            except Exception:
+                commits_since = []
+            if commits_since:
+                break
 
             # Talk-only with no direction: already filtered above by `not actions` /
             # short action_text. If we reach here, there IS a direction.
