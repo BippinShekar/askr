@@ -153,9 +153,18 @@ IDLE_TRIGGER_SECS   = SESSION_STALE_SECS  # genuine inactivity → run the heavy
                            # threshold askr already treats as "this session is effectively over"
                            # elsewhere, instead of a separately-invented number.
 MAX_TURN_ACTIVE_SECS = 1800  # if a turn-start marker is older than this with no matching stop,
-                           # treat the turn as abandoned (crashed session, closed terminal) rather
-                           # than "still active" forever — otherwise a turn that never signals Stop
-                           # would permanently suppress the idle-checkpoint safety net.
+                           # AND there's no liveness signal (see _turn_marker_still_live) to trust
+                           # it, treat the turn as abandoned (crashed session, closed terminal)
+                           # rather than "still active" forever — otherwise a turn that never
+                           # signals Stop would permanently suppress the idle-checkpoint safety net.
+                           # Found 2026-08-10: this used to be an unconditional cutoff — ANY turn
+                           # older than 30 min was flagged abandoned, including a genuine 50-minute
+                           # single turn confirmed in production, which got misclassified as
+                           # abandoned 20 minutes before it actually finished. A stuck marker and a
+                           # long turn look identical by wall-clock age alone; liveness (process
+                           # still running, transcript still being written to) is what actually
+                           # tells them apart, so age alone now only starts the liveness check
+                           # rather than deciding the answer by itself.
 TURN_QUIET_GRACE_SECS = 90  # found 2026-07-14: Stop fires the instant Claude's reply finishes
                            # generating, even when that reply is a plain-text question waiting on
                            # the user (no tool call involved, so _turn_currently_active() has
@@ -1327,7 +1336,37 @@ def _turn_stopped_since(session_id: str, since_ts: float) -> bool:
     return os.path.exists(marker) and os.path.getmtime(marker) >= since_ts
 
 
-def _turn_currently_active(session_id: str) -> bool:
+def _turn_marker_still_live(project_path: str, session_id: str) -> bool:
+    """
+    Backstop for a turn-start marker older than MAX_TURN_ACTIVE_SECS: is this a
+    genuinely still-running turn, or a stuck/abandoned one? True only if the
+    Claude process for this project is alive AND the session's transcript
+    (rewritten by Claude Code itself as it streams text and dispatches tool
+    calls — not dependent on any askr hook) has been touched within
+    MAX_TURN_ACTIVE_SECS.
+
+    This is not a reintroduction of the bug it backstops: the old check
+    flagged ANY turn older than 30 minutes as abandoned, full stop — including
+    ones with the transcript growing every few seconds the entire time. This
+    only gives up once there's been zero transcript activity for 30 minutes
+    despite an open turn — a hard-hung process, not a long one. (A single tool
+    call that blocks for more than 30 minutes with no transcript writes in
+    between — e.g. one very long shell command — can still misfire this; that
+    residual gap is far narrower than the one it replaces.)
+    """
+    if not _find_all_claude_pids_by_project(project_path):
+        return False
+    try:
+        from askr.session.monitor import _find_active_jsonl
+        transcript_path = _find_active_jsonl(project_path)
+        if not transcript_path:
+            return False
+        return (time.time() - os.path.getmtime(transcript_path)) < MAX_TURN_ACTIVE_SECS
+    except Exception:
+        return False
+
+
+def _turn_currently_active(session_id: str, project_path: str = None) -> bool:
     """
     True if the user has submitted a prompt (user_prompt_submit.py's turn-start
     marker) more recently than the last Stop-hook turn-stop marker — i.e. Claude
@@ -1340,6 +1379,11 @@ def _turn_currently_active(session_id: str) -> bool:
     a long gap and then stepping away for even a minute can cross IDLE_TRIGGER_SECS
     while the user is actively present and Claude is still replying — a false
     "been quiet for 10 minutes" with no actual 10 minutes of inactivity.
+
+    project_path is optional but should always be passed when the caller has
+    it: without it, an old start marker is treated as abandoned by age alone
+    (the pre-2026-08-10 behavior). With it, age alone is only the trigger to
+    check liveness (see _turn_marker_still_live), not the verdict itself.
     """
     if not session_id:
         return False
@@ -1348,7 +1392,8 @@ def _turn_currently_active(session_id: str) -> bool:
         return False
     start_mtime = os.path.getmtime(start_marker)
     if (time.time() - start_mtime) >= MAX_TURN_ACTIVE_SECS:
-        return False  # turn-start marker too old to trust — treat as abandoned, not active
+        if not (project_path and _turn_marker_still_live(project_path, session_id)):
+            return False  # no liveness signal to trust an old marker — genuinely abandoned
     stop_marker = os.path.join(_TURN_STOP_DIR, f"{session_id}.json")
     if not os.path.exists(stop_marker):
         return True  # turn started, never stopped yet
@@ -1419,7 +1464,15 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None, require_
     from askr.session.checkpoint import has_outstanding_subagent
 
     POLL          = 5    # polling interval (seconds)
-    MAX_WAIT_SECS = 600  # hard cap; only hit if the user never has a quiet moment
+    MAX_WAIT_SECS = 600  # only forces past the grace-period/outstanding-subagent niceties (a user
+                          # who never goes quiet between messages) — never overrides a turn that's
+                          # still genuinely active. Found 2026-08-10: this used to force the
+                          # companion open unconditionally at 600s, which fired mid-reply during a
+                          # single turn that ran past 10 minutes straight (confirmed in production —
+                          # zero Stop signals the entire wait). _turn_currently_active()'s own
+                          # PID-liveness check (see _turn_marker_still_live) is what actually decides
+                          # when a genuinely active turn ends; this cap only ever short-circuits the
+                          # UX-only waiting once the turn itself is already done.
 
     if require_quiet_grace:
         _log("waiting for a genuinely quiet moment (Stop hook fired, no new turn, no outstanding "
@@ -1438,9 +1491,10 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None, require_
             _log("claude session ended while waiting")
             break
 
+        turn_active = _turn_currently_active(session_id, project_path)
         _, stop_idle_secs = _last_turn_stop(session_id)
         turn_genuinely_done = (
-            _turn_stopped_since(session_id, wait_start) and not _turn_currently_active(session_id)
+            _turn_stopped_since(session_id, wait_start) and not turn_active
             and not has_outstanding_subagent(_find_active_jsonl(project_path) or "")
         )
         if require_quiet_grace:
@@ -1454,9 +1508,13 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None, require_
                  + " — reply finished")
             break
 
-        if waited >= MAX_WAIT_SECS:
-            _log(f"WARN: waited {MAX_WAIT_SECS}s without a quiet moment — proceeding anyway")
+        if waited >= MAX_WAIT_SECS and not turn_active:
+            _log(f"WARN: waited {MAX_WAIT_SECS}s without a quiet moment (turn itself already "
+                 "finished) — proceeding anyway")
             break
+        elif waited >= MAX_WAIT_SECS and waited % 300 == 0:
+            _log(f"turn still genuinely active after {waited}s — continuing to wait, "
+                 "not forcing through a live reply")
 
     return True
 
@@ -1988,7 +2046,7 @@ def _evaluate_session_triggers(
     prev_ts = prev_entry.get("turn_stop_ts") if isinstance(prev_entry, dict) else prev_entry
     if (turn_stop_ts is not None and idle_secs >= IDLE_TRIGGER_SECS
             and prev_ts != turn_stop_ts
-            and not _turn_currently_active(session_id)):
+            and not _turn_currently_active(session_id, project_path)):
         _log(f"Trigger C: idle {idle_secs:.0f}s >= {IDLE_TRIGGER_SECS}s [{project_path}] session={session_id[:8] if session_id else '?'}")
         logged_something = True
         from askr.state.writer import append_event
