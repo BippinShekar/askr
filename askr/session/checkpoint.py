@@ -1410,6 +1410,46 @@ def create_handover_only(
     return result
 
 
+def aggregate_fresh_scratches(developer: str, project_path: str, session_id: str = "",
+                               state_dir: Optional[str] = None) -> bool:
+    """
+    Light canonical merge with none of create_checkpoint()'s heavy side effects
+    (no git commit/push, no architecture regen, no Discord/voice) — meant for
+    SessionStart, not the context/quota/idle trigger path.
+
+    Folds every fresh sibling scratch (other concurrently-active sessions on
+    this project — see load_fresh_sibling_scratches) into the canonical
+    handover_<dev>.json BEFORE a brand-new session reads it via
+    build_context_injection(). Without this, a new session's freshness depends
+    entirely on some OTHER session's own trigger eventually firing and merging
+    — which, for a session that keeps chatting without ever crossing quota 90%
+    or going idle 10 minutes, might not happen for a long while.
+
+    No-op (returns False, no LLM call) when there's nothing fresh to merge —
+    the common case for solo work — so this never adds latency or cost to a
+    session start where it wouldn't change anything.
+
+    Reuses create_checkpoint()'s exact merge/dedup machinery
+    (_generate_handover_with_llm's sibling_summaries reconciliation,
+    _drop_accomplished_next_actions' deterministic staleness filter via
+    _run_light_handover) rather than inventing new dedup logic for one more
+    call site.
+    """
+    from askr.state.config import get_state_dir as _get_state_dir
+    resolved_state_dir = state_dir or _get_state_dir()
+    from askr.state.writer import file_lock, load_fresh_sibling_scratches
+    siblings = load_fresh_sibling_scratches(developer, session_id, resolved_state_dir)
+    if not siblings:
+        return False
+    with file_lock(os.path.join(resolved_state_dir, "checkpoint"), timeout=45):
+        _, summary, _ = _run_light_handover(
+            "session_start", developer, transcript_path="", state_dir=resolved_state_dir,
+            session_id=session_id, write_target="canonical",
+            sibling_summaries=siblings, merge_required=True,
+        )
+    return bool(summary)
+
+
 def create_checkpoint(
     trigger_type: str,
     developer: str,

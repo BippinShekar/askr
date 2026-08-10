@@ -437,6 +437,13 @@ def main():
     _notify_stale_goals()
     suggested_goals = _maybe_suggest_goals(developer)
 
+    if session_id:
+        try:
+            from askr.session.checkpoint import aggregate_fresh_scratches
+            aggregate_fresh_scratches(developer, os.path.dirname(get_state_dir()), session_id)
+        except Exception:
+            pass
+
     state_context = build_context_injection()
     goals = goals_context()
     launch_mode = _read_launch_mode()
