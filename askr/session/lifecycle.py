@@ -604,6 +604,104 @@ def _wait_until_quota_near_exhausted(reset_at_iso: str):
         time.sleep(sleep_for)
 
 
+_PREMATURE_ACTIVITY_POLL_SECS = 20  # how often to re-check the transcript during the watch
+
+
+def _watch_for_premature_activity(transcript_path: str, reset_at_iso: str, baseline_mtime: float,
+                                   project_path: str = "", session_id: str = "") -> bool:
+    """
+    Safety net for the same-session rate-limit auto-resume feature (Stage 5,
+    2026-08-11): after sending Escape to decline "extra usage"/"upgrade" and
+    accept "wait for reset," the session should sit completely inert — no
+    new transcript activity — until the account's quota genuinely resets. If
+    the transcript starts growing BEFORE reset_at, that's the tell that the
+    wrong option got selected: a spending path (extra usage/upgrade) would
+    unblock the session immediately, while "wait for reset" leaves it
+    blocked until the real reset time.
+
+    Can't verify this by reading the terminal directly — there's no stable
+    API for that (see extension.js's readTerminalBuffer docstring) — so this
+    is deliberately an independent, out-of-band signal: transcript activity
+    is proof real API calls are succeeding, which "wait for reset" should
+    make impossible until the real reset time.
+
+    Polls transcript mtime; the moment it moves past baseline_mtime before
+    reset_at, fires a loud, unmissable alert and returns True. Returns False
+    if reset arrived with no premature activity — the expected, safe outcome.
+    Fails safe on an unparseable reset time: skips the watch (returns False)
+    rather than either blocking forever or false-alarming on nothing.
+    """
+    try:
+        reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
+    except Exception:
+        _log("premature-activity watch: could not parse reset time — skipping the watch")
+        return False
+
+    while True:
+        now = datetime.now(timezone.utc)
+        if now >= reset_at:
+            _log("premature-activity watch: reset time reached with no early activity — clean")
+            return False
+
+        try:
+            current_mtime = (
+                os.path.getmtime(transcript_path)
+                if transcript_path and os.path.exists(transcript_path)
+                else baseline_mtime
+            )
+        except Exception:
+            current_mtime = baseline_mtime
+
+        if current_mtime > baseline_mtime:
+            _alert_premature_activity(project_path, session_id)
+            return True
+
+        remaining = (reset_at - now).total_seconds()
+        sleep_for = min(_PREMATURE_ACTIVITY_POLL_SECS, max(remaining, 0))
+        if sleep_for <= 0:
+            continue
+        time.sleep(sleep_for)
+
+
+def _alert_premature_activity(project_path: str = "", session_id: str = ""):
+    """
+    Loud, unmissable alert on every channel — no rate limiting, unlike every
+    other notification in this file. This means real usage may have started
+    despite askr intending to select "wait for reset," which is a real
+    billing event, not a UX nicety to be quiet about.
+    """
+    message = (
+        "URGENT — Askr expected this session to stay inactive until quota reset, but it "
+        "just started producing new output early. This can mean the wrong rate-limit option "
+        "got selected (extra usage or a plan upgrade instead of waiting). Check your "
+        "Anthropic billing/plan now."
+    )
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump({
+                "type": "billing_anomaly_alert",
+                "message": message,
+                "project_path": project_path,
+                "session_id": session_id,
+                "shown": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
+    except Exception:
+        pass
+    try:
+        _speak("Urgent — check your Anthropic billing now. A session may have resumed early.",
+               source="lifecycle._alert_premature_activity", project_path=project_path, session_id=session_id or "")
+    except Exception:
+        pass
+    try:
+        from askr.clients.discord import send_message
+        send_message(f"🚨 **[askr] URGENT — possible billing anomaly**\n{message}")
+    except Exception:
+        pass
+    _log(f"ALERT: premature transcript activity detected before reset — {project_path}")
+
+
 def _get_next_goal(state_dir: str = None) -> str:
     try:
         from askr.state.goals import load_today_goals, load_open_goals

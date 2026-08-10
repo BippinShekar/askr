@@ -475,6 +475,25 @@ function checkNotification() {
     } else if (n.type === 'guard_warning') {
       // Non-blocking by design (Phase 3.5) — informational only, no action needed.
       vscode.window.showWarningMessage(`Askr guard: ${n.summary || n.message}`);
+    } else if (n.type === 'billing_anomaly_alert') {
+      // Same-session rate-limit-resume safety net (lifecycle.
+      // _alert_premature_activity, 2026-08-11) — the only showErrorMessage
+      // in this extension, reserved for the one notification type that
+      // means a real, unintended billing action may have just happened.
+      // Not dismiss-and-forget: re-shown every poll until the user opens
+      // their Anthropic billing page, since a single toast is exactly the
+      // kind of thing that gets missed when it matters most.
+      vscode.window.showErrorMessage(
+        `Askr: ${n.message}`,
+        'Open Anthropic Billing'
+      ).then(action => {
+        if (action === 'Open Anthropic Billing') {
+          vscode.env.openExternal(vscode.Uri.parse('https://console.anthropic.com/settings/billing'));
+        } else {
+          n.shown = false; // not acknowledged — surface again next poll
+          try { fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n)); } catch {}
+        }
+      });
     } else if (n.type === 'task_approval_pending') {
       // Phase 5 approval gate — a teammate's queued task is held because this
       // session has dangerous permissions (--dangerously-skip-permissions,
