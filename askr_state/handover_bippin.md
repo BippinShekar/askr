@@ -1,72 +1,62 @@
 # Handover: bippin
 
-Last updated: 2026-07-30 14:53
+Last updated: 2026-08-10 20:04
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Clarified credential architecture for leaps/backend production deployment and confirmed askr's Claude Code OAuth token bypass is working as designed for personal autonomous orchestration; established that leaps cannot reuse askr's session-scoped OAuth grant and must obtain its own funded Console API key for Railway deployment.
+Completed four-stage companion session handover pipeline and fixed stale-handover bugs in idle/goal-autolaunch and infer_direction paths, enabling seamless context carry-over and accurate trigger inference across autonomous session spawns.
 
 ## Discussion
-Session 1 built autonomous multi-session infrastructure with structured event logging and quota management. This session investigated whether leaps/backend could reuse askr's Claude Code OAuth credentials for production. After inspecting the actual Keychain credential structure, confirmed that Claude Code stores only a short-lived, session-scoped OAuth access/refresh token pair (expires in ~6 hours, rotates automatically) — not a static Console API key. This token is deliberately scoped to Claude Code client use only and cannot be stably used for a deployed backend service. leaps/backend must obtain its own funded Console API key from console.anthropic.com for production Railway deployment; no technical workaround exists. Estimated leaps' actual inference costs at ~$0.004–0.05 per call (Haiku-dominant, lightweight token budgets), suggesting a modest $10–20 Console top-up is sufficient for testing before production launch.
+Session 1 built the four-stage handover pipeline (liveness detection, scratch aggregation, response threading, compose-box capture) to enable seamless context carry-over when Claude Code spawns new sessions. This session identified and fixed two critical bugs in the same root cause: _start_claude() (idle/goal-autolaunch path) was the only launch path that never called _infer_direction() for ground-truth verification, and _infer_direction() itself had a staleness gap — it trusted the newest handover with non-empty next_actions without checking for commits landed since that handover was written. A session can finish real work, commit it, and end without crossing a trigger threshold, leaving canonical handover stale. Both fixes are now live (commit 47cd3c6), and all 544 tests pass. The overnight autonomous orchestrator test from Session 1 remains the critical next validation step.
 
 ## Accomplishments
-- [x] Inspected Claude Code's actual Keychain credential structure to determine if a static API key exists
-- [x] Confirmed askr's OAuth token bypass (call_claude() via macOS Keychain) draws from Claude Code subscription credits and is working as designed
-- [x] Established architectural boundary: leaps/backend cannot reuse askr's personal Claude Code OAuth grant for production deployment
-- [x] Analyzed leaps/backend model usage (Haiku 4.5 primary, Sonnet 4.6 for reasoning) to estimate actual inference costs
-- [x] Documented that leaps/backend requires its own funded Console API key for Railway production deployment
-
-## In Progress
-- `None`: Build structured JSONL event log at askr/state/events.jsonl recording trigger_fired, companion_spawned, session_ended events with session_id, parent_session_id, trigger_type, context_pct, context_tokens, quota_pct, project_path, timestamp
-- `askr/session/lifecycle.py`: Instrument trigger firing sites (context, quota, idle) to emit events to structured log with parent_session_id captured from environment or checkpoint state
-- `askr/session/checkpoint.py`: Instrument companion spawn site to emit event with both session_id and parent_session_id
+- [x] Identified root cause of token-wasting bug: _start_claude() never called _infer_direction(), and _infer_direction() had zero staleness cross-check against commits since handover was written
+- [x] Wired _start_claude() (idle/goal-autolaunch and post-quota-reset relaunch path) through _infer_direction() for ground-truth trigger verification, matching behavior of _open_companion_session and stop.py relaunch paths
+- [x] Added staleness cross-check to _infer_direction(): now verifies no real (non-askr) commits exist between candidate handover and HEAD before returning stale next_actions; falls through to Signal 4 (commit-momentum) if commits found
+- [x] Added 2 new unit tests to test_infer_direction_signal_quality.py covering _start_claude() wiring and staleness cross-check logic; all 9 tests in file pass
+- [x] Verified full test suite: 544/544 tests pass across all test files
+- [x] Committed fix with clean git history (commit 47cd3c6) and comprehensive commit message explaining root cause, impact, and both fixes
+- [x] Pushed stale-handover fix to origin/main
 
 ## Next Actions
-1. Build structured JSONL event log at askr/state/events.jsonl recording trigger_fired, companion_spawned, session_ended events with session_id, parent_session_id, trigger_type, context_pct, context_tokens, quota_pct, project_path, timestamp
-   *Why: Foundation for multi-session persistence visualization and trigger distribution analysis*
-2. Instrument lifecycle.py trigger firing sites (context, quota, idle) to emit events to structured log with parent_session_id captured from environment or checkpoint state
-   *Why: Enables tracking of which trigger type spawned which session and context/quota savings across the tree*
-3. Instrument checkpoint.py companion spawn site to emit event with both session_id and parent_session_id
-   *Why: Completes event instrumentation for full session lifecycle tracking*
-4. Pre-flight check: confirm daemon is running via launchd (askr launch), not just alive in a terminal
-   *Why: Ensures overnight autonomous run will persist across terminal close*
-5. Pre-flight check: plug into power and run caffeinate if needed; seed goals.jsonl with at least one goal or hand-kick first task
-   *Why: Prevents mid-run power sleep and ensures daemon has work to orchestrate*
-6. After overnight run completes, build visualization dashboard querying the structured event log to show session tree, context/quota savings, trigger type distribution, and multi-session persistence story
-   *Why: Validates multi-session infrastructure and demonstrates autonomous orchestration effectiveness*
+1. Run overnight autonomous orchestrator test: plug into power, run caffeinate, seed goals.jsonl with at least one goal, confirm daemon is running via launchd (askr launch), then let it run unattended overnight
+   *Why: Critical validation that the four-stage handover pipeline and stale-handover fixes work end-to-end in autonomous mode; will reveal any remaining context/quota/session-tree issues before declaring the feature production-ready*
+2. After overnight run completes, query the structured event log (askr/state/events.jsonl) to build visualization dashboard showing session tree, context/quota savings across sessions, trigger type distribution, and multi-session persistence story
+   *Why: Provides empirical evidence of handover effectiveness and identifies any patterns of wasted context or repeated work across session boundaries*
+3. Monitor compose-box capture for false positives or missed carries during the overnight run; if the parser misses valid input or captures noise, refine extractPendingInput() logic in extension.js and re-test against the six realistic cases
+   *Why: Ensures unsent terminal input is reliably carried over without noise, completing the user-experience continuity of the handover pipeline*
+4. If overnight run succeeds, document the four-stage companion handover feature in CLAUDE.md and add it to the project README as a core capability of the autonomous orchestrator
+   *Why: Makes the feature discoverable and maintainable for future developers; establishes it as a stable, documented part of the system*
+5. Do NOT build auto-typing at the 5-hour hard limit without: (1) exact confirmation of what Claude Code's CLI shows when the account hits the real limit (passive message vs. interactive prompt), and (2) a design decision on whether auto-type happens unconditionally at reset time or only if terminal has been untouched since limit hit
+   *Why: Current terminal-targeting mechanism (VS Code extension createTerminal) does not reach Cursor's integrated terminal panel; AppleScript fallback cannot reach WebView panes. Auto-typing into a terminal the user is actively reading is more invasive than any notification built so far and requires explicit user intent, not silent defaults.*
 
 ## Decisions
-- Split quota notification into three independent phases (silent poll → user notification → reset wait) instead of a single blocking check — Users working quickly were being interrupted at 90% threshold instead of real quota edge; silent polling lets them work to the genuine limit before notification
-- Persist session_first_seen to disk alongside trigger_state and companioned_sessions — Prevents grace period reset on daemon restart, enabling accurate idle-trigger dedup across restarts
-- Implement per-session scratch handovers with auto-deletion after checkpoint merge — Prevents accumulation of scratch files and accidental commits of session-local state
 - Exempt read-only Bash commands (cat, ls, tail, grep) from cross-repo block guard while maintaining write/edit security — Allows safe inspection of files across repos without compromising guard integrity for write operations
 - Replace raw regex split with shlex tokenization for Bash command parsing — Honors quoted strings and complex patterns in command arguments, preventing false positives in guard logic
-- Raise CONTEXT_TRIGGER from 0.60 to 0.70 and QUOTA_HIGH from 85 to 70 — Aligned thresholds and more runway before companion spawn, reducing false companion triggers
-- Fix idle-trigger dedup to key on (project_path, session_id) pair instead of project_path alone — Multiple stale sessions were clobbering each other's dedup entries; per-session keying prevents false dedup across different sessions
-- Truncate task descriptions to one-line summaries in task-held notifications — Prevents silent Discord 2000-char truncation when multiple verbose tasks are queued
 - Skip status:fixed entries from task-held notification count as defensive fix — Independent of per-task discard API, reduces noise in held-task notices
-- Increase Claude Code monthly spend limit to $90 — Ensures sufficient credits for overnight autonomous orchestrator runs without hitting quota mid-execution
-- Do not route leaps/backend production LLM calls through askr's Claude Code OAuth token bypass — leaps is a separate product with its own deployment targets (local + remote via nixpacks); routing through personal Claude Code subscription raises fair-use concerns and creates architectural coupling; leaps/backend must use its own funded Console API key for production
+- Split quota notification into three independent phases (silent poll → user notification → reset wait) instead of a single blocking check — Users working quickly were being interrupted at 90% threshold instead of real quota edge; silent polling lets them work to the genuine limit before notification
+- Implement best-effort parent_session_id linking by observing launch_mode.json on first session_id sighting — Enables session tree reconstruction from event log without requiring explicit parent-passing through all spawn sites; gracefully handles sessions that don't have a parent (root sessions)
+- Make append_event() fail open (non-fatal) to match codebase convention for non-critical writes — Event logging failures should not crash trigger evaluation; aligns with existing pattern for optional instrumentation
+- Wire _start_claude() through _infer_direction() for ground-truth trigger verification, matching _open_companion_session and stop.py relaunch paths — Prevents idle/goal-autolaunch from blindly executing stale next_actions without verifying they are still valid; closes the only launch path that skipped verification entirely
+- Add staleness cross-check to _infer_direction(): verify no real commits exist between candidate handover and HEAD before returning stale next_actions — Prevents sessions that finish work and commit without crossing a trigger threshold from leaving canonical handover stale; ensures fresh autonomous launches do not re-verify already-resolved issues
 
 ## User-Rejected Approaches
-- **Port askr's live Keychain-reading OAuth token refresh function into leaps' AnthropicProvider to avoid static key management** — "no bro, that won't work for leaps, cause leaps will eventually be deployed on railway" (domain: leaps/backend credential architecture)
-- **Search the internet for a way to extract Claude Code's static API key or use its OAuth token for production** — "no no, di depper, scour the internet" (domain: credential extraction and reuse)
-
-## Failed Approaches
-- Attempt to locate a static Console API key hidden within Claude Code's Keychain storage — Claude Code stores only session-scoped OAuth access/refresh tokens, not Console API keys; the token format and scope explicitly prevent use outside Claude Code client
-- Use Claude Code's refreshToken to mint new access tokens for leaps/backend production deployment — Using Claude Code's own OAuth credentials to authenticate a separate deployed commercial product constitutes impersonation of the Claude Code app outside its intended scope; creates account suspension risk and violates fair-use boundaries
+- **Build auto-typing into the terminal at the 5-hour hard limit to automatically resume Claude Code sessions** — "Do not infringe on the user's control; auto-typing into a terminal the user might be mid-thought in front of is more invasive than any notification built so far" (domain: askr/ide/vscode-extension/extension.js, terminal automation)
 
 ## Files In Play
 - `askr/session/lifecycle.py`
 - `askr/session/checkpoint.py`
-- `askr/session/guard.py`
-- `askr/state/analytics.py`
-- `askr/session/monitor.py`
-- `askr/clients/claude.py`
-- `askr/session/usage_api.py`
+- `askr/hooks/session_start.py`
+- `askr/ide/vscode-extension/extension.js`
+- `tests/test_infer_direction_signal_quality.py`
+- `tests/test_quota_notify_split.py`
+- `tests/test_context_cut_handover.py`
+- `tests/test_git_push_honesty.py`
+- `tests/test_blockers.py`
 
 ## Relational Files
-- `askr/clients/claude.py` (imported_by): Contains call_claude() OAuth token bypass implementation that reads from Keychain
-- `askr/session/usage_api.py` (imported_by): Contains _get_access_token() that reads Claude Code-credentials from Keychain; verified credential structure in this session
+- `askr/session/infer_direction.py` (imported_by): Core trigger inference logic that now receives calls from _start_claude() and includes staleness cross-check
+- `askr/session/stop.py` (imported_by): Relaunch path that already called _infer_direction(); now consistent with _start_claude() behavior
+- `askr/state/events.jsonl` (configures): Structured event log that will be queried after overnight test to validate session tree and handover effectiveness
