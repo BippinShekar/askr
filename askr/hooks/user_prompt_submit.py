@@ -53,6 +53,9 @@ def main():
         print(json.dumps({"decision": "approve"}))
         return
 
+    from askr.utils.hook_capture import capture_hook_payload
+    capture_hook_payload("UserPromptSubmit", payload)
+
     _signal_turn_started(payload.get("session_id", ""))
 
     raw = payload.get("prompt", "")

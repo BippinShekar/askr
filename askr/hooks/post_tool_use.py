@@ -494,6 +494,9 @@ def main():
     except Exception:
         return
 
+    from askr.utils.hook_capture import capture_hook_payload
+    capture_hook_payload("PostToolUse", payload)
+
     if not os.path.isdir(get_state_dir()):
         return
 

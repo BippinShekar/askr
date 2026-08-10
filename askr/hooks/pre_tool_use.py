@@ -389,6 +389,9 @@ def main():
     except Exception:
         sys.exit(0)
 
+    from askr.utils.hook_capture import capture_hook_payload
+    capture_hook_payload("PreToolUse", payload)
+
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
 

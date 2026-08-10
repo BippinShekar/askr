@@ -384,6 +384,9 @@ def main():
     except Exception:
         payload = {}
 
+    from askr.utils.hook_capture import capture_hook_payload
+    capture_hook_payload("SessionStart", payload)
+
     _reset_stats_for_project(payload.get("source", ""), payload.get("session_id", ""))
 
     pull_ok = True
