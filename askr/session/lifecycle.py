@@ -1234,6 +1234,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
 
     state_dir = os.path.join(project_path, "askr_state")
     developer = ""
+    last_summary = ""
     try:
         from askr.state.config import load_developer
         from askr.session.checkpoint import create_checkpoint
@@ -1249,6 +1250,15 @@ def _open_companion_session(project_path: str, session_id: str = None):
             transcript_path=transcript_path, state_dir=state_dir,
         )
         _log(f"checkpoint (companion session): {checkpoint_result.get('trigger')} at {checkpoint_result.get('timestamp','')[:19]}")
+        # Read back what the checkpoint just wrote so the toast/terminal can show
+        # a TL;DR of the session being companioned — without this, the only way
+        # to see what it last said is to switch to it, defeating the point of
+        # opening a companion instead of just reading the old one.
+        try:
+            with open(os.path.join(state_dir, f"handover_{developer}.json")) as f:
+                last_summary = (json.load(f).get("discussion_summary") or "").strip()
+        except Exception:
+            pass
     except Exception as e:
         _log(f"companion checkpoint error: {e}")
 
@@ -1289,6 +1299,8 @@ def _open_companion_session(project_path: str, session_id: str = None):
         companion_message = ("Context at 70%+ — opening a fresh companion session now with full, "
                               "uncompressed memory, before Claude's native compaction would compress "
                               "it. Your current session keeps running if you'd like to continue there.")
+        if last_summary:
+            companion_message += f"\n\nWhat it last did: {last_summary}"
         # Voice gets its own short line, not the full popup text read verbatim —
         # matches pre_compact.py's emergency case, which already does this.
         voice_message = "Context at 70 percent. Opening a companion now with full memory. Your current session keeps running."
@@ -1297,6 +1309,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
             json.dump({
                 "type": "context",
                 "message": companion_message,
+                "last_summary": last_summary,
                 "goal": next_goal,
                 "project_path": project_path,
                 "allowed_tools": allowed_tools,

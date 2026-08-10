@@ -196,7 +196,14 @@ function checkNotification() {
 
     if (n.type === 'context') {
       const goal = n.goal ? ` Picking up: ${n.goal}` : '';
-      vscode.window.showInformationMessage(`Askr: Context saved — opening a fresh companion session. Your current one keeps running.${goal}`);
+      // last_summary (lifecycle._open_companion_session, 2026-08-10): a TL;DR of
+      // what the companioned session last did, read back from the handover it
+      // just wrote — so the user doesn't have to switch to the old session just
+      // to see what it said before deciding whether to work in this new one.
+      const summaryPreview = n.last_summary
+        ? ` Last session: ${n.last_summary.length > 200 ? n.last_summary.slice(0, 200) + '…' : n.last_summary}`
+        : '';
+      vscode.window.showInformationMessage(`Askr: Context saved — opening a fresh companion session. Your current one keeps running.${goal}${summaryPreview}`);
       const termOpts = { name: 'askr — new session' };
       if (n.project_path) termOpts.cwd = n.project_path;
       const terminal = vscode.window.createTerminal(termOpts);
@@ -205,6 +212,16 @@ function checkNotification() {
         ? ` --allowedTools ${n.allowed_tools.join(',')}`
         : '';
       const launchPrompt = (n.prompt || 'Read the handover and start on the Next Action immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
+      if (n.last_summary) {
+        // Shell-escape for a raw sendText echo: strip quotes/backticks (command
+        // injection via the other launch prompts already strips these the same
+        // way) plus $ and \ so nothing expands, and collapse to one line.
+        const safeSummary = n.last_summary
+          .replace(/[`"$\\]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (safeSummary) terminal.sendText(`echo "askr — previous session: ${safeSummary}"`);
+      }
       terminal.sendText(`claude${toolsFlag}`);
       setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
     } else if (n.type === 'compaction_prevented') {
