@@ -103,15 +103,32 @@ class WaitForTurnToFinishTests(unittest.TestCase):
             result = lifecycle._wait_for_turn_to_finish("/some/project", "sess-1")
         self.assertTrue(result)
 
-    def test_max_wait_cap_still_applies_if_never_quiet(self):
-        # Every poll: stopped but a turn is always active (rapid chat, never
-        # a gap). Must still give up after MAX_WAIT_SECS, not loop forever.
+    def test_never_forces_through_a_genuinely_active_turn_past_max_wait(self):
+        # 2026-08-10 fix (see the function's own MAX_WAIT_SECS comment):
+        # the cap used to force an exit unconditionally at 600s, which fired
+        # mid-reply during a single turn that legitimately ran past 10
+        # minutes straight with zero Stop signals — confirmed in production.
+        # The cap must now only ever short-circuit the UX-only grace period
+        # once the turn itself has already finished; while turn_active stays
+        # True, it has to keep polling PAST the 600s/POLL(5s)=120-poll mark,
+        # not force-return early. This replaces a stale test asserting the
+        # old (removed) forced-exit behavior — that version deadlocked the
+        # whole suite: with time.sleep mocked to a no-op and turn_active
+        # permanently True, the old assertion's scenario has no exit
+        # condition left in the current implementation at all.
+        active_sequence = [True] * 125 + [False]
         with patch.object(lifecycle, "_find_all_claude_pids_by_project", return_value=[123]), \
              patch.object(lifecycle.time, "sleep"), \
              patch.object(lifecycle, "_turn_stopped_since", return_value=True), \
-             patch.object(lifecycle, "_turn_currently_active", return_value=True):
+             patch.object(lifecycle, "_turn_currently_active", side_effect=active_sequence) as mock_active, \
+             patch.object(lifecycle, "_last_turn_stop", return_value=("2026-07-14T00:00:00+00:00", lifecycle.TURN_QUIET_GRACE_SECS)), \
+             patch(_FIND_ACTIVE_JSONL, return_value="/some/project/transcript.jsonl"), \
+             patch(_HAS_OUTSTANDING_SUBAGENT, return_value=False):
             result = lifecycle._wait_for_turn_to_finish("/some/project", "sess-1")
-        self.assertTrue(result)  # gives up and proceeds anyway after the cap
+        self.assertTrue(result)
+        # 126 calls: polled straight through the 120-poll (600s) mark until
+        # turn_active finally went False — proof it didn't force an early exit.
+        self.assertEqual(mock_active.call_count, 126)
 
 
 if __name__ == "__main__":
