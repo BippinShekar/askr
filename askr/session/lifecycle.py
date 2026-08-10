@@ -395,6 +395,43 @@ def _spawn_terminal_app_fallback(project_path: str, claude_bin: str, tools_flag:
         _log(f"fallback watcher spawn failed: {e}")
 
 
+def _get_ancestor_pids(pid: int, max_depth: int = 6) -> list:
+    """
+    Walk the process tree upward from `pid` (a `claude` process), returning
+    its ancestor PIDs in order (immediate parent first). Built for the
+    same-session rate-limit-resume feature: a VS Code/Cursor integrated
+    terminal exposes `terminal.processId` (the shell PID) but has no concept
+    of a "Claude session_id" — this is the other half of the bridge, giving
+    the extension a set of PIDs to match `terminal.processId` against rather
+    than needing to identify which ancestor is specifically "the shell."
+    Any one of these matching is sufficient — extra layers (a wrapper, tmux,
+    etc.) don't need to be specifically identified, just present in the set.
+
+    Stops at max_depth or once ppid <= 1 (reached init/launchd). Never
+    raises — a broken `ps` call just yields a shorter (possibly empty) list,
+    which the caller treats as "no match found," not an error.
+    """
+    ancestors = []
+    current = pid
+    for _ in range(max_depth):
+        try:
+            result = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(current)],
+                capture_output=True, text=True, timeout=3,
+            )
+            ppid_str = result.stdout.strip()
+            if not ppid_str:
+                break
+            ppid = int(ppid_str)
+        except Exception:
+            break
+        if ppid <= 1:
+            break
+        ancestors.append(ppid)
+        current = ppid
+    return ancestors
+
+
 def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     """Find ALL running 'claude' processes whose cwd matches project_path."""
     pids = []

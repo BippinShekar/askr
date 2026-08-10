@@ -179,16 +179,40 @@ function readStats() {
   }
 }
 
-// Best-effort capture of whatever the user was mid-typing into the Claude
-// Code terminal's own prompt when the companion trigger fired (2026-08-10).
-// There's no VS Code API to read a terminal's unsent input line directly —
+// Best-effort terminal-content reading (2026-08-10, generalized 2026-08-11).
+// There's no VS Code API to read a terminal's rendered content directly —
 // sendText() (used everywhere below to launch companions) is write-only, and
 // the proposed onDidWriteTerminalData API needs --enable-proposed-api, not
 // viable for a normally-installed extension. This uses only stable APIs:
-// select-all + copy-selection on the terminal, then parse the copied
-// scrollback for a trailing line that looks like the CLI's own "> " prompt.
-// Fragile by nature — tied to how Claude Code currently renders its prompt —
-// so it fails closed (returns null) rather than guessing wrong.
+// select-all + copy-selection on the given terminal, then reads the copied
+// scrollback back off the system clipboard as plain text. Fragile by
+// nature — tied to whatever the terminal currently has rendered — so
+// callers should fail closed on an unrecognized buffer, not guess.
+//
+// Visible side effect: this actually selects text in the target terminal
+// (matching how a user would manually copy it) and briefly focuses it via
+// show(true) — only call this against a terminal askr has a real reason to
+// read right now, not speculatively.
+async function readTerminalBuffer(term) {
+  if (!term) return null;
+  let original = null;
+  try {
+    original = await vscode.env.clipboard.readText();
+  } catch { /* clipboard read is best-effort too — proceed without a restore point */ }
+  try {
+    term.show(true);
+    await vscode.commands.executeCommand('workbench.action.terminal.selectAll');
+    await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
+    return await vscode.env.clipboard.readText();
+  } catch {
+    return null;
+  } finally {
+    if (original !== null) {
+      try { await vscode.env.clipboard.writeText(original); } catch { /* best-effort restore */ }
+    }
+  }
+}
+
 const DECOR_CHARS = /[─-╿]/g; // box-drawing block used to frame the input line
 
 function extractPendingInput(buffer) {
@@ -211,23 +235,31 @@ function extractPendingInput(buffer) {
 async function captureUnsentInput() {
   const term = vscode.window.activeTerminal;
   if (!term) return null;
-  let original = null;
-  try {
-    original = await vscode.env.clipboard.readText();
-  } catch { /* clipboard read is best-effort too — proceed without a restore point */ }
-  try {
-    term.show(true);
-    await vscode.commands.executeCommand('workbench.action.terminal.selectAll');
-    await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
-    const buffer = await vscode.env.clipboard.readText();
-    return extractPendingInput(buffer);
-  } catch {
-    return null;
-  } finally {
-    if (original !== null) {
-      try { await vscode.env.clipboard.writeText(original); } catch { /* best-effort restore */ }
+  const buffer = await readTerminalBuffer(term);
+  return extractPendingInput(buffer);
+}
+
+// Same-session rate-limit-resume feature, Stage 2 (2026-08-11): bridges
+// Python's PID-based session tracking (which knows nothing about VS Code
+// terminal objects) to vscode.window.terminals (which knows nothing about
+// Claude session_ids). terminal.processId resolves to the PID of the SHELL
+// running inside that terminal, not `claude` itself — Python walks the
+// process-ancestor chain from the claude PID upward (lifecycle.
+// _get_ancestor_pids) and hands over the resulting PID list; this just
+// needs ANY of them to match, not a specific identified "shell" PID.
+async function findTerminalByAncestorPids(ancestorPids) {
+  if (!ancestorPids || !ancestorPids.length) return null;
+  const wanted = new Set(ancestorPids);
+  for (const term of vscode.window.terminals) {
+    let pid;
+    try {
+      pid = await term.processId;
+    } catch {
+      continue;
     }
+    if (pid && wanted.has(pid)) return term;
   }
+  return null;
 }
 
 async function openContextCompanion(n) {
