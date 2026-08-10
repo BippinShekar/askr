@@ -179,6 +179,96 @@ function readStats() {
   }
 }
 
+// Best-effort capture of whatever the user was mid-typing into the Claude
+// Code terminal's own prompt when the companion trigger fired (2026-08-10).
+// There's no VS Code API to read a terminal's unsent input line directly —
+// sendText() (used everywhere below to launch companions) is write-only, and
+// the proposed onDidWriteTerminalData API needs --enable-proposed-api, not
+// viable for a normally-installed extension. This uses only stable APIs:
+// select-all + copy-selection on the terminal, then parse the copied
+// scrollback for a trailing line that looks like the CLI's own "> " prompt.
+// Fragile by nature — tied to how Claude Code currently renders its prompt —
+// so it fails closed (returns null) rather than guessing wrong.
+const DECOR_CHARS = /[─-╿]/g; // box-drawing block used to frame the input line
+
+function extractPendingInput(buffer) {
+  if (!buffer) return null;
+  const lines = buffer.split(/\r?\n/).map(l => l.replace(DECOR_CHARS, '').trim());
+  let end = lines.length - 1;
+  while (end >= 0 && lines[end] === '') end--;
+  if (end < 0) return null;
+  let start = end;
+  while (start >= 0 && lines[start] !== '' && !lines[start].startsWith('>')) start--;
+  if (start < 0 || !lines[start].startsWith('>')) return null; // no confident prompt marker — don't guess
+  const pending = lines.slice(start, end + 1)
+    .map((l, i) => (i === 0 ? l.replace(/^>\s*/, '') : l))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return pending || null;
+}
+
+async function captureUnsentInput() {
+  const term = vscode.window.activeTerminal;
+  if (!term) return null;
+  let original = null;
+  try {
+    original = await vscode.env.clipboard.readText();
+  } catch { /* clipboard read is best-effort too — proceed without a restore point */ }
+  try {
+    term.show(true);
+    await vscode.commands.executeCommand('workbench.action.terminal.selectAll');
+    await vscode.commands.executeCommand('workbench.action.terminal.copySelection');
+    const buffer = await vscode.env.clipboard.readText();
+    return extractPendingInput(buffer);
+  } catch {
+    return null;
+  } finally {
+    if (original !== null) {
+      try { await vscode.env.clipboard.writeText(original); } catch { /* best-effort restore */ }
+    }
+  }
+}
+
+async function openContextCompanion(n) {
+  const capturedInput = await captureUnsentInput();
+
+  const goal = n.goal ? ` Picking up: ${n.goal}` : '';
+  // last_summary (lifecycle._open_companion_session, 2026-08-10): a TL;DR of
+  // what the companioned session last did, read back from the handover it
+  // just wrote — so the user doesn't have to switch to the old session just
+  // to see what it said before deciding whether to work in this new one.
+  const summaryPreview = n.last_summary
+    ? ` Last session: ${n.last_summary.length > 200 ? n.last_summary.slice(0, 200) + '…' : n.last_summary}`
+    : '';
+  const carriedOver = capturedInput ? ` Carried over what you were typing — continue it in the new window.` : '';
+  vscode.window.showInformationMessage(`Askr: Context saved — opening a fresh companion session. Your current one keeps running.${goal}${summaryPreview}${carriedOver}`);
+
+  const termOpts = { name: 'askr — new session' };
+  if (n.project_path) termOpts.cwd = n.project_path;
+  const terminal = vscode.window.createTerminal(termOpts);
+  terminal.show();
+  const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
+    ? ` --allowedTools ${n.allowed_tools.join(',')}`
+    : '';
+  const defaultPrompt = n.prompt || 'Read the handover and start on the Next Action immediately. Work autonomously.';
+  const launchPrompt = (capturedInput
+    ? `Read the handover for full context, then continue with what the user was about to ask: ${capturedInput}`
+    : defaultPrompt).replace(/"/g, '').replace(/`/g, '');
+  if (n.last_summary) {
+    // Shell-escape for a raw sendText echo: strip quotes/backticks (command
+    // injection via the other launch prompts already strips these the same
+    // way) plus $ and \ so nothing expands, and collapse to one line.
+    const safeSummary = n.last_summary
+      .replace(/[`"$\\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (safeSummary) terminal.sendText(`echo "askr — previous session: ${safeSummary}"`);
+  }
+  terminal.sendText(`claude${toolsFlag}`);
+  setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+}
+
 function checkNotification() {
   try {
     if (!fs.existsSync(NOTIFICATION_PATH)) return;
@@ -195,35 +285,11 @@ function checkNotification() {
     fs.writeFileSync(NOTIFICATION_PATH, JSON.stringify(n));
 
     if (n.type === 'context') {
-      const goal = n.goal ? ` Picking up: ${n.goal}` : '';
-      // last_summary (lifecycle._open_companion_session, 2026-08-10): a TL;DR of
-      // what the companioned session last did, read back from the handover it
-      // just wrote — so the user doesn't have to switch to the old session just
-      // to see what it said before deciding whether to work in this new one.
-      const summaryPreview = n.last_summary
-        ? ` Last session: ${n.last_summary.length > 200 ? n.last_summary.slice(0, 200) + '…' : n.last_summary}`
-        : '';
-      vscode.window.showInformationMessage(`Askr: Context saved — opening a fresh companion session. Your current one keeps running.${goal}${summaryPreview}`);
-      const termOpts = { name: 'askr — new session' };
-      if (n.project_path) termOpts.cwd = n.project_path;
-      const terminal = vscode.window.createTerminal(termOpts);
-      terminal.show();
-      const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
-        ? ` --allowedTools ${n.allowed_tools.join(',')}`
-        : '';
-      const launchPrompt = (n.prompt || 'Read the handover and start on the Next Action immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
-      if (n.last_summary) {
-        // Shell-escape for a raw sendText echo: strip quotes/backticks (command
-        // injection via the other launch prompts already strips these the same
-        // way) plus $ and \ so nothing expands, and collapse to one line.
-        const safeSummary = n.last_summary
-          .replace(/[`"$\\]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (safeSummary) terminal.sendText(`echo "askr — previous session: ${safeSummary}"`);
-      }
-      terminal.sendText(`claude${toolsFlag}`);
-      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+      // Capture BEFORE anything else touches focus/clipboard — creating and
+      // showing the new terminal below would make it the active one, and by
+      // then whatever the user had typed into the old terminal's prompt is no
+      // longer reachable via activeTerminal.
+      openContextCompanion(n);
     } else if (n.type === 'compaction_prevented') {
       // Emergency PreCompact kill (askr/hooks/pre_compact.py) — the session
       // was stopped before Claude Code's own compaction could compress it.
