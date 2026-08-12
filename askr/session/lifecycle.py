@@ -2435,6 +2435,130 @@ def _evaluate_session_triggers(
         _log(f"ok: ctx={ctx_pct:.1%} [{ctx_label}] {q_str} project={project_path}")
 
 
+_STALE_HIGH_QUOTA_MAX_AGE_SECS = 7200  # 2h — generous enough to catch a session frozen mid-block,
+                                        # without matching genuinely abandoned sessions from days ago
+_STALE_HIGH_QUOTA_THRESHOLD    = 75.0  # matches QUOTA_WARNING_TRIGGER — "was clearly approaching
+                                        # exhaustion when its stats file stopped updating"
+
+
+def _read_stale_high_quota_stats() -> list:
+    """
+    Confirmed live 2026-08-12: a session's stats file can freeze at a
+    below-trigger quota_pct (observed: 84.0%, bit-for-bit identical across
+    every 15s poll for 5+ minutes straight) while the REAL account keeps
+    climbing past 90% and blocks entirely. quota_pct only ever refreshes via
+    PostToolUse, which needs a SUCCESSFUL tool call to fire — once the
+    account is genuinely exhausted, no more successful calls happen to
+    refresh it, so the file just stops updating at whatever it last
+    recorded. _read_all_stats()'s SESSION_STALE_SECS (10 min) freshness
+    filter EXCLUDES exactly these files — the ones that most need checking,
+    because they stopped updating precisely because they're blocked.
+
+    This is the complementary read: stats whose last quota_pct was already
+    high but have since gone stale, bounded to a few hours so it can't match
+    sessions abandoned days ago.
+    """
+    try:
+        if not os.path.isdir(_STATS_DIR):
+            return []
+        now = time.time()
+        results = []
+        for f in os.listdir(_STATS_DIR):
+            if not f.endswith(".json"):
+                continue
+            path = os.path.join(_STATS_DIR, f)
+            try:
+                age = now - os.path.getmtime(path)
+            except Exception:
+                continue
+            if age < SESSION_STALE_SECS or age >= _STALE_HIGH_QUOTA_MAX_AGE_SECS:
+                continue  # either already covered by _read_all_stats, or too old to trust
+            try:
+                with open(path) as fp:
+                    data = json.load(fp)
+            except Exception:
+                continue
+            if (data.get("quota_pct") or 0) >= _STALE_HIGH_QUOTA_THRESHOLD:
+                results.append(data)
+        return results
+    except Exception:
+        return []
+
+
+_INDEPENDENT_QUOTA_POLL_SECS = 60  # matches QUOTA_NOTIFY_POLL_SECS's own cadence
+
+
+def _poll_independent_quota_and_fire(last_poll_ts: float, quota_triggered_windows: set,
+                                      session_parent: dict) -> float:
+    """
+    Runs on EVERY daemon loop iteration, active or idle — the entire point
+    is that this must not depend on _session_is_active() or any single
+    per-project stats file being fresh, both of which gate the normal
+    per-project trigger check in _evaluate_session_triggers(). Quota is
+    account-wide, not per-project, so one direct poll here covers every
+    project regardless of which one (if any) currently looks "active."
+
+    Closes a real gap confirmed live: a per-project stats file frozen below
+    QUOTA_TRIGGER can never cross it on its own once tool calls stop — this
+    polls the true account state directly and, when genuinely at or above
+    QUOTA_TRIGGER, fires _execute_quota_trigger for every project whose
+    stats (fresh, or recently-stale-but-was-high — see
+    _read_stale_high_quota_stats) suggest it's an affected session.
+
+    Returns the new last_poll_ts — unchanged if this cycle didn't poll
+    (throttled to _INDEPENDENT_QUOTA_POLL_SECS, same cadence the rest of the
+    quota machinery already uses) or if the window was already handled.
+    """
+    now = time.time()
+    if now - last_poll_ts < _INDEPENDENT_QUOTA_POLL_SECS:
+        return last_poll_ts
+
+    try:
+        from askr.session.usage_api import get_quota_status
+        status = get_quota_status()
+    except Exception:
+        status = None
+    if status is None or status.five_hour_pct < QUOTA_TRIGGER:
+        return now
+
+    reset_at = status.five_hour_reset.isoformat()
+    if _reset_window_already_triggered(reset_at, quota_triggered_windows):
+        return now
+
+    candidates = _read_all_stats() + _read_stale_high_quota_stats()
+    seen_projects = set()
+    fired_any = False
+    for stats in candidates:
+        project_path = stats.get("project_path")
+        if not project_path or project_path in seen_projects:
+            continue
+        seen_projects.add(project_path)
+        session_id = stats.get("session_id")
+        _log(f"Trigger B (independent poll): quota={status.five_hour_pct:.1f}% (real API) [{project_path}]")
+        try:
+            from askr.state.writer import append_event
+            append_event("trigger_fired", project_path, session_id=session_id,
+                         parent_session_id=session_parent.get(session_id), trigger_type="quota",
+                         context_pct=stats.get("context_pct"), context_tokens=stats.get("context_tokens"),
+                         quota_pct=status.five_hour_pct)
+        except Exception:
+            pass
+        fresh_stats = dict(stats)
+        fresh_stats["quota_pct"] = status.five_hour_pct
+        fresh_stats["quota_reset_at"] = reset_at
+        threading.Thread(
+            target=_execute_quota_trigger,
+            args=(fresh_stats, project_path, session_id),
+            daemon=True,
+        ).start()
+        fired_any = True
+
+    if fired_any:
+        quota_triggered_windows.add(reset_at)
+        _save_quota_triggered_windows(quota_triggered_windows)
+    return now
+
+
 def run_daemon():
     # Single-instance guard — exit immediately if another instance is already running
     if os.path.exists(_PID_PATH):
@@ -2459,6 +2583,8 @@ def run_daemon():
     idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → {"turn_stop_ts", "recorded_at"}, disk-backed
     session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
     session_parent: dict = _load_session_parent()  # session_id → parent_session_id, disk-backed, best-effort (see docstring)
+    last_independent_quota_poll: float = 0.0  # throttle for _poll_independent_quota_and_fire, in-memory only —
+                                               # a restart just means the next poll happens sooner, never a problem
 
     def _on_term(sig, frame):
         _log("received SIGTERM — stopping")
@@ -2481,6 +2607,14 @@ def run_daemon():
                 _stop_caffeinate()
 
             was_active = active
+
+            # Independent of the active/idle branch below on purpose — quota is
+            # account-wide and this must not depend on _session_is_active() or
+            # any per-project stats file staying fresh (see the function's own
+            # docstring for the confirmed-live bug this closes).
+            last_independent_quota_poll = _poll_independent_quota_and_fire(
+                last_independent_quota_poll, quota_triggered_windows, session_parent,
+            )
 
             if active:
                 # Scan ALL active projects every poll — not just the most recently updated one.
