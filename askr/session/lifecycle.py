@@ -432,6 +432,59 @@ def _get_ancestor_pids(pid: int, max_depth: int = 6) -> list:
     return ancestors
 
 
+def _find_session_pid(transcript_path: str, project_path: str = "") -> int | None:
+    """
+    Find the PID of the Claude process that owns this specific session
+    transcript. Uses lsof to find which process has the JSONL file open —
+    precise and correct for multi-session scenarios because each session has
+    a unique file. Falls back to pgrep+cwd match if lsof returns nothing
+    (e.g. file not yet flushed).
+
+    project_path defaults to os.getcwd() — correct when called from within a
+    hook process (Claude Code sets cwd to the project for the whole hook
+    invocation), but callers from the long-running daemon (which has no
+    reason to share cwd with whichever project it's currently evaluating)
+    must pass it explicitly.
+    """
+    if transcript_path and os.path.exists(transcript_path):
+        try:
+            result = subprocess.run(
+                ["lsof", "-t", transcript_path],
+                capture_output=True, text=True, timeout=5,
+            )
+            for pid_str in result.stdout.strip().splitlines():
+                try:
+                    pid = int(pid_str)
+                    os.kill(pid, 0)
+                    return pid
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    try:
+        resolved_project_path = project_path or os.getcwd()
+        result = subprocess.run(
+            ["pgrep", "-x", "claude"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for pid_str in result.stdout.strip().splitlines():
+            try:
+                pid = int(pid_str)
+                lsof = subprocess.run(
+                    ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-F", "n"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                for line in lsof.stdout.splitlines():
+                    if line.startswith("n") and line[1:] == resolved_project_path:
+                        return pid
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
 def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     """Find ALL running 'claude' processes whose cwd matches project_path."""
     pids = []
@@ -1098,6 +1151,34 @@ def _write_notification(trigger: str, goal: str = "", pct: float = 0.0, handover
         pass
 
 
+def _write_terminal_action_notification(notif_type: str, ancestor_pids: list, project_path: str,
+                                         message: str, resume_text: str = ""):
+    """
+    Same-session rate-limit-resume feature (2026-08-12): the notification
+    itself is just the payload — extension.js's own case for notif_type is
+    what actually resolves the target Terminal via findTerminalByAncestorPids
+    and performs the real action (Escape for 'quota_exhausted_wait', typed
+    resume_text for 'quota_resume_cont'). This function only ever writes the
+    handoff; it never touches a terminal directly (that's JS-only, no stable
+    Python-side API for it).
+    """
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        payload = {
+            "type": notif_type,
+            "message": message,
+            "ancestor_pids": ancestor_pids,
+            "project_path": project_path,
+            "resume_text": resume_text,
+            "shown": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump(payload, f)
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Trigger execution
 # ---------------------------------------------------------------------------
@@ -1258,6 +1339,73 @@ def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = Non
     # kill-then-relaunch design could yank a running session out from under the
     # user mid-task; askr now only ever adds a fresh session, never removes theirs.
 
+    # Same-session resume (2026-08-12): once quota is confirmed genuinely
+    # exhausted via our OWN ground-truth poll above (not a guess from hook
+    # silence — every hook goes completely dark while Claude Code's
+    # rate-limit-options menu is up, confirmed live), send Escape into the
+    # SAME session — proven equivalent to manually selecting "Stop and wait
+    # for limit to reset" (see pre_compact.py/extension.js history) — and,
+    # once reset genuinely arrives clean, "cont" to resume the in-flight
+    # work in place instead of only ever handing the user a fresh companion.
+    # Escape is safe to send even if the menu hasn't rendered yet: at a
+    # normal idle prompt it's a harmless no-op. Falls through to the
+    # existing companion-open path (unconditionally correct fallback) if the
+    # session's pid can't be resolved, or if the Stage 5 safety net detects
+    # activity before the real reset time (wrong option may have been
+    # selected — do not compound that by assuming same-session resume is safe).
+    same_session_resumed = False
+    try:
+        pid = _find_session_pid(transcript_path, project_path)
+    except Exception:
+        pid = None
+
+    if pid:
+        ancestor_pids = _get_ancestor_pids(pid)
+        if ancestor_pids:
+            _write_terminal_action_notification(
+                "quota_exhausted_wait", ancestor_pids, project_path,
+                message=("Quota exhausted — askr is telling this session to wait for reset "
+                         "(not switch to paid usage or upgrade). It'll resume automatically "
+                         "once your quota resets; you don't need to do anything."),
+            )
+            _speak("Quota exhausted. Waiting for reset — this session will resume automatically.",
+                   source="lifecycle._execute_quota_trigger.escape", project_path=project_path,
+                   session_id=session_id or "")
+
+            baseline_mtime = None
+            try:
+                if transcript_path and os.path.exists(transcript_path):
+                    baseline_mtime = os.path.getmtime(transcript_path)
+            except Exception:
+                baseline_mtime = None
+
+            if reset_at and baseline_mtime is not None:
+                anomaly = _watch_for_premature_activity(
+                    transcript_path, reset_at, baseline_mtime, project_path, session_id or "",
+                )
+                if not anomaly:
+                    _write_terminal_action_notification(
+                        "quota_resume_cont", ancestor_pids, project_path,
+                        message="Quota reset — resuming this session's in-flight work automatically.",
+                        resume_text="cont",
+                    )
+                    _speak("Quota reset. Resuming automatically.",
+                           source="lifecycle._execute_quota_trigger.cont", project_path=project_path,
+                           session_id=session_id or "")
+                    same_session_resumed = True
+
+    if same_session_resumed:
+        _notify_discord_resumed("quota", next_goal)
+        try:
+            from askr.state.analytics import today_summary
+            saved = today_summary().get("total_seconds", 0)
+            _write_resumed_marker("quota", saved)
+        except Exception:
+            pass
+        return
+
+    # Fallback: pid unresolved, ancestor walk empty, or the safety net caught
+    # premature activity — same behavior as before this feature existed.
     if reset_at:
         _wait_for_reset(reset_at)
     else:

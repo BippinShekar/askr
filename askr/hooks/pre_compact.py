@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
+from askr.session.lifecycle import _find_session_pid
 
 _CHECKPOINT_PENDING     = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFIED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/emergency_notified_sessions.json")
@@ -125,52 +126,6 @@ def _session_duration_minutes(transcript_path: str) -> int:
         return max(0, int((end - start).total_seconds() // 60))
     except Exception:
         return 0
-
-
-def _find_session_pid(transcript_path: str) -> int | None:
-    """
-    Find the PID of the Claude process that owns this specific session transcript.
-    Uses lsof to find which process has the JSONL file open — this is precise
-    and correct for multi-session scenarios because each session has a unique file.
-    Falls back to pgrep+cwd match if lsof returns nothing (e.g. file not yet flushed).
-    """
-    if transcript_path and os.path.exists(transcript_path):
-        try:
-            result = subprocess.run(
-                ["lsof", "-t", transcript_path],
-                capture_output=True, text=True, timeout=5,
-            )
-            for pid_str in result.stdout.strip().splitlines():
-                try:
-                    pid = int(pid_str)
-                    os.kill(pid, 0)
-                    return pid
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    try:
-        project_path = os.getcwd()
-        result = subprocess.run(
-            ["pgrep", "-x", "claude"],
-            capture_output=True, text=True, timeout=5,
-        )
-        for pid_str in result.stdout.strip().splitlines():
-            try:
-                pid = int(pid_str)
-                lsof = subprocess.run(
-                    ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-F", "n"],
-                    capture_output=True, text=True, timeout=3,
-                )
-                for line in lsof.stdout.splitlines():
-                    if line.startswith("n") and line[1:] == project_path:
-                        return pid
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
 
 
 def _finish_emergency_checkpoint(project_path: str, developer: str, transcript_path: str,

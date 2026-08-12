@@ -345,6 +345,28 @@ function checkNotification() {
       // no terminal to open here: the daemon opens the companion itself once
       // the account's quota actually resets, this is purely informational.
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
+    } else if (n.type === 'quota_exhausted_wait') {
+      // Same-session rate-limit-resume, step 1 (2026-08-12): quota is
+      // confirmed genuinely exhausted via askr's own ground-truth API poll
+      // (lifecycle._wait_until_quota_near_exhausted) — not a guess. Send
+      // Escape into the exact terminal running that session, proven
+      // equivalent to manually selecting "Stop and wait for limit to
+      // reset" (see the compaction_prevented history above). Safe even if
+      // the menu hasn't rendered yet: at a normal idle prompt, Escape is a
+      // harmless no-op.
+      vscode.window.showInformationMessage(`Askr: ${n.message}`);
+      findTerminalByAncestorPids(n.ancestor_pids).then(term => {
+        if (term) term.sendText('\x1b', false);
+      });
+    } else if (n.type === 'quota_resume_cont') {
+      // Same-session rate-limit-resume, step 2: reset genuinely arrived with
+      // no premature activity detected (lifecycle._watch_for_premature_activity) —
+      // resume the same session's in-flight work in place instead of only
+      // ever handing the user a fresh companion.
+      vscode.window.showInformationMessage(`Askr: ${n.message}`);
+      findTerminalByAncestorPids(n.ancestor_pids).then(term => {
+        if (term) term.sendText(n.resume_text || 'cont', true);
+      });
     } else if (n.type === 'goal_launch') {
       const goal = n.goal || '';
       const termOpts = { name: `askr — ${goal.slice(0, 40)}` };
