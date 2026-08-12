@@ -38,6 +38,48 @@ def _stats(**overrides):
     return base
 
 
+class ResetWindowAlreadyTriggeredTests(unittest.TestCase):
+    """Pure unit coverage for the tolerance-based matcher itself, independent
+    of the full trigger-evaluation pipeline above."""
+
+    def test_exact_match_is_triggered(self):
+        self.assertTrue(lifecycle._reset_window_already_triggered(
+            "2026-08-11T17:30:00.000000+00:00", {"2026-08-11T17:30:00.000000+00:00"},
+        ))
+
+    def test_within_tolerance_across_minute_boundary_is_triggered(self):
+        self.assertTrue(lifecycle._reset_window_already_triggered(
+            "2026-08-11T17:30:00.122998+00:00", {"2026-08-11T17:29:59.666245+00:00"},
+        ))
+
+    def test_beyond_tolerance_is_not_triggered(self):
+        self.assertFalse(lifecycle._reset_window_already_triggered(
+            "2026-08-11T17:36:00.000000+00:00", {"2026-08-11T17:30:00.000000+00:00"},
+        ))
+
+    def test_empty_set_is_not_triggered(self):
+        self.assertFalse(lifecycle._reset_window_already_triggered(
+            "2026-08-11T17:30:00.000000+00:00", set(),
+        ))
+
+    def test_unparseable_target_falls_back_to_exact_match(self):
+        self.assertFalse(lifecycle._reset_window_already_triggered(
+            "not-a-real-timestamp", {"2026-08-11T17:30:00.000000+00:00"},
+        ))
+        self.assertTrue(lifecycle._reset_window_already_triggered(
+            "not-a-real-timestamp", {"not-a-real-timestamp"},
+        ))
+
+    def test_unparseable_stored_entry_is_skipped_not_raised(self):
+        try:
+            result = lifecycle._reset_window_already_triggered(
+                "2026-08-11T17:30:00.000000+00:00", {"garbage", "2026-08-11T17:30:00.000000+00:00"},
+            )
+        except Exception as e:
+            self.fail(f"_reset_window_already_triggered raised: {e}")
+        self.assertTrue(result)
+
+
 class TriggerIndependenceTests(unittest.TestCase):
     def setUp(self):
         # Neutralize everything _evaluate_session_triggers touches outside its
@@ -192,6 +234,46 @@ class TriggerIndependenceTests(unittest.TestCase):
             idle_triggered={},
         )
         self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
+
+    def test_quota_dedup_survives_cross_session_reset_at_jitter(self):
+        """
+        Confirmed live 2026-08-11/12: two DIFFERENT sessions on the exact
+        same 5-hour account window independently polled the usage API and
+        recorded quota_reset_at a second apart, straddling a minute
+        boundary ("...T17:29:59.666245+00:00" vs "...T17:30:00.122998+00:00").
+        Exact string-membership dedup treated these as two different
+        windows, so a second session re-fired Trigger B (and re-announced
+        "Quota at X%") for what was really one exhaustion event already
+        handled. The stored window and this session's own reset_at must
+        still dedup correctly despite the jitter.
+        """
+        stats = _stats(quota_pct=97.0, quota_reset_at="2026-08-11T17:30:00.122998+00:00")
+        lifecycle._evaluate_session_triggers(
+            stats,
+            session_first_seen={"sess123": 0.0},
+            quota_warned_windows=set(),
+            companioned_sessions=set(),
+            last_trigger_at={},
+            quota_triggered_windows={"2026-08-11T17:29:59.666245+00:00"},
+            idle_triggered={},
+        )
+        self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
+
+    def test_quota_genuinely_different_windows_still_refire(self):
+        """The tolerance fix must not over-merge — a reset_at 5 hours away
+        from any stored window is a genuinely different window and must
+        still fire normally."""
+        stats = _stats(quota_pct=97.0, quota_reset_at="2026-08-11T22:30:00.000000+00:00")
+        lifecycle._evaluate_session_triggers(
+            stats,
+            session_first_seen={"sess123": 0.0},
+            quota_warned_windows=set(),
+            companioned_sessions=set(),
+            last_trigger_at={},
+            quota_triggered_windows={"2026-08-11T17:30:00.122998+00:00"},
+            idle_triggered={},
+        )
+        self.assertIn(lifecycle._execute_quota_trigger, self._thread_targets())
 
     def test_quota_without_reset_at_skips_rather_than_firing_blind(self):
         stats = _stats(quota_pct=95.0, quota_reset_at="")

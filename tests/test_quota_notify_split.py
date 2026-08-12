@@ -74,17 +74,19 @@ class WaitUntilQuotaNearExhaustedTests(unittest.TestCase):
         past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
         with patch("askr.session.usage_api.get_quota_status") as mock_status, \
              patch.object(lifecycle.time, "sleep") as mock_sleep:
-            lifecycle._wait_until_quota_near_exhausted(past)
+            result = lifecycle._wait_until_quota_near_exhausted(past)
         mock_status.assert_not_called()
         mock_sleep.assert_not_called()
+        self.assertIsNone(result)
 
     def test_returns_immediately_if_quota_already_near_exhausted(self):
         future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
         status = MagicMock(five_hour_pct=lifecycle.QUOTA_NOTIFY_TRIGGER + 0.5)
         with patch("askr.session.usage_api.get_quota_status", return_value=status), \
              patch.object(lifecycle.time, "sleep") as mock_sleep:
-            lifecycle._wait_until_quota_near_exhausted(future)
+            result = lifecycle._wait_until_quota_near_exhausted(future)
         mock_sleep.assert_not_called()
+        self.assertEqual(result, lifecycle.QUOTA_NOTIFY_TRIGGER + 0.5)
 
     def test_polls_until_near_exhausted(self):
         future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
@@ -92,15 +94,18 @@ class WaitUntilQuotaNearExhaustedTests(unittest.TestCase):
         above = MagicMock(five_hour_pct=lifecycle.QUOTA_NOTIFY_TRIGGER + 1)
         with patch("askr.session.usage_api.get_quota_status", side_effect=[below, below, above]), \
              patch.object(lifecycle.time, "sleep") as mock_sleep:
-            lifecycle._wait_until_quota_near_exhausted(future)
+            result = lifecycle._wait_until_quota_near_exhausted(future)
         self.assertEqual(mock_sleep.call_count, 2)  # slept twice, then saw "above" and returned
+        # The fresh, live-polled value — not the caller's stale trigger-time snapshot.
+        self.assertEqual(result, lifecycle.QUOTA_NOTIFY_TRIGGER + 1)
 
     def test_unparseable_reset_time_fails_open_without_blocking(self):
         with patch("askr.session.usage_api.get_quota_status") as mock_status, \
              patch.object(lifecycle.time, "sleep") as mock_sleep:
-            lifecycle._wait_until_quota_near_exhausted("not-a-real-timestamp")
+            result = lifecycle._wait_until_quota_near_exhausted("not-a-real-timestamp")
         mock_status.assert_not_called()
         mock_sleep.assert_not_called()
+        self.assertIsNone(result)
 
 
 class ExecuteQuotaTriggerPhaseOrderTests(unittest.TestCase):
@@ -163,6 +168,66 @@ class ExecuteQuotaTriggerPhaseOrderTests(unittest.TestCase):
                 "/fake/project", "sess123",
             )
         mock_wait.assert_called_once_with("/fake/project", "sess123", require_quiet_grace=False)
+
+    def test_announcement_uses_fresh_quota_not_stale_trigger_time_snapshot(self):
+        """
+        Confirmed live 2026-08-12: the stats dict _execute_quota_trigger
+        receives is captured back when the trigger FIRST fired — Phase 1's
+        checkpoint and Phase 2's own wait both take real time, so by Phase 3
+        the account can already be well past that snapshot (a real instance:
+        "Quota at 97%" was announced minutes after the account had already
+        hit 100% and blocked). Phase 2 already re-polls the live API and
+        knows the true number — Phase 3 must use that, not stats["quota_pct"].
+        """
+        with patch.object(lifecycle, "_claude_cli_available", return_value=True), \
+             patch("askr.state.config.load_developer", return_value="dev"), \
+             patch("askr.session.safe_pause.is_safe_to_pause", return_value=(True, "")), \
+             patch.object(lifecycle, "_wait_for_turn_to_finish"), \
+             patch("os.path.isdir", return_value=True), \
+             patch("askr.session.monitor._find_active_jsonl", return_value=""), \
+             patch("askr.session.checkpoint.create_checkpoint",
+                   return_value={"trigger": "quota", "timestamp": "", "handover_path": "", "git_pushed": True}), \
+             patch.object(lifecycle, "_wait_until_quota_near_exhausted", return_value=100.0), \
+             patch.object(lifecycle, "_get_next_goal", return_value=""), \
+             patch.object(lifecycle, "_write_launch_mode"), \
+             patch.object(lifecycle, "_write_notification") as mock_notify, \
+             patch.object(lifecycle, "_find_session_pid", return_value=None), \
+             patch.object(lifecycle, "_wait_for_reset"), \
+             patch.object(lifecycle, "_start_claude", return_value=False):
+            lifecycle._execute_quota_trigger(
+                # The stale snapshot the trigger fired on — must NOT be what
+                # gets announced.
+                {"quota_pct": 97.0, "quota_reset_at": "2026-01-01T01:00:00Z"},
+                "/fake/project", "sess123",
+            )
+        announced_pct = mock_notify.call_args[0][2]
+        self.assertEqual(announced_pct, 100.0)
+
+    def test_announcement_falls_back_to_stale_snapshot_when_no_fresh_reading(self):
+        """When Phase 2 can't confirm a fresh value (unparseable reset time,
+        reset already passed, API unreachable — all return None), Phase 3
+        must still announce something rather than crashing or showing 0%."""
+        with patch.object(lifecycle, "_claude_cli_available", return_value=True), \
+             patch("askr.state.config.load_developer", return_value="dev"), \
+             patch("askr.session.safe_pause.is_safe_to_pause", return_value=(True, "")), \
+             patch.object(lifecycle, "_wait_for_turn_to_finish"), \
+             patch("os.path.isdir", return_value=True), \
+             patch("askr.session.monitor._find_active_jsonl", return_value=""), \
+             patch("askr.session.checkpoint.create_checkpoint",
+                   return_value={"trigger": "quota", "timestamp": "", "handover_path": "", "git_pushed": True}), \
+             patch.object(lifecycle, "_wait_until_quota_near_exhausted", return_value=None), \
+             patch.object(lifecycle, "_get_next_goal", return_value=""), \
+             patch.object(lifecycle, "_write_launch_mode"), \
+             patch.object(lifecycle, "_write_notification") as mock_notify, \
+             patch.object(lifecycle, "_find_session_pid", return_value=None), \
+             patch.object(lifecycle, "_wait_for_reset"), \
+             patch.object(lifecycle, "_start_claude", return_value=False):
+            lifecycle._execute_quota_trigger(
+                {"quota_pct": 97.0, "quota_reset_at": "2026-01-01T01:00:00Z"},
+                "/fake/project", "sess123",
+            )
+        announced_pct = mock_notify.call_args[0][2]
+        self.assertEqual(announced_pct, 97.0)
 
 
 class SameSessionResumeTests(unittest.TestCase):

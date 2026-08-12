@@ -64,6 +64,7 @@ import shutil
 import subprocess
 import threading
 from datetime import datetime, timezone
+from typing import Optional
 
 _PID_PATH              = os.path.expanduser("~/.config/askr/daemon.pid")
 _CAFFEINATE_PID_PATH   = os.path.expanduser("~/.config/askr/caffeinate.pid")
@@ -617,13 +618,25 @@ QUOTA_NOTIFY_TRIGGER   = 99.0  # only surface the companion/voice once quota rea
 QUOTA_NOTIFY_POLL_SECS = 60    # how often to re-check the REAL account quota while waiting
 
 
-def _wait_until_quota_near_exhausted(reset_at_iso: str):
+def _wait_until_quota_near_exhausted(reset_at_iso: str) -> Optional[float]:
     """
     Silently poll the real account quota (not the stale snapshot the trigger
     fired on) until it's genuinely near exhausted or the reset has already
     passed. The user is never disturbed during this wait — no voice, no
     window — they keep working right up to the real edge of their quota
     instead of getting cut off pre-emptively at the 90% trigger threshold.
+
+    Returns the final confirmed live percentage (fresh, from this function's
+    own polling) — or None if it fell through unconfirmed (unparseable reset
+    time, reset already passed, or the API never responded). Callers must
+    use this return value for anything user-facing, not the stale quota_pct
+    the trigger originally fired on: confirmed live 2026-08-12, that stale
+    value can be meaningfully behind reality by the time Phase 3 actually
+    announces anything, since Phase 1's checkpoint and this function's own
+    wait both take real time — "Quota at 97%" was heard several minutes
+    after the account had already hit 100% and blocked, because the
+    announcement used the number from when the trigger first fired, not a
+    fresh read of what this function had just confirmed.
 
     Fails open: if the reset time is unparseable or the usage API is
     unreachable, falls back to _wait_for_reset's own fallback behavior rather
@@ -635,18 +648,18 @@ def _wait_until_quota_near_exhausted(reset_at_iso: str):
         reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
     except Exception:
         _log("could not parse reset time — skipping the near-exhausted wait, falling back")
-        return
+        return None
 
     while True:
         now = datetime.now(timezone.utc)
         if now >= reset_at:
             _log("quota reset already passed while waiting to notify — proceeding")
-            return
+            return None
 
         status = get_quota_status()
         if status is not None and status.five_hour_pct >= QUOTA_NOTIFY_TRIGGER:
             _log(f"quota now at {status.five_hour_pct:.1f}% (real API) — near exhausted, notifying")
-            return
+            return status.five_hour_pct
 
         pct_str = f"{status.five_hour_pct:.1f}%" if status is not None else "unknown"
         remaining = (reset_at - now).total_seconds()
@@ -1324,8 +1337,9 @@ def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = Non
     # Phase 2: silently wait for quota to actually be near exhausted (or the
     # reset to have already passed). The user keeps working, undisturbed.
     reset_at = stats.get("quota_reset_at")
+    fresh_quota_pct = None
     if reset_at:
-        _wait_until_quota_near_exhausted(reset_at)
+        fresh_quota_pct = _wait_until_quota_near_exhausted(reset_at)
 
     # Phase 3: now it's actually time to interrupt.
     next_goal = _get_next_goal(state_dir)
@@ -1333,7 +1347,14 @@ def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = Non
     handover_path = result.get("handover_path", "")
     handover_has_content = bool(handover_path and os.path.exists(handover_path) and
                                 os.path.getsize(handover_path) > 200)
-    _write_notification("quota", next_goal, stats.get("quota_pct", 0.0), handover_has_content,
+    # Confirmed live 2026-08-12: using stats.get("quota_pct") here — the value
+    # from whenever the trigger FIRST fired — announced "Quota at 97%" several
+    # minutes after the account had already hit 100% and blocked. Phase 1's
+    # checkpoint and Phase 2's own wait both take real time; Phase 2 already
+    # polls the live API and knows the true current number, so use it instead
+    # of the stale snapshot whenever it's available.
+    announced_quota_pct = fresh_quota_pct if fresh_quota_pct is not None else stats.get("quota_pct", 0.0)
+    _write_notification("quota", next_goal, announced_quota_pct, handover_has_content,
                          project_path, handover_path, git_pushed=result.get("git_pushed", False))
     # Never kill the user's live session — just prepare a companion one. The old
     # kill-then-relaunch design could yank a running session out from under the
@@ -1998,6 +2019,46 @@ def _save_quota_triggered_windows(windows: set):
         _log(f"WARN: failed to persist quota-triggered windows: {e}")
 
 
+_RESET_WINDOW_TOLERANCE_SECS = 300  # far below the 5h gap between real windows, comfortably
+                                     # above the observed cross-session jitter (below)
+
+
+def _reset_window_already_triggered(reset_at: str, quota_triggered_windows: set) -> bool:
+    """
+    Confirmed live 2026-08-11/12: two DIFFERENT sessions on the exact same
+    5-hour account window independently polled the usage API and recorded
+    quota_reset_at as "...T17:29:59.666245+00:00" and "...T17:30:00.122998+00:00"
+    — the same logical reset moment, but straddling a full minute boundary.
+    quota_triggered_windows used to be checked via exact string membership
+    (`reset_at in quota_triggered_windows`), so every session with its own
+    independently-polled reset_at string defeated the dedup entirely — each
+    one fired its own Trigger B, ran its own Phase 1-3, and spoke its own
+    "Quota at X%" announcement for what was really one account-wide
+    exhaustion event. This is why a real 100%-exhaustion could be followed by
+    a SEPARATE "97%" announcement several minutes later — not one delayed
+    announcement, but two independently-fired ones, each reading whatever
+    quota_pct its own stats file happened to have at trigger time.
+
+    Tolerance-based instead of exact-match: treats reset_at as "already
+    triggered" if any stored entry is within _RESET_WINDOW_TOLERANCE_SECS —
+    far more than the observed sub-minute jitter, far less than the 5h gap
+    between genuinely different windows, so this can't merge two real windows.
+    """
+    try:
+        target = datetime.fromisoformat(reset_at.replace("Z", "+00:00"))
+    except Exception:
+        return reset_at in quota_triggered_windows  # fail back to exact match on bad input
+
+    for existing in quota_triggered_windows:
+        try:
+            existing_dt = datetime.fromisoformat(existing.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if abs((target - existing_dt).total_seconds()) <= _RESET_WINDOW_TOLERANCE_SECS:
+            return True
+    return False
+
+
 def _load_idle_triggered() -> dict:
     try:
         with open(_IDLE_TRIGGERED_PATH) as f:
@@ -2279,7 +2340,8 @@ def _evaluate_session_triggers(
         _save_trigger_state(last_trigger_at)
 
     # --- Quota (Trigger B) — independent of context's state above ---
-    if quota_pct is not None and quota_pct >= QUOTA_TRIGGER and reset_at and reset_at in quota_triggered_windows:
+    if (quota_pct is not None and quota_pct >= QUOTA_TRIGGER and reset_at
+            and _reset_window_already_triggered(reset_at, quota_triggered_windows)):
         # Already fired the hard trigger for this reset window — quota stays
         # >=90% for the whole 5h window, so without this the per-project
         # cooldown alone would spawn a fresh _execute_quota_trigger thread — and
