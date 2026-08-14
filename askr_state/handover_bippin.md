@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-08-14 22:33
+Last updated: 2026-08-14 22:34
 
 *Source of truth: `handover_bippin.json`*
 
@@ -41,10 +41,12 @@ The quota-exhaustion trigger (Trigger B) was structurally broken: it only refres
 
 ## Files In Play
 - `askr/cli/askr.py`
-- `askr_state/decisions.jsonl`
 
 ## Relational Files
 - `askr/daemon/quota_monitor.py` (imports): Contains independent polling logic and Trigger B firing; central to quota-exhaustion detection
 - `askr/daemon/rate_limit_resume.py` (imported_by): Receives Trigger B signal from quota_monitor and executes Stage 4 automation (Escape, notification, wait, cont)
 - `askr/utils/hook_capture.py` (configures): Captures hook payloads for all seven lifecycle hooks; provides ground truth for session transition analysis
 - `tests/test_quota_monitor.py` (tested_by): 599 tests pass; validates independent poll logic and dedup behavior
+
+## Uncommitted Files
+- `askr_state/implementation_bippin.jsonl`

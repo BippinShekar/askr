@@ -83,8 +83,7 @@
     }
   ],
   "files_in_play": [
-    "askr/cli/askr.py",
-    "askr_state/decisions.jsonl"
+    "askr/cli/askr.py"
   ],
   "relational_files": [
     {
@@ -108,15 +107,15 @@
       "why": "599 tests pass; validates independent poll logic and dedup behavior"
     }
   ],
-  "uncommitted_files": [],
-  "blockers": [],
-  "completed_goals": [
-    "Commit hook-capture instrumentation across all 6 lifecycle hooks"
+  "uncommitted_files": [
+    "askr_state/implementation_bippin.jsonl"
   ],
+  "blockers": [],
+  "completed_goals": [],
   "behavioral_preferences": [],
   "session_metadata": {
     "trigger_type": "idle",
-    "timestamp": "2026-08-11T00:49:00.000000+00:00",
+    "timestamp": "2026-08-14T17:03:46.767978+00:00",
     "developer": "bippin"
   }
 }
