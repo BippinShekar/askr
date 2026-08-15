@@ -252,6 +252,19 @@ def _start_caffeinate():
 
 
 def _stop_caffeinate():
+    if _quota_wait_in_flight():
+        # Confirmed live 2026-08-15: session went idle mid-quota-wait, this
+        # unconditionally stopped caffeinate, the Mac slept, and the whole
+        # daemon (all projects, all threads) froze for 1h43m — right through
+        # the window _wait_until_quota_near_exhausted needed to actually
+        # observe quota crossing 99% and interrupt the user. It only found
+        # out the reset had already passed once it woke up hours later, so
+        # no warning/notification/voice ever surfaced live. Don't release
+        # the sleep lock while that wait (or the Stage 5 premature-activity
+        # watch that follows it) is still running, regardless of session
+        # idle state.
+        _log("caffeinate stop skipped — quota-wait thread still in flight")
+        return
     if not _caffeinate_running():
         return
     try:
@@ -265,6 +278,32 @@ def _stop_caffeinate():
         _log("caffeinate stopped")
     except Exception:
         pass
+
+
+# Tracks whether an _execute_quota_trigger thread (Phase 2 near-exhausted
+# poll or the Stage 5 premature-activity watch) is currently in flight, so
+# _stop_caffeinate() can refuse to release the sleep lock out from under it.
+# A depth counter, not a bool: quota is account-wide but _evaluate_session_triggers
+# runs per-project, so two projects can each be mid-wait at once.
+_quota_wait_lock = threading.Lock()
+_quota_wait_depth = 0
+
+
+def _quota_wait_begin():
+    global _quota_wait_depth
+    with _quota_wait_lock:
+        _quota_wait_depth += 1
+
+
+def _quota_wait_end():
+    global _quota_wait_depth
+    with _quota_wait_lock:
+        _quota_wait_depth = max(0, _quota_wait_depth - 1)
+
+
+def _quota_wait_in_flight() -> bool:
+    with _quota_wait_lock:
+        return _quota_wait_depth > 0
 
 
 # ---------------------------------------------------------------------------
@@ -1270,6 +1309,18 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
 
 
 def _execute_quota_trigger(stats: dict, project_path: str, session_id: str = None):
+    """Thin wrapper around _execute_quota_trigger_impl that keeps caffeinate
+    alive for the whole call, including across a session-idle transition
+    mid-wait — see _stop_caffeinate()'s docstring for the incident this
+    closes."""
+    _quota_wait_begin()
+    try:
+        _execute_quota_trigger_impl(stats, project_path, session_id)
+    finally:
+        _quota_wait_end()
+
+
+def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str = None):
     """
     Found 2026-07-16: this used to wait up to 10 minutes for a quiet moment
     (TURN_QUIET_GRACE_SECS + MAX_WAIT_SECS, both UX-only — see
