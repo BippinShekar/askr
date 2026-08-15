@@ -1185,6 +1185,53 @@ def _drop_accomplished_next_actions(next_actions: list, corpus: list) -> list:
     return survivors
 
 
+def _file_exists_relative_or_absolute(path: str, project_path: str) -> bool:
+    if not path or not isinstance(path, str):
+        return False
+    if os.path.isabs(path):
+        return os.path.exists(path)
+    return os.path.exists(os.path.join(project_path, path))
+
+
+def _drop_hallucinated_files(summary, project_path: str):
+    """
+    Confirmed live 2026-08-15: handover generation invented two files that
+    never existed (askr/daemon/quota_monitor.py, askr/daemon/
+    rate_limit_resume.py) in relational_files — plausible-sounding paths
+    matching the session's own narrative, not real filesystem state. Same
+    class of problem the next_actions staleness fix (97c5b19, 2026-08-09)
+    addressed for a different field: trusting LLM-generated claims about the
+    codebase without checking them against ground truth. Nothing downstream
+    re-validates these paths, so a fabricated one just sits in the committed
+    handover indefinitely, feeding wrong context to every future session
+    that reads it.
+
+    Deterministic, no LLM call — this only ever removes entries, never edits
+    or invents one, so a bug here fails toward "drops a real file" (annoying,
+    recoverable next checkpoint) rather than "keeps a fake one" (actively
+    misleading, silent). Only touches dict summaries; the mechanical fallback
+    handover doesn't run the same fabrication risk and any non-dict value
+    (e.g. a legacy string handover) passes through untouched.
+    """
+    if not isinstance(summary, dict):
+        return summary
+    try:
+        files_in_play = summary.get("files_in_play")
+        if isinstance(files_in_play, list):
+            summary["files_in_play"] = [
+                f for f in files_in_play if _file_exists_relative_or_absolute(f, project_path)
+            ]
+        relational_files = summary.get("relational_files")
+        if isinstance(relational_files, list):
+            summary["relational_files"] = [
+                r for r in relational_files
+                if isinstance(r, dict) and _file_exists_relative_or_absolute(r.get("file"), project_path)
+            ]
+    except Exception:
+        pass
+    return summary
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -1325,6 +1372,8 @@ def _run_light_handover(
                 "state_dir": state_dir}, None, transcript_text
     else:
         summary = _build_fallback_handover_dict(entries, existing_handover, trigger_type, state_dir=state_dir)
+
+    summary = _drop_hallucinated_files(summary, project_path)
 
     from askr.state.writer import write_handover, write_session_scratch_handover
     if write_target == "scratch":
