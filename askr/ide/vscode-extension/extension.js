@@ -497,6 +497,22 @@ function checkNotification() {
     } else if (n.type === 'guard_warning') {
       // Non-blocking by design (Phase 3.5) — informational only, no action needed.
       vscode.window.showWarningMessage(`Askr guard: ${n.summary || n.message}`);
+    } else if (n.type === 'guard_approval_pending') {
+      // Escape-hatch redesign (2026-08-15) — the write is HELD, not allowed.
+      // Used to auto-pass through here after 2 blocks with only a Discord
+      // message after the fact; confirmed in real use (twice) that two
+      // retries isn't evidence a human ever reviewed the approach. The file
+      // stays blocked until Approve/Discard actually runs.
+      const filePath = (n.file_path || '').replace(/"/g, '').replace(/`/g, '');
+      vscode.window.showWarningMessage(
+        `Askr: ${n.message}`,
+        'Approve', 'Discard'
+      ).then(action => {
+        if (!action) return;
+        const terminal = vscode.window.createTerminal({ name: 'askr — guard approval' });
+        terminal.show();
+        terminal.sendText(action === 'Approve' ? `askr guard approve "${filePath}"` : `askr guard discard "${filePath}"`);
+      });
     } else if (n.type === 'billing_anomaly_alert') {
       // Same-session rate-limit-resume safety net (lifecycle.
       // _alert_premature_activity, 2026-08-11) — the only showErrorMessage

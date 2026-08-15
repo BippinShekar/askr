@@ -455,6 +455,27 @@ def main():
     if session.get("session_date") != _today():
         session = {"write_count": 0, "last_trigger_at": None, "session_date": _today()}
 
+    # A human explicitly approved this exact file via `askr guard approve` —
+    # let this one retry through, then clear the entry so it isn't treated as
+    # permanently pre-approved for later, unrelated edits to the same file.
+    if blocks.get(file_path, {}).get("approved"):
+        del blocks[file_path]
+        _save_blocks(blocks)
+        _save_session(session)
+        sys.exit(0)
+
+    # Still awaiting a human decision from a prior escape-hatch — block again,
+    # every retry, until approve/discard actually happens. Must not let
+    # Claude keep attempting the same write while this is pending; that's
+    # exactly the silent-bypass behavior this replaced.
+    if blocks.get(file_path, {}).get("pending_approval"):
+        _block_tool(
+            f"Still awaiting human approval for {file_path} "
+            f"(blocked {blocks[file_path].get('count', _ESCAPE_HATCH_COUNT)}x already). "
+            f"Do not retry this write — tell the user to run "
+            f"`askr guard approve {file_path}` or `askr guard discard {file_path}`."
+        )
+
     # Previously-blocked files bypass the cooldown so retries are always checked
     previously_blocked = file_path in blocks
     if _in_cooldown(session) and not previously_blocked:
@@ -475,14 +496,29 @@ def main():
         trigger_reason = blocks[file_path].get("trigger_reason", "retry")
 
     if trigger_reason:
-        # Escape hatch: if blocked too many times, allow through and escalate
+        # Escape hatch: after this many CONSECUTIVE blocks with no genuine
+        # correction, this can no longer resolve itself — it requires an
+        # explicit human decision, not a silent bypass. The old behavior let
+        # the write through here with only an after-the-fact Discord
+        # message ("allowing write through... requires manual review" —
+        # but the write had already happened by the time anyone read that).
+        # Confirmed in real use, twice: Claude retrying the same or a
+        # superficially different approach twice is not evidence a human
+        # ever reviewed it. Block again, mark pending_approval, and require
+        # askr guard approve/discard before this file can be written at all.
         block_count = blocks.get(file_path, {}).get("count", 0)
         if block_count >= _ESCAPE_HATCH_COUNT:
-            _on_escape_hatch(file_path, blocks[file_path])
-            del blocks[file_path]
+            blocks.setdefault(file_path, {"count": block_count})
+            blocks[file_path]["pending_approval"] = True
             _save_blocks(blocks)
             _save_session(session)
-            sys.exit(0)
+            _on_escape_hatch_pending_approval(file_path, blocks[file_path])
+            _block_tool(
+                f"Blocked {block_count}x without a genuinely different approach — this now "
+                f"requires explicit human approval, not another retry. Stop attempting this "
+                f"write. Tell the user: run `askr guard approve {file_path}` to allow it, or "
+                f"`askr guard discard {file_path}` to reject it — then wait for their decision."
+            )
 
         trigger = {
             "reason": trigger_reason,
@@ -590,20 +626,47 @@ def _append_guard_log_block(file_path: str, reason_label: str, summary: str, iss
         pass
 
 
-def _on_escape_hatch(file_path: str, block_entry: dict):
-    """Blocked too many times — allow the write but escalate to Discord as unresolved."""
+_NOTIFICATION_PATH = os.path.expanduser("~/.config/askr/notification.json")
+
+
+def _on_escape_hatch_pending_approval(file_path: str, block_entry: dict):
+    """
+    Blocked _ESCAPE_HATCH_COUNT times with no genuine correction — this can
+    no longer resolve itself automatically. Used to auto-allow the write
+    through here with only an after-the-fact Discord message; confirmed in
+    real use (twice) that Claude retrying the same or a superficially
+    different approach twice is not evidence a human ever reviewed it, so
+    the write was going through with zero actual approval. Now: block stays
+    in place, and this only ever announces that a decision is needed — the
+    write itself does not proceed until `askr guard approve/discard` runs.
+    """
     count  = block_entry.get("count", _ESCAPE_HATCH_COUNT)
     issues = block_entry.get("issues", [])
+    issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
+
     try:
         from askr.clients.discord import send_message
-        issues_text = "\n".join(f"• {i}" for i in issues) if issues else ""
         msg = (
-            f"🚨 **[askr guard] Unresolved** — `{os.path.basename(file_path)}`\n"
-            f"Blocked {count}x without correction. Allowing write through.\n"
-            f"**Requires manual review.**"
+            f"🚨 **[askr guard] Awaiting your approval** — `{os.path.basename(file_path)}`\n"
+            f"Blocked {count}x without a genuine correction. Write is held, not allowed.\n"
+            f"Run `askr guard approve {file_path}` or `askr guard discard {file_path}`."
             + (f"\n{issues_text}" if issues_text else "")
         )
         send_message(msg)
+    except Exception:
+        pass
+
+    try:
+        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
+        with open(_NOTIFICATION_PATH, "w") as f:
+            json.dump({
+                "type": "guard_approval_pending",
+                "message": f"Guard blocked {os.path.basename(file_path)} {count}x — awaiting your approval",
+                "file_path": file_path,
+                "issues": issues,
+                "shown": False,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, f)
     except Exception:
         pass
 
@@ -612,10 +675,10 @@ def _on_escape_hatch(file_path: str, block_entry: dict):
         log_path = os.path.join(get_state_dir(), "guard_log.md")
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
         lines = [
-            f"\n## {ts} — Escape hatch [UNRESOLVED]",
+            f"\n## {ts} — Escape hatch [PENDING APPROVAL]",
             f"**File:** `{file_path}`",
-            f"Blocked {count}x — Claude did not self-correct. Write allowed through.",
-            "**Outcome:** Escalated — requires manual review",
+            f"Blocked {count}x — Claude did not self-correct. Write held, not allowed through.",
+            "**Outcome:** Awaiting `askr guard approve` or `askr guard discard`",
             "",
         ]
         header = ""

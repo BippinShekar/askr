@@ -659,9 +659,13 @@ class WriteEditGuardPipelineTests(unittest.TestCase):
         trigger = mock_guard.call_args[0][0]
         self.assertEqual(trigger["reason"], "new_file")  # reused from the prior block entry
 
-    # -- escape hatch ---------------------------------------------------
+    # -- escape hatch (2026-08-15 redesign: held for approval, not auto-passed) --
 
-    def test_escape_hatch_after_repeated_blocks_allows_through(self):
+    def test_escape_hatch_holds_the_write_does_not_allow_through(self):
+        """The write must stay BLOCKED after repeated failures — the old
+        behavior silently allowed it through with only an after-the-fact
+        Discord message, confirmed live (twice) that this is not real
+        human review."""
         path = self._existing_file("stubborn.py")
         blocks = {
             path: {
@@ -674,19 +678,55 @@ class WriteEditGuardPipelineTests(unittest.TestCase):
         with open(pre_tool_use._GUARD_BLOCKS_PATH, "w") as f:
             json.dump(blocks, f)
 
+        with patch("askr.clients.discord.send_message", return_value=(True, "")), \
+             patch("askr.hooks.pre_tool_use._run_guard") as mock_guard:
+            self._feed({"tool_name": "Edit", "tool_input": {"file_path": path}})
+            code = self._run_main()
+
+        self.assertEqual(code, 2)  # BLOCKED, not allowed through
+        mock_guard.assert_not_called()  # escape hatch short-circuits before the guard call
+
+        remaining = json.load(open(pre_tool_use._GUARD_BLOCKS_PATH))
+        self.assertIn(path, remaining)
+        self.assertTrue(remaining[path]["pending_approval"])
+
+        log = self._guard_log()
+        self.assertIn("Escape hatch [PENDING APPROVAL]", log)
+        self.assertIn("stubborn.py", log)
+
+    def test_pending_approval_blocks_every_subsequent_retry(self):
+        """Claude retrying the same write while it's pending must keep
+        getting blocked — not silently pass just because it tried again."""
+        path = self._existing_file("stubborn.py")
+        blocks = {path: {"count": 3, "pending_approval": True, "issues": []}}
+        with open(pre_tool_use._GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+
+        with patch("askr.hooks.pre_tool_use._run_guard") as mock_guard:
+            self._feed({"tool_name": "Edit", "tool_input": {"file_path": path}})
+            code = self._run_main()
+
+        self.assertEqual(code, 2)
+        mock_guard.assert_not_called()
+
+    def test_approved_file_is_allowed_through_once_then_cleared(self):
+        """askr guard approve marks the entry approved — the hook must let
+        that exact retry through, then remove the entry so future unrelated
+        edits to the same file aren't treated as pre-approved forever."""
+        path = self._existing_file("stubborn.py")
+        blocks = {path: {"count": 3, "pending_approval": False, "approved": True, "issues": []}}
+        with open(pre_tool_use._GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+
         with patch("askr.hooks.pre_tool_use._run_guard") as mock_guard:
             self._feed({"tool_name": "Edit", "tool_input": {"file_path": path}})
             code = self._run_main()
 
         self.assertEqual(code, 0)
-        mock_guard.assert_not_called()  # escape hatch short-circuits before the guard call
+        mock_guard.assert_not_called()  # approved — skip the guard entirely, don't re-litigate it
 
         remaining = json.load(open(pre_tool_use._GUARD_BLOCKS_PATH))
-        self.assertNotIn(path, remaining)
-
-        log = self._guard_log()
-        self.assertIn("Escape hatch [UNRESOLVED]", log)
-        self.assertIn("stubborn.py", log)
+        self.assertNotIn(path, remaining)  # cleared, not left "approved forever"
 
     # -- cross-repo boundary for Write/Edit -------------------------------
 

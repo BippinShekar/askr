@@ -1795,6 +1795,72 @@ def cmd_brief():
         console.print("  [yellow]⚠ project_brief.md was not generated — check ~/.config/askr/error.log[/yellow]\n")
 
 
+_GUARD_BLOCKS_PATH = os.path.expanduser("~/.config/askr/guard_blocks.json")
+
+
+def cmd_guard(args: list):
+    """
+    askr guard list            — show writes currently held pending approval
+    askr guard approve <file>  — allow a held write through on its next retry
+    askr guard discard <file>  — reject a held write; Claude must try something different
+
+    2026-08-15: the escape hatch (pre_tool_use.py) used to auto-allow a write
+    through after 2 blocks with only an after-the-fact Discord message — the
+    write had already happened by the time anyone could react. Confirmed in
+    real use, twice: two retries is not evidence a human ever reviewed the
+    approach. Now the write stays held until one of these two commands runs.
+    """
+    sub = args[0] if args else ""
+
+    try:
+        with open(_GUARD_BLOCKS_PATH) as f:
+            blocks = json.load(f)
+    except Exception:
+        blocks = {}
+
+    if sub == "list":
+        pending = {p: e for p, e in blocks.items() if e.get("pending_approval")}
+        if not pending:
+            console.print("\n  [dim]no writes pending approval[/dim]\n")
+            return
+        console.print(f"\n  [bold]{len(pending)} write(s) pending approval:[/bold]\n")
+        for path, entry in pending.items():
+            console.print(f"  • {path}  [dim](blocked {entry.get('count', '?')}x)[/dim]")
+            for issue in entry.get("issues", []):
+                console.print(f"      [dim]- {issue}[/dim]")
+        console.print()
+        return
+
+    if sub not in ("approve", "discard"):
+        console.print("\n  [bold]askr guard[/bold]")
+        console.print("  [dim]askr guard list                - show writes pending approval[/dim]")
+        console.print("  [dim]askr guard approve <file>      - allow a held write through[/dim]")
+        console.print("  [dim]askr guard discard <file>      - reject a held write[/dim]\n")
+        return
+
+    if len(args) < 2:
+        console.print(f"\n  usage: [bold]askr guard {sub} <file>[/bold]\n")
+        return
+
+    file_path = args[1]
+    if file_path not in blocks or not blocks[file_path].get("pending_approval"):
+        console.print(f"\n  [dim]{file_path}: nothing pending approval[/dim]\n")
+        return
+
+    if sub == "approve":
+        blocks[file_path]["approved"] = True
+        blocks[file_path]["pending_approval"] = False
+        with open(_GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+        console.print(f"\n  [green]✓[/green] approved — the next retry of [bold]{file_path}[/bold] will go through\n")
+    else:
+        del blocks[file_path]
+        with open(_GUARD_BLOCKS_PATH, "w") as f:
+            json.dump(blocks, f)
+        console.print(f"\n  [green]✓[/green] discarded — [bold]{file_path}[/bold] stays blocked; "
+                       f"Claude needs a genuinely different approach\n")
+
+
 def cmd_report():
     """Send a morning/daily report to Discord as a PNG card, print summary to stdout."""
     from askr.state.analytics import today_summary, _load_all
@@ -1978,6 +2044,9 @@ def main():
         console.print("  [dim]askr report              - send morning/daily report to Discord[/dim]")
         console.print("  [dim]askr brief               - regenerate project_brief.md on demand[/dim]")
         console.print("  [dim]askr graph               - print the session-spawn tree from events.jsonl[/dim]")
+        console.print("  [dim]askr guard list          - show writes held pending your approval[/dim]")
+        console.print("  [dim]askr guard approve <f>   - allow a held write through[/dim]")
+        console.print("  [dim]askr guard discard <f>   - reject a held write[/dim]")
         console.print()
         sys.exit(0)
 
@@ -2008,6 +2077,8 @@ def main():
         cmd_team()
     elif cmd == "graph":
         cmd_graph()
+    elif cmd == "guard":
+        cmd_guard(rest)
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
