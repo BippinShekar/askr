@@ -1874,6 +1874,90 @@ def cmd_report():
         console.print("  [yellow]Discord webhook not configured[/yellow] — set ASKR_DISCORD_WEBHOOK in .env")
 
 
+_TRIGGER_COLOR = {"context": "cyan", "quota": "yellow", "idle": "dim", "emergency": "red"}
+
+
+def _format_trigger_summary(events: list) -> str:
+    """One-line summary of a session's trigger_fired rows — most recent
+    first if there happen to be more than one (a session can fire more than
+    one trigger type over its life, e.g. a quota warning then later idle)."""
+    if not events:
+        return "[dim](no trigger recorded)[/dim]"
+    parts = []
+    for e in events[-3:]:  # cap — a runaway session shouldn't blow out one line
+        ttype = e.get("trigger_type") or "?"
+        color = _TRIGGER_COLOR.get(ttype, "white")
+        ts = (e.get("ts") or "")[11:16]  # HH:MM
+        pct_str = ""
+        if ttype == "context":
+            pct = e.get("context_pct")
+            if pct is not None:
+                pct_str = f" {pct*100:.0f}%" if pct <= 1 else f" {pct:.0f}%"
+        elif ttype == "quota":
+            pct = e.get("quota_pct")
+            if pct is not None:
+                pct_str = f" {pct:.0f}%"
+        # idle/emergency aren't percentage-based — trigger type + time is the whole story
+        parts.append(f"[{color}]{ttype}[/{color}]{pct_str} @{ts}")
+    return "  ".join(parts)
+
+
+def _build_graph_tree(tree: dict):
+    from rich.tree import Tree
+
+    sessions = tree["sessions"]
+
+    def _label(sid: str) -> str:
+        node = sessions[sid]
+        proj = os.path.basename((node.get("project_path") or "").rstrip("/")) or "?"
+        spawn_note = ""
+        if node["spawns"]:
+            causes = {s.get("trigger_type") or "?" for s in node["spawns"]}
+            spawn_note = f"  [dim]→ spawned {len(node['spawns'])} via {'/'.join(sorted(causes))}[/dim]"
+        return f"[bold]{sid[:8]}[/bold] [dim]({proj})[/dim]  {_format_trigger_summary(node['triggers'])}{spawn_note}"
+
+    def _sort_key(sid: str):
+        triggers = sessions[sid]["triggers"]
+        return triggers[0].get("ts", "") if triggers else ""
+
+    root = Tree("[bold]askr session graph[/bold]")
+
+    def _add(parent_branch, sid: str):
+        branch = parent_branch.add(_label(sid))
+        for child in sorted(sessions[sid]["children"], key=_sort_key):
+            _add(branch, child)
+
+    for sid in sorted(tree["roots"], key=_sort_key):
+        _add(root, sid)
+
+    return root
+
+
+def cmd_graph():
+    """Reconstruct and print the session-spawn tree from events.jsonl —
+    which trigger fired, when, at what context/quota%, and which session it
+    handed off to. The autonomy story askr's overnight runs are supposed to
+    tell, read back from disk instead of watched live."""
+    from askr.state.events_reader import load_events, build_session_tree
+
+    events = load_events(get_state_dir())
+    if not events:
+        console.print()
+        console.print("  [yellow]No session events recorded yet.[/yellow]")
+        console.print("  [dim]Events are written when a context/quota/idle trigger fires — "
+                       "nothing has fired in this project yet.[/dim]")
+        console.print()
+        return
+
+    tree = build_session_tree(events)
+    console.print()
+    console.print(_build_graph_tree(tree))
+    console.print()
+    total_spawns = sum(len(n["spawns"]) for n in tree["sessions"].values())
+    console.print(f"  [dim]{len(tree['sessions'])} session(s), {total_spawns} companion spawn(s)[/dim]")
+    console.print()
+
+
 def main():
     if len(sys.argv) < 2:
         console.print("\n  [bold]askr[/bold]  [dim]session orchestration for Claude Code[/dim]")
@@ -1893,6 +1977,7 @@ def main():
         console.print("  [dim]askr uninstall --global  - remove askr from this whole machine[/dim]")
         console.print("  [dim]askr report              - send morning/daily report to Discord[/dim]")
         console.print("  [dim]askr brief               - regenerate project_brief.md on demand[/dim]")
+        console.print("  [dim]askr graph               - print the session-spawn tree from events.jsonl[/dim]")
         console.print()
         sys.exit(0)
 
@@ -1921,6 +2006,8 @@ def main():
         cmd_task(rest)
     elif cmd == "team":
         cmd_team()
+    elif cmd == "graph":
+        cmd_graph()
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
