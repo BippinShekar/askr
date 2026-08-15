@@ -42,6 +42,34 @@ _NOTIFIED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/emergency_notified_
 QUOTA_HIGH              = 70.0  # treat as quota-exhausted if above this
 
 
+def _get_tty_for_pid(pid: int) -> str | None:
+    """tty device (e.g. 'ttys003') the given pid's stdio is attached to, or
+    None if it has no controlling terminal (headless/backgrounded)."""
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "tty=", "-p", str(pid)],
+            capture_output=True, text=True, timeout=2,
+        ).stdout.strip()
+        if not out or out in ("?", "??"):
+            return None
+        return out
+    except Exception:
+        return None
+
+
+def _reset_terminal_mouse_tracking(tty: str):
+    """Disable xterm mouse-tracking modes directly on the tty device, so a
+    killed session's terminal doesn't spend the rest of its life echoing raw
+    SGR mouse reports as garbage text. Also re-shows the cursor, which the
+    same modes commonly hide."""
+    device = tty if os.path.isabs(tty) else f"/dev/{tty}"
+    try:
+        with open(device, "w") as f:
+            f.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l\x1b[?25h")
+    except Exception:
+        pass
+
+
 def _load_notified_sessions() -> set:
     try:
         with open(_NOTIFIED_SESSIONS_PATH) as f:
@@ -307,6 +335,11 @@ def main():
     from askr.session.lifecycle import _find_all_claude_pids_by_project
     other_pids = [p for p in _find_all_claude_pids_by_project(project_path) if p != pid] if project_path else []
 
+    # Resolve the controlling tty BEFORE the kill below — `ps -p pid` returns
+    # nothing once the process is dead, so this has to happen while it's
+    # still alive.
+    tty = _get_tty_for_pid(pid)
+
     # Delete own stats file before dying — prevents the daemon from re-triggering
     # on a dead session's stale high ctx% after the cooldown expires.
     if transcript_path and project_path:
@@ -332,6 +365,21 @@ def main():
         os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+
+    # SIGKILL leaves no room for Claude Code's TUI to run its own exit
+    # handler, which is what would normally disable the xterm mouse-tracking
+    # mode (\x1b[?1000h/?1003h/?1006h) it enables on start. Left alone, every
+    # mouse move over that terminal pane afterward gets SGR-encoded and
+    # dumped onto the screen as unreadable noise ("35;92;25M35;76;28M...") —
+    # confirmed live 2026-08-16, looks exactly like a corrupted terminal or a
+    # virus to anyone who doesn't recognize SGR mouse reporting. Writing the
+    # disable sequence straight to the tty device (same mechanism the
+    # `write`/`wall` commands use) bypasses the now-dead shell entirely, so
+    # it doesn't depend on the extension's notification round-trip or on
+    # zsh's line editor faithfully relaying raw escape bytes it was never
+    # meant to interpret.
+    if tty:
+        _reset_terminal_mouse_tracking(tty)
 
     already_notified = session_id in _load_notified_sessions()
     if session_id:

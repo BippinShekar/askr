@@ -182,6 +182,91 @@ class MainKillOrderingTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Terminal mouse-tracking reset after SIGKILL (2026-08-16)
+#
+# SIGKILL gives Claude Code's TUI no chance to disable the xterm mouse-
+# tracking mode it enables on start, so every mouse move over that terminal
+# afterward gets SGR-encoded and dumped onto the screen as garbage text.
+# ---------------------------------------------------------------------------
+
+class TerminalResetTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.state_dir = os.path.join(self._tmp.name, "askr_state")
+        os.makedirs(self.state_dir, exist_ok=True)
+        self._orig_stdin = sys.stdin
+
+    def tearDown(self):
+        sys.stdin = self._orig_stdin
+        self._tmp.cleanup()
+
+    def _feed(self, payload):
+        import io
+        sys.stdin = io.StringIO(json.dumps(payload))
+
+    def test_get_tty_for_pid_parses_ps_output(self):
+        with patch("subprocess.run", return_value=MagicMock(stdout="ttys003\n")):
+            self.assertEqual(pre_compact._get_tty_for_pid(4242), "ttys003")
+
+    def test_get_tty_for_pid_returns_none_for_no_tty(self):
+        with patch("subprocess.run", return_value=MagicMock(stdout="??\n")):
+            self.assertIsNone(pre_compact._get_tty_for_pid(4242))
+
+    def test_get_tty_for_pid_returns_none_on_error(self):
+        with patch("subprocess.run", side_effect=OSError("boom")):
+            self.assertIsNone(pre_compact._get_tty_for_pid(4242))
+
+    def test_reset_terminal_mouse_tracking_writes_disable_sequence(self):
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        try:
+            pre_compact._reset_terminal_mouse_tracking(tmp.name)
+            with open(tmp.name) as f:
+                written = f.read()
+            self.assertIn("\x1b[?1000l", written)
+            self.assertIn("\x1b[?1006l", written)
+            self.assertIn("\x1b[?25h", written)
+        finally:
+            os.remove(tmp.name)
+
+    def test_reset_terminal_mouse_tracking_never_raises_on_bad_device(self):
+        pre_compact._reset_terminal_mouse_tracking("/nonexistent/path/ttyXXX")
+
+    def test_main_resolves_tty_before_kill_and_resets_after(self):
+        call_order = []
+        with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
+             patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
+             patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
+             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
+             patch("askr.hooks.pre_compact._get_tty_for_pid",
+                   side_effect=lambda pid: (call_order.append("get_tty"), "ttys003")[1]), \
+             patch("os.kill", side_effect=lambda pid, sig: call_order.append("kill")), \
+             patch("askr.hooks.pre_compact._reset_terminal_mouse_tracking",
+                   side_effect=lambda tty: call_order.append("reset")) as mock_reset, \
+             patch("askr.hooks.pre_compact._spawn_background_finish"):
+            self._feed({"transcript_path": "/tmp/fake-session.jsonl"})
+            pre_compact.main()
+
+        self.assertEqual(call_order, ["get_tty", "kill", "reset"])
+        mock_reset.assert_called_once_with("ttys003")
+
+    def test_main_skips_reset_when_pid_has_no_tty(self):
+        with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
+             patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
+             patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
+             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
+             patch("askr.hooks.pre_compact._get_tty_for_pid", return_value=None), \
+             patch("os.kill"), \
+             patch("askr.hooks.pre_compact._reset_terminal_mouse_tracking") as mock_reset, \
+             patch("askr.hooks.pre_compact._spawn_background_finish"):
+            self._feed({"transcript_path": "/tmp/fake-session.jsonl"})
+            pre_compact.main()
+
+        mock_reset.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # _finish_emergency_checkpoint — notify/companion-open logic
 # ---------------------------------------------------------------------------
 
