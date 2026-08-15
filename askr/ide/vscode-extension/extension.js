@@ -2,10 +2,35 @@ const vscode = require('vscode');
 const fs     = require('fs');
 const path   = require('path');
 const os     = require('os');
+const cp     = require('child_process');
 
 const STATS_DIR         = path.join(os.homedir(), '.config', 'askr', 'stats');
 const NOTIFICATION_PATH = path.join(os.homedir(), '.config', 'askr', 'notification.json');
 const POLL_MS = 5000;
+
+// Single-quote shell escaping — wrap in quotes, replace any literal ' with '\''.
+function shellQuote(s) {
+  return `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
+
+// Runs a plain `askr ...` command with no visible terminal and no focus
+// steal (2026-08-15) — createTerminal()+show() used to yank the user into a
+// brand-new panel just to run a one-line, non-interactive command (Keep/
+// Discard, Approve/Discard), leaving them stranded away from whatever they
+// were actually doing. -l (login shell) matches lifecycle.py's own
+// _patch_path() fix for the same problem on the Python side: a GUI-launched
+// app (Cursor.app) doesn't inherit the interactive shell PATH that a real
+// terminal would, so `askr` can 404 without it.
+function runAskrSilently(args, opts = {}) {
+  const command = 'askr ' + args.map(shellQuote).join(' ');
+  cp.execFile('/bin/zsh', ['-l', '-c', command], { cwd: opts.cwd, timeout: 15000 }, (err) => {
+    if (err) {
+      vscode.window.showWarningMessage(`Askr: "${command}" failed — ${err.message}`);
+    } else if (opts.successMessage) {
+      vscode.window.showInformationMessage(opts.successMessage);
+    }
+  });
+}
 
 function latestStatsPath() {
   // No way to know which session_id belongs to "the chat the user is looking
@@ -395,13 +420,8 @@ function checkNotification() {
         'Mark Done', 'Discard', 'Keep'
       ).then(action => {
         if (!action || action === 'Keep') return;
-        const terminal = vscode.window.createTerminal({ name: 'askr — goal review' });
-        terminal.show();
-        if (action === 'Mark Done') {
-          goals.forEach(g => terminal.sendText(`askr goal done "${g}"`));
-        } else if (action === 'Discard') {
-          goals.forEach(g => terminal.sendText(`askr goal discard "${g}"`));
-        }
+        const sub = action === 'Mark Done' ? 'done' : 'discard';
+        goals.forEach(g => runAskrSilently(['goal', sub, g]));
       });
     } else if (n.type === 'behavior_confirm') {
       // High-confidence behavioral preference(s) detected from this session's
@@ -422,14 +442,11 @@ function checkNotification() {
         'Keep', 'Discard'
       ).then(action => {
         if (!action) return;  // dismissed — stays in `askr prefs pending` untouched
-        const terminal = vscode.window.createTerminal({ name: 'askr — preferences' });
-        terminal.show();
         rules.forEach(r => {
-          const safeRule = r.rule.replace(/"/g, '').replace(/`/g, '');
           if (action === 'Keep') {
-            terminal.sendText(`askr prefs keep "${safeRule}" --scope ${r.scope || 'project'}`);
+            runAskrSilently(['prefs', 'keep', r.rule, '--scope', r.scope || 'project']);
           } else {
-            terminal.sendText(`askr prefs discard "${safeRule}"`);
+            runAskrSilently(['prefs', 'discard', r.rule]);
           }
         });
       });
@@ -453,14 +470,18 @@ function checkNotification() {
         'Dismiss'
       ).then(action => {
         if (!action || action === 'Dismiss') return;
-        const termOpts = { name: 'askr', ...(n.project_path ? { cwd: n.project_path } : {}) };
-        const terminal = vscode.window.createTerminal(termOpts);
-        terminal.show();
         if (action === 'Add to Goals') {
-          const safeDir = (n.direction || preview).replace(/"/g, '').replace(/`/g, '').slice(0, 120);
-          terminal.sendText(`askr goal add "${safeDir}"`);
+          // Just queues it — no interactive session to show here. The daemon
+          // auto-launches it later on its own schedule, which fires its own
+          // goal_launch notification (and its own terminal) when it actually starts.
+          const dir = (n.direction || preview).slice(0, 120);
+          runAskrSilently(['goal', 'add', dir], { cwd: n.project_path, successMessage: 'Askr: added to goals' });
         } else {
-          // Start Now — open Claude with this direction as the launch prompt
+          // Start Now — this genuinely opens an interactive Claude session,
+          // so a visible, focused terminal is the right call here.
+          const termOpts = { name: 'askr', ...(n.project_path ? { cwd: n.project_path } : {}) };
+          const terminal = vscode.window.createTerminal(termOpts);
+          terminal.show();
           const toolsFlag = (n.allowed_tools && n.allowed_tools.length)
             ? ` --allowedTools ${n.allowed_tools.join(',')}`
             : '';
@@ -503,15 +524,14 @@ function checkNotification() {
       // message after the fact; confirmed in real use (twice) that two
       // retries isn't evidence a human ever reviewed the approach. The file
       // stays blocked until Approve/Discard actually runs.
-      const filePath = (n.file_path || '').replace(/"/g, '').replace(/`/g, '');
       vscode.window.showWarningMessage(
         `Askr: ${n.message}`,
         'Approve', 'Discard'
       ).then(action => {
         if (!action) return;
-        const terminal = vscode.window.createTerminal({ name: 'askr — guard approval' });
-        terminal.show();
-        terminal.sendText(action === 'Approve' ? `askr guard approve "${filePath}"` : `askr guard discard "${filePath}"`);
+        const sub = action === 'Approve' ? 'approve' : 'discard';
+        const successMessage = action === 'Approve' ? 'Askr: approved' : 'Askr: discarded';
+        runAskrSilently(['guard', sub, n.file_path], { successMessage });
       });
     } else if (n.type === 'billing_anomaly_alert') {
       // Same-session rate-limit-resume safety net (lifecycle.
@@ -536,16 +556,16 @@ function checkNotification() {
       // Phase 5 approval gate — a teammate's queued task is held because this
       // session has dangerous permissions (--dangerously-skip-permissions,
       // unrestricted Bash, or an rm pattern in permissions.allow).
-      const dev = (n.developer || '').replace(/"/g, '').replace(/`/g, '');
+      const dev = n.developer || '';
       const count = (n.tasks || []).length;
       vscode.window.showWarningMessage(
         `Askr: ${count} queued task(s) held for ${dev} — ${(n.reasons || []).join('; ')}`,
         'Approve', 'Discard'
       ).then(action => {
         if (!action) return;
-        const terminal = vscode.window.createTerminal({ name: 'askr — task approval' });
-        terminal.show();
-        terminal.sendText(action === 'Approve' ? `askr task approve ${dev}` : `askr task discard ${dev}`);
+        const sub = action === 'Approve' ? 'approve' : 'discard';
+        const successMessage = action === 'Approve' ? 'Askr: approved' : 'Askr: discarded';
+        runAskrSilently(['task', sub, dev], { successMessage });
       });
     } else {
       // Any notification type without a dedicated case above — just inform.
