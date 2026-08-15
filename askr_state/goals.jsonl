@@ -276,3 +276,5 @@
 {"id": "3c143a74", "text": "Analyze daemon.log for Trigger B patterns & quota=100% detection latency", "status": "open", "date": "2026-08-15", "added": "2026-08-15T09:47:51Z", "auto_suggested": true, "done_at": null}
 {"id": "33c84ab9", "text": "Run overnight orchestrator test & validate quota-detection in events.jsonl", "status": "discarded", "date": "2026-08-15", "added": "2026-08-15T09:47:51Z", "auto_suggested": true, "done_at": "2026-08-15T09:48:49Z"}
 {"id": "3c143a74", "text": "Analyze daemon.log for Trigger B patterns & quota=100% detection latency", "status": "discarded", "date": "2026-08-15", "added": "2026-08-15T09:47:51Z", "auto_suggested": true, "done_at": "2026-08-15T09:48:49Z"}
+{"id": "d75ce3a6", "text": "Run overnight autonomous orchestrator test and validate quota-detection/auto-res", "status": "open", "date": "2026-08-15", "added": "2026-08-15T10:42:54Z", "auto_suggested": true, "done_at": null}
+{"id": "79e36ab5", "text": "Monitor daemon.log for Trigger B fire patterns and quota=100% detection latency", "status": "open", "date": "2026-08-15", "added": "2026-08-15T10:42:54Z", "auto_suggested": true, "done_at": null}
