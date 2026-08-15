@@ -1,6 +1,6 @@
 {
-  "task": "Implemented independent quota polling to close the root cause of rate-limit triggers failing to fire, enabling reliable quota-exhaustion detection and same-session auto-resume across all daemon cycles.",
-  "discussion_summary": "The quota-exhaustion trigger (Trigger B) was structurally broken: it only refreshed via PostToolUse hooks, so once the account hit 100%, no more successful tool calls occurred and the stats file froze at whatever it last recorded (often 84%), preventing the trigger from ever firing. This bug recurred across the entire past week. Fixed by adding an independent 60-second poll that hits the live usage API directly, bypassing the frozen stats file and firing the trigger for the affected project even when its own instrumentation is stale. The fix reuses existing dedup logic to prevent double-firing against the per-project path. All 599 tests pass; daemon self-restarts on source changes and is live without manual intervention.",
+  "task": "Implemented independent quota polling to close the root cause of rate-limit triggers failing to fire, enabling reliable quota-exhaustion detection and same-session auto-resume across all daemon cycles; added cmd_graph() CLI command to visualize session-spawn trees and trigger-fire patterns from events.jsonl for autonomous orchestrator validation.",
+  "discussion_summary": "The quota-exhaustion trigger (Trigger B) was structurally broken: it only refreshed via PostToolUse hooks, so once the account hit 100%, no more successful tool calls occurred and the stats file froze at whatever it last recorded (often 84%), preventing the trigger from ever firing. This bug recurred across the entire past week. Fixed by adding an independent 60-second poll that hits the live usage API directly, bypassing the frozen stats file and firing the trigger for the affected project even when its own instrumentation is stale. The fix reuses existing dedup logic to prevent double-firing against the per-project path. All 599 tests pass; daemon self-restarts on source changes and is live without manual intervention. This session added cmd_graph() to reconstruct and visualize the session-spawn tree from events.jsonl, enabling ground-truth validation of quota-detection and auto-resume flows without requiring live observation.",
   "accomplishments": [
     {
       "what": "Implemented independent quota polling (_INDEPENDENT_QUOTA_POLL_SECS = 60) that queries live usage API on every daemon cycle, independent of per-project stats file freshness",
@@ -21,6 +21,34 @@
     {
       "what": "Confirmed daemon self-restart on source changes; fix is live without manual restart required",
       "done": true
+    },
+    {
+      "what": "Researched Conductor.build competitive positioning; confirmed orthogonal product category with no direct feature overlap",
+      "done": true
+    },
+    {
+      "what": "Implemented cmd_graph() CLI command to reconstruct and print session-spawn tree from events.jsonl with trigger type, timestamp, context/quota percentages, and spawn causality",
+      "done": true
+    },
+    {
+      "what": "Added _format_trigger_summary() to render one-line trigger history (context/quota/idle/emergency with percentages and timestamps) for session nodes in graph output",
+      "done": true
+    },
+    {
+      "what": "Added _build_graph_tree() to construct Rich tree visualization of session hierarchy with color-coded trigger types and spawn annotations",
+      "done": true
+    },
+    {
+      "what": "Integrated cmd_graph() into main() CLI dispatcher and added help text to usage output",
+      "done": true
+    },
+    {
+      "what": "Created askr/state/events_reader.py with load_events() and build_session_tree() to parse events.jsonl and reconstruct parent-child session relationships",
+      "done": true
+    },
+    {
+      "what": "Added test_cmd_graph.py and test_events_reader.py to validate graph reconstruction and event parsing logic",
+      "done": true
     }
   ],
   "in_progress": [],
@@ -28,7 +56,7 @@
     {
       "order": 1,
       "action": "Run overnight autonomous orchestrator test and query events.jsonl for dashboard to validate quota-detection and auto-resume flow end-to-end",
-      "why": "Confirms that independent poll correctly triggers Stage 4 automation (Escape, notification, wait, cont) when real quota exhaustion occurs; provides ground truth for dashboard visualization"
+      "why": "Confirms that independent poll correctly triggers Stage 4 automation (Escape, notification, wait, cont) when real quota exhaustion occurs; cmd_graph() now provides ground truth for dashboard visualization"
     },
     {
       "order": 2,
@@ -39,6 +67,11 @@
       "order": 3,
       "action": "Verify that Stage 4 automation (PID\u2192terminal targeting, Escape keystroke, notification, cont message) fires correctly when independent poll detects exhaustion",
       "why": "Completes the end-to-end flow; independent poll is only useful if it successfully triggers the downstream automation that resumes the session"
+    },
+    {
+      "order": 4,
+      "action": "Commit cmd_graph() and events_reader.py changes to main after verifying test suite passes",
+      "why": "Enables overnight orchestrator runs to generate events.jsonl that can be queried with cmd_graph() for autonomous flow validation"
     }
   ],
   "decisions": [
@@ -69,6 +102,18 @@
     {
       "decision": "Independent quota poll runs on 60-second cadence (_INDEPENDENT_QUOTA_POLL_SECS), matched to existing QUOTA_NOTIFY_POLL_SECS cadence",
       "reason": "Balances responsiveness (within 60s of real exhaustion) against unknown rate-limit constraints on the usage API; 60s is conservative and aligns with existing quota machinery"
+    },
+    {
+      "decision": "cmd_graph() reconstructs session-spawn tree from events.jsonl instead of live daemon state, enabling post-hoc analysis of autonomous orchestrator runs without requiring real-time observation",
+      "reason": "Events are immutable ground truth written to disk; reconstruction from events.jsonl is reproducible, debuggable, and survives daemon restarts or crashes"
+    },
+    {
+      "decision": "Trigger summary in graph output shows most recent 3 trigger-fire events per session (capped to prevent runaway output) with color-coded type, percentage (for context/quota), and HH:MM timestamp",
+      "reason": "Balances visibility of trigger history against one-line readability; color coding enables quick visual scanning of trigger types; time-of-day helps correlate with daemon logs"
+    },
+    {
+      "decision": "Session nodes in graph tree show project basename, trigger history, and spawn causality (which trigger type spawned child sessions) in a single line",
+      "reason": "Enables complete autonomy story to be read from a single tree view without requiring separate log queries; spawn causality shows which automation fired and what it triggered"
     }
   ],
   "user_rejected_decisions": [],
@@ -83,39 +128,48 @@
     }
   ],
   "files_in_play": [
-    "askr/cli/askr.py"
+    "askr/cli/askr.py",
+    "askr/state/events_reader.py",
+    "tests/test_cmd_graph.py",
+    "tests/test_events_reader.py"
   ],
   "relational_files": [
     {
       "file": "askr/daemon/quota_monitor.py",
       "relationship": "imports",
-      "why": "Contains independent polling logic and Trigger B firing; central to quota-exhaustion detection"
+      "why": "Contains independent polling logic and Trigger B firing; central to quota-exhaustion detection that cmd_graph() visualizes"
     },
     {
       "file": "askr/daemon/rate_limit_resume.py",
       "relationship": "imported_by",
-      "why": "Receives Trigger B signal from quota_monitor and executes Stage 4 automation (Escape, notification, wait, cont)"
+      "why": "Receives Trigger B signal from quota_monitor and executes Stage 4 automation (Escape, notification, wait, cont); spawn causality in graph output traces back to this module"
     },
     {
       "file": "askr/utils/hook_capture.py",
       "relationship": "configures",
-      "why": "Captures hook payloads for all seven lifecycle hooks; provides ground truth for session transition analysis"
+      "why": "Captures hook payloads for all seven lifecycle hooks; events.jsonl is built from these payloads, which cmd_graph() reconstructs into session tree"
     },
     {
       "file": "tests/test_quota_monitor.py",
       "relationship": "tested_by",
-      "why": "599 tests pass; validates independent poll logic and dedup behavior"
+      "why": "599 tests pass; validates independent poll logic and dedup behavior that cmd_graph() depends on for accurate trigger-fire reconstruction"
     }
   ],
   "uncommitted_files": [
-    "askr_state/implementation_bippin.jsonl"
+    "askr/cli/askr.py",
+    "askr_state/decisions.jsonl",
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_bippin.jsonl",
+    "askr/state/events_reader.py",
+    "tests/test_cmd_graph.py",
+    "tests/test_events_reader.py"
   ],
   "blockers": [],
   "completed_goals": [],
   "behavioral_preferences": [],
   "session_metadata": {
-    "trigger_type": "idle",
-    "timestamp": "2026-08-14T17:03:46.767978+00:00",
+    "trigger_type": "emergency",
+    "timestamp": "2026-08-15T10:06:03.436847+00:00",
     "developer": "bippin"
   }
 }
