@@ -138,7 +138,7 @@ class MainKillOrderingTests(unittest.TestCase):
             self._feed({"transcript_path": "/tmp/fake-session.jsonl"})
             pre_compact.main()
 
-        mock_kill.assert_called_once_with(4242, __import__("signal").SIGTERM)
+        mock_kill.assert_called_once_with(4242, __import__("signal").SIGKILL)
         mock_spawn.assert_called_once()
         self.assertEqual(call_order, [("kill", 4242), "spawn_background"])
 
@@ -241,6 +241,34 @@ class FinishEmergencyCheckpointTests(unittest.TestCase):
         mock_spawn_term.assert_called_once()
         mock_event.assert_called_once()
         self.assertEqual(mock_event.call_args[0][0], "companion_spawned")
+        self.assertEqual(mock_event.call_args.kwargs["parent_session_id"], "sess-1")
+
+    def test_empty_session_id_falls_back_to_transcript_path(self):
+        """
+        Regression test: every emergency companion_spawned event in production
+        (2026-08-10 through 2026-08-15) shipped with parent_session_id "" even
+        though transcript_path was always present — breaking askr graph's
+        lineage for every emergency-spawned companion. session_id must be
+        re-derived from transcript_path whenever it arrives empty.
+        """
+        notif_path = os.path.join(self._tmp.name, "notification.json")
+        with patch("askr.session.checkpoint.create_checkpoint", return_value={}), \
+             patch("askr.hooks.pre_compact._latest_stats", return_value={"quota_pct": 10}), \
+             patch("askr.session.lifecycle._NOTIFICATION_PATH", notif_path), \
+             patch("askr.session.lifecycle._load_allowed_tools", return_value=[]), \
+             patch("askr.session.lifecycle._spawn_terminal_app_fallback") as mock_spawn_term, \
+             patch("askr.state.writer.append_event") as mock_event, \
+             patch("askr.hooks.pre_compact._speak"):
+            pre_compact._finish_emergency_checkpoint(
+                self._tmp.name, "dev", "/tmp/8ed7cfb6-e562-430b-9c7c-3400745a8a51.jsonl", "",
+                should_open_companion=True, already_notified=False,
+            )
+        mock_spawn_term.assert_called_once()
+        mock_event.assert_called_once()
+        self.assertEqual(
+            mock_event.call_args.kwargs["parent_session_id"],
+            "8ed7cfb6-e562-430b-9c7c-3400745a8a51",
+        )
 
     def test_should_open_companion_false_does_not_spawn_terminal(self):
         notif_path = os.path.join(self._tmp.name, "notification.json")

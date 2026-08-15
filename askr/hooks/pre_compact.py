@@ -138,6 +138,18 @@ def _finish_emergency_checkpoint(project_path: str, developer: str, transcript_p
     notification, speaks a short line, and opens a companion if none is
     already running for this project.
     """
+    if not session_id and transcript_path:
+        # Every "companion_spawned" event logged in production so far has
+        # shown up with parent_session_id "" (confirmed 2026-08-15 across
+        # every emergency-trigger row in events.jsonl) — the session_id this
+        # function received was empty even though the transcript_path that
+        # produced it wasn't, breaking askr graph's parent/child lineage for
+        # every emergency-spawned companion. Re-derive from transcript_path
+        # (same computation main() does) as a cheap, always-available backstop
+        # rather than propagating an empty id into launch_mode.json and the
+        # event log.
+        session_id = os.path.basename(transcript_path).replace(".jsonl", "")
+
     from askr.session.checkpoint import create_checkpoint
     checkpoint_result = create_checkpoint(
         trigger_type="emergency", developer=developer, transcript_path=transcript_path,
@@ -309,8 +321,15 @@ def main():
     # THE race: kill before Claude Code's own compaction can finish. Nothing
     # above this line does network I/O or an LLM call — everything that does
     # happens below, after the kill, off this hook's critical path.
+    #
+    # SIGKILL, not SIGTERM: confirmed 2026-08-15 that SIGTERM lost the race
+    # even with kill-first ordering — Claude Code's process finished the
+    # in-flight compaction AND generated its next response before actually
+    # exiting, meaning it was treating SIGTERM as "finish current work, then
+    # exit" rather than dying on receipt. SIGKILL can't be caught, blocked,
+    # or deferred by the target process, so there's no handler left to honor.
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.kill(pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
 
