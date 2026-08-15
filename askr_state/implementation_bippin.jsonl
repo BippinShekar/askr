@@ -4504,3 +4504,30 @@
 {"ts": "2026-08-15T21:10:05Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "git add askr/hooks/pre_compact.py tests/test_pre_compact.py && git status"}
 {"ts": "2026-08-15T21:10:10Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "git commit -m \"$(cat <<'EOF'\nfix(hooks): reset xterm mouse-tracking on terminal "}
 {"ts": "2026-08-15T21:10:13Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "git push origin main 2>&1 | tail -20"}
+{"ts": "2026-08-15T21:11:28Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "find /Users/bippin/Desktop/askr -iname \"*handover*\" -newer /Users/bippin/Desktop"}
+{"ts": "2026-08-15T21:11:35Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "tail -30 askr_state/events.jsonl"}
+{"ts": "2026-08-15T21:11:36Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -c companion_spawned askr_state/events.jsonl; echo ---; grep companion_spaw"}
+{"ts": "2026-08-15T21:11:41Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -rn \"companion_spawned\\|trigger_type.*emergency\\|\\\"emergency\\\"\" askr/ --inc"}
+{"ts": "2026-08-15T21:11:43Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -rln \"companion_spawned\" askr/ 2>/dev/null"}
+{"ts": "2026-08-15T21:11:45Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -n \"companion_spawned\\|emergency\" askr/hooks/pre_compact.py askr/session/li"}
+{"ts": "2026-08-15T21:12:05Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -n \"companion_spawned\\|append_event\" askr/session/lifecycle.py | head -30"}
+{"ts": "2026-08-15T21:12:05Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "ls -la ~/.config/askr/ 2>/dev/null; echo ---; tail -80 ~/.config/askr/daemon.log"}
+{"ts": "2026-08-15T21:12:05Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "find / -iname \"*handover*\" -mmin -720 2>/dev/null | grep -v \"/\\.Trash\" | head -5"}
+{"ts": "2026-08-15T21:12:12Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "git status && echo \"---LOG---\" && git log --oneline -5 -- askr/session/lifecycle"}
+{"ts": "2026-08-15T21:12:16Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -c \"source files updated\" ~/.config/askr/daemon.log; echo ---last50min---\na"}
+{"ts": "2026-08-15T21:12:16Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "git diff --stat askr_state/decisions.jsonl askr_state/events.jsonl askr_state/fa"}
+{"ts": "2026-08-15T21:12:16Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -n \"PreCompact\" ~/.config/askr/hook_capture.log | tail -30"}
+{"ts": "2026-08-15T21:12:19Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -o '\"ts\": \"[^\"]*\".*\"hook\": \"PreCompact\"' ~/.config/askr/hook_capture.log | "}
+{"ts": "2026-08-15T21:12:21Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "tail -40 /Users/bippin/.config/askr/daemon.log 2>/dev/null\necho \"===events new=="}
+{"ts": "2026-08-15T21:12:23Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -c '\"hook\": \"PreCompact\"' ~/.config/askr/hook_capture.log\necho ---\ngrep '\"h"}
+{"ts": "2026-08-15T21:12:28Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "head -1 ~/.config/askr/hook_capture.log | grep -o '\"ts\": \"[^\"]*\"'\nwc -l ~/.confi"}
+{"ts": "2026-08-15T21:12:34Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "date\necho \"---repo extension.js---\"\nfind /Users/bippin/Desktop/askr -iname \"exte"}
+{"ts": "2026-08-15T21:12:40Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "REPO_EXT=\"/Users/bippin/Desktop/askr/askr/ide/vscode-extension/extension.js\"\nCUR"}
+{"ts": "2026-08-15T21:12:49Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -n \"hook_capture\\|1000\\|maxlen\\|truncate\" askr/utils/hook_capture.py 2>/dev"}
+{"ts": "2026-08-15T21:12:49Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "grep -c \"askr: emergency\" <(git log --format=\"%s\") \necho \"---last 15 emergency c"}
+{"ts": "2026-08-15T21:12:59Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "cat ~/.config/askr/notification.json 2>/dev/null; echo; echo ---checkpoint_resul"}
+{"ts": "2026-08-15T21:12:59Z", "session_id": "b361e6c9-ee46-4b39-b0e8-dbb591dba88d", "type": "command", "detail": "grep -n \"kill\\|SIGKILL\\|PreCompact\\|companion\" ~/.config/askr/daemon.log | tail "}
+{"ts": "2026-08-15T21:13:01Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "python -m pytest tests/test_turn_wait.py tests/test_independent_quota_poll.py te"}
+{"ts": "2026-08-15T21:13:05Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "(python3 -m pytest tests/test_turn_wait.py tests/test_independent_quota_poll.py "}
+{"ts": "2026-08-15T21:13:13Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "source venv/bin/activate && python -m pytest tests/test_turn_wait.py tests/test_"}
+{"ts": "2026-08-15T21:13:23Z", "session_id": "52e7f29a-a7e3-43c4-97e8-cc46a9636755", "type": "command", "detail": "source venv/bin/activate && python -m pytest tests/ -q 2>&1 | tail -20"}
