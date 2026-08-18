@@ -257,6 +257,32 @@ function extractPendingInput(buffer) {
   return pending || null;
 }
 
+// Companion-launch readiness probe (2026-08-18): sendText() is fire-and-
+// forget, so the launch prompt used to be sent after a blind 4s setTimeout
+// regardless of whether the `claude` CLI had actually finished booting.
+// Confirmed live: under load (several companions spawning within the same
+// few minutes) cold start routinely exceeds 4s, so the prompt+\r landed on
+// a terminal that wasn't listening yet and was silently dropped — an idle
+// companion terminal sitting on the banner with nothing typed into it, no
+// error anywhere. Reuses readTerminalBuffer to poll for the empty ready
+// prompt ('>' with nothing after it) before sending. Still sends
+// unconditionally once the bounded wait is exhausted, so this degrades to
+// the old blind-send behavior in the worst case rather than ever hanging.
+function isPromptReady(buffer) {
+  if (!buffer) return false;
+  const lines = buffer.split(/\r?\n/).map(l => l.replace(DECOR_CHARS, '').trim());
+  let end = lines.length - 1;
+  while (end >= 0 && lines[end] === '') end--;
+  return end >= 0 && lines[end] === '>';
+}
+
+async function waitForClaudeReady(terminal, checkDelaysMs = [6000, 5000]) {
+  for (const delay of checkDelaysMs) {
+    await new Promise(r => setTimeout(r, delay));
+    if (isPromptReady(await readTerminalBuffer(terminal))) return;
+  }
+}
+
 async function captureUnsentInput() {
   const term = vscode.window.activeTerminal;
   if (!term) return null;
@@ -323,7 +349,10 @@ async function openContextCompanion(n) {
     if (safeSummary) terminal.sendText(`echo "askr — previous session: ${safeSummary}"`);
   }
   terminal.sendText(`claude${toolsFlag}`);
-  setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+  waitForClaudeReady(terminal).then(() => {
+    terminal.sendText(launchPrompt, false);
+    terminal.sendText('\r', false);
+  });
 }
 
 function checkNotification() {
@@ -363,7 +392,10 @@ function checkNotification() {
           : '';
         const launchPrompt = (n.prompt || 'Read the handover and continue immediately. Work autonomously.').replace(/"/g, '').replace(/`/g, '');
         terminal.sendText(`claude${toolsFlag}`);
-        setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+        waitForClaudeReady(terminal).then(() => {
+          terminal.sendText(launchPrompt, false);
+          terminal.sendText('\r', false);
+        });
       }
     } else if (n.type === 'quota') {
       // Quota trigger's own richer message (lifecycle._write_notification) —
@@ -406,7 +438,10 @@ function checkNotification() {
         ? n.prompt.replace(/"/g, '').replace(/`/g, '')
         : `Read the handover and work on this goal autonomously: ${safeGoal}`;
       terminal.sendText(`claude${toolsFlag}`);
-      setTimeout(() => { terminal.sendText(launchPrompt, false); terminal.sendText('\r', false); }, 4000);
+      waitForClaudeReady(terminal).then(() => {
+        terminal.sendText(launchPrompt, false);
+        terminal.sendText('\r', false);
+      });
       vscode.window.showInformationMessage(`Askr: Starting session — ${goal.slice(0, 80)}`);
     } else if (n.type === 'goal_check') {
       // Stale inferred goals — ask user what to do, log the outcome
@@ -487,7 +522,10 @@ function checkNotification() {
             : '';
           const safePrompt = (n.prompt || n.direction || '').replace(/"/g, '').replace(/`/g, '');
           terminal.sendText(`claude${toolsFlag}`);
-          setTimeout(() => { terminal.sendText(safePrompt, false); terminal.sendText('\r', false); }, 4000);
+          waitForClaudeReady(terminal).then(() => {
+            terminal.sendText(safePrompt, false);
+            terminal.sendText('\r', false);
+          });
         }
       });
     } else if (n.type === 'direction_confirm' || n.type === 'direction_needed') {
@@ -513,7 +551,10 @@ function checkNotification() {
           : '';
         const safeInput = input.replace(/"/g, '').replace(/`/g, '');
         terminal.sendText(`claude${toolsFlag}`);
-        setTimeout(() => { terminal.sendText(safeInput, false); terminal.sendText('\r', false); }, 4000);
+        waitForClaudeReady(terminal).then(() => {
+          terminal.sendText(safeInput, false);
+          terminal.sendText('\r', false);
+        });
       });
     } else if (n.type === 'guard_warning') {
       // Non-blocking by design (Phase 3.5) — informational only, no action needed.
