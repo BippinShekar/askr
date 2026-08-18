@@ -472,6 +472,26 @@ def _get_ancestor_pids(pid: int, max_depth: int = 6) -> list:
     return ancestors
 
 
+def _norm_path(path: str) -> str:
+    """
+    Resolve symlinks/case before comparing paths across process boundaries.
+    macOS mounts the boot volume at both `/Users/...` and the underlying
+    `/System/Volumes/Data/Users/...` — `lsof -d cwd` reports whichever form
+    the kernel resolved to, which doesn't always match the form callers built
+    project_path from (os.getcwd(), a hook payload's cwd, etc). A bare string
+    equality against unresolved paths silently undercounts live pids, which
+    is exactly what let pre_compact.py's companion-dedup guard open a
+    redundant companion on top of one already running (confirmed live
+    2026-08-18: _find_all_claude_pids_by_project missed an already-running
+    pid whose lsof cwd and the caller's project_path took different forms of
+    the same real directory).
+    """
+    try:
+        return os.path.realpath(path)
+    except Exception:
+        return path
+
+
 def _find_session_pid(transcript_path: str, project_path: str = "") -> int | None:
     """
     Find the PID of the Claude process that owns this specific session
@@ -503,7 +523,7 @@ def _find_session_pid(transcript_path: str, project_path: str = "") -> int | Non
             pass
 
     try:
-        resolved_project_path = project_path or os.getcwd()
+        resolved_project_path = _norm_path(project_path or os.getcwd())
         result = subprocess.run(
             ["pgrep", "-x", "claude"],
             capture_output=True, text=True, timeout=5,
@@ -516,7 +536,7 @@ def _find_session_pid(transcript_path: str, project_path: str = "") -> int | Non
                     capture_output=True, text=True, timeout=3,
                 )
                 for line in lsof.stdout.splitlines():
-                    if line.startswith("n") and line[1:] == resolved_project_path:
+                    if line.startswith("n") and _norm_path(line[1:]) == resolved_project_path:
                         return pid
             except Exception:
                 continue
@@ -528,6 +548,7 @@ def _find_session_pid(transcript_path: str, project_path: str = "") -> int | Non
 def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
     """Find ALL running 'claude' processes whose cwd matches project_path."""
     pids = []
+    resolved_project_path = _norm_path(project_path)
     try:
         result = subprocess.run(
             ["pgrep", "-x", "claude"],
@@ -541,7 +562,7 @@ def _find_all_claude_pids_by_project(project_path: str) -> list[int]:
                     capture_output=True, text=True, timeout=3,
                 )
                 for line in lsof_result.stdout.splitlines():
-                    if line.startswith("n") and line[1:] == project_path:
+                    if line.startswith("n") and _norm_path(line[1:]) == resolved_project_path:
                         pids.append(pid)
                         break
             except Exception:

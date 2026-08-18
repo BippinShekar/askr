@@ -40,7 +40,10 @@ def _write_claude_pid(developer: str):
     its own PID so the daemon can kill all of them.
     """
     try:
-        project_path = os.getcwd()
+        # realpath both sides — macOS mounts the boot volume at both
+        # /Users/... and /System/Volumes/Data/Users/..., and lsof's reported
+        # cwd doesn't always take the same form os.getcwd() does.
+        project_path = os.path.realpath(os.getcwd())
         result = subprocess.run(
             ["pgrep", "-x", "claude"],
             capture_output=True, text=True, timeout=5,
@@ -53,7 +56,7 @@ def _write_claude_pid(developer: str):
                     capture_output=True, text=True, timeout=3,
                 )
                 for line in lsof.stdout.splitlines():
-                    if line.startswith("n") and line[1:] == project_path:
+                    if line.startswith("n") and os.path.realpath(line[1:]) == project_path:
                         path = _sessions_path(developer)
                         os.makedirs(_SESSIONS_DIR, exist_ok=True)
                         registry = []

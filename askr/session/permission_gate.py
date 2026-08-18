@@ -31,6 +31,10 @@ def _claude_launch_args_dangerous(project_path: str) -> bool:
     a hook subprocess (Claude Code's hook stdin payload doesn't include them).
     """
     try:
+        # realpath both sides — macOS mounts the boot volume at both
+        # /Users/... and /System/Volumes/Data/Users/..., and lsof's reported
+        # cwd doesn't always take the same form the caller's project_path does.
+        resolved_project_path = os.path.realpath(project_path)
         pgrep = subprocess.run(
             ["pgrep", "-x", "claude"], capture_output=True, text=True, timeout=5,
         )
@@ -43,7 +47,7 @@ def _claude_launch_args_dangerous(project_path: str) -> bool:
                 capture_output=True, text=True, timeout=3,
             )
             matches_cwd = any(
-                line.startswith("n") and line[1:] == project_path
+                line.startswith("n") and os.path.realpath(line[1:]) == resolved_project_path
                 for line in lsof.stdout.splitlines()
             )
             if not matches_cwd:
