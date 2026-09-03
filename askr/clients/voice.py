@@ -45,12 +45,15 @@ def humanize_for_speech(text: str, max_len: int = 200) -> str:
     return text
 
 
-def _say_preconditions() -> tuple[str, str]:
+def _say_preconditions(project_path: str = "") -> tuple[str, str]:
     """Shared gate for any spoken output: voice_notifications on, macOS, `say` on PATH.
-    Returns (say_bin, "") when clear to speak, ("", reason) otherwise."""
+    Returns (say_bin, "") when clear to speak, ("", reason) otherwise. `project_path`
+    resolves a per-project override (askr_state/config.json) ahead of the global
+    machine-level default — required for callers like the daemon whose own cwd is
+    never the project being announced about."""
     try:
         from askr.state.config import load_voice_enabled
-        if not load_voice_enabled():
+        if not load_voice_enabled(project_path or None):
             return "", "voice notifications disabled"
     except Exception as e:
         return "", str(e)
@@ -120,7 +123,7 @@ def _log_voice_event(text: str, spoken: bool, reason: str, context: dict = None)
         pass
 
 
-def speak(text: str, voice: str = "", context: dict = None) -> tuple[bool, str]:
+def speak(text: str, voice: str = "", context: dict = None, project_path: str = "") -> tuple[bool, str]:
     """
     Speak text aloud via macOS's native `say` command.
     Gated by the user's voice_notifications preference. Returns (True, "") on
@@ -129,11 +132,14 @@ def speak(text: str, voice: str = "", context: dict = None) -> tuple[bool, str]:
     voice (e.g. "Zarvox"); empty uses the system default. `context` is an
     optional dict (source/session_id/project_path/...) recorded alongside
     this call in voice_log.jsonl for debugging — see _log_voice_event.
+    `project_path` resolves per-project config overrides; falls back to
+    context["project_path"] when not passed explicitly.
     """
     if not text:
         return False, "empty text"
 
-    say_bin, reason = _say_preconditions()
+    project_path = project_path or (context or {}).get("project_path", "")
+    say_bin, reason = _say_preconditions(project_path)
     if not say_bin:
         _log_voice_event(text, False, reason, context)
         return False, reason
@@ -154,7 +160,7 @@ def speak(text: str, voice: str = "", context: dict = None) -> tuple[bool, str]:
         _release_voice_lock(lock_fd)
 
 
-def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, context: dict = None) -> tuple[bool, str]:
+def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, context: dict = None, project_path: str = "") -> tuple[bool, str]:
     """
     Speak a short branded prefix in one voice immediately followed by the
     detail in a second voice — askr's two-tone "sonic logo" for the
@@ -162,9 +168,10 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, 
 
     Locked as a single unit so another process's announcement can never land
     between the prefix and body — that interleaving would sound just as
-    garbled as two full announcements overlapping. `context` — see speak().
+    garbled as two full announcements overlapping. `context`/`project_path` — see speak().
     """
-    say_bin, reason = _say_preconditions()
+    project_path = project_path or (context or {}).get("project_path", "")
+    say_bin, reason = _say_preconditions(project_path)
     if not say_bin:
         _log_voice_event(f"{prefix} {body}".strip(), False, reason, context)
         return False, reason
@@ -184,16 +191,24 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, 
         _release_voice_lock(lock_fd)
 
 
-def announce(message: str, prefix: str = "Askr.", context: dict = None) -> tuple[bool, str]:
+def announce(message: str, prefix: str = "Askr.", context: dict = None, project_path: str = "") -> tuple[bool, str]:
     """
     The single entry point every askr hook/daemon should call to speak —
     keeps all spoken output on the same voice(s) instead of some call sites
     using the configured sonic logo and others falling back to the system
     default. Honors the user's voice_mode: "dual" speaks `prefix` then
     `message` as the two-tone signature; "single" speaks `message` alone in
-    one configured voice. `context` — see speak().
+    one configured voice. `context`/`project_path` — see speak(). Hook
+    callers rely on cwd already being the project root; the daemon (whose
+    cwd is never the project it's announcing about) must pass project_path
+    explicitly or via context["project_path"].
     """
     from askr.state.config import load_voice_mode, load_voice_single, load_voice_prefix, load_voice_body
-    if load_voice_mode() == "single":
-        return speak(message, voice=load_voice_single(), context=context)
-    return speak_signature(prefix, message, load_voice_prefix(), load_voice_body(), context=context)
+    project_path = project_path or (context or {}).get("project_path", "")
+    if load_voice_mode(project_path or None) == "single":
+        return speak(message, voice=load_voice_single(project_path or None), context=context, project_path=project_path)
+    return speak_signature(
+        prefix, message,
+        load_voice_prefix(project_path or None), load_voice_body(project_path or None),
+        context=context, project_path=project_path,
+    )

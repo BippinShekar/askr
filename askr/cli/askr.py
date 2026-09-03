@@ -828,8 +828,12 @@ def cmd_init():
             os.environ["ASKR_DISCORD_WEBHOOK"] = global_hook
             console.print("  [green]✓[/green] global webhook saved to ~/.config/askr/.env")
 
-    # Voice notifications — machine-level preference (native macOS `say`), not
-    # per-project: it's "does this Mac talk", same trait as the developer name.
+    # Voice notifications — global default lives in ~/.config/askr/config.json
+    # (machine-level, same trait as the developer name); a project can override
+    # any/all of it locally in askr_state/config.json, same precedence as the
+    # Discord webhook above. Without this, `askr init` in one repo silently
+    # rewrote the single global voice config every other repo's daemon reads
+    # from — see askr_state/decisions.jsonl, 2026-09-03 (supersedes 2026-07-02).
     if platform.system() == "Darwin":
         from askr.state.config import (
             load_voice_enabled, save_voice_enabled,
@@ -837,43 +841,75 @@ def cmd_init():
             load_voice_single, save_voice_single,
             load_voice_prefix, load_voice_body, save_voice_style,
         )
+        existing_project_voice = load_project_config()
+        has_project_voice_override = any(
+            k in existing_project_voice
+            for k in ("voice_notifications", "voice_mode", "voice_single", "voice_prefix", "voice_body")
+        )
         existing_voice = load_voice_enabled()
         console.print()
-        console.print(f"  [dim]voice notifications (current: {'on' if existing_voice else 'off'})[/dim]")
+        scope_note = " [dim](project override active)[/dim]" if has_project_voice_override else " [dim](using global default)[/dim]"
+        console.print(f"  [dim]voice notifications (current: {'on' if existing_voice else 'off'})[/dim]{scope_note}")
         try:
-            voice_raw = input("  enable spoken updates via macOS `say`? [y/N]: ").strip().lower()
+            scope_raw = input("  configure voice for [1] this project only, [2] global default (all repos), [enter] skip: ").strip()
         except (KeyboardInterrupt, EOFError):
-            voice_raw = ""
-        if voice_raw == "y":
-            save_voice_enabled(True)
-            console.print("  [green]✓[/green] voice notifications enabled")
-        elif voice_raw == "n":
-            save_voice_enabled(False)
+            scope_raw = ""
 
-        if voice_raw == "y" or (existing_voice and voice_raw != "n"):
-            console.print(f"  [dim]voice style (current: {load_voice_mode()})[/dim]")
+        if scope_raw in ("1", "2"):
+            project_scope = scope_raw == "1"
+
+            def _save_voice(**kwargs):
+                if project_scope:
+                    save_project_config(kwargs)
+                else:
+                    setters = {
+                        "voice_notifications": save_voice_enabled,
+                        "voice_mode": save_voice_mode,
+                        "voice_single": save_voice_single,
+                    }
+                    for key, value in kwargs.items():
+                        if key in setters:
+                            setters[key](value)
+
             try:
-                mode_raw = input("  one voice for everything, or a two-voice sonic logo? [1=single/2=dual, enter to keep]: ").strip()
+                voice_raw = input("  enable spoken updates via macOS `say`? [y/N]: ").strip().lower()
             except (KeyboardInterrupt, EOFError):
-                mode_raw = ""
-            if mode_raw == "1":
-                save_voice_mode("single")
+                voice_raw = ""
+            if voice_raw == "y":
+                _save_voice(voice_notifications=True)
+                console.print(f"  [green]✓[/green] voice notifications enabled{' for this project' if project_scope else ' (global)'}")
+            elif voice_raw == "n":
+                _save_voice(voice_notifications=False)
+
+            if voice_raw == "y" or (existing_voice and voice_raw != "n"):
+                console.print(f"  [dim]voice style (current: {load_voice_mode()})[/dim]")
                 try:
-                    voice_name = input(f"  which voice? (current: {load_voice_single()}, enter to keep): ").strip()
+                    mode_raw = input("  one voice for everything, or a two-voice sonic logo? [1=single/2=dual, enter to keep]: ").strip()
                 except (KeyboardInterrupt, EOFError):
-                    voice_name = ""
-                if voice_name:
-                    save_voice_single(voice_name)
-                console.print("  [green]✓[/green] single-voice mode saved")
-            elif mode_raw == "2":
-                save_voice_mode("dual")
-                try:
-                    prefix_voice = input(f"  prefix voice? (current: {load_voice_prefix()}, enter to keep): ").strip()
-                    body_voice = input(f"  body voice? (current: {load_voice_body()}, enter to keep): ").strip()
-                except (KeyboardInterrupt, EOFError):
-                    prefix_voice = body_voice = ""
-                save_voice_style(prefix_voice or load_voice_prefix(), body_voice or load_voice_body())
-                console.print("  [green]✓[/green] dual-voice sonic logo saved")
+                    mode_raw = ""
+                if mode_raw == "1":
+                    _save_voice(voice_mode="single")
+                    try:
+                        voice_name = input(f"  which voice? (current: {load_voice_single()}, enter to keep): ").strip()
+                    except (KeyboardInterrupt, EOFError):
+                        voice_name = ""
+                    if voice_name:
+                        _save_voice(voice_single=voice_name)
+                    console.print(f"  [green]✓[/green] single-voice mode saved{' for this project' if project_scope else ' (global)'}")
+                elif mode_raw == "2":
+                    _save_voice(voice_mode="dual")
+                    try:
+                        prefix_voice = input(f"  prefix voice? (current: {load_voice_prefix()}, enter to keep): ").strip()
+                        body_voice = input(f"  body voice? (current: {load_voice_body()}, enter to keep): ").strip()
+                    except (KeyboardInterrupt, EOFError):
+                        prefix_voice = body_voice = ""
+                    if project_scope:
+                        _save_voice(voice_prefix=prefix_voice or load_voice_prefix(), voice_body=body_voice or load_voice_body())
+                    else:
+                        save_voice_style(prefix_voice or load_voice_prefix(), body_voice or load_voice_body())
+                    console.print(f"  [green]✓[/green] dual-voice sonic logo saved{' for this project' if project_scope else ' (global)'}")
+        elif has_project_voice_override or existing_voice:
+            console.print("  [dim]- voice settings unchanged[/dim]")
 
     from askr.clients.discord import _get_webhook_url
     if _get_webhook_url():

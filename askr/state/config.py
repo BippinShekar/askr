@@ -28,7 +28,12 @@ def save_developer(name: str):
     _save_config(data)
 
 
-def load_voice_enabled() -> bool:
+def load_voice_enabled(project_path: str = None) -> bool:
+    """Project override (askr_state/config.json) takes precedence over the
+    global machine-level default (~/.config/askr/config.json)."""
+    proj = load_project_config(project_path)
+    if "voice_notifications" in proj:
+        return bool(proj["voice_notifications"])
     return bool(_load_config().get("voice_notifications", False))
 
 
@@ -52,11 +57,17 @@ DEFAULT_VOICE_MODE = "dual"
 DEFAULT_VOICE_SINGLE = "Zarvox"
 
 
-def load_voice_prefix() -> str:
+def load_voice_prefix(project_path: str = None) -> str:
+    proj = load_project_config(project_path)
+    if "voice_prefix" in proj:
+        return proj["voice_prefix"]
     return _load_config().get("voice_prefix", DEFAULT_VOICE_PREFIX)
 
 
-def load_voice_body() -> str:
+def load_voice_body(project_path: str = None) -> str:
+    proj = load_project_config(project_path)
+    if "voice_body" in proj:
+        return proj["voice_body"]
     return _load_config().get("voice_body", DEFAULT_VOICE_BODY)
 
 
@@ -67,7 +78,10 @@ def save_voice_style(prefix: str, body: str):
     _save_config(data)
 
 
-def load_voice_mode() -> str:
+def load_voice_mode(project_path: str = None) -> str:
+    proj = load_project_config(project_path)
+    if "voice_mode" in proj:
+        return proj["voice_mode"]
     return _load_config().get("voice_mode", DEFAULT_VOICE_MODE)
 
 
@@ -77,7 +91,10 @@ def save_voice_mode(mode: str):
     _save_config(data)
 
 
-def load_voice_single() -> str:
+def load_voice_single(project_path: str = None) -> str:
+    proj = load_project_config(project_path)
+    if "voice_single" in proj:
+        return proj["voice_single"]
     return _load_config().get("voice_single", DEFAULT_VOICE_SINGLE)
 
 
