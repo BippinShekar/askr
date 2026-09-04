@@ -284,6 +284,7 @@ class SameSessionResumeTests(unittest.TestCase):
         with patch.object(lifecycle, "_find_session_pid", return_value=4242) as mock_find_pid, \
              patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
              patch.object(lifecycle, "_watch_for_premature_activity", return_value=False), \
+             patch("os.kill"), \
              patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
              patch.object(lifecycle, "_start_claude") as mock_start_claude, \
              patch.object(lifecycle, "_speak"):
@@ -330,6 +331,31 @@ class SameSessionResumeTests(unittest.TestCase):
 
         # Escape was attempted (real safety action), but cont must never be
         # sent once an anomaly is detected — and the fallback still runs.
+        mock_write_action.assert_called_once()
+        self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
+        mock_wait_reset.assert_called_once()
+        mock_start_claude.assert_called_once()
+
+    def test_pid_died_during_wait_falls_back_to_companion_instead_of_dead_cont(self):
+        """2026-09-05: the premature-activity watch can block for hours (it
+        just sleeps until reset_at) — long enough to span a lid-close sleep
+        caffeinate -i cannot prevent. Live-reproduced: the target claude
+        process was SIGKILLed (by the OS, not askr) during that gap, and
+        'cont' landed on a dead shell with no recovery. A dead pid after a
+        clean (non-anomalous) wait must fall back to opening a companion,
+        exactly like the no-pid/no-ancestor-pids cases already do — never
+        report same-session success for a process that's gone."""
+        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
+             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
+             patch.object(lifecycle, "_watch_for_premature_activity", return_value=False), \
+             patch("os.kill", side_effect=ProcessLookupError), \
+             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
+             patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
+             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
+             patch.object(lifecycle, "_speak"):
+            self._run([])
+
+        # Only Escape (step 1) fires — cont is never sent to the dead pid.
         mock_write_action.assert_called_once()
         self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
         mock_wait_reset.assert_called_once()

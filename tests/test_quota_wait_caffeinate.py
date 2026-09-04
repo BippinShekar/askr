@@ -98,5 +98,33 @@ class StopCaffeinateGuardTests(unittest.TestCase):
         running.assert_called_once()
 
 
+class SourceRestartGuardTests(unittest.TestCase):
+    """
+    2026-09-05: the daemon's source-file self-watch (run_daemon()'s
+    "source files updated — exiting for launchd restart" -> sys.exit(0))
+    used to fire unconditionally, same as any other restart trigger — but
+    _execute_quota_trigger's Escape/wait/cont sequence runs on a daemon=True
+    background thread with no persisted state; sys.exit(0) kills it
+    instantly mid-wait, silently abandoning it with no fallback ever firing.
+    Live-reproduced: a quota-wait thread was mid-flight while lifecycle.py
+    was being edited; nothing in the restart path checked for that.
+
+    run_daemon()'s main loop isn't directly unit-testable (see
+    test_trigger_independence.py's docstring on why _evaluate_session_triggers
+    had to be extracted) — this instead pins the source itself, matching the
+    project's precedent for asserting an unextracted call site wasn't
+    reverted (see test_session_scoped_transcript.py's thread-args check).
+    """
+
+    def test_source_restart_branch_checks_quota_wait_in_flight(self):
+        import inspect
+        src = inspect.getsource(lifecycle.run_daemon)
+        self.assertIn(
+            "if _max_source_mtime() > _STARTUP_SOURCE_MTIME and _quota_wait_in_flight():",
+            src,
+        )
+        self.assertIn("deferring the restart until it finishes", src)
+
+
 if __name__ == "__main__":
     unittest.main()

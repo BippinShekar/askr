@@ -239,12 +239,17 @@ def _start_caffeinate():
         with open(_CAFFEINATE_PID_PATH, "w") as f:
             f.write(str(proc.pid))
         _log("caffeinate started")
-        try:
-            r = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True)
-            if "Battery Power" in r.stdout:
-                _log("WARNING: on battery — lid close will sleep device regardless of caffeinate")
-        except Exception:
-            pass
+        # caffeinate -i only blocks IDLE sleep — it cannot prevent clamshell
+        # (lid-close) sleep on a MacBook without an external display attached,
+        # on battery OR on AC power. Confirmed live 2026-09-04: a quota-wait
+        # thread correctly held this lock through "session ended or went
+        # idle," but the machine still slept for 1h49m mid-wait and the
+        # target claude process was SIGKILLed during the gap — not by askr.
+        # Warn unconditionally; the old battery-only check implied AC power
+        # was safe, which it isn't without a second display.
+        _log("NOTE: caffeinate cannot prevent lid-close sleep without an external "
+             "display attached — closing the lid during a quota wait can still "
+             "suspend the machine for the whole wait, regardless of power source")
     except FileNotFoundError:
         _log("WARNING: caffeinate not found")
     except Exception as e:
@@ -1476,7 +1481,31 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
                 anomaly = _watch_for_premature_activity(
                     transcript_path, reset_at, baseline_mtime, project_path, session_id or "",
                 )
+                # Found 2026-09-05: the premature-activity watch can block for
+                # hours (it just sleeps until reset_at) — long enough to span
+                # a lid-close sleep that caffeinate -i cannot prevent (it only
+                # blocks idle sleep, not clamshell sleep; the code has warned
+                # about this for battery since 2026-08-16 but the same is true
+                # on AC without an external display). If the target process
+                # died during that gap (observed live: SIGKILL, cause outside
+                # askr — not one of askr's own kill triggers), sending 'cont'
+                # types into a dead shell and silently strands the user with
+                # no recovery. Verify the pid is still alive before declaring
+                # success; a dead pid falls through to the existing
+                # companion-open fallback below instead of a no-op.
+                pid_still_alive = False
                 if not anomaly:
+                    try:
+                        os.kill(pid, 0)
+                        pid_still_alive = True
+                    except (ProcessLookupError, PermissionError):
+                        pid_still_alive = False
+                    except Exception:
+                        pid_still_alive = True  # unexpected errno — don't assume dead on a shaky signal
+                if not anomaly and not pid_still_alive:
+                    _log(f"quota_resume_cont: pid {pid} no longer alive after the wait — "
+                         "falling back to opening a companion session instead of sending 'cont' into a dead shell")
+                if not anomaly and pid_still_alive:
                     _write_terminal_action_notification(
                         "quota_resume_cont", ancestor_pids, project_path,
                         message="Quota reset — resuming this session's in-flight work automatically.",
@@ -2717,7 +2746,20 @@ def run_daemon():
             # Source self-watch: if any .py file in the askr package changed since
             # startup, exit cleanly. launchd KeepAlive:true restarts us with the
             # new code — no manual daemon restart needed after a git pull.
-            if _max_source_mtime() > _STARTUP_SOURCE_MTIME:
+            #
+            # Found 2026-09-05: this used to exit unconditionally, same as any
+            # other restart — but _execute_quota_trigger's Escape/wait/cont
+            # sequence runs on a daemon=True background thread with no
+            # persisted state; sys.exit(0) kills it instantly mid-wait with no
+            # chance to finish, no fallback, nothing. _stop_caffeinate() right
+            # below already refuses to release the sleep lock while a
+            # quota-wait is in flight — this is the same guard applied to the
+            # restart decision itself, not just the lock: defer the restart
+            # (checked again next poll cycle) rather than abandon the wait.
+            if _max_source_mtime() > _STARTUP_SOURCE_MTIME and _quota_wait_in_flight():
+                _log("source files updated but a quota-wait thread is in flight — "
+                     "deferring the restart until it finishes")
+            elif _max_source_mtime() > _STARTUP_SOURCE_MTIME:
                 _log("source files updated — exiting for launchd restart")
                 # If extension.js also changed, prompt the user to reload their IDE
                 if _extension_mtime() > _STARTUP_EXTENSION_MTIME:
