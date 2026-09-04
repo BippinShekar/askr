@@ -1277,7 +1277,7 @@ def _write_resumed_marker(trigger: str, saved_seconds: int):
         pass
 
 
-def _execute_idle_checkpoint(stats: dict, project_path: str):
+def _execute_idle_checkpoint(stats: dict, project_path: str, session_id: str = None):
     """
     Genuine-inactivity trigger — deliberately NOT _execute_quota_trigger(), which is
     built for "quota exhausted, hand off to a fresh session": it labels its
@@ -1314,7 +1314,7 @@ def _execute_idle_checkpoint(stats: dict, project_path: str):
 
     _log("safe to pause — creating idle checkpoint")
     from askr.session.monitor import _find_active_jsonl
-    transcript_path = _find_active_jsonl(project_path) or ""
+    transcript_path = _find_active_jsonl(project_path, session_id) or ""
     result = create_checkpoint(trigger_type="idle", developer=developer,
                                 transcript_path=transcript_path, state_dir=state_dir)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
@@ -1401,7 +1401,7 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
 
     _log("safe to pause — creating checkpoint (silent, no notification yet)")
     from askr.session.monitor import _find_active_jsonl
-    transcript_path = _find_active_jsonl(project_path) or ""
+    transcript_path = _find_active_jsonl(project_path, session_id) or ""
     result = create_checkpoint(trigger_type="quota", developer=developer,
                                 transcript_path=transcript_path, state_dir=state_dir)
     _log(f"checkpoint: {result.get('trigger')} at {result.get('timestamp', '')[:19]}")
@@ -1523,7 +1523,7 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
 # Main daemon loop
 # ---------------------------------------------------------------------------
 
-def _pre_kill_update_tools(project_path: str):
+def _pre_kill_update_tools(project_path: str, session_id: str = None):
     """
     Before killing Claude, extract all tools used in the active JSONL and
     persist them to the project's .claude/settings.json allowedTools.
@@ -1532,7 +1532,7 @@ def _pre_kill_update_tools(project_path: str):
     """
     try:
         from askr.session.monitor import _find_active_jsonl
-        jsonl = _find_active_jsonl(project_path)
+        jsonl = _find_active_jsonl(project_path, session_id)
         if not jsonl or not os.path.exists(jsonl):
             return
         tools_used = set()
@@ -1606,7 +1606,7 @@ def _open_companion_session(project_path: str, session_id: str = None):
     existing one keeps running for as long as the user wants it, and the user
     decides when (or whether) to switch over.
     """
-    _pre_kill_update_tools(project_path)  # sync allowedTools/permissions for the new session
+    _pre_kill_update_tools(project_path, session_id)  # sync allowedTools/permissions for the new session
 
     state_dir = os.path.join(project_path, "askr_state")
     developer = ""
@@ -1618,9 +1618,10 @@ def _open_companion_session(project_path: str, session_id: str = None):
         developer = load_developer()
         if not os.path.isdir(state_dir):
             raise RuntimeError(f"no askr_state/ in {project_path} — run 'askr init' there first")
-        # _find_active_jsonl picks by mtime, not liveness — reads the live
-        # session's transcript without needing to kill it first.
-        transcript_path = _find_active_jsonl(project_path) or ""
+        # _find_active_jsonl reads the live session's transcript without
+        # needing to kill it first — session_id pins the exact file instead
+        # of guessing by mtime (wrong whenever 2+ sessions share a project).
+        transcript_path = _find_active_jsonl(project_path, session_id) or ""
         checkpoint_result = create_checkpoint(
             trigger_type="context", developer=developer,
             transcript_path=transcript_path, state_dir=state_dir,
@@ -1747,7 +1748,7 @@ def _turn_marker_still_live(project_path: str, session_id: str) -> bool:
         return False
     try:
         from askr.session.monitor import _find_active_jsonl
-        transcript_path = _find_active_jsonl(project_path)
+        transcript_path = _find_active_jsonl(project_path, session_id)
         if not transcript_path:
             return False
         return (time.time() - os.path.getmtime(transcript_path)) < MAX_TURN_ACTIVE_SECS
@@ -1884,7 +1885,7 @@ def _wait_for_turn_to_finish(project_path: str, session_id: str = None, require_
         _, stop_idle_secs = _last_turn_stop(session_id)
         turn_genuinely_done = (
             _turn_stopped_since(session_id, wait_start) and not turn_active
-            and not has_outstanding_subagent(_find_active_jsonl(project_path) or "")
+            and not has_outstanding_subagent(_find_active_jsonl(project_path, session_id) or "")
         )
         if require_quiet_grace:
             turn_genuinely_done = (
@@ -2496,7 +2497,7 @@ def _evaluate_session_triggers(
         # Trigger B, so other open projects don't go unmonitored.
         threading.Thread(
             target=_execute_idle_checkpoint,
-            args=(stats, project_path),
+            args=(stats, project_path, session_id),
             daemon=True,
         ).start()
         last_trigger_at[project_path] = time.time()
