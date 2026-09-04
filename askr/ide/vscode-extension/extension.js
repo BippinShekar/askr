@@ -299,18 +299,39 @@ async function captureUnsentInput() {
 // _get_ancestor_pids) and hands over the resulting PID list; this just
 // needs ANY of them to match, not a specific identified "shell" PID.
 async function findTerminalByAncestorPids(ancestorPids) {
-  if (!ancestorPids || !ancestorPids.length) return null;
-  const wanted = new Set(ancestorPids);
-  for (const term of vscode.window.terminals) {
-    let pid;
-    try {
-      pid = await term.processId;
-    } catch {
-      continue;
+  // Diagnostic instrumentation (2026-09-04): the quota_resume_cont miss
+  // reported live left no trace of why — no match log, no error log, no
+  // unhandled-rejection log either. Wrapping the whole body and logging the
+  // full terminal/pid landscape on every call (not just failures) so a
+  // repeat miss is diagnosable from Log (Extension Host) instead of guessed
+  // at again. Remove once the root cause is confirmed and fixed.
+  try {
+    if (!ancestorPids || !ancestorPids.length) {
+      console.warn('Askr: findTerminalByAncestorPids called with no ancestorPids');
+      return null;
     }
-    if (pid && wanted.has(pid)) return term;
+    const wanted = new Set(ancestorPids);
+    const seen = [];
+    for (const term of vscode.window.terminals) {
+      let pid;
+      try {
+        pid = await term.processId;
+      } catch (e) {
+        seen.push({ name: term.name, pid: 'ERROR: ' + e });
+        continue;
+      }
+      seen.push({ name: term.name, pid });
+      if (pid && wanted.has(pid)) {
+        console.log(`Askr: findTerminalByAncestorPids matched terminal "${term.name}" (pid ${pid}) against wanted ${JSON.stringify(ancestorPids)}`);
+        return term;
+      }
+    }
+    console.warn(`Askr: findTerminalByAncestorPids found NO match. wanted=${JSON.stringify(ancestorPids)} vscode.window.terminals(${vscode.window.terminals.length})=${JSON.stringify(seen)}`);
+    return null;
+  } catch (e) {
+    console.error(`Askr: findTerminalByAncestorPids threw: ${e && e.stack || e}`);
+    return null;
   }
-  return null;
 }
 
 async function openContextCompanion(n) {
@@ -415,7 +436,7 @@ function checkNotification() {
       findTerminalByAncestorPids(n.ancestor_pids).then(term => {
         if (term) term.sendText('\x1b', false);
         else console.warn(`Askr: quota_exhausted_wait found no terminal matching ancestor_pids ${JSON.stringify(n.ancestor_pids)} — Escape not sent (harmless: Claude Code shows its own rate-limit prompt regardless)`);
-      });
+      }).catch(e => console.error(`Askr: quota_exhausted_wait handler threw: ${e && e.stack || e}`));
     } else if (n.type === 'quota_resume_cont') {
       // Same-session rate-limit-resume, step 2: reset genuinely arrived with
       // no premature activity detected (lifecycle._watch_for_premature_activity) —
@@ -440,7 +461,7 @@ function checkNotification() {
           );
           console.warn(`Askr: quota_resume_cont found no terminal matching ancestor_pids ${JSON.stringify(n.ancestor_pids)} — '${n.resume_text || 'cont'}' not sent`);
         }
-      });
+      }).catch(e => console.error(`Askr: quota_resume_cont handler threw: ${e && e.stack || e}`));
     } else if (n.type === 'goal_launch') {
       const goal = n.goal || '';
       const termOpts = { name: `askr — ${goal.slice(0, 40)}` };
