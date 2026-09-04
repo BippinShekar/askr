@@ -414,15 +414,32 @@ function checkNotification() {
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
       findTerminalByAncestorPids(n.ancestor_pids).then(term => {
         if (term) term.sendText('\x1b', false);
+        else console.warn(`Askr: quota_exhausted_wait found no terminal matching ancestor_pids ${JSON.stringify(n.ancestor_pids)} — Escape not sent (harmless: Claude Code shows its own rate-limit prompt regardless)`);
       });
     } else if (n.type === 'quota_resume_cont') {
       // Same-session rate-limit-resume, step 2: reset genuinely arrived with
       // no premature activity detected (lifecycle._watch_for_premature_activity) —
       // resume the same session's in-flight work in place instead of only
       // ever handing the user a fresh companion.
+      //
+      // Found 2026-09-04: findTerminalByAncestorPids can miss (terminal
+      // closed/reopened, window reloaded, or a Cursor "Agents" panel terminal
+      // that isn't a real vscode.window.Terminal). Previously this failed
+      // completely silently — the daemon writes the notification and marks
+      // itself done with no ack from this side, so a miss here meant the
+      // session sat stuck at the rate-limit prompt forever with zero
+      // indication anything went wrong. This is the one step that actually
+      // has to land, so a miss must be loud and tell the user what to type.
       vscode.window.showInformationMessage(`Askr: ${n.message}`);
       findTerminalByAncestorPids(n.ancestor_pids).then(term => {
-        if (term) term.sendText(n.resume_text || 'cont', true);
+        if (term) {
+          term.sendText(n.resume_text || 'cont', true);
+        } else {
+          vscode.window.showWarningMessage(
+            `Askr: quota reset, but couldn't find the original terminal to auto-resume it — type "${n.resume_text || 'cont'}" there yourself to continue.`
+          );
+          console.warn(`Askr: quota_resume_cont found no terminal matching ancestor_pids ${JSON.stringify(n.ancestor_pids)} — '${n.resume_text || 'cont'}' not sent`);
+        }
       });
     } else if (n.type === 'goal_launch') {
       const goal = n.goal || '';
