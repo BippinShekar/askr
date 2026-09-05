@@ -319,7 +319,15 @@ class SameSessionResumeTests(unittest.TestCase):
         mock_write_action.assert_not_called()
         mock_start_claude.assert_called_once()
 
-    def test_anomaly_sends_escape_but_never_sends_cont_and_falls_back(self):
+    def test_anomaly_sends_escape_but_never_sends_cont_and_skips_redundant_companion(self):
+        """2026-09-05: an anomaly IS the session proving it's already alive
+        and producing output — that's the entire evidence the alert fired on.
+        Recurring live pattern across multiple projects (2026-08-29,
+        2026-08-31, 2026-09-05): this used to fall through to the same
+        force=True companion-open used when the pid is totally unresolved,
+        opening a redundant second session on top of one already working
+        fine. The alert already told the user to check billing if it's
+        genuine; nothing more should be automated here."""
         with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
              patch.object(lifecycle, "_get_ancestor_pids", return_value=[100]), \
              patch.object(lifecycle, "_watch_for_premature_activity", return_value=True), \
@@ -330,11 +338,11 @@ class SameSessionResumeTests(unittest.TestCase):
             self._run([])
 
         # Escape was attempted (real safety action), but cont must never be
-        # sent once an anomaly is detected — and the fallback still runs.
+        # sent once an anomaly is detected — and no companion opens either.
         mock_write_action.assert_called_once()
         self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
-        mock_wait_reset.assert_called_once()
-        mock_start_claude.assert_called_once()
+        mock_wait_reset.assert_not_called()
+        mock_start_claude.assert_not_called()
 
     def test_pid_died_during_wait_falls_back_to_companion_instead_of_dead_cont(self):
         """2026-09-05: the premature-activity watch can block for hours (it

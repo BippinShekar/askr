@@ -1452,6 +1452,7 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
     # activity before the real reset time (wrong option may have been
     # selected — do not compound that by assuming same-session resume is safe).
     same_session_resumed = False
+    anomaly = False
     try:
         pid = _find_session_pid(transcript_path, project_path)
     except Exception:
@@ -1526,8 +1527,22 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
             pass
         return
 
-    # Fallback: pid unresolved, ancestor walk empty, or the safety net caught
-    # premature activity — same behavior as before this feature existed.
+    # Found 2026-09-05: an anomaly means the session already proved it's alive
+    # and producing new output — that's the entire evidence the alert fired
+    # on. The fallback below exists for the OPPOSITE situation (pid/ancestor
+    # unresolved — we have no idea whether anything is running) and force=True
+    # launches a companion regardless of what's already there. Recurring
+    # false-alarm pattern across multiple projects (2026-08-29, 2026-08-31,
+    # 2026-09-05): every time, this then opened a redundant companion on top
+    # of a session that was already working fine. The alert already told the
+    # user to check billing if it's genuine; nothing more to automate here.
+    if anomaly:
+        _log("premature activity already alerted — session is clearly active, "
+             "not opening a redundant companion on top of it")
+        return
+
+    # Fallback: pid unresolved or ancestor walk empty — same behavior as
+    # before this feature existed.
     if reset_at:
         _wait_for_reset(reset_at)
     else:

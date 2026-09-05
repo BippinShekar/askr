@@ -4791,3 +4791,15 @@
 {"ts": "2026-09-04T19:54:20Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "venv/bin/python -c \"\nimport json\nentries = [\n{\n    'at': '2026-09-05 01:23',\n   "}
 {"ts": "2026-09-04T19:54:24Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git status"}
 {"ts": "2026-09-04T19:54:28Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git diff askr/session/lifecycle.py | head -150"}
+{"ts": "2026-09-04T19:54:42Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git add askr/session/lifecycle.py askr_state/decisions.jsonl askr_state/failed_a"}
+{"ts": "2026-09-05T14:14:43Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "wc -l /Users/bippin/.config/askr/daemon.log"}
+{"ts": "2026-09-05T14:14:48Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "grep -n \"premature\\|Trigger B\\|quota_resume_cont\\|ALERT: premature\\|companion cl"}
+{"ts": "2026-09-05T14:15:58Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-09-05T14:16:09Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/askr/session/lifecycle.py"}
+{"ts": "2026-09-05T14:16:16Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "venv/bin/python -c \"import ast; ast.parse(open('askr/session/lifecycle.py').read"}
+{"ts": "2026-09-05T14:16:21Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "grep -n \"test_anomaly_sends_escape_but_never_sends_cont_and_falls_back\" -A 20 te"}
+{"ts": "2026-09-05T14:16:33Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "file_modified", "detail": "/Users/bippin/Desktop/askr/tests/test_quota_notify_split.py"}
+{"ts": "2026-09-05T14:16:49Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -20"}
+{"ts": "2026-09-05T14:16:57Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "printf -- \"- [2026-09-05] Same-session quota resume treated 'premature activity "}
+{"ts": "2026-09-05T14:17:04Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "venv/bin/python -c \"\nimport json\nentry = {\n    'at': '2026-09-05 19:50',\n    'de"}
+{"ts": "2026-09-05T14:17:07Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git status"}
