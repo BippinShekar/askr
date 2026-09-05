@@ -135,17 +135,18 @@ class ExecuteQuotaTriggerPhaseOrderTests(unittest.TestCase):
              patch.object(lifecycle, "_wait_until_quota_near_exhausted", side_effect=record("near_exhausted_wait")), \
              patch.object(lifecycle, "_get_next_goal", return_value=""), \
              patch.object(lifecycle, "_write_launch_mode"), \
-             patch.object(lifecycle, "_write_notification", side_effect=record("notify")), \
-             patch.object(lifecycle, "_wait_for_reset", side_effect=record("wait_for_reset")), \
-             patch.object(lifecycle, "_start_claude", return_value=False):
+             patch.object(lifecycle, "_write_notification", side_effect=record("notify")):
             lifecycle._execute_quota_trigger(
                 {"quota_pct": 95.0, "quota_reset_at": "2026-01-01T01:00:00Z"},
                 "/fake/project", "sess123",
             )
 
+        # 2026-09-06: the trigger ends at the informational notification —
+        # no terminal action, no wait-for-reset, no companion (Claude Code's
+        # native auto-continue owns everything past this point now).
         self.assertEqual(
             call_order,
-            ["wait_for_turn", "create_checkpoint", "near_exhausted_wait", "notify", "wait_for_reset"],
+            ["wait_for_turn", "create_checkpoint", "near_exhausted_wait", "notify"],
         )
 
     def test_checkpoint_wait_uses_no_quiet_grace(self):
@@ -230,18 +231,22 @@ class ExecuteQuotaTriggerPhaseOrderTests(unittest.TestCase):
         self.assertEqual(announced_pct, 97.0)
 
 
-class SameSessionResumeTests(unittest.TestCase):
+class NoTerminalActionOnQuotaTriggerTests(unittest.TestCase):
     """
-    2026-08-12: once quota is confirmed genuinely exhausted (phase 2, ground
-    truth from the usage API — not a guess from hook silence, confirmed live
-    that every hook goes dark while Claude Code's rate-limit-options menu is
-    up), askr sends Escape into the SAME session (proven equivalent to
-    manually selecting "Stop and wait for limit to reset") and, once reset
-    genuinely arrives with no premature activity, "cont" to resume in place —
-    instead of only ever handing the user a fresh companion. Must fall back
-    to the pre-existing companion-open path whenever any part of that chain
-    can't be resolved with confidence: no pid, no ancestor pids, or the
-    safety net catching activity before the real reset time.
+    2026-09-06: retires the 2026-08-12 same-session-resume feature (Escape ->
+    watch -> "cont"). Confirmed live: Claude Code's CLI now natively handles
+    the whole exhausted -> wait -> resume cycle on its own ("Usage limit
+    reached ... continuing automatically" -> "Usage limit reset ...
+    continuing automatically"), and the native prompt's "esc ... to cancel"
+    wording means Escape now CANCELS that native auto-continue rather than
+    selecting it (the 2026-08 binary analysis proving Escape == "wait for
+    reset" was for an older Claude Code version). Live pattern that gave it
+    away: every session askr sent Escape to got stuck; every session left
+    untouched resumed on its own, right on schedule.
+
+    _execute_quota_trigger_impl must now do exactly checkpoint + the
+    informational "quota" notification, and nothing else — no terminal
+    keystroke, no companion session, regardless of pid/ancestor/reset state.
     """
 
     def _base_patches(self, extra=None):
@@ -280,116 +285,34 @@ class SameSessionResumeTests(unittest.TestCase):
             stack.enter_context(p)
         return stack
 
-    def test_clean_resume_sends_escape_then_cont_no_companion(self):
-        with patch.object(lifecycle, "_find_session_pid", return_value=4242) as mock_find_pid, \
+    def test_no_terminal_action_sent_regardless_of_pid_resolution(self):
+        """Even when pid/ancestor_pids resolve fine, no Escape and no 'cont'
+        should ever be sent — Claude Code's native auto-continue owns this
+        now, and touching the terminal at all is what broke it."""
+        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
              patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
-             patch.object(lifecycle, "_watch_for_premature_activity", return_value=False), \
-             patch("os.kill"), \
+             patch.object(lifecycle, "_watch_for_premature_activity") as mock_watch, \
              patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
+             patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
              patch.object(lifecycle, "_start_claude") as mock_start_claude, \
              patch.object(lifecycle, "_speak"):
             self._run([])
 
-        mock_find_pid.assert_called_once_with("/fake/transcript.jsonl", "/fake/project")
-        self.assertEqual(mock_write_action.call_count, 2)
-        first_call, second_call = mock_write_action.call_args_list
-        self.assertEqual(first_call[0][0], "quota_exhausted_wait")
-        self.assertEqual(first_call[0][1], [100, 50])
-        self.assertEqual(second_call[0][0], "quota_resume_cont")
-        mock_start_claude.assert_not_called()  # no companion — resumed in place
-
-    def test_no_pid_falls_back_to_companion(self):
-        with patch.object(lifecycle, "_find_session_pid", return_value=None), \
-             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
-             patch.object(lifecycle, "_wait_for_reset"), \
-             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude:
-            self._run([])
-
+        mock_watch.assert_not_called()
         mock_write_action.assert_not_called()
-        mock_start_claude.assert_called_once()
-
-    def test_no_ancestor_pids_falls_back_to_companion(self):
-        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
-             patch.object(lifecycle, "_get_ancestor_pids", return_value=[]), \
-             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
-             patch.object(lifecycle, "_wait_for_reset"), \
-             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude:
-            self._run([])
-
-        mock_write_action.assert_not_called()
-        mock_start_claude.assert_called_once()
-
-    def test_anomaly_sends_escape_but_never_sends_cont_and_skips_redundant_companion(self):
-        """2026-09-05: an anomaly IS the session proving it's already alive
-        and producing output — that's the entire evidence the alert fired on.
-        Recurring live pattern across multiple projects (2026-08-29,
-        2026-08-31, 2026-09-05): this used to fall through to the same
-        force=True companion-open used when the pid is totally unresolved,
-        opening a redundant second session on top of one already working
-        fine. The alert already told the user to check billing if it's
-        genuine; nothing more should be automated here."""
-        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
-             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100]), \
-             patch.object(lifecycle, "_watch_for_premature_activity", return_value=True), \
-             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
-             patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
-             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
-             patch.object(lifecycle, "_speak"):
-            self._run([])
-
-        # Escape was attempted (real safety action), but cont must never be
-        # sent once an anomaly is detected — and no companion opens either.
-        mock_write_action.assert_called_once()
-        self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
         mock_wait_reset.assert_not_called()
         mock_start_claude.assert_not_called()
 
-    def test_pid_died_during_wait_falls_back_to_companion_instead_of_dead_cont(self):
-        """2026-09-05: the premature-activity watch can block for hours (it
-        just sleeps until reset_at) — long enough to span a lid-close sleep
-        caffeinate -i cannot prevent. Live-reproduced: the target claude
-        process was SIGKILLed (by the OS, not askr) during that gap, and
-        'cont' landed on a dead shell with no recovery. A dead pid after a
-        clean (non-anomalous) wait must fall back to opening a companion,
-        exactly like the no-pid/no-ancestor-pids cases already do — never
-        report same-session success for a process that's gone."""
-        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
-             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
-             patch.object(lifecycle, "_watch_for_premature_activity", return_value=False), \
-             patch("os.kill", side_effect=ProcessLookupError), \
+    def test_no_pid_still_sends_no_terminal_action_and_no_companion(self):
+        with patch.object(lifecycle, "_find_session_pid", return_value=None), \
              patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
              patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
-             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
-             patch.object(lifecycle, "_speak"):
+             patch.object(lifecycle, "_start_claude") as mock_start_claude:
             self._run([])
 
-        # Only Escape (step 1) fires — cont is never sent to the dead pid.
-        mock_write_action.assert_called_once()
-        self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
-        mock_wait_reset.assert_called_once()
-        mock_start_claude.assert_called_once()
-
-    def test_missing_transcript_mtime_falls_back_to_companion(self):
-        # baseline_mtime can't be established — must not guess a safety-net
-        # baseline, fall back instead of watching against an invented value.
-        # os.path.exists=False must be the LAST entry so it's the innermost
-        # (active) patch — _base_patches already includes its own
-        # os.path.exists=True earlier in the stack, and ExitStack activates
-        # whichever patch on the same attribute was entered most recently.
-        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
-             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100]), \
-             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
-             patch.object(lifecycle, "_watch_for_premature_activity") as mock_watch, \
-             patch.object(lifecycle, "_wait_for_reset"), \
-             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
-             patch.object(lifecycle, "_speak"):
-            self._run([patch("os.path.exists", return_value=False)])
-
-        mock_watch.assert_not_called()
-        mock_start_claude.assert_called_once()
-        # Escape is still sent (safe either way) even though we can't watch afterward.
-        mock_write_action.assert_called_once()
-        self.assertEqual(mock_write_action.call_args[0][0], "quota_exhausted_wait")
+        mock_write_action.assert_not_called()
+        mock_wait_reset.assert_not_called()
+        mock_start_claude.assert_not_called()
 
 
 if __name__ == "__main__":

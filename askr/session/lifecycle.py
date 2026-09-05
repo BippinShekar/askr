@@ -1433,128 +1433,27 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
     announced_quota_pct = fresh_quota_pct if fresh_quota_pct is not None else stats.get("quota_pct", 0.0)
     _write_notification("quota", next_goal, announced_quota_pct, handover_has_content,
                          project_path, handover_path, git_pushed=result.get("git_pushed", False))
-    # Never kill the user's live session — just prepare a companion one. The old
-    # kill-then-relaunch design could yank a running session out from under the
-    # user mid-task; askr now only ever adds a fresh session, never removes theirs.
 
-    # Same-session resume (2026-08-12): once quota is confirmed genuinely
-    # exhausted via our OWN ground-truth poll above (not a guess from hook
-    # silence — every hook goes completely dark while Claude Code's
-    # rate-limit-options menu is up, confirmed live), send Escape into the
-    # SAME session — proven equivalent to manually selecting "Stop and wait
-    # for limit to reset" (see pre_compact.py/extension.js history) — and,
-    # once reset genuinely arrives clean, "cont" to resume the in-flight
-    # work in place instead of only ever handing the user a fresh companion.
-    # Escape is safe to send even if the menu hasn't rendered yet: at a
-    # normal idle prompt it's a harmless no-op. Falls through to the
-    # existing companion-open path (unconditionally correct fallback) if the
-    # session's pid can't be resolved, or if the Stage 5 safety net detects
-    # activity before the real reset time (wrong option may have been
-    # selected — do not compound that by assuming same-session resume is safe).
-    same_session_resumed = False
-    anomaly = False
-    try:
-        pid = _find_session_pid(transcript_path, project_path)
-    except Exception:
-        pid = None
-
-    if pid:
-        ancestor_pids = _get_ancestor_pids(pid)
-        if ancestor_pids:
-            _write_terminal_action_notification(
-                "quota_exhausted_wait", ancestor_pids, project_path,
-                message=("Quota exhausted — askr is telling this session to wait for reset "
-                         "(not switch to paid usage or upgrade). It'll resume automatically "
-                         "once your quota resets; you don't need to do anything."),
-            )
-            _speak("Quota exhausted. Waiting for reset — this session will resume automatically.",
-                   source="lifecycle._execute_quota_trigger.escape", project_path=project_path,
-                   session_id=session_id or "")
-
-            baseline_mtime = None
-            try:
-                if transcript_path and os.path.exists(transcript_path):
-                    baseline_mtime = os.path.getmtime(transcript_path)
-            except Exception:
-                baseline_mtime = None
-
-            if reset_at and baseline_mtime is not None:
-                anomaly = _watch_for_premature_activity(
-                    transcript_path, reset_at, baseline_mtime, project_path, session_id or "",
-                )
-                # Found 2026-09-05: the premature-activity watch can block for
-                # hours (it just sleeps until reset_at) — long enough to span
-                # a lid-close sleep that caffeinate -i cannot prevent (it only
-                # blocks idle sleep, not clamshell sleep; the code has warned
-                # about this for battery since 2026-08-16 but the same is true
-                # on AC without an external display). If the target process
-                # died during that gap (observed live: SIGKILL, cause outside
-                # askr — not one of askr's own kill triggers), sending 'cont'
-                # types into a dead shell and silently strands the user with
-                # no recovery. Verify the pid is still alive before declaring
-                # success; a dead pid falls through to the existing
-                # companion-open fallback below instead of a no-op.
-                pid_still_alive = False
-                if not anomaly:
-                    try:
-                        os.kill(pid, 0)
-                        pid_still_alive = True
-                    except (ProcessLookupError, PermissionError):
-                        pid_still_alive = False
-                    except Exception:
-                        pid_still_alive = True  # unexpected errno — don't assume dead on a shaky signal
-                if not anomaly and not pid_still_alive:
-                    _log(f"quota_resume_cont: pid {pid} no longer alive after the wait — "
-                         "falling back to opening a companion session instead of sending 'cont' into a dead shell")
-                if not anomaly and pid_still_alive:
-                    _write_terminal_action_notification(
-                        "quota_resume_cont", ancestor_pids, project_path,
-                        message="Quota reset — resuming this session's in-flight work automatically.",
-                        resume_text="cont",
-                    )
-                    _speak("Quota reset. Resuming automatically.",
-                           source="lifecycle._execute_quota_trigger.cont", project_path=project_path,
-                           session_id=session_id or "")
-                    same_session_resumed = True
-
-    if same_session_resumed:
-        _notify_discord_resumed("quota", next_goal)
-        try:
-            from askr.state.analytics import today_summary
-            saved = today_summary().get("total_seconds", 0)
-            _write_resumed_marker("quota", saved)
-        except Exception:
-            pass
-        return
-
-    # Found 2026-09-05: an anomaly means the session already proved it's alive
-    # and producing new output — that's the entire evidence the alert fired
-    # on. The fallback below exists for the OPPOSITE situation (pid/ancestor
-    # unresolved — we have no idea whether anything is running) and force=True
-    # launches a companion regardless of what's already there. Recurring
-    # false-alarm pattern across multiple projects (2026-08-29, 2026-08-31,
-    # 2026-09-05): every time, this then opened a redundant companion on top
-    # of a session that was already working fine. The alert already told the
-    # user to check billing if it's genuine; nothing more to automate here.
-    if anomaly:
-        _log("premature activity already alerted — session is clearly active, "
-             "not opening a redundant companion on top of it")
-        return
-
-    # Fallback: pid unresolved or ancestor walk empty — same behavior as
-    # before this feature existed.
-    if reset_at:
-        _wait_for_reset(reset_at)
-    else:
-        time.sleep(300)
-
-    _log("starting companion claude session (existing session, if any, left running)")
-    launched = _start_claude(project_path, force=True)
-    if launched:
-        _notify_discord_resumed("quota", next_goal)
-        from askr.state.writer import append_event
-        append_event("companion_spawned", project_path, parent_session_id=session_id,
-                     trigger_type="quota", quota_pct=stats.get("quota_pct"))
+    # Found 2026-09-06: Claude Code's CLI now natively handles the entire
+    # exhausted -> wait -> resume cycle on its own — confirmed live: "Usage
+    # limit reached ... continuing automatically at <time> ... esc or type to
+    # cancel", then "Usage limit reset ... continuing automatically", no askr
+    # involvement, no terminal action needed. This retires the 2026-08-12
+    # same-session-resume feature (Escape -> watch -> "cont"), which was built
+    # on a binary analysis showing Escape equivalent to selecting "Stop and
+    # wait for limit to reset" — true for the Claude Code version analyzed
+    # then, but the CURRENT native prompt's own "esc ... to cancel" wording
+    # means Escape now CANCELS the native auto-continue instead of selecting
+    # it. Live pattern that gave this away: every session askr sent Escape to
+    # got stuck at the limit; every session askr left untouched resumed on
+    # its own right on schedule. The "premature activity" alarms this used to
+    # fire (see the two retired fixes above it in git history) weren't
+    # billing anomalies at all — they were the native auto-continue
+    # succeeding despite askr's interference, misread as suspicious.
+    #
+    # askr's job here ends at the checkpoint + informational notification
+    # above: no Escape, no watch, no "cont", no companion. Sending nothing
+    # and getting out of the way is what actually works now.
     try:
         from askr.state.analytics import today_summary
         saved = today_summary().get("total_seconds", 0)
