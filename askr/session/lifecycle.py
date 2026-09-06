@@ -81,6 +81,17 @@ _QUOTA_WARNED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/quota_warned_se
 # dedup shape as _QUOTA_WARNED_SESSIONS_PATH, but for _execute_quota_trigger
 # (which checkpoints, speaks, and waits for reset) rather than the pre-trigger heads-up.
 _QUOTA_TRIGGERED_WINDOWS_PATH = os.path.expanduser("~/.config/askr/quota_triggered_windows.json")
+# "session_id::reset_at" strings that have already had their own native-resume
+# verification (Phase 4) run for this account-wide window. Separate from
+# _QUOTA_TRIGGERED_WINDOWS_PATH on purpose (2026-09-06): that dedup correctly
+# stops duplicate voice/Discord announcements when 2+ concurrent sessions
+# share one account-wide quota window, but it was ALSO silently skipping the
+# verify-and-cont step for every session except whichever fired the trigger
+# first — confirmed live, a second session sharing the window sat frozen at
+# its limit with nothing watching it. Keyed per-session, not per-window, so
+# every concurrent session still gets its own resume check even when the
+# announcement itself was already deduped away.
+_QUOTA_RESUME_VERIFIED_PATH = os.path.expanduser("~/.config/askr/quota_resume_verified.json")
 # project_path -> ISO turn-stop timestamp the idle trigger already fired for.
 # Keyed by the turn-stop timestamp itself (not just a bool) so a brand new
 # turn automatically makes the project eligible again — no separate pruning
@@ -1405,26 +1416,44 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
     _write_notification("quota", next_goal, announced_quota_pct, handover_has_content,
                          project_path, handover_path, git_pushed=result.get("git_pushed", False))
 
-    # Found 2026-09-06: Claude Code's CLI now natively handles the exhausted
-    # -> wait -> resume cycle on its own for SOME sessions — confirmed live:
-    # "Usage limit reached ... continuing automatically at <time> ... esc or
-    # type to cancel", then "Usage limit reset ... continuing automatically".
-    # The 2026-08-12 same-session-resume feature sent Escape here on a binary
-    # analysis showing it equivalent to selecting "Stop and wait for limit to
-    # reset" — true for that Claude Code version, but the CURRENT native
-    # prompt's own "esc ... to cancel" wording means Escape now CANCELS the
-    # native auto-continue instead. Every session askr sent Escape to got
-    # stuck; every session left untouched resumed on its own.
-    #
-    # But native auto-continue isn't universal: confirmed live the same
-    # night, other sessions that also hit the limit sat frozen indefinitely
-    # with nothing watching them. So askr no longer sends Escape (never
-    # interferes with the native path) but does verify it actually happened:
-    # wait past the real reset plus a grace buffer, then check whether the
-    # transcript resumed writing on its own. Only if it's still frozen does
-    # askr step in with 'cont' — the same dead-pid-safe delivery as before,
-    # falling back to a companion session if the pid can't be resolved or
-    # has died in the meantime.
+    _verify_native_resume_or_cont(project_path, session_id, transcript_path, reset_at, next_goal, stats)
+
+
+def _verify_native_resume_or_cont(project_path: str, session_id: str, transcript_path: str,
+                                   reset_at: str, next_goal: str, stats: dict):
+    """
+    Phase 4 (2026-09-06): Claude Code's CLI now natively handles the
+    exhausted -> wait -> resume cycle on its own for SOME sessions —
+    confirmed live: "Usage limit reached ... continuing automatically at
+    <time> ... esc or type to cancel", then "Usage limit reset ...
+    continuing automatically". The 2026-08-12 same-session-resume feature
+    sent Escape here on a binary analysis showing it equivalent to selecting
+    "Stop and wait for limit to reset" — true for that Claude Code version,
+    but the CURRENT native prompt's own "esc ... to cancel" wording means
+    Escape now CANCELS the native auto-continue instead. Every session askr
+    sent Escape to got stuck; every session left untouched resumed on its
+    own.
+
+    But native auto-continue isn't universal: confirmed live the same
+    night, other sessions that also hit the limit sat frozen indefinitely
+    with nothing watching them. So askr no longer sends Escape (never
+    interferes with the native path) but does verify it actually happened:
+    wait past the real reset plus a grace buffer, then check whether the
+    transcript resumed writing on its own. Only if it's still frozen does
+    askr step in with 'cont' — the same dead-pid-safe delivery as before,
+    falling back to a companion session if the pid can't be resolved or
+    has died in the meantime.
+
+    Extracted as its own function (2026-09-06) so it can run per-SESSION
+    even when the account-wide quota announcement (checkpoint + voice/
+    Discord, above) was already deduped away for this reset window on a
+    different session — see _verify_native_resume_for_other_sessions().
+    Confirmed live: quota_triggered_windows correctly stops duplicate
+    announcements across concurrent sessions sharing one account-wide
+    quota, but it was ALSO silently skipping this verify-and-cont step for
+    every session but the first, leaving other sessions that hit the same
+    limit with nobody watching them at all.
+    """
     resumed_natively = False
     same_session_resumed = False
     if reset_at:
@@ -2089,6 +2118,51 @@ def _save_quota_triggered_windows(windows: set):
         _log(f"WARN: failed to persist quota-triggered windows: {e}")
 
 
+def _load_quota_resume_verified() -> set:
+    """"session_id::reset_at" strings already run through Phase 4's native-resume
+    verification for the current account-wide window — see
+    _QUOTA_RESUME_VERIFIED_PATH for why this is separate from the
+    announcement-only dedup above."""
+    try:
+        with open(_QUOTA_RESUME_VERIFIED_PATH) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _save_quota_resume_verified(verified: set):
+    try:
+        os.makedirs(os.path.dirname(_QUOTA_RESUME_VERIFIED_PATH), exist_ok=True)
+        with open(_QUOTA_RESUME_VERIFIED_PATH, "w") as f:
+            json.dump(list(verified), f)
+    except Exception as e:
+        _log(f"WARN: failed to persist quota-resume-verified sessions: {e}")
+
+
+def _verify_native_resume_for_other_session(project_path: str, session_id: str, stats: dict):
+    """
+    Runs Phase 4 (native-resume verification + 'cont' fallback) for a
+    session whose account-wide quota window was already announced by a
+    DIFFERENT session — see _QUOTA_RESUME_VERIFIED_PATH's docstring for why
+    that announcement dedup must not also skip this. Deliberately skips
+    Phase 1-3 entirely (no checkpoint, no duplicate voice/Discord
+    announcement) — those already happened once for this window; this is
+    purely "does THIS session's own terminal need a 'cont' too."
+    """
+    reset_at = stats.get("quota_reset_at")
+    if not reset_at:
+        return
+
+    state_dir = os.path.join(project_path, "askr_state")
+    if not os.path.isdir(state_dir):
+        return
+
+    from askr.session.monitor import _find_active_jsonl
+    transcript_path = _find_active_jsonl(project_path, session_id) or ""
+    next_goal = _get_next_goal(state_dir)
+    _verify_native_resume_or_cont(project_path, session_id, transcript_path, reset_at, next_goal, stats)
+
+
 _RESET_WINDOW_TOLERANCE_SECS = 300  # far below the 5h gap between real windows, comfortably
                                      # above the observed cross-session jitter (below)
 
@@ -2257,6 +2331,7 @@ def _evaluate_session_triggers(
     quota_triggered_windows: set,
     idle_triggered: dict,
     session_parent: dict = None,
+    quota_resume_verified: set = None,
 ) -> None:
     """
     Evaluate all three triggers (context, quota, idle) for one session's stats
@@ -2309,6 +2384,8 @@ def _evaluate_session_triggers(
     turn_stop_ts, idle_secs = _last_turn_stop(session_id)
     if session_parent is None:
         session_parent = {}
+    if quota_resume_verified is None:
+        quota_resume_verified = set()
 
     # Grace period: give a newly-observed session a moment before evaluating
     # any trigger against it. Quota is account-wide, so a brand-new chat can
@@ -2419,6 +2496,26 @@ def _evaluate_session_triggers(
         # as the wait lasts.
         _log(f"quota trigger already fired for this window — not re-announcing (quota={quota_pct:.1f}%) [{project_path}]")
         logged_something = True
+
+        # Found 2026-09-06: this dedup correctly stops duplicate voice/Discord
+        # announcements across concurrent sessions sharing one account-wide
+        # quota window, but it was ALSO silently skipping the native-resume
+        # verification (Phase 4) for every session except whichever fired the
+        # trigger first — confirmed live, a second session sharing the window
+        # sat frozen at its limit with nobody watching it, needing a manual
+        # 'cont'. Each session is a separate terminal and needs its own
+        # check, keyed here per (session_id, reset_at) so it only runs once
+        # per session per window, independent of the announcement dedup above.
+        if session_id:
+            resume_key = f"{session_id}::{reset_at}"
+            if resume_key not in quota_resume_verified:
+                quota_resume_verified.add(resume_key)
+                _save_quota_resume_verified(quota_resume_verified)
+                threading.Thread(
+                    target=_verify_native_resume_for_other_session,
+                    args=(project_path, session_id, stats),
+                    daemon=True,
+                ).start()
     elif quota_pct is not None and quota_pct >= QUOTA_TRIGGER and not reset_at:
         # Real bug found 2026-07-09: this branch used to fire unconditionally
         # on quota_pct alone, while the dedup case above can only engage
@@ -2650,6 +2747,7 @@ def run_daemon():
     companioned_sessions: set = _load_companioned_sessions()  # session_id → already got a companion, disk-backed
     quota_warned_windows: set = _load_quota_warned_windows()  # quota_reset_at → already spoke the 75% heads-up, disk-backed
     quota_triggered_windows: set = _load_quota_triggered_windows()  # quota_reset_at → already fired the 90% hard trigger, disk-backed
+    quota_resume_verified: set = _load_quota_resume_verified()  # "session_id::reset_at" → already ran Phase 4 for this session+window, disk-backed
     idle_triggered: dict = _load_idle_triggered()  # "project_path::session_id" → {"turn_stop_ts", "recorded_at"}, disk-backed
     session_first_seen: dict = _load_session_first_seen()  # session_id → epoch first observed, disk-backed (survives restarts)
     session_parent: dict = _load_session_parent()  # session_id → parent_session_id, disk-backed, best-effort (see docstring)
@@ -2704,7 +2802,7 @@ def run_daemon():
                         stats, session_first_seen, quota_warned_windows,
                         companioned_sessions, last_trigger_at,
                         quota_triggered_windows, idle_triggered,
-                        session_parent,
+                        session_parent, quota_resume_verified,
                     )
 
                 time.sleep(POLL_ACTIVE)

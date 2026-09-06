@@ -19,6 +19,7 @@ Two problems this fixes, both from the design conversation:
 
 import os
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
@@ -369,6 +370,47 @@ class VerifyThenFallbackResumeTests(unittest.TestCase):
         mock_write_action.assert_not_called()
         mock_wait_reset.assert_called_once()
         mock_start_claude.assert_called_once()
+
+
+class VerifyNativeResumeForOtherSessionTests(unittest.TestCase):
+    """
+    2026-09-06: the lightweight per-session entry point spawned for a
+    session whose account-wide quota window was already announced by a
+    DIFFERENT session (see _evaluate_session_triggers' dedup branch). Must
+    resolve this session's own transcript/goal and delegate to the same
+    Phase 4 logic — never re-checkpoint or re-announce.
+    """
+
+    def test_resolves_transcript_and_goal_then_delegates_to_phase_four(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "askr_state"))
+            with patch("os.path.isdir", return_value=True), \
+                 patch("askr.session.monitor._find_active_jsonl", return_value="/fake/transcript.jsonl") as mock_find, \
+                 patch.object(lifecycle, "_get_next_goal", return_value="the next goal") as mock_goal, \
+                 patch.object(lifecycle, "_verify_native_resume_or_cont") as mock_verify:
+                lifecycle._verify_native_resume_for_other_session(
+                    tmp, "sess456", {"quota_reset_at": "2026-01-01T00:00:00Z", "quota_pct": 95.0},
+                )
+
+        mock_find.assert_called_once_with(tmp, "sess456")
+        mock_goal.assert_called_once()
+        mock_verify.assert_called_once_with(
+            tmp, "sess456", "/fake/transcript.jsonl", "2026-01-01T00:00:00Z", "the next goal",
+            {"quota_reset_at": "2026-01-01T00:00:00Z", "quota_pct": 95.0},
+        )
+
+    def test_no_reset_at_is_a_no_op(self):
+        with patch.object(lifecycle, "_verify_native_resume_or_cont") as mock_verify:
+            lifecycle._verify_native_resume_for_other_session("/fake/project", "sess456", {"quota_pct": 95.0})
+        mock_verify.assert_not_called()
+
+    def test_missing_state_dir_is_a_no_op(self):
+        with patch("os.path.isdir", return_value=False), \
+             patch.object(lifecycle, "_verify_native_resume_or_cont") as mock_verify:
+            lifecycle._verify_native_resume_for_other_session(
+                "/fake/project", "sess456", {"quota_reset_at": "2026-01-01T00:00:00Z"},
+            )
+        mock_verify.assert_not_called()
 
 
 if __name__ == "__main__":

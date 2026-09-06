@@ -92,6 +92,7 @@ class TriggerIndependenceTests(unittest.TestCase):
             patch.object(lifecycle, "_save_trigger_state"),
             patch.object(lifecycle, "_save_quota_triggered_windows"),
             patch.object(lifecycle, "_save_quota_warned_windows"),
+            patch.object(lifecycle, "_save_quota_resume_verified"),
             patch.object(lifecycle, "_save_idle_triggered"),
             patch.object(lifecycle, "_save_session_first_seen"),
             patch.object(lifecycle, "_last_turn_stop", return_value=(None, 0)),
@@ -234,6 +235,60 @@ class TriggerIndependenceTests(unittest.TestCase):
             idle_triggered={},
         )
         self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
+
+    def test_already_fired_window_still_verifies_native_resume_for_this_session(self):
+        """2026-09-06: the announcement dedup above must not ALSO skip this
+        session's own native-resume check — confirmed live, a second session
+        sharing an already-announced window sat frozen at its limit with
+        nobody watching it. _execute_quota_trigger (checkpoint + announce)
+        correctly does not refire, but _verify_native_resume_for_other_session
+        must still fire for THIS session_id."""
+        stats = _stats(quota_pct=95.0, quota_reset_at="2026-01-01T00:00:00Z")
+        quota_resume_verified = set()
+        lifecycle._evaluate_session_triggers(
+            stats,
+            session_first_seen={"sess123": 0.0},
+            quota_warned_windows=set(),
+            companioned_sessions=set(),
+            last_trigger_at={},
+            quota_triggered_windows={"2026-01-01T00:00:00Z"},
+            idle_triggered={},
+            quota_resume_verified=quota_resume_verified,
+        )
+        self.assertNotIn(lifecycle._execute_quota_trigger, self._thread_targets())
+        self.assertIn(lifecycle._verify_native_resume_for_other_session, self._thread_targets())
+        self.assertIn("sess123::2026-01-01T00:00:00Z", quota_resume_verified)
+
+    def test_already_verified_session_does_not_reverify_on_next_poll(self):
+        stats = _stats(quota_pct=95.0, quota_reset_at="2026-01-01T00:00:00Z")
+        lifecycle._evaluate_session_triggers(
+            stats,
+            session_first_seen={"sess123": 0.0},
+            quota_warned_windows=set(),
+            companioned_sessions=set(),
+            last_trigger_at={},
+            quota_triggered_windows={"2026-01-01T00:00:00Z"},
+            idle_triggered={},
+            quota_resume_verified={"sess123::2026-01-01T00:00:00Z"},
+        )
+        self.assertNotIn(lifecycle._verify_native_resume_for_other_session, self._thread_targets())
+
+    def test_different_session_sharing_the_window_still_verifies_independently(self):
+        """The exact live scenario: session A's trigger already announced this
+        window; session B (different session_id, same account-wide window)
+        must still get its own verification, not be silently skipped."""
+        stats = _stats(session_id="sess456", quota_pct=95.0, quota_reset_at="2026-01-01T00:00:00Z")
+        lifecycle._evaluate_session_triggers(
+            stats,
+            session_first_seen={"sess456": 0.0},
+            quota_warned_windows=set(),
+            companioned_sessions=set(),
+            last_trigger_at={},
+            quota_triggered_windows={"2026-01-01T00:00:00Z"},
+            idle_triggered={},
+            quota_resume_verified={"sess123::2026-01-01T00:00:00Z"},  # only session A already verified
+        )
+        self.assertIn(lifecycle._verify_native_resume_for_other_session, self._thread_targets())
 
     def test_quota_dedup_survives_cross_session_reset_at_jitter(self):
         """
