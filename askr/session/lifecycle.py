@@ -63,7 +63,7 @@ import shlex
 import shutil
 import subprocess
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 _PID_PATH              = os.path.expanduser("~/.config/askr/daemon.pid")
@@ -735,44 +735,49 @@ def _wait_until_quota_near_exhausted(reset_at_iso: str) -> Optional[float]:
         time.sleep(sleep_for)
 
 
-_PREMATURE_ACTIVITY_POLL_SECS = 20  # how often to re-check the transcript during the watch
+_NATIVE_RESUME_POLL_SECS  = 20   # how often to re-check the transcript during the watch
+_NATIVE_RESUME_GRACE_SECS = 180  # buffer past the real reset for Claude Code's own
+                                 # auto-continue to fire and write at least once, before
+                                 # askr concludes this session needs a manual nudge
 
 
-def _watch_for_premature_activity(transcript_path: str, reset_at_iso: str, baseline_mtime: float,
-                                   project_path: str = "", session_id: str = "") -> bool:
+def _watch_for_native_resume(transcript_path: str, reset_at_iso: str, baseline_mtime: float,
+                              project_path: str = "", session_id: str = "") -> bool:
     """
-    Safety net for the same-session rate-limit auto-resume feature (Stage 5,
-    2026-08-11): after sending Escape to decline "extra usage"/"upgrade" and
-    accept "wait for reset," the session should sit completely inert — no
-    new transcript activity — until the account's quota genuinely resets. If
-    the transcript starts growing BEFORE reset_at, that's the tell that the
-    wrong option got selected: a spending path (extra usage/upgrade) would
-    unblock the session immediately, while "wait for reset" leaves it
-    blocked until the real reset time.
+    Replaces the 2026-08-11 same-session-resume watch entirely (2026-09-06).
+    That version sent Escape to select "wait for reset" and watched for
+    activity BEFORE the real reset as a billing-anomaly signal. Retired:
+    Claude Code's CLI now natively handles exhausted -> wait -> resume on its
+    own ("Usage limit reached ... continuing automatically" -> "Usage limit
+    reset ... continuing automatically"), and the native prompt's own
+    "esc ... to cancel" wording means Escape now CANCELS that auto-continue
+    instead of selecting it — confirmed live, every session askr sent Escape
+    to got stuck.
 
-    Can't verify this by reading the terminal directly — there's no stable
-    API for that (see extension.js's readTerminalBuffer docstring) — so this
-    is deliberately an independent, out-of-band signal: transcript activity
-    is proof real API calls are succeeding, which "wait for reset" should
-    make impossible until the real reset time.
+    But native auto-continue isn't universal either — confirmed live the
+    same night: some sessions resumed on their own, others sat frozen at the
+    limit indefinitely with nothing watching them. So this function never
+    touches the terminal; it just watches. It waits until reset_at plus a
+    grace buffer (time for the native mechanism to actually fire) and checks
+    whether the transcript resumed writing on its own.
 
-    Polls transcript mtime; the moment it moves past baseline_mtime before
-    reset_at, fires a loud, unmissable alert and returns True. Returns False
-    if reset arrived with no premature activity — the expected, safe outcome.
-    Fails safe on an unparseable reset time: skips the watch (returns False)
-    rather than either blocking forever or false-alarming on nothing.
+    Returns True the moment new activity appears (native auto-continue
+    worked — nothing more to do). Returns False if the grace window fully
+    elapses with the transcript still frozen (native auto-continue didn't
+    happen for this session — the caller should step in with 'cont' itself).
+    Fails safe on an unparseable reset time: treats it as "didn't resume,"
+    same as the caller's existing pid-unresolved/dead-pid handling.
     """
     try:
         reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
     except Exception:
-        _log("premature-activity watch: could not parse reset time — skipping the watch")
+        _log("native-resume watch: could not parse reset time — treating as not-yet-resumed")
         return False
+
+    target = reset_at + timedelta(seconds=_NATIVE_RESUME_GRACE_SECS)
 
     while True:
         now = datetime.now(timezone.utc)
-        if now >= reset_at:
-            _log("premature-activity watch: reset time reached with no early activity — clean")
-            return False
 
         try:
             current_mtime = (
@@ -784,53 +789,19 @@ def _watch_for_premature_activity(transcript_path: str, reset_at_iso: str, basel
             current_mtime = baseline_mtime
 
         if current_mtime > baseline_mtime:
-            _alert_premature_activity(project_path, session_id)
+            _log(f"native auto-continue resumed the session on its own — no action needed [{project_path}]")
             return True
 
-        remaining = (reset_at - now).total_seconds()
-        sleep_for = min(_PREMATURE_ACTIVITY_POLL_SECS, max(remaining, 0))
+        if now >= target:
+            _log(f"native-resume watch: grace window elapsed with no activity — "
+                 f"falling back to 'cont' [{project_path}]")
+            return False
+
+        remaining = (target - now).total_seconds()
+        sleep_for = min(_NATIVE_RESUME_POLL_SECS, max(remaining, 0))
         if sleep_for <= 0:
             continue
         time.sleep(sleep_for)
-
-
-def _alert_premature_activity(project_path: str = "", session_id: str = ""):
-    """
-    Loud, unmissable alert on every channel — no rate limiting, unlike every
-    other notification in this file. This means real usage may have started
-    despite askr intending to select "wait for reset," which is a real
-    billing event, not a UX nicety to be quiet about.
-    """
-    message = (
-        "URGENT — Askr expected this session to stay inactive until quota reset, but it "
-        "just started producing new output early. This can mean the wrong rate-limit option "
-        "got selected (extra usage or a plan upgrade instead of waiting). Check your "
-        "Anthropic billing/plan now."
-    )
-    try:
-        os.makedirs(os.path.dirname(_NOTIFICATION_PATH), exist_ok=True)
-        with open(_NOTIFICATION_PATH, "w") as f:
-            json.dump({
-                "type": "billing_anomaly_alert",
-                "message": message,
-                "project_path": project_path,
-                "session_id": session_id,
-                "shown": False,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }, f)
-    except Exception:
-        pass
-    try:
-        _speak("Urgent — check your Anthropic billing now. A session may have resumed early.",
-               source="lifecycle._alert_premature_activity", project_path=project_path, session_id=session_id or "")
-    except Exception:
-        pass
-    try:
-        from askr.clients.discord import send_message
-        send_message(f"🚨 **[askr] URGENT — possible billing anomaly**\n{message}")
-    except Exception:
-        pass
-    _log(f"ALERT: premature transcript activity detected before reset — {project_path}")
 
 
 def _get_next_goal(state_dir: str = None) -> str:
@@ -1434,26 +1405,109 @@ def _execute_quota_trigger_impl(stats: dict, project_path: str, session_id: str 
     _write_notification("quota", next_goal, announced_quota_pct, handover_has_content,
                          project_path, handover_path, git_pushed=result.get("git_pushed", False))
 
-    # Found 2026-09-06: Claude Code's CLI now natively handles the entire
-    # exhausted -> wait -> resume cycle on its own — confirmed live: "Usage
-    # limit reached ... continuing automatically at <time> ... esc or type to
-    # cancel", then "Usage limit reset ... continuing automatically", no askr
-    # involvement, no terminal action needed. This retires the 2026-08-12
-    # same-session-resume feature (Escape -> watch -> "cont"), which was built
-    # on a binary analysis showing Escape equivalent to selecting "Stop and
-    # wait for limit to reset" — true for the Claude Code version analyzed
-    # then, but the CURRENT native prompt's own "esc ... to cancel" wording
-    # means Escape now CANCELS the native auto-continue instead of selecting
-    # it. Live pattern that gave this away: every session askr sent Escape to
-    # got stuck at the limit; every session askr left untouched resumed on
-    # its own right on schedule. The "premature activity" alarms this used to
-    # fire (see the two retired fixes above it in git history) weren't
-    # billing anomalies at all — they were the native auto-continue
-    # succeeding despite askr's interference, misread as suspicious.
+    # Found 2026-09-06: Claude Code's CLI now natively handles the exhausted
+    # -> wait -> resume cycle on its own for SOME sessions — confirmed live:
+    # "Usage limit reached ... continuing automatically at <time> ... esc or
+    # type to cancel", then "Usage limit reset ... continuing automatically".
+    # The 2026-08-12 same-session-resume feature sent Escape here on a binary
+    # analysis showing it equivalent to selecting "Stop and wait for limit to
+    # reset" — true for that Claude Code version, but the CURRENT native
+    # prompt's own "esc ... to cancel" wording means Escape now CANCELS the
+    # native auto-continue instead. Every session askr sent Escape to got
+    # stuck; every session left untouched resumed on its own.
     #
-    # askr's job here ends at the checkpoint + informational notification
-    # above: no Escape, no watch, no "cont", no companion. Sending nothing
-    # and getting out of the way is what actually works now.
+    # But native auto-continue isn't universal: confirmed live the same
+    # night, other sessions that also hit the limit sat frozen indefinitely
+    # with nothing watching them. So askr no longer sends Escape (never
+    # interferes with the native path) but does verify it actually happened:
+    # wait past the real reset plus a grace buffer, then check whether the
+    # transcript resumed writing on its own. Only if it's still frozen does
+    # askr step in with 'cont' — the same dead-pid-safe delivery as before,
+    # falling back to a companion session if the pid can't be resolved or
+    # has died in the meantime.
+    resumed_natively = False
+    same_session_resumed = False
+    if reset_at:
+        baseline_mtime = None
+        try:
+            if transcript_path and os.path.exists(transcript_path):
+                baseline_mtime = os.path.getmtime(transcript_path)
+        except Exception:
+            baseline_mtime = None
+
+        # Can't verify native auto-continue without a transcript to watch —
+        # don't guess. Skip straight to the companion fallback below, which
+        # still waits for the real reset via _wait_for_reset() first.
+        if baseline_mtime is not None:
+            resumed_natively = _watch_for_native_resume(
+                transcript_path, reset_at, baseline_mtime, project_path, session_id or "",
+            )
+
+            if not resumed_natively:
+                try:
+                    pid = _find_session_pid(transcript_path, project_path)
+                except Exception:
+                    pid = None
+
+                pid_alive = False
+                if pid:
+                    try:
+                        os.kill(pid, 0)
+                        pid_alive = True
+                    except (ProcessLookupError, PermissionError):
+                        pid_alive = False
+                    except Exception:
+                        pid_alive = True  # unexpected errno — don't assume dead on a shaky signal
+
+                if pid and not pid_alive:
+                    _log(f"quota fallback: pid {pid} no longer alive — opening a companion instead of 'cont'")
+                elif not pid:
+                    _log("quota fallback: pid unresolved — opening a companion instead of 'cont'")
+
+                if pid_alive:
+                    ancestor_pids = _get_ancestor_pids(pid)
+                    if ancestor_pids:
+                        _write_terminal_action_notification(
+                            "quota_resume_cont", ancestor_pids, project_path,
+                            message="Quota reset — this session didn't auto-continue, so askr is resuming it for you.",
+                            resume_text="cont",
+                        )
+                        _speak("Quota reset. This session didn't auto-continue — resuming it now.",
+                               source="lifecycle._execute_quota_trigger.cont_fallback", project_path=project_path,
+                               session_id=session_id or "")
+                        same_session_resumed = True
+                    else:
+                        _log("quota fallback: ancestor pids unresolved — opening a companion instead of 'cont'")
+
+    if resumed_natively or same_session_resumed:
+        if same_session_resumed:
+            _notify_discord_resumed("quota", next_goal)
+        try:
+            from askr.state.analytics import today_summary
+            saved = today_summary().get("total_seconds", 0)
+            _write_resumed_marker("quota", saved)
+        except Exception:
+            pass
+        return
+
+    # Fallback: no transcript to watch, pid/ancestor unresolved, the pid died
+    # mid-wait, or the grace window elapsed with no native resume and no way
+    # to send 'cont' — same last-resort behavior as before this feature
+    # existed. _wait_for_reset() no-ops immediately if reset_at already
+    # passed (e.g. the watch above already waited it out), so it's always
+    # safe to call here regardless of which path led to this point.
+    if reset_at:
+        _wait_for_reset(reset_at)
+    else:
+        time.sleep(300)
+
+    _log("starting companion claude session (existing session, if any, left running)")
+    launched = _start_claude(project_path, force=True)
+    if launched:
+        _notify_discord_resumed("quota", next_goal)
+        from askr.state.writer import append_event
+        append_event("companion_spawned", project_path, parent_session_id=session_id,
+                     trigger_type="quota", quota_pct=stats.get("quota_pct"))
     try:
         from askr.state.analytics import today_summary
         saved = today_summary().get("total_seconds", 0)

@@ -231,22 +231,25 @@ class ExecuteQuotaTriggerPhaseOrderTests(unittest.TestCase):
         self.assertEqual(announced_pct, 97.0)
 
 
-class NoTerminalActionOnQuotaTriggerTests(unittest.TestCase):
+class VerifyThenFallbackResumeTests(unittest.TestCase):
     """
-    2026-09-06: retires the 2026-08-12 same-session-resume feature (Escape ->
-    watch -> "cont"). Confirmed live: Claude Code's CLI now natively handles
-    the whole exhausted -> wait -> resume cycle on its own ("Usage limit
-    reached ... continuing automatically" -> "Usage limit reset ...
-    continuing automatically"), and the native prompt's "esc ... to cancel"
-    wording means Escape now CANCELS that native auto-continue rather than
-    selecting it (the 2026-08 binary analysis proving Escape == "wait for
-    reset" was for an older Claude Code version). Live pattern that gave it
-    away: every session askr sent Escape to got stuck; every session left
-    untouched resumed on its own, right on schedule.
+    2026-09-06: retires the 2026-08-12 same-session-resume feature's Escape
+    step. Confirmed live: Claude Code's CLI natively handles exhausted ->
+    wait -> resume for SOME sessions on its own ("Usage limit reached ...
+    continuing automatically" -> "Usage limit reset ... continuing
+    automatically"), and the native prompt's "esc ... to cancel" wording
+    means Escape now CANCELS that auto-continue rather than selecting it
+    (the 2026-08 binary analysis proving Escape == "wait for reset" was for
+    an older Claude Code version) — every session askr sent Escape to got
+    stuck; every session left untouched resumed on its own.
 
-    _execute_quota_trigger_impl must now do exactly checkpoint + the
-    informational "quota" notification, and nothing else — no terminal
-    keystroke, no companion session, regardless of pid/ancestor/reset state.
+    But native auto-continue isn't universal: other sessions that hit the
+    limit the same night sat frozen indefinitely with nothing watching them.
+    So askr never sends Escape, but it does verify: wait past the real reset
+    plus a grace buffer (_watch_for_native_resume), then only send 'cont' —
+    with the same dead-pid-safe delivery as before — if the session is still
+    frozen. Falls back to opening a companion if pid/ancestor resolution
+    fails or the pid died, exactly like the pre-2026-08-12 behavior.
     """
 
     def _base_patches(self, extra=None):
@@ -285,34 +288,87 @@ class NoTerminalActionOnQuotaTriggerTests(unittest.TestCase):
             stack.enter_context(p)
         return stack
 
-    def test_no_terminal_action_sent_regardless_of_pid_resolution(self):
-        """Even when pid/ancestor_pids resolve fine, no Escape and no 'cont'
-        should ever be sent — Claude Code's native auto-continue owns this
-        now, and touching the terminal at all is what broke it."""
+    def test_native_resume_confirmed_sends_no_terminal_action_and_no_companion(self):
+        """The watch confirming native resume must short-circuit everything
+        else — no Escape (never sent at all, any test below confirms that
+        too), no 'cont', no companion, regardless of pid/ancestor state."""
         with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
              patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
-             patch.object(lifecycle, "_watch_for_premature_activity") as mock_watch, \
+             patch.object(lifecycle, "_watch_for_native_resume", return_value=True), \
              patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
              patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
              patch.object(lifecycle, "_start_claude") as mock_start_claude, \
              patch.object(lifecycle, "_speak"):
             self._run([])
 
-        mock_watch.assert_not_called()
         mock_write_action.assert_not_called()
         mock_wait_reset.assert_not_called()
         mock_start_claude.assert_not_called()
 
-    def test_no_pid_still_sends_no_terminal_action_and_no_companion(self):
-        with patch.object(lifecycle, "_find_session_pid", return_value=None), \
+    def test_no_native_resume_sends_cont_to_the_live_pid(self):
+        """The core new behavior: native auto-continue didn't happen, but the
+        pid resolved and is alive — askr sends 'cont' itself, and 'Escape'
+        (quota_exhausted_wait) must never appear anywhere in this flow."""
+        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
+             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
+             patch.object(lifecycle, "_watch_for_native_resume", return_value=False), \
+             patch("os.kill"), \
+             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
+             patch.object(lifecycle, "_start_claude") as mock_start_claude, \
+             patch.object(lifecycle, "_speak"):
+            self._run([])
+
+        mock_write_action.assert_called_once()
+        self.assertEqual(mock_write_action.call_args[0][0], "quota_resume_cont")
+        self.assertEqual(mock_write_action.call_args[0][1], [100, 50])
+        mock_start_claude.assert_not_called()  # resumed in place — no companion
+
+    def test_no_native_resume_and_dead_pid_falls_back_to_companion(self):
+        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
+             patch.object(lifecycle, "_get_ancestor_pids", return_value=[100, 50]), \
+             patch.object(lifecycle, "_watch_for_native_resume", return_value=False), \
+             patch("os.kill", side_effect=ProcessLookupError), \
              patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
              patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
-             patch.object(lifecycle, "_start_claude") as mock_start_claude:
+             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
+             patch.object(lifecycle, "_speak"):
             self._run([])
 
         mock_write_action.assert_not_called()
-        mock_wait_reset.assert_not_called()
-        mock_start_claude.assert_not_called()
+        mock_wait_reset.assert_called_once()
+        mock_start_claude.assert_called_once()
+
+    def test_no_pid_falls_back_to_companion(self):
+        with patch.object(lifecycle, "_find_session_pid", return_value=None), \
+             patch.object(lifecycle, "_watch_for_native_resume", return_value=False), \
+             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
+             patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
+             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude:
+            self._run([])
+
+        mock_write_action.assert_not_called()
+        mock_wait_reset.assert_called_once()
+        mock_start_claude.assert_called_once()
+
+    def test_missing_transcript_mtime_skips_watch_and_falls_back_to_companion(self):
+        """baseline_mtime can't be established — can't verify native resume
+        at all, so don't guess; go straight to the wait-then-companion
+        fallback (which still waits for the real reset via _wait_for_reset).
+        os.path.exists=False must be the LAST entry so it's the innermost
+        (active) patch — _base_patches already includes its own
+        os.path.exists=True earlier in the stack."""
+        with patch.object(lifecycle, "_find_session_pid", return_value=4242), \
+             patch.object(lifecycle, "_watch_for_native_resume") as mock_watch, \
+             patch.object(lifecycle, "_write_terminal_action_notification") as mock_write_action, \
+             patch.object(lifecycle, "_wait_for_reset") as mock_wait_reset, \
+             patch.object(lifecycle, "_start_claude", return_value=True) as mock_start_claude, \
+             patch.object(lifecycle, "_speak"):
+            self._run([patch("os.path.exists", return_value=False)])
+
+        mock_watch.assert_not_called()
+        mock_write_action.assert_not_called()
+        mock_wait_reset.assert_called_once()
+        mock_start_claude.assert_called_once()
 
 
 if __name__ == "__main__":
