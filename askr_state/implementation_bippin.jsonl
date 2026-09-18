@@ -4912,3 +4912,4 @@
 {"ts": "2026-09-18T09:46:04Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "venv/bin/python -m pytest tests/ -q 2>&1 | tail -40"}
 {"ts": "2026-09-18T09:46:37Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git status"}
 {"ts": "2026-09-18T09:46:48Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git diff --stat askr_state/decisions.jsonl askr_state/failed_approaches.md askr_"}
+{"ts": "2026-09-18T09:47:04Z", "session_id": "14f3ea4f-a4b7-44f4-acdc-5927633342b3", "type": "command", "detail": "git add askr/hooks/pre_compact.py askr/session/lifecycle.py askr_state/decisions"}
