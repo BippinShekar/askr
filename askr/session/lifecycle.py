@@ -782,10 +782,19 @@ def _watch_for_native_resume(transcript_path: str, reset_at_iso: str, baseline_m
     try:
         reset_at = datetime.fromisoformat(reset_at_iso.replace("Z", "+00:00"))
     except Exception:
-        _log("native-resume watch: could not parse reset time — treating as not-yet-resumed")
+        _log(f"native-resume watch [{session_id or '?'}]: could not parse reset time "
+             f"({reset_at_iso!r}) — treating as not-yet-resumed [{project_path}]")
         return False
 
     target = reset_at + timedelta(seconds=_NATIVE_RESUME_GRACE_SECS)
+    # Found 2026-09-18: this watch's own log lines printed neither session_id
+    # nor the actual reset_at/target it was waiting on — a live "cont felt
+    # ~30 minutes late" report couldn't be diagnosed as a real stall vs. a
+    # legitimately-far-off reset_at without this. Logged once up front so the
+    # deadline this specific call is working toward is on the record before
+    # any waiting happens.
+    _log(f"native-resume watch [{session_id or '?'}]: waiting for reset_at={reset_at.isoformat()} "
+         f"+ {_NATIVE_RESUME_GRACE_SECS}s grace = target {target.isoformat()} [{project_path}]")
 
     while True:
         now = datetime.now(timezone.utc)
@@ -800,12 +809,13 @@ def _watch_for_native_resume(transcript_path: str, reset_at_iso: str, baseline_m
             current_mtime = baseline_mtime
 
         if current_mtime > baseline_mtime:
-            _log(f"native auto-continue resumed the session on its own — no action needed [{project_path}]")
+            _log(f"native-resume watch [{session_id or '?'}]: native auto-continue resumed the "
+                 f"session on its own at {now.isoformat()} — no action needed [{project_path}]")
             return True
 
         if now >= target:
-            _log(f"native-resume watch: grace window elapsed with no activity — "
-                 f"falling back to 'cont' [{project_path}]")
+            _log(f"native-resume watch [{session_id or '?'}]: grace window elapsed at {now.isoformat()} "
+                 f"(target was {target.isoformat()}) with no activity — falling back to 'cont' [{project_path}]")
             return False
 
         remaining = (target - now).total_seconds()
@@ -1489,13 +1499,17 @@ def _verify_native_resume_or_cont(project_path: str, session_id: str, transcript
                         pid_alive = True  # unexpected errno — don't assume dead on a shaky signal
 
                 if pid and not pid_alive:
-                    _log(f"quota fallback: pid {pid} no longer alive — opening a companion instead of 'cont'")
+                    _log(f"quota fallback [{session_id or '?'}]: pid {pid} no longer alive — "
+                         f"opening a companion instead of 'cont' [{project_path}]")
                 elif not pid:
-                    _log("quota fallback: pid unresolved — opening a companion instead of 'cont'")
+                    _log(f"quota fallback [{session_id or '?'}]: pid unresolved — "
+                         f"opening a companion instead of 'cont' [{project_path}]")
 
                 if pid_alive:
                     ancestor_pids = _get_ancestor_pids(pid)
                     if ancestor_pids:
+                        _log(f"quota fallback [{session_id or '?'}]: sending 'cont' to pid {pid} "
+                             f"(ancestor_pids={ancestor_pids}) [{project_path}]")
                         _write_terminal_action_notification(
                             "quota_resume_cont", ancestor_pids, project_path,
                             message="Quota reset — this session didn't auto-continue, so askr is resuming it for you.",
@@ -1506,7 +1520,8 @@ def _verify_native_resume_or_cont(project_path: str, session_id: str, transcript
                                session_id=session_id or "")
                         same_session_resumed = True
                     else:
-                        _log("quota fallback: ancestor pids unresolved — opening a companion instead of 'cont'")
+                        _log(f"quota fallback [{session_id or '?'}]: ancestor pids unresolved for pid {pid} — "
+                             f"opening a companion instead of 'cont' [{project_path}]")
 
     if resumed_natively or same_session_resumed:
         if same_session_resumed:

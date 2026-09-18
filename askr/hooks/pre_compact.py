@@ -39,7 +39,44 @@ from askr.session.lifecycle import _find_session_pid
 
 _CHECKPOINT_PENDING     = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFIED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/emergency_notified_sessions.json")
+_DAEMON_LOG_PATH        = os.path.expanduser("~/.config/askr/daemon.log")
 QUOTA_HIGH              = 70.0  # treat as quota-exhausted if above this
+
+
+def _log_kill_diagnostics(session_id: str, project_path: str, ctx_pct):
+    """
+    2026-09-18: this hook's SIGKILL fires whenever Claude Code is about to
+    auto-compact — the module docstring's own claim is that Trigger A (the
+    70% daemon companion-opener) "should prevent this from firing in normal
+    operation." Live report: it was firing on an actively-attended session,
+    with no way to tell from daemon.log alone whether Trigger A never ran
+    for that session, or ran and lost the race. Appends directly to
+    daemon.log (this hook is a separate process from the daemon, so _log()'s
+    stdout-redirection trick doesn't reach it) so both are visible on one
+    timeline without correlating two separate log files by hand.
+
+    Deliberately called AFTER the kill (see main()) — this hook's entire
+    design is winning a race against Claude Code's own compaction, so no
+    file I/O beyond what already existed is allowed on the pre-kill path.
+    ctx_pct is captured pre-kill (piggybacking on the stats-file read the
+    kill path already does before deleting it) since _latest_stats() called
+    from here would read whatever's left AFTER that same-session stats file
+    was just deleted.
+    """
+    try:
+        from askr.session.lifecycle import _load_companioned_sessions
+        already_companioned = bool(session_id) and session_id in _load_companioned_sessions()
+    except Exception:
+        already_companioned = None
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        os.makedirs(os.path.dirname(_DAEMON_LOG_PATH), exist_ok=True)
+        with open(_DAEMON_LOG_PATH, "a") as f:
+            f.write(f"[{ts}] PreCompact emergency kill: session={session_id or '?'} "
+                    f"ctx={ctx_pct if ctx_pct is not None else '?'} "
+                    f"already_companioned_by_trigger_a={already_companioned} [{project_path}]\n")
+    except Exception:
+        pass
 
 
 def _get_tty_for_pid(pid: int) -> str | None:
@@ -341,12 +378,21 @@ def main():
     tty = _get_tty_for_pid(pid)
 
     # Delete own stats file before dying — prevents the daemon from re-triggering
-    # on a dead session's stale high ctx% after the cooldown expires.
+    # on a dead session's stale high ctx% after the cooldown expires. Reads
+    # context_pct out of it first (free — the file's already being opened for
+    # this) so the post-kill diagnostic log below has this session's actual
+    # number, not whatever _latest_stats() would find after this file is gone.
+    ctx_pct_at_kill = None
     if transcript_path and project_path:
         try:
             from askr.session.monitor import stats_path_for_session
             sp = stats_path_for_session(project_path, session_id)
             if os.path.exists(sp):
+                try:
+                    with open(sp) as f:
+                        ctx_pct_at_kill = json.load(f).get("context_pct")
+                except Exception:
+                    pass
                 os.remove(sp)
         except Exception:
             pass
@@ -380,6 +426,8 @@ def main():
     # meant to interpret.
     if tty:
         _reset_terminal_mouse_tracking(tty)
+
+    _log_kill_diagnostics(session_id, project_path, ctx_pct_at_kill)
 
     already_notified = session_id in _load_notified_sessions()
     if session_id:

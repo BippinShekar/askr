@@ -132,6 +132,8 @@ class MainKillOrderingTests(unittest.TestCase):
              patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
              patch("askr.session.monitor.stats_path_for_session", return_value="/nonexistent"), \
              patch("os.kill", side_effect=lambda pid, sig: call_order.append(("kill", pid))) as mock_kill, \
+             patch("askr.hooks.pre_compact._log_kill_diagnostics",
+                   side_effect=lambda *a, **k: call_order.append("log_diagnostics")), \
              patch("askr.hooks.pre_compact._spawn_background_finish",
                    side_effect=lambda *a, **k: call_order.append("spawn_background")) as mock_spawn, \
              patch("askr.hooks.pre_compact.create_checkpoint" if False else "os.path.exists", return_value=False):
@@ -140,7 +142,32 @@ class MainKillOrderingTests(unittest.TestCase):
 
         mock_kill.assert_called_once_with(4242, __import__("signal").SIGKILL)
         mock_spawn.assert_called_once()
-        self.assertEqual(call_order, [("kill", 4242), "spawn_background"])
+        self.assertEqual(call_order, [("kill", 4242), "log_diagnostics", "spawn_background"])
+
+    def test_kill_diagnostics_reads_context_pct_before_deleting_stats_file(self):
+        """2026-09-18: the diagnostic log's ctx_pct must come from THIS
+        session's own stats file, captured before it's deleted — not from
+        _latest_stats() called after, which would read nothing (this file is
+        gone) or a different concurrent session's file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            stats_path = os.path.join(tmp, "stats.json")
+            with open(stats_path, "w") as f:
+                json.dump({"context_pct": 0.93}, f)
+
+            with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
+                 patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
+                 patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
+                 patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+                 patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
+                 patch("askr.session.monitor.stats_path_for_session", return_value=stats_path), \
+                 patch("os.kill"), \
+                 patch("askr.hooks.pre_compact._log_kill_diagnostics") as mock_log, \
+                 patch("askr.hooks.pre_compact._spawn_background_finish"):
+                self._feed({"transcript_path": "/tmp/fake-session.jsonl"})
+                pre_compact.main()
+
+            mock_log.assert_called_once_with("fake-session", self._tmp.name, 0.93)
+            self.assertFalse(os.path.exists(stats_path))  # still deleted as before
 
     def test_no_pid_runs_checkpoint_synchronously_and_never_spawns_background(self):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
@@ -391,6 +418,79 @@ class FinishEmergencyCheckpointTests(unittest.TestCase):
                 should_open_companion=False, already_notified=True,
             )
         self.assertFalse(os.path.exists(pre_compact._CHECKPOINT_PENDING))
+
+
+# ---------------------------------------------------------------------------
+# Kill diagnostics (2026-09-18)
+#
+# Live report: this hook's emergency SIGKILL fired on an actively-attended
+# session, with no way to tell from daemon.log whether Trigger A (the 70%
+# daemon companion-opener, which the module docstring claims "should prevent
+# this from firing in normal operation") ever ran for that session, or ran
+# and lost the race. This appends a diagnostic line so both are visible on
+# one timeline.
+# ---------------------------------------------------------------------------
+
+class KillDiagnosticsTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self._orig_path = pre_compact._DAEMON_LOG_PATH
+        pre_compact._DAEMON_LOG_PATH = os.path.join(self._tmp.name, "daemon.log")
+
+    def tearDown(self):
+        pre_compact._DAEMON_LOG_PATH = self._orig_path
+        self._tmp.cleanup()
+
+    def test_writes_session_ctx_and_companion_status(self):
+        with patch("askr.session.lifecycle._load_companioned_sessions", return_value={"sess-1"}):
+            pre_compact._log_kill_diagnostics("sess-1", "/fake/project", 0.93)
+
+        with open(pre_compact._DAEMON_LOG_PATH) as f:
+            line = f.read()
+        self.assertIn("PreCompact emergency kill", line)
+        self.assertIn("session=sess-1", line)
+        self.assertIn("ctx=0.93", line)
+        self.assertIn("already_companioned_by_trigger_a=True", line)
+        self.assertIn("[/fake/project]", line)
+
+    def test_session_not_in_companioned_set_logs_false(self):
+        with patch("askr.session.lifecycle._load_companioned_sessions", return_value=set()):
+            pre_compact._log_kill_diagnostics("sess-2", "/fake/project", 0.95)
+        with open(pre_compact._DAEMON_LOG_PATH) as f:
+            self.assertIn("already_companioned_by_trigger_a=False", f.read())
+
+    def test_missing_ctx_pct_logs_unknown_marker(self):
+        with patch("askr.session.lifecycle._load_companioned_sessions", return_value=set()):
+            pre_compact._log_kill_diagnostics("sess-3", "/fake/project", None)
+        with open(pre_compact._DAEMON_LOG_PATH) as f:
+            self.assertIn("ctx=?", f.read())
+
+    def test_never_raises_even_if_companioned_sessions_lookup_fails(self):
+        with patch("askr.session.lifecycle._load_companioned_sessions", side_effect=Exception("boom")):
+            try:
+                pre_compact._log_kill_diagnostics("sess-4", "/fake/project", 0.9)
+            except Exception as e:
+                self.fail(f"_log_kill_diagnostics raised: {e}")
+        with open(pre_compact._DAEMON_LOG_PATH) as f:
+            self.assertIn("already_companioned_by_trigger_a=None", f.read())
+
+    def test_never_raises_even_if_log_write_fails(self):
+        pre_compact._DAEMON_LOG_PATH = "/definitely/does/not/exist/daemon.log"
+        with patch("askr.session.lifecycle._load_companioned_sessions", return_value=set()):
+            try:
+                pre_compact._log_kill_diagnostics("sess-5", "/fake/project", 0.9)
+            except Exception as e:
+                self.fail(f"_log_kill_diagnostics raised: {e}")
+
+    def test_appends_rather_than_overwriting(self):
+        with patch("askr.session.lifecycle._load_companioned_sessions", return_value=set()):
+            pre_compact._log_kill_diagnostics("sess-a", "/fake/project", 0.9)
+            pre_compact._log_kill_diagnostics("sess-b", "/fake/project", 0.95)
+        with open(pre_compact._DAEMON_LOG_PATH) as f:
+            lines = f.readlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("sess-a", lines[0])
+        self.assertIn("sess-b", lines[1])
 
 
 if __name__ == "__main__":
