@@ -1,6 +1,6 @@
 {
-  "task": "Instrumented PreCompact emergency kills and native-resume watch with session-level diagnostics to enable root-cause analysis of two live complaints (premature session termination and slow cont recovery) without guessing.",
-  "discussion_summary": "Two parallel sessions converged on the same diagnostic instrumentation goal. Session 1 built the full five-stage quota-reset automation pipeline (Stages 1\u20135), guard-block CLI commands, handover hallucination filtering, and fixed the daemon-suspension gap during macOS sleep/wake by holding caffeinate alive across quota-wait threads. This session completed Stages 1 and 3 of the instrumentation: PreCompact kills now log session_id, context_pct, and already_companioned flag to daemon.log (enabling diagnosis of whether Trigger A never ran or opened a companion but lost the race), and _watch_for_native_resume plus quota-fallback paths now include session_id, resolved reset_at, and grace-adjusted deadline up front (enabling next slow cont to be diagnosed from the log directly). All 702 tests pass. The only remaining uncertainty is Stage 5 (handover quality) \u2014 the current leaps handover is factually sound but structurally poor (run-on Task line, flat Next Actions mixing urgency levels).",
+  "task": "Instrumented PreCompact emergency kills and native-resume watch with session-level diagnostics, added ASKR_DEVELOPER environment override for multi-user bot scenarios, and marked superseded decisions in audit trail to prevent stale guidance.",
+  "discussion_summary": "Two parallel sessions converged on diagnostic instrumentation to enable root-cause analysis of premature session termination and slow recovery without guessing. Session 1 built the five-stage quota-reset automation pipeline and fixed daemon-suspension gaps during macOS sleep/wake. This session completed Stages 1 and 3 of instrumentation (PreCompact kills now log session_id, context_pct, and already_companioned flag; _watch_for_native_resume logs session_id, resolved reset_at, and grace-adjusted deadline). All 702 tests pass. Additionally, added ASKR_DEVELOPER environment variable override to support shared bots running Claude Code on behalf of multiple users without touching machine-level config, and established a convention for marking reversed decisions with '[SUPERSEDED]' prefix to keep audit trail intact while preventing stale guidance from being read as current.",
   "accomplishments": [
     {
       "what": "Instrumented PreCompact emergency SIGKILL with session_id, context_pct at kill time, and already_companioned flag logged AFTER the kill to preserve race-winning behavior",
@@ -77,6 +77,18 @@
     {
       "what": "Wrapped _execute_quota_trigger with _quota_wait_begin/_quota_wait_end to hold caffeinate alive across session-idle transitions during quota-reset wait, closing the incident where daemon froze for 1h43m mid-wait",
       "done": true
+    },
+    {
+      "what": "Added ASKR_DEVELOPER environment variable override in load_developer() to support shared bots running Claude Code on behalf of multiple users without modifying machine-level config",
+      "done": true
+    },
+    {
+      "what": "Established convention for marking reversed/retired decisions with '[SUPERSEDED]' prefix in decisions.jsonl to preserve audit trail while preventing stale guidance from being read as current",
+      "done": true
+    },
+    {
+      "what": "Marked '[SUPERSEDED]' on Escape/cont automation decision after this week's work explicitly retired same-session automation because Claude Code now handles quota-resume natively",
+      "done": true
     }
   ],
   "in_progress": [],
@@ -95,6 +107,11 @@
       "order": 3,
       "action": "Clarify what specific factual error or hallucination in handover output to target for Stage 5 \u2014 current leaps handover (2026-09-18 14:32) appears factually sound but has poor structure (Task line is run-on, Next Actions mixes urgency levels without markers)",
       "why": "Stage 5 is blocked on understanding the concrete quality problem; the current handover is not obviously broken, so need clarification on which handover or what specific error to fix"
+    },
+    {
+      "order": 4,
+      "action": "Commit and push ASKR_DEVELOPER environment override and test_developer_override.py to enable multi-user bot deployments",
+      "why": "Feature is complete and tested; unblocks shared-bot scenarios where a single daemon serves multiple users"
     }
   ],
   "decisions": [
@@ -115,8 +132,8 @@
       "reason": "SIGKILL gives Claude Code's TUI no chance to disable mouse-tracking mode it enables on start, leaving the terminal dumping raw SGR mouse reports as garbage text; direct device write bypasses the killed process entirely"
     },
     {
-      "decision": "Use Escape key (\\x1b) for quota-reset menu automation, not arrow-navigation or digit-selection",
-      "reason": "Binary analysis proves Escape and manual 'Stop and wait' selection both call the same code path (der()); Escape is position-independent and sidesteps the risk of menu-order changes via remote feature flags"
+      "decision": "[SUPERSEDED] Use Escape key (\\x1b) for quota-reset menu automation, not arrow-navigation or digit-selection",
+      "reason": "This week's work explicitly retired same-session Escape/cont automation because Claude Code now handles quota-resume natively; decision is still in audit trail but no longer active guidance"
     },
     {
       "decision": "Implement quota-reset automation in five stages: (1) instrumentation for detection, (2) PID\u2192terminal bridge, (3) wait for real data, (4) wire automation, (5) safety-net detection",
@@ -133,6 +150,14 @@
     {
       "decision": "Instrument _watch_for_native_resume and quota-fallback paths with session_id, resolved reset_at, and grace-adjusted deadline up front before waiting",
       "reason": "Next slow cont can be diagnosed from the log directly instead of reconstructing guesses across multiple incidents; shows whether askr was legitimately waiting for a future reset or actually stalled"
+    },
+    {
+      "decision": "Mark reversed/retired decisions with '[SUPERSEDED]' prefix instead of deleting them or presenting them unmarked as current",
+      "reason": "Audit trail must stay intact for traceability, but unmarked reversed decisions sitting next to new ones read as stale/naive guidance. Prefix makes the reversal explicit without losing history."
+    },
+    {
+      "decision": "Support ASKR_DEVELOPER environment variable override in load_developer() for multi-user bot deployments",
+      "reason": "Shared bots running Claude Code on behalf of many users need per-run identity without touching machine-level config; environment override is the standard pattern for this use case"
     }
   ],
   "user_rejected_decisions": [],
@@ -140,7 +165,9 @@
   "files_in_play": [
     "askr/hooks/pre_compact.py",
     "askr/session/lifecycle.py",
-    "tests/test_pre_compact.py"
+    "askr/state/config.py",
+    "tests/test_pre_compact.py",
+    "tests/test_developer_override.py"
   ],
   "relational_files": [
     {
@@ -154,9 +181,14 @@
       "why": "32 tests verify PreCompact kill instrumentation and edge cases"
     },
     {
+      "file": "tests/test_developer_override.py",
+      "relationship": "tested_by",
+      "why": "Tests ASKR_DEVELOPER environment override behavior in load_developer()"
+    },
+    {
       "file": "askr_state/decisions.jsonl",
       "relationship": "configures",
-      "why": "Tracks all architectural decisions including the new instrumentation choices"
+      "why": "Tracks all architectural decisions including the new instrumentation choices and superseded decisions"
     },
     {
       "file": "askr_state/events.jsonl",
@@ -164,7 +196,13 @@
       "why": "Records companion-spawn events that correlate with PreCompact kill diagnostics"
     }
   ],
-  "uncommitted_files": [],
+  "uncommitted_files": [
+    "askr/state/config.py",
+    "askr_state/decisions.jsonl",
+    "askr_state/goals.jsonl",
+    "askr_state/implementation_bippin.jsonl",
+    "tests/test_developer_override.py"
+  ],
   "blockers": [
     "Stage 5 (handover quality) blocked on clarification of what specific factual error or hallucination to target \u2014 current leaps handover appears factually sound but has poor structure"
   ],
@@ -172,7 +210,7 @@
   "behavioral_preferences": [],
   "session_metadata": {
     "trigger_type": "context",
-    "timestamp": "2026-09-18T15:18:00.000000+00:00",
+    "timestamp": "2026-09-18T17:13:00.000000+00:00",
     "developer": "bippin"
   }
 }
