@@ -19,6 +19,12 @@ def _save_config(data: dict):
 
 
 def load_developer() -> str:
+    # ASKR_DEVELOPER lets a host process (e.g. a shared bot running Claude Code
+    # on behalf of many users) set identity per run without touching the
+    # machine-level config file.
+    override = os.environ.get("ASKR_DEVELOPER", "").strip()
+    if override:
+        return override
     return _load_config().get("developer", "dev")
 
 
