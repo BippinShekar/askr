@@ -1,6 +1,6 @@
 # Handover: bippin
 
-Last updated: 2026-10-25 14:30
+Last updated: 2026-10-25 14:31
 
 *Source of truth: `handover_bippin.json`*
 
@@ -42,8 +42,6 @@ Two parallel sessions converged on diagnostic instrumentation to enable root-cau
    *Why: Can't fix the slow-cont complaint without knowing whether it's a real wait or a stall; the log will show the resolved reset_at and grace-adjusted deadline up front*
 3. Clarify what specific factual error or hallucination in handover output to target for Stage 5 — current leaps handover (2026-09-18 14:32) appears factually sound but has poor structure (Task line is run-on, Next Actions mixes urgency levels without markers)
    *Why: Stage 5 is blocked on understanding the concrete quality problem; the current handover is not obviously broken, so need clarification on which handover or what specific error to fix*
-4. Commit and push ASKR_DEVELOPER environment override and test_developer_override.py to enable multi-user bot deployments
-   *Why: Feature is complete and tested; unblocks shared-bot scenarios where a single daemon serves multiple users*
 
 ## Decisions
 - Separate the account-wide announcement dedup (quota_triggered_windows, keyed by reset_at) from per-session resume verification (quota_resume_verified, keyed by session_id::reset_at) — Quota is account-wide so the announcement fires once per window by design (correct, stops duplicate voice/Discord spam across concurrent sessions) — but each concurrent session is a separate terminal needing its own resume check. Reusing the same dedup for both silently left every session but the first with nobody watching it after the announcement fired once.
@@ -71,13 +69,6 @@ Two parallel sessions converged on diagnostic instrumentation to enable root-cau
 - `tests/test_developer_override.py` (tested_by): Tests ASKR_DEVELOPER environment override behavior in load_developer()
 - `askr_state/decisions.jsonl` (configures): Tracks all architectural decisions including the new instrumentation choices and superseded decisions
 - `askr_state/events.jsonl` (configures): Records companion-spawn events that correlate with PreCompact kill diagnostics
-
-## Uncommitted Files
-- `askr/state/config.py`
-- `askr_state/decisions.jsonl`
-- `askr_state/goals.jsonl`
-- `askr_state/implementation_bippin.jsonl`
-- `tests/test_developer_override.py`
 
 ## Blockers
 - Stage 5 (handover quality) blocked on clarification of what specific factual error or hallucination to target — current leaps handover appears factually sound but has poor structure
