@@ -4,7 +4,8 @@ Quota API — reads real-time session utilization from Anthropic's OAuth usage e
 
 Claude Code calls this same endpoint internally to power the /usage slash command.
 Credentials are read from the macOS Keychain (service: "Claude Code-credentials")
-or from the plaintext fallback at ~/.claude/.credentials.json.
+or from the plaintext fallback at ~/.claude/.credentials.json, then the
+CLAUDE_CODE_OAUTH_TOKEN env var (headless hosts).
 
 Returns five_hour and seven_day utilization percentages (0–100) plus exact reset times.
 """
@@ -76,8 +77,12 @@ def _get_access_token() -> Optional[str]:
                 return token
     raw = _read_creds_file()
     if raw:
-        return _extract_access_token(raw)
-    return None
+        token = _extract_access_token(raw)
+        if token:
+            return token
+    # Headless hosts (containers, CI) authenticate Claude Code with a
+    # `claude setup-token` token in the env and have no keychain/creds file.
+    return os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip() or None
 
 
 def get_quota_status() -> Optional[QuotaStatus]:
