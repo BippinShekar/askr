@@ -120,7 +120,12 @@ class WiredIntoHooksTests(unittest.TestCase):
             os.makedirs(os.path.join(tmp, "askr_state"))
             args = self._assert_hook_calls_capture(
                 "askr.hooks.pre_compact", {"transcript_path": ""},
-                extra_patches=[patch("askr.state.config.get_state_dir", return_value=os.path.join(tmp, "askr_state"))],
+                # pre_compact binds get_state_dir by name, so patching
+                # askr.state.config alone misses it — main() then ran against
+                # the real repo, pgrep'd the live claude in cwd and SIGKILLed
+                # it (2026-10-25). Point it at a missing dir so main() returns
+                # right after the capture this test is actually checking.
+                extra_patches=[patch("askr.hooks.pre_compact.get_state_dir", return_value=os.path.join(tmp, "missing"))],
             )
         self.assertEqual(args[0], "PreCompact")
 

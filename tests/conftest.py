@@ -23,3 +23,21 @@ def _isolate_hook_capture_log(tmp_path, monkeypatch):
     per-file changes required.
     """
     monkeypatch.setattr(hook_capture, "_CAPTURE_PATH", str(tmp_path / "hook_capture.log"))
+
+
+@pytest.fixture(autouse=True)
+def _never_target_real_claude_process(tmp_path, monkeypatch):
+    """
+    pre_compact.main() SIGKILLs whatever _find_session_pid() returns, and with
+    no transcript that falls back to pgrep'ing the claude process whose cwd is
+    the test's cwd — i.e. the live session running the suite. One under-patched
+    test did exactly that on 2026-10-25 and killed the session mid-run. No test
+    needs the real lookup, so resolve to None everywhere unless a test patches
+    it explicitly. Also keeps kill diagnostics out of the real daemon.log, the
+    evidence those diagnostics exist to collect.
+    """
+    from askr.hooks import pre_compact
+    from askr.session import lifecycle
+    monkeypatch.setattr(lifecycle, "_find_session_pid", lambda *a, **k: None)
+    monkeypatch.setattr(pre_compact, "_find_session_pid", lambda *a, **k: None)
+    monkeypatch.setattr(pre_compact, "_DAEMON_LOG_PATH", str(tmp_path / "daemon.log"))
