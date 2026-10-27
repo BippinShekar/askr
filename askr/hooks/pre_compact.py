@@ -35,7 +35,6 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from askr.state.config import get_state_dir, load_developer
-from askr.session.lifecycle import _find_session_pid
 
 _CHECKPOINT_PENDING     = os.path.expanduser("~/.config/askr/checkpoint_pending.json")
 _NOTIFIED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/emergency_notified_sessions.json")
@@ -77,6 +76,40 @@ def _log_kill_diagnostics(session_id: str, project_path: str, ctx_pct):
                     f"already_companioned_by_trigger_a={already_companioned} [{project_path}]\n")
     except Exception:
         pass
+
+
+def _find_own_claude_pid(max_depth: int = 8) -> int | None:
+    """
+    The claude process that is compacting — always an ancestor of this hook
+    (claude -> shell -> python). The old lookup (lifecycle._find_session_pid)
+    tried lsof on the transcript, which Claude Code doesn't hold open, then
+    fell back to "first claude whose cwd is this project" — with two sessions
+    open in the same repo that SIGKILLed the OTHER one (confirmed 2026-10-27:
+    PreCompact for 8f929be6 killed dc118219 mid-task while 8f929be6 compacted
+    anyway). Returns None if no claude ancestor is found; the caller must
+    then not kill anything rather than guess.
+    """
+    current = os.getppid()
+    for _ in range(max_depth):
+        if current <= 1:
+            return None
+        try:
+            result = subprocess.run(
+                ["ps", "-o", "ppid=,comm=", "-p", str(current)],
+                capture_output=True, text=True, timeout=3,
+            )
+            ppid_str, _, comm = result.stdout.strip().partition(" ")
+            if not ppid_str:
+                return None
+        except Exception:
+            return None
+        if os.path.basename(comm.strip()) == "claude":
+            return current
+        try:
+            current = int(ppid_str)
+        except ValueError:
+            return None
+    return None
 
 
 def _get_tty_for_pid(pid: int) -> str | None:
@@ -349,7 +382,7 @@ def main():
     from askr.session.monitor import find_project_root
     project_path = find_project_root()
 
-    pid = _find_session_pid(transcript_path)
+    pid = _find_own_claude_pid()
 
     if not pid:
         # No live process to race against compaction for — nothing to kill, so

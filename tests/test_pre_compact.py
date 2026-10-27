@@ -128,7 +128,7 @@ class MainKillOrderingTests(unittest.TestCase):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
              patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
              patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=4242), \
              patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
              patch("askr.session.monitor.stats_path_for_session", return_value="/nonexistent"), \
              patch("os.kill", side_effect=lambda pid, sig: call_order.append(("kill", pid))) as mock_kill, \
@@ -157,7 +157,7 @@ class MainKillOrderingTests(unittest.TestCase):
             with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
                  patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
                  patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-                 patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+                 patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=4242), \
                  patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
                  patch("askr.session.monitor.stats_path_for_session", return_value=stats_path), \
                  patch("os.kill"), \
@@ -173,7 +173,7 @@ class MainKillOrderingTests(unittest.TestCase):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
              patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
              patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-             patch("askr.hooks.pre_compact._find_session_pid", return_value=None), \
+             patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=None), \
              patch("askr.session.checkpoint.create_checkpoint", return_value={"git_pushed": True}) as mock_ckpt, \
              patch("askr.hooks.pre_compact._spawn_background_finish") as mock_spawn:
             self._feed({"transcript_path": "/tmp/fake-session.jsonl"})
@@ -193,7 +193,7 @@ class MainKillOrderingTests(unittest.TestCase):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
              patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
              patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=4242), \
              patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
              patch("os.kill") as mock_kill, \
              patch("askr.hooks.pre_compact._spawn_background_finish") as mock_spawn:
@@ -263,7 +263,7 @@ class TerminalResetTests(unittest.TestCase):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
              patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
              patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=4242), \
              patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
              patch("askr.hooks.pre_compact._get_tty_for_pid",
                    side_effect=lambda pid: (call_order.append("get_tty"), "ttys003")[1]), \
@@ -281,7 +281,7 @@ class TerminalResetTests(unittest.TestCase):
         with patch("askr.state.config.get_state_dir", return_value=self.state_dir), \
              patch("askr.hooks.pre_compact.load_developer", return_value="dev"), \
              patch("askr.session.monitor.find_project_root", return_value=self._tmp.name), \
-             patch("askr.hooks.pre_compact._find_session_pid", return_value=4242), \
+             patch("askr.hooks.pre_compact._find_own_claude_pid", return_value=4242), \
              patch("askr.session.lifecycle._find_all_claude_pids_by_project", return_value=[4242]), \
              patch("askr.hooks.pre_compact._get_tty_for_pid", return_value=None), \
              patch("os.kill"), \
