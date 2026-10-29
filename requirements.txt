@@ -5,3 +5,5 @@ pathspec
 rich
 certifi
 matplotlib
+sounddevice
+faster-whisper
