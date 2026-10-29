@@ -40,6 +40,60 @@ _CHECKPOINT_PENDING     = os.path.expanduser("~/.config/askr/checkpoint_pending.
 _NOTIFIED_SESSIONS_PATH = os.path.expanduser("~/.config/askr/emergency_notified_sessions.json")
 _DAEMON_LOG_PATH        = os.path.expanduser("~/.config/askr/daemon.log")
 QUOTA_HIGH              = 70.0  # treat as quota-exhausted if above this
+IDLE_COMPACTION_SECS    = 300   # finished turn this long ago + nothing since = background compaction
+_TRANSCRIPT_TAIL_BYTES  = 2 * 1024 * 1024
+# Entry types that mean a turn is (or was) in flight. Everything else after a
+# turn ends — away_summary recaps, file-history-snapshot, attachment, mode,
+# last-prompt, ai-title, ... — is bookkeeping Claude Code writes on its own.
+_ACTIVITY_TYPES         = {"user", "assistant", "api-request"}
+
+
+def _idle_seconds_at_compaction(transcript_path: str) -> float | None:
+    """
+    Seconds since the session's last turn finished, if nothing has happened
+    since — i.e. Claude Code is compacting an idle conversation in the
+    background, not racing a live turn. None if a turn is in flight or it
+    can't tell (caller then falls through to the normal kill path).
+
+    2026-10-29: turn ended 12:09, recap at 12:41, then Claude Code
+    auto-compacted the untouched session at 13:03 and this hook SIGKILLed it.
+    There's no work to protect in that case, and the payload can't tell us —
+    trigger is "auto" for both — so read the transcript tail instead.
+    """
+    if not transcript_path:
+        return None
+    try:
+        with open(transcript_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - _TRANSCRIPT_TAIL_BYTES))
+            lines = f.read().splitlines()
+    except Exception:
+        return None
+    for raw in reversed(lines):
+        try:
+            entry = json.loads(raw)
+        except Exception:
+            continue  # partial first line of the tail window
+        if entry.get("type") in _ACTIVITY_TYPES:
+            return None
+        if entry.get("type") == "system" and entry.get("subtype") == "turn_duration":
+            try:
+                ended = datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+            except Exception:
+                return None
+            return (datetime.now(timezone.utc) - ended).total_seconds()
+    return None
+
+
+def _log_idle_skip(session_id: str, project_path: str, idle_secs: float):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        os.makedirs(os.path.dirname(_DAEMON_LOG_PATH), exist_ok=True)
+        with open(_DAEMON_LOG_PATH, "a") as f:
+            f.write(f"[{ts}] PreCompact skipped kill: idle background compaction "
+                    f"session={session_id or '?'} idle={int(idle_secs)}s [{project_path}]\n")
+    except Exception:
+        pass
 
 
 def _log_kill_diagnostics(session_id: str, project_path: str, ctx_pct):
@@ -381,6 +435,11 @@ def main():
 
     from askr.session.monitor import find_project_root
     project_path = find_project_root()
+
+    idle_secs = _idle_seconds_at_compaction(transcript_path)
+    if idle_secs is not None and idle_secs >= IDLE_COMPACTION_SECS:
+        _log_idle_skip(session_id, project_path, idle_secs)
+        return
 
     pid = _find_own_claude_pid()
 
