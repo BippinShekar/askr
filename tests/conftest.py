@@ -26,22 +26,6 @@ def _isolate_hook_capture_log(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _never_target_real_claude_process(tmp_path, monkeypatch):
-    """
-    pre_compact.main() SIGKILLs whatever _find_own_claude_pid() returns —
-    under pytest that walk finds the live claude session running the suite
-    (and the old cwd-based _find_session_pid found any claude in the repo). One under-patched
-    test did exactly that on 2026-10-25 and killed the session mid-run. No test
-    needs the real lookup, so resolve to None everywhere unless a test patches
-    it explicitly.
-    """
-    from askr.hooks import pre_compact
-    from askr.session import lifecycle
-    monkeypatch.setattr(lifecycle, "_find_session_pid", lambda *a, **k: None)
-    monkeypatch.setattr(pre_compact, "_find_own_claude_pid", lambda *a, **k: None)
-
-
-@pytest.fixture(autouse=True)
 def _isolate_real_askr_side_effects(tmp_path, monkeypatch):
     """
     Under-patched tests reached _spawn_terminal_app_fallback, which detaches a
