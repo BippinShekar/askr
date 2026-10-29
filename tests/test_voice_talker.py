@@ -91,6 +91,24 @@ def test_parse_json_wrapped_in_prose():
     assert r.say == "It is running tests." and r.send is None
 
 
+def test_instruction_is_always_sent_even_if_model_withholds_it():
+    r = _parse('{"intent": "instruction", "send": null, '
+               '"say": "Did you mean a different session?"}', "make the archived layer purple")
+    assert r.send == "make the archived layer purple"
+    assert r.say == "Sending that over."
+
+
+def test_instruction_keeps_models_cleaned_send_and_confirmation():
+    r = _parse('{"intent": "instruction", "send": "Make the archived layer purple.", '
+               '"say": "Passing that on."}', "tell it to make the archive layer purple")
+    assert r.send == "Make the archived layer purple." and r.say == "Passing that on."
+
+
+def test_clarify_is_not_forced_through():
+    r = _parse('{"intent": "clarify", "send": null, "say": "The colour of what?"}', "change the colour")
+    assert r.send is None and r.say == "The colour of what?"
+
+
 def test_parse_garbage_falls_back():
     r = _parse("no json here")
     assert r.send is None and "didn't get" in r.say

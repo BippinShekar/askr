@@ -2083,6 +2083,7 @@ def main():
         console.print("  [dim]askr guard list          - show writes held pending your approval[/dim]")
         console.print("  [dim]askr guard approve <f>   - allow a held write through[/dim]")
         console.print("  [dim]askr guard discard <f>   - reject a held write[/dim]")
+        console.print("  [dim]askr voice               - talk to this project's Claude session (\"askr …\")[/dim]")
         console.print()
         sys.exit(0)
 
@@ -2115,6 +2116,9 @@ def main():
         cmd_graph()
     elif cmd == "guard":
         cmd_guard(rest)
+    elif cmd == "voice":
+        from askr.voice.loop import main as voice_main
+        voice_main(rest)
     else:
         console.print(f"\n  [yellow]askr {cmd}[/yellow] [dim]- not yet implemented, see roadmap.md[/dim]\n")
 
