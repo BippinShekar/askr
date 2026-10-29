@@ -680,6 +680,18 @@ def main():
     developer       = load_developer()
     transcript_path = payload.get("transcript_path", "")
     session_id      = payload.get("session_id", "")
+
+    # Spoken input (askr voice) that arrived after the turn's last tool call
+    # would otherwise sit unread until the next turn — keep Claude going with
+    # it instead. Drained, so it can't loop.
+    try:
+        from askr.voice import inbox
+        voice = inbox.drain(session_id)
+        if voice:
+            print(json.dumps({"decision": "block", "reason": inbox.as_context(voice)}), flush=True)
+    except Exception:
+        pass
+
     _update_allowed_tools(transcript_path)
     _extract_and_save_decisions(transcript_path, get_state_dir())
 

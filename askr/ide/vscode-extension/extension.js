@@ -653,6 +653,40 @@ function checkNotification() {
   } catch {}
 }
 
+// askr voice (askr/voice/terminal.py): type a spoken request into an idle
+// Claude Code session's terminal. Separate file from notification.json so a
+// voice prompt can't clobber (or be clobbered by) a daemon notification.
+// Every Cursor window sees only its own terminals, so a window claims the
+// prompt — atomic rename, exactly one winner — only after it has found the
+// matching terminal; windows without it leave the file for the right one.
+const VOICE_PROMPT_PATH = path.join(os.homedir(), '.config', 'askr', 'voice_prompt.json');
+let voicePromptBusy = false;
+
+async function checkVoicePrompt() {
+  if (voicePromptBusy || !fs.existsSync(VOICE_PROMPT_PATH)) return;
+  voicePromptBusy = true;
+  try {
+    const p = JSON.parse(fs.readFileSync(VOICE_PROMPT_PATH, 'utf8'));
+    const term = await findTerminalByAncestorPids(p.ancestor_pids);
+    if (!term) return;
+    const claimed = `${VOICE_PROMPT_PATH}.${process.pid}.claimed`;
+    try {
+      fs.renameSync(VOICE_PROMPT_PATH, claimed);
+    } catch {
+      return;  // another window got it first
+    }
+    const claimedPrompt = JSON.parse(fs.readFileSync(claimed, 'utf8'));
+    fs.unlinkSync(claimed);
+    if (claimedPrompt.id !== p.id) return;  // replaced between read and claim; next pass handles it
+    term.sendText(p.text, false);
+    term.sendText('\r', false);
+  } catch (e) {
+    console.error(`Askr: voice prompt handler threw: ${e && e.stack || e}`);
+  } finally {
+    voicePromptBusy = false;
+  }
+}
+
 function activate(context) {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
   item.command = 'askr.openStatus';
@@ -665,8 +699,20 @@ function activate(context) {
     })
   );
 
+  try {
+    const configDir = path.dirname(VOICE_PROMPT_PATH);
+    if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+    const voiceWatcher = fs.watch(configDir, (_, filename) => {
+      if (filename === 'voice_prompt.json') checkVoicePrompt();
+    });
+    context.subscriptions.push({ dispose: () => voiceWatcher.close() });
+  } catch (e) {
+    console.error(`Askr: voice prompt watcher failed: ${e}`);
+  }
+
   function refresh() {
     checkNotification();
+    checkVoicePrompt();
     const result = readStats();
     if (result) {
       item.text    = result.label;

@@ -392,6 +392,12 @@ def main():
 
     _reset_stats_for_project(payload.get("source", ""), payload.get("session_id", ""))
 
+    try:
+        from askr.voice.terminal import record_own_pid
+        record_own_pid(payload.get("session_id", ""))
+    except Exception:
+        pass
+
     pull_ok = True
     if os.path.isdir(get_state_dir()):
         pull_ok = git_pull()

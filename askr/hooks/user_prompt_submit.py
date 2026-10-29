@@ -58,6 +58,12 @@ def main():
 
     _signal_turn_started(payload.get("session_id", ""))
 
+    try:
+        from askr.voice.terminal import record_own_pid
+        record_own_pid(payload.get("session_id", ""))
+    except Exception:
+        pass
+
     raw = payload.get("prompt", "")
     cleaned = _strip_tags(raw)
 
