@@ -173,6 +173,13 @@ class HandleBashTests(unittest.TestCase):
         self.assertIn("/etc/passwd", reason)
         self.assertIn(self.project_dir, reason)
 
+    def test_host_can_turn_the_check_off(self):
+        # A host that already confines each session (Cyantist) sets ASKR_ALLOW_CROSS_REPO=1.
+        with patch.dict(os.environ, {"ASKR_ALLOW_CROSS_REPO": "1"}):
+            with patch("askr.hooks.pre_tool_use._block_tool") as mock_block:
+                pre_tool_use._handle_bash({"command": "cp a.png /data/outbox/x/a.png"})
+        mock_block.assert_not_called()
+
     def test_outside_root_read_does_not_block(self):
         # The actual bug this fixes: a pure read of another repo's log/state
         # (e.g. diagnosing a sibling project's daemon.log) used to be blocked

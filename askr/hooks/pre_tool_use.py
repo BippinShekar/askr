@@ -37,6 +37,12 @@ _ESCAPE_HATCH_COUNT  = 2     # allow through + escalate after this many consecut
 _SCRATCH_DIR_RE = re.compile(r"^/(?:private/)?tmp/claude-[^/]+(?:/|$)")
 
 
+def _cross_repo_allowed() -> bool:
+    """Hosts that already sandbox each session to its own folders (e.g. Cyantist, which lets a run write only
+    where it was granted) set ASKR_ALLOW_CROSS_REPO=1: the cross-repo check would only block those folders."""
+    return os.environ.get("ASKR_ALLOW_CROSS_REPO", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _is_scratch_path(path: str) -> bool:
     if not path:
         return False
@@ -364,6 +370,8 @@ def _handle_bash(tool_input: dict):
     extracted from the command string. Wrapped in try/except and fails open,
     matching the existing cross-repo check's style exactly.
     """
+    if _cross_repo_allowed():
+        return
     try:
         from askr.state.config import get_state_dir as _gsd
         if not os.path.isdir(_gsd()):
@@ -439,6 +447,7 @@ def main():
             abs_file and abs_root
             and not abs_file.startswith(abs_root + os.sep) and abs_file != abs_root
             and not _is_scratch_path(abs_file)
+            and not _cross_repo_allowed()
         ):
             _block_tool(
                 f"Cross-repo write blocked: {file_path} is outside the current project root "
