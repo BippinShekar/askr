@@ -1,74 +1,112 @@
 # Handover: bippin
 
-Last updated: 2026-10-25 14:31
+Last updated: 2026-10-30 16:19
 
 *Source of truth: `handover_bippin.json`*
 
 
 ## Task
-Instrumented PreCompact emergency kills and native-resume watch with session-level diagnostics, added ASKR_DEVELOPER environment override for multi-user bot scenarios, and marked superseded decisions in audit trail to prevent stale guidance.
+Built a complete voice interface for askr with local Whisper STT, wake-word detection, automatic user-specific calibration, live Terminal window with status display, and end-to-end delivery of spoken requests to Claude Code sessions.
 
 ## Discussion
-Two parallel sessions converged on diagnostic instrumentation to enable root-cause analysis of premature session termination and slow recovery without guessing. Session 1 built the five-stage quota-reset automation pipeline and fixed daemon-suspension gaps during macOS sleep/wake. This session completed Stages 1 and 3 of instrumentation (PreCompact kills now log session_id, context_pct, and already_companioned flag; _watch_for_native_resume logs session_id, resolved reset_at, and grace-adjusted deadline). All 702 tests pass. Additionally, added ASKR_DEVELOPER environment variable override to support shared bots running Claude Code on behalf of multiple users without touching machine-level config, and established a convention for marking reversed decisions with '[SUPERSEDED]' prefix to keep audit trail intact while preventing stale guidance from being read as current.
+The project fixed three critical issues blocking the user: random session kills (PreCompact hook was killing sessions during compaction), terminal windows opening unexpectedly (test harness was spawning real Terminal.app), and lack of voice support. Voice stages 1–7 are now complete: mic listener with adaptive noise floor, local Whisper transcription, fuzzy wake-word matching with per-user calibration, session digest and talker agent, delivery via terminal typing (primary) and Stop-hook inbox (fallback), live narration of responses, and a dedicated Terminal.app window with pinned status line showing listening state, mic level meter, and live partial transcription. All 746 tests pass. The user's feedback that the wake word wasn't heard and nothing was visible led directly to stages 6–7 (Terminal window, status display, calibration guards).
 
 ## Accomplishments
-- [x] Instrumented PreCompact emergency SIGKILL with session_id, context_pct at kill time, and already_companioned flag logged AFTER the kill to preserve race-winning behavior
-- [x] Instrumented _watch_for_native_resume with session_id, resolved reset_at, and grace-adjusted deadline up front before waiting
-- [x] Instrumented quota-fallback log lines in _verify_native_resume_or_cont with session_id, resolved reset_at, and grace-adjusted deadline
-- [x] Verified all 702 tests pass after instrumentation changes
-- [x] Committed and pushed instrumentation stages (commit 1022c58)
-- [x] Implemented independent quota polling in lifecycle.py that fires the trigger even when stats files are stale (root cause of 90% trigger never firing)
-- [x] Built five-stage same-session rate-limit auto-resume: detect via live poll → send Escape → target terminal via ancestor-PID → wait for reset with safety net → auto-send 'cont'
-- [x] Redesigned guard escape-hatch from auto-allow-after-2-blocks to held-for-approval requiring explicit `askr guard approve/discard`
-- [x] Converted all one-shot notification-button handlers (Keep/Discard, Approve/Discard, Add to Goals) to run silently via runAskrSilently() instead of creating visible terminals
-- [x] Added `askr graph` CLI command rendering session-spawn tree from events.jsonl with trigger summaries
-- [x] Added `askr guard list/approve/discard` CLI commands for managing guard blocks
-- [x] Fixed handover hallucination by filtering files_in_play and relational_files against real filesystem before writing
-- [x] Implemented next_actions staleness prevention via corpus-overlap matching (65% token threshold) and git-commit cross-checks
-- [x] Extended mid-session CLAUDE.md reminder mechanism to combat context-decay adherence drift
-- [x] Fixed test suite deadlock in test_turn_wait.py that was silently hanging entire pytest run
-- [x] Added test isolation via conftest.py autouse fixture for hook_capture diagnostic logging
-- [x] Identified critical daemon-suspension gap during macOS sleep/wake: 1.5-hour gap in daemon.log (18:52–20:36) with zero quota-polling events, blocking overnight autonomous runs
-- [x] Fixed daemon-suspension root cause by preventing caffeinate release while quota-wait threads are in flight, using _quota_wait_depth counter to track concurrent quota-wait/premature-activity-watch threads across projects
-- [x] Wrapped _execute_quota_trigger with _quota_wait_begin/_quota_wait_end to hold caffeinate alive across session-idle transitions during quota-reset wait, closing the incident where daemon froze for 1h43m mid-wait
-- [x] Added ASKR_DEVELOPER environment variable override in load_developer() to support shared bots running Claude Code on behalf of multiple users without modifying machine-level config
-- [x] Established convention for marking reversed/retired decisions with '[SUPERSEDED]' prefix in decisions.jsonl to preserve audit trail while preventing stale guidance from being read as current
-- [x] Marked '[SUPERSEDED]' on Escape/cont automation decision after this week's work explicitly retired same-session automation because Claude Code now handles quota-resume natively
+- [x] Stage 1: MicListener with adaptive energy segmenter, 600ms pre-roll, and Whisper STT with initial_prompt tuning
+- [x] Stage 2: Talker agent with session digest, intent classification (instruction/question/clarify/chat), and Haiku 4.5 response generation
+- [x] Stage 3: Delivery via Cursor extension terminal typing (primary) and Stop-hook inbox fallback
+- [x] Stage 4: Narrator that streams session responses back as spoken audio via macOS say with voice lock
+- [x] Stage 5: askr voice CLI command with profile loading and inline/window modes
+- [x] Stage 6: Own Terminal.app window with pinned status line (listening/hearing/transcribing/thinking/speaking/sending), mic level meter with threshold marker, and live partial transcription
+- [x] Stage 7: Fuzzy wake-word matching (one edit distance, filler skipping, exclusion of asked/asks) and automatic calibration on first launch learning user's Whisper spelling and speech floor
+- [x] Calibration guards: rejects sentences, non-askr samples, background audio; requires ≥3 clean samples; deleted bogus profile from smoke test
+- [x] Fixed PreCompact hook to observe-only (no kills); removed idle-session kill; removed mid-turn kill
+- [x] Fixed test harness spawning real Terminal windows; added conftest sweep of uppercase config constants to tmp_path
+- [x] Verified all 746 tests pass after voice subsystem completion
+- [x] Committed and pushed stages 1–7 (commit aa7d16d)
 
 ## Next Actions
-1. Monitor daemon.log for next PreCompact kill to confirm Stage 1 diagnostics are working and determine whether Trigger A is losing the race (already_companioned=False) or opening companion but still losing (already_companioned=True)
-   *Why: Can't fix the kill complaint without knowing which race is being lost; the log will tell us directly next time it happens*
-2. Monitor daemon.log for next slow cont recovery to confirm Stage 3 diagnostics show whether askr was legitimately waiting for a future reset_at or actually stalled mid-wait
-   *Why: Can't fix the slow-cont complaint without knowing whether it's a real wait or a stall; the log will show the resolved reset_at and grace-adjusted deadline up front*
-3. Clarify what specific factual error or hallucination in handover output to target for Stage 5 — current leaps handover (2026-09-18 14:32) appears factually sound but has poor structure (Task line is run-on, Next Actions mixes urgency levels without markers)
-   *Why: Stage 5 is blocked on understanding the concrete quality problem; the current handover is not obviously broken, so need clarification on which handover or what specific error to fix*
+1. Run `cd ~/Desktop/grid && askr voice` and allow Terminal microphone access when prompted; say 'askr' 5 times during calibration
+   *Why: Live verification of calibration on user's actual voice and speech floor learning*
+2. Reload the Cursor window (Developer: Reload Window) so the updated extension loads and terminal typing works
+   *Why: Extension changes in this session require reload; without it, voice prompts won't type into the terminal*
+3. Test wake-word detection by saying 'askr, what's it doing?' and paste the 'heard: …' lines from the Terminal window if it still misses
+   *Why: Diagnose whether Whisper's spelling of user's pronunciation matches the fuzzy matcher; if not, the exact spelling helps refine variants*
+4. Monitor daemon.log for next PreCompact event to confirm Stage 1 diagnostics are working and determine whether Trigger A is losing the race (already_companioned=False) or opening companion but still losing (already_companioned=True)
+   *Why: Verify that the observe-only PreCompact hook is logging correctly and diagnose any remaining session-targeting issues*
+5. Monitor daemon.log for next slow cont recovery to confirm Stage 3 diagnostics show whether askr was legitimately waiting for a future reset_at or actually stalled mid-wait
+   *Why: Verify that slow recovery diagnostics are working and identify any stalls in the continuation logic*
 
 ## Decisions
-- Separate the account-wide announcement dedup (quota_triggered_windows, keyed by reset_at) from per-session resume verification (quota_resume_verified, keyed by session_id::reset_at) — Quota is account-wide so the announcement fires once per window by design (correct, stops duplicate voice/Discord spam across concurrent sessions) — but each concurrent session is a separate terminal needing its own resume check. Reusing the same dedup for both silently left every session but the first with nobody watching it after the announcement fired once.
-- Maintain 180-second grace buffer after real quota-reset time before checking whether the transcript resumed natively — Allows time for Claude Code to detect the reset, reconnect, and resume writing; 180s is conservative enough to catch slow reconnects without waiting indefinitely; this is intentional design, not a bug
-- Accept stale quota percentage (e.g. '99%') in voice announcements when reset has already passed before the announcement fires — Cosmetic wording issue only; the mechanism is correct (Phase 4 verification checks whether transcript actually resumed, not the announced percentage); fixing the wording is lower priority than fixing the concurrent-session verification bug
-- Resolve the target pid's tty before emergency SIGKILL and write the mouse-tracking disable sequence (\x1b[?1000l) directly to the device afterward — SIGKILL gives Claude Code's TUI no chance to disable mouse-tracking mode it enables on start, leaving the terminal dumping raw SGR mouse reports as garbage text; direct device write bypasses the killed process entirely
-- [SUPERSEDED] Use Escape key (\x1b) for quota-reset menu automation, not arrow-navigation or digit-selection — This week's work explicitly retired same-session Escape/cont automation because Claude Code now handles quota-resume natively; decision is still in audit trail but no longer active guidance
-- Implement quota-reset automation in five stages: (1) instrumentation for detection, (2) PID→terminal bridge, (3) wait for real data, (4) wire automation, (5) safety-net detection — Stages 1, 2, and 5 are buildable today without live events and carry no automation risk; Stage 3 requires real quota-limit data; Stage 4 (the only risky stage) waits for Stage 3 before proceeding
-- PID→vscode.Terminal targeting uses _get_ancestor_pids to walk the process tree and findTerminalByAncestorPids to match Terminal by ancestor PID — Claude Code may spawn multiple terminal instances; ancestor-PID matching is more reliable than terminal title or index-based targeting and survives terminal renames
-- Instrument PreCompact kills with session_id, context_pct, and already_companioned flag logged AFTER the kill to preserve race-winning behavior — Logging before kill would add latency and risk losing the race; logging after preserves the hook's whole point while enabling diagnosis of which race (Trigger A never ran vs. opened companion but lost) is being lost
-- Instrument _watch_for_native_resume and quota-fallback paths with session_id, resolved reset_at, and grace-adjusted deadline up front before waiting — Next slow cont can be diagnosed from the log directly instead of reconstructing guesses across multiple incidents; shows whether askr was legitimately waiting for a future reset or actually stalled
-- Mark reversed/retired decisions with '[SUPERSEDED]' prefix instead of deleting them or presenting them unmarked as current — Audit trail must stay intact for traceability, but unmarked reversed decisions sitting next to new ones read as stale/naive guidance. Prefix makes the reversal explicit without losing history.
-- Support ASKR_DEVELOPER environment variable override in load_developer() for multi-user bot deployments — Shared bots running Claude Code on behalf of many users need per-run identity without touching machine-level config; environment override is the standard pattern for this use case
+- Use local Whisper base.en int8 with initial_prompt 'Askr, run the tests.' for STT — Measured best accuracy on user's voice; avoids cloud latency and privacy concerns
+- Fuzzy wake-word matching: one edit distance from asker/askr, after filler skipping (hey/ok/so/um/uh/etc.), excluding asked/asks/aster/ashes/asset — Fixed spelling list tuned on say(1) voice missed user's pronunciation; fuzzy matching + per-user calibration learns actual Whisper output
+- Automatic calibration on first launch: user says 'askr' 5 times, learns Whisper's spelling and sets speech floor from user's volume — Eliminates fixed thresholds that don't adapt to user's mic, room, and voice; guards prevent background audio contamination
+- Calibration only counts askr-like single words; rejects sentences, common words (you, the, asked, okay, hello, banana, a), and non-learnable spellings — Smoke test accidentally learned 'you' from YouTube audio; guards prevent similar contamination
+- Calibration requires ≥3 clean samples before saving profile; otherwise prints hint about mic permissions — Prevents saving incomplete or noisy profiles; user can retry if needed
+- askr voice opens own Terminal.app window (--here flag runs inline instead) — User feedback: no visibility into listening state; own window eliminates ambiguity about which terminal to use
+- Pinned status line shows state (listening/hearing/transcribing/thinking/speaking/sending) with live mic level meter and threshold marker — User feedback: no indication of listening or transcription; visual feedback confirms the system is working
+- Every heard line printed including ignored ones with reason (e.g. 'no wake word, ignored') — Debugging: user can see exactly what Whisper heard and why it was rejected
+- PreCompact hook is observe-only; no kills, no checkpoints, only logging — Kills were firing on wrong sessions (cwd-based PID guess), killing idle sessions, and killing mid-turn sessions; logging is sufficient for diagnostics
+- Delivery via Cursor extension terminal typing (primary) and Stop-hook inbox fallback — PostToolUse additionalContext is refused as prompt injection; terminal typing is reliable; inbox handles mid-turn fallback
+- Talker enforces intent field and send/say rules: instruction always sent, say <30 words, never second-guess off-topic instructions — Early runs withheld off-topic instructions; enforcement ensures consistent behavior
+- Use Haiku 4.5 for talker (not haiku-5-5 or sonnet models which return 429 over OAuth token) — Measured: haiku-4-5 works; haiku-5-5 and sonnet-5-5/4-6 return 429 over OAuth transport
+
+## Failed Approaches
+- Fixed spelling list for wake-word matching (askr, asker, askher, askar, ascar, oscar, aska, asca, askedr, askedher, asgar, asgr, askur) — Tuned on say(1) voice; missed user's actual pronunciation; no feedback when rejected
+- Fixed speech threshold (0.004 RMS) — Doesn't adapt to user's mic, room, or voice; too high for some users, too low for others
+- No visible status or transcription display — User had no way to know if system was listening or what it heard; led to confusion and false negatives
+- Inline voice loop in the user's terminal — User feedback: ambiguous which terminal to use; own window eliminates confusion
+- PostToolUse additionalContext for delivery — Claude treats it as prompt injection inside tool result and refuses; terminal typing is primary route
+- Smoke-test harness without process isolation — Hung and left background processes; killed bash wrapper but not python child; fixed with start_new_session and killpg
+- speech_rms using top 30% of frames — Silence diluted the measurement; switched to 90th percentile for more accurate floor
+- PreCompact hook killing sessions on compaction — Killed wrong sessions (cwd-based PID guess), killed idle sessions, killed mid-turn sessions; removed entirely
 
 ## Files In Play
+- `askr/voice/__init__.py`
+- `askr/voice/calibrate.py`
+- `askr/voice/listener.py`
+- `askr/voice/loop.py`
+- `askr/voice/stt.py`
+- `askr/voice/wake.py`
+- `askr/voice/session.py`
+- `askr/voice/talker.py`
+- `askr/voice/inbox.py`
+- `askr/voice/terminal.py`
+- `askr/voice/speaker.py`
+- `askr/voice/narrator.py`
+- `askr/voice/ui.py`
 - `askr/hooks/pre_compact.py`
-- `askr/session/lifecycle.py`
-- `askr/state/config.py`
+- `askr/hooks/stop.py`
+- `askr/hooks/session_start.py`
+- `askr/hooks/user_prompt_submit.py`
+- `askr/cli/askr.py`
+- `askr/ide/vscode-extension/extension.js`
+- `tests/conftest.py`
+- `tests/test_voice_calibrate.py`
+- `tests/test_voice_listener.py`
+- `tests/test_voice_talker.py`
+- `tests/test_voice_delivery.py`
+- `tests/test_voice_narrator.py`
+- `tests/test_voice_loop.py`
+- `tests/test_hook_capture.py`
 - `tests/test_pre_compact.py`
-- `tests/test_developer_override.py`
+- `requirements.txt`
 
 ## Relational Files
-- `askr/session/lifecycle.py` (imports): pre_compact.py calls _log() and _latest_stats() from lifecycle.py for diagnostics
-- `tests/test_pre_compact.py` (tested_by): 32 tests verify PreCompact kill instrumentation and edge cases
-- `tests/test_developer_override.py` (tested_by): Tests ASKR_DEVELOPER environment override behavior in load_developer()
-- `askr_state/decisions.jsonl` (configures): Tracks all architectural decisions including the new instrumentation choices and superseded decisions
-- `askr_state/events.jsonl` (configures): Records companion-spawn events that correlate with PreCompact kill diagnostics
-
-## Blockers
-- Stage 5 (handover quality) blocked on clarification of what specific factual error or hallucination to target — current leaps handover appears factually sound but has poor structure
+- `askr/voice/loop.py` (imports): Main entry point; orchestrates listener, transcriber, talker, speaker, narrator
+- `askr/voice/calibrate.py` (imported_by): Called by loop.py on first launch or explicit request
+- `askr/voice/listener.py` (imported_by): Provides MicListener and Segmenter for audio capture
+- `askr/voice/stt.py` (imported_by): Provides Transcriber for Whisper STT
+- `askr/voice/wake.py` (imported_by): Provides WakeGate for fuzzy wake-word matching
+- `askr/voice/session.py` (imported_by): Provides Digest for session context
+- `askr/voice/talker.py` (imported_by): Provides Talker for intent classification and response generation
+- `askr/voice/speaker.py` (imported_by): Provides Speaker for TTS via macOS say
+- `askr/voice/narrator.py` (imported_by): Provides Narrator for streaming session responses
+- `askr/voice/terminal.py` (imported_by): Provides terminal typing and PID tracking
+- `askr/voice/inbox.py` (imported_by): Fallback delivery route via Stop hook
+- `askr/hooks/stop.py` (imports): Drains voice inbox as fallback when mid-turn
+- `askr/hooks/session_start.py` (imports): Records session PID for voice targeting
+- `askr/hooks/user_prompt_submit.py` (imports): Records session PID for voice targeting
+- `askr/ide/vscode-extension/extension.js` (configures): Watches voice_prompt.json and types into terminal
+- `tests/conftest.py` (tested_by): Isolates voice tests from real config and Terminal spawning
+- `requirements.txt` (configures): Declares sounddevice and faster-whisper dependencies
