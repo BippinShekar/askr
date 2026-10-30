@@ -32,6 +32,7 @@ class Segmenter:
         self.max_frames = max_ms // FRAME_MS
         self.min_speech_frames = min_speech_ms // FRAME_MS
         self.noise = min_rms
+        self.level = 0.0
         self._preroll = collections.deque(maxlen=preroll_ms // FRAME_MS)
         self._frames = []
         self._loud_run = 0
@@ -42,8 +43,14 @@ class Segmenter:
     def _threshold(self) -> float:
         return max(self.min_rms, self.noise * self.start_ratio)
 
+    def snapshot(self) -> np.ndarray | None:
+        """Audio of the utterance in progress, for live partial transcription."""
+        frames = list(self._frames)  # copy: the audio thread keeps appending
+        return np.concatenate(frames) if self.active and frames else None
+
     def feed(self, frame: np.ndarray):
         rms = float(np.sqrt(np.mean(frame * frame))) if frame.size else 0.0
+        self.level = rms
         loud = rms > self._threshold()
 
         if not self.active:

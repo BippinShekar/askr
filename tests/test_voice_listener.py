@@ -91,5 +91,28 @@ def test_whisper_noise_hallucinations_ignored_even_in_window():
         assert gate.accept(noise, now=1) is None
 
 
+def test_fuzzy_spellings_one_edit_from_asker():
+    for said in ["Askor, run the tests", "Esker, run the tests", "Uh, asker run the tests",
+                 "So askr, run the tests"]:
+        assert WakeGate().accept(said, now=0).lower() == "run the tests", said
+
+
+def test_common_words_near_wake_word_do_not_wake():
+    for said in ["Asked him to leave early", "Asks the same question", "Ask him later",
+                 "After that we went home", "Oscars were last night"]:
+        assert WakeGate().accept(said, now=0) is None, said
+
+
+def test_learned_variant_from_calibration():
+    gate = WakeGate(variants=["Asgaard"])
+    assert gate.accept("Asgaard, run the tests", now=0) == "run the tests"
+    assert WakeGate().accept("Asgaard, run the tests", now=0) is None
+
+
+def test_learned_two_word_variant():
+    gate = WakeGate(variants=["is car"])
+    assert gate.accept("Is car, run the tests", now=0) == "run the tests"
+
+
 def test_wake_word_must_be_at_start():
     assert WakeGate().accept("I was telling my friend to ask her later", now=0) is None

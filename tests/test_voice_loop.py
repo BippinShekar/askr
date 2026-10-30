@@ -54,7 +54,7 @@ def _loop(tmp_path, heard, reply, session_entries=None):
     t = tmp_path / "sess-1.jsonl"
     t.write_text("\n".join(json.dumps(e) for e in (session_entries or [])) + "\n")
     talker, speaker = FakeTalker(reply), FakeSpeaker()
-    loop = VoiceLoop(str(tmp_path), FakeListener(), FakeSTT(heard), talker, speaker, out=lambda *a: None)
+    loop = VoiceLoop(str(tmp_path), FakeListener(), FakeSTT(heard), talker, speaker)
     with patch("askr.voice.session.find_latest_transcript", return_value=str(t)):
         loop.retarget(force=True)
     return loop, talker, speaker, t
@@ -127,7 +127,7 @@ def test_pinned_session(tmp_path):
     (tmp_path / "other.jsonl").write_text("")
     (tmp_path / "pinned.jsonl").write_text("")
     loop = VoiceLoop(str(tmp_path), FakeListener(), FakeSTT(""), FakeTalker(Reply("x")), FakeSpeaker(),
-                     session_id="pinned", out=lambda *a: None)
+                     session_id="pinned")
     with patch("askr.voice.session.find_latest_transcript", return_value=str(tmp_path / "other.jsonl")):
         loop.retarget(force=True)
     assert loop.session_id == "pinned"
