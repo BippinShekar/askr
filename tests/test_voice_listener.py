@@ -139,3 +139,9 @@ def test_custom_wake_word_and_phrase():
     phrase = WakeGate(word="heads up")
     assert phrase.accept("Heads up, run the tests", now=0) == "run the tests"
     assert phrase.accept("Okay heads-up: push it", now=100) == "push it"
+
+
+def test_chosen_word_said_as_an_address_mid_sentence():
+    gate = WakeGate(word="Sudo")
+    assert gate.accept("So that is the video, Sudo, push it.", now=0) == "push it."
+    assert WakeGate(word="Sudo").accept("you have to run sudo apt install first", now=0) is None

@@ -135,6 +135,11 @@ class WakeGate:
                 continue
             if re.search(r"[.?!]", before) or self._is_strong(text[tokens[start].start():end]):
                 return end
+            # Said as an address — "…the video, Sudo, push it": Whisper marks
+            # the pause after a name with a comma. Plain use ("run sudo apt")
+            # has none.
+            if not self.is_askr and re.match(r"\s*[,.!?:]", text[end:]):
+                return end
         return None
 
     def _is_strong(self, spoken: str) -> bool:
