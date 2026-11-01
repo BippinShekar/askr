@@ -15,6 +15,10 @@ import subprocess
 import time
 
 STATE_PATH = os.path.expanduser("~/.config/askr/voice_notes.json")
+# Dictation turns itself off after this long with nothing written — found
+# 2026-11-01: left on, it silently swallowed every later "askr …" (and a
+# YouTube video) into the note for half an hour.
+IDLE_SECS = 300.0
 
 _START_RE = re.compile(r"\b(notes? app|into notes|in notes|onto notes|to notes|take notes|"
                        r"taking notes|start dictat\w*)\b", re.I)
@@ -30,19 +34,24 @@ def wants_stop(text: str) -> bool:
     return bool(_STOP_RE.search(text))
 
 
-def active() -> dict | None:
+def active(now: float | None = None) -> dict | None:
     try:
         with open(STATE_PATH) as f:
-            return json.load(f)
+            state = json.load(f)
     except (OSError, ValueError):
         return None
+    now = time.time() if now is None else now
+    if now - float(state.get("last") or state.get("started") or 0) > IDLE_SECS:
+        stop()
+        return None
+    return state
 
 
 def start(now: float | None = None) -> str:
     title = time.strftime("askr dictation — %Y-%m-%d %H:%M", time.localtime(now))
     os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
     with open(STATE_PATH, "w") as f:
-        json.dump({"title": title, "started": now or time.time()}, f)
+        json.dump({"title": title, "started": now or time.time(), "last": now or time.time()}, f)
     _osascript(_script(title, "", create_only=True))
     return title
 
@@ -58,7 +67,15 @@ def append(text: str) -> bool:
     state = active()
     if not state or not text.strip():
         return False
-    return _osascript(_script(state["title"], f"<div>{html.escape(text.strip())}</div>"))
+    ok = _osascript(_script(state["title"], f"<div>{html.escape(text.strip())}</div>"))
+    if ok:
+        state["last"] = time.time()
+        try:
+            with open(STATE_PATH, "w") as f:
+                json.dump(state, f)
+        except OSError:
+            pass
+    return ok
 
 
 def _as_string(s: str) -> str:

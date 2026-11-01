@@ -116,8 +116,9 @@ class VoiceLoop:
         if not text:
             self.display.line("ignored", "  (heard sound, no words)")
             return
-        if notes.active():
-            # Dictation: everything heard goes into the note, no wake word, no Claude.
+        if notes.active() and self.gate.match(text) is None:
+            # Dictation: everything heard goes into the note, no wake word, no
+            # Claude — except lines addressed to askr, which are still commands.
             if notes.wants_stop(text):
                 notes.stop()
                 self.display.line("askr", "Stopped taking notes.")
@@ -139,6 +140,11 @@ class VoiceLoop:
 
     def handle_command(self, command: str):
         """Act on something addressed to askr (wake word already stripped)."""
+        if notes.active() and notes.wants_stop(command):
+            notes.stop()
+            self.display.line("askr", "Stopped taking notes.")
+            self._speak("Stopped taking notes.")
+            return
         if notes.wants_start(command):
             title = notes.start(self.clock())
             self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")

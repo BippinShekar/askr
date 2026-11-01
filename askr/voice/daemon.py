@@ -68,11 +68,12 @@ class StatusFile:
 
     def line(self, kind: str, text: str):
         now = self.clock()
-        if kind in ("you", "ignored"):
+        if kind in ("you", "ignored", "notes"):
             heard = text.strip()
             if kind == "ignored" and heard.startswith("heard:"):
                 heard = heard[len("heard:"):].split("←")[0].strip()
-            _append_heard({"ts": now, "text": heard, "accepted": kind == "you"})
+            _append_heard({"ts": now, "text": heard, "accepted": kind == "you",
+                           **({"dictation": True} if kind == "notes" else {})})
         if kind != "info" or text.startswith("talking to"):
             self.last = {"kind": kind, "text": text.strip(), "ts": now}
         if text.startswith("talking to session"):
@@ -113,10 +114,16 @@ class StatusFile:
                 "pid": os.getpid(), "ts": now, "state": self.state,
                 "level": round(self.level, 5), "threshold": round(self.threshold, 5),
                 "partial": self.partial, "last": self.last, "session": self.session,
-                "wake": self.wake,
+                "wake": self.wake, "notes": _notes_title(),
             })
         except OSError:
             pass
+
+
+def _notes_title() -> str:
+    from askr.voice import notes
+    state = notes.active()
+    return state["title"] if state else ""
 
 
 def _append_heard(entry: dict):

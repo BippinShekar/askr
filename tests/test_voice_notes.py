@@ -69,3 +69,23 @@ def test_dictation_mode_end_to_end(tmp_path):
     assert "make new note" in scripts[0]
     assert '<div>First idea: &quot;pricing&quot; &amp; tiers.</div>' in scripts[1].replace('\\"', '"')
     assert len(scripts) == 2                      # the stop phrase isn't written into the note
+
+
+def test_dictation_turns_itself_off_when_idle():
+    with patch.object(notes, "_osascript", return_value=True):
+        notes.start(now=1000.0)
+    assert notes.active(now=1000.0 + notes.IDLE_SECS - 1)
+    assert notes.active(now=1000.0 + notes.IDLE_SECS + 1) is None
+    assert notes.active() is None  # and it stays off
+
+
+def test_wake_word_lines_are_commands_even_while_dictating(tmp_path):
+    stt, talker, speaker = _STT(), _Talker(), _Speaker()
+    loop = VoiceLoop(str(tmp_path), _Listener(), stt, talker, speaker)
+    with patch.object(notes, "_osascript", return_value=True) as osa:
+        notes.start()
+        osa.reset_mock()
+        stt.text = "Askr, stop taking notes."
+        loop.handle_utterance(b"a")
+    assert notes.active() is None
+    osa.assert_not_called()  # not written into the note

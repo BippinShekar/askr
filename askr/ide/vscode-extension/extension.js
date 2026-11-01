@@ -818,7 +818,11 @@ function renderVoice(item) {
   let text;
   let color = COLOR_OK;
   const wake = s.wake || 'askr';
-  if (s.state === 'recording') {
+  if (s.notes && !['transcribing', 'thinking', 'sending', 'speaking', 'recording'].includes(s.state)) {
+    // Dictation swallows everything without a wake word — never let it look like normal listening.
+    text = `$(note) taking notes${s.partial ? ` "${clip(s.partial, 40)}"` : ''} — say "stop taking notes"`;
+    color = COLOR_WARN;
+  } else if (s.state === 'recording') {
     text = `$(record) recording${s.partial ? ` "${clip(s.partial, 50)}"` : '…'} — press again to send`;
     color = COLOR_HIGH;
   } else if (s.state.startsWith('hearing') && s.partial) {
