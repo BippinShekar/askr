@@ -100,6 +100,9 @@ class VoiceLoop:
         self._status("transcribing", self._partial)
         self._partial = ""
         text = self.transcriber.transcribe(audio)
+        save_clip = getattr(self.display, "save_clip", None)
+        if save_clip:
+            save_clip(audio, text)
         if not text:
             self.display.line("ignored", "  (heard sound, no words)")
             return

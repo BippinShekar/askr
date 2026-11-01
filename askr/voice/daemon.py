@@ -35,6 +35,8 @@ LOG_PATH = os.path.join(_DIR, "voice_daemon.log")
 HEARD_PATH = os.path.join(_DIR, "voice_heard.jsonl")
 DISABLED_PATH = os.path.join(_DIR, "voice_disabled")
 _HEARD_MAX_BYTES = 512 * 1024
+CLIPS_DIR = os.path.join(_DIR, "voice_clips")
+_CLIPS_KEEP = 40
 _STATUS_EVERY_SECS = 0.25
 
 
@@ -72,6 +74,26 @@ class StatusFile:
         if text.startswith("talking to session"):
             self.session = text[len("talking to session"):].strip()
         self._write(force=True)
+
+    def save_clip(self, audio, text: str):
+        """Keep the last _CLIPS_KEEP utterances' audio, so a missed wake word
+        can be replayed through other Whisper settings on the user's real voice."""
+        try:
+            import numpy as np
+            os.makedirs(CLIPS_DIR, exist_ok=True)
+            stem = os.path.join(CLIPS_DIR, f"{self.clock():.2f}")
+            np.save(stem + ".npy", np.asarray(audio, dtype=np.float32))
+            with open(stem + ".txt", "w") as f:
+                f.write(text)
+            clips = sorted(f for f in os.listdir(CLIPS_DIR) if f.endswith(".npy"))
+            for old in clips[:-_CLIPS_KEEP]:
+                for ext in (".npy", ".txt"):
+                    try:
+                        os.remove(os.path.join(CLIPS_DIR, old[:-4] + ext))
+                    except OSError:
+                        pass
+        except Exception:
+            pass
 
     def status(self, state: str, level: float = 0.0, threshold: float = 0.0, partial: str = ""):
         self.state, self.level, self.threshold, self.partial = state, level, threshold, partial

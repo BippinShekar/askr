@@ -80,3 +80,15 @@ def test_off_disables_and_daemon_then_refuses_to_start(capsys):
     assert not os.path.exists(daemon.DISABLED_PATH)
     popen.assert_called_once()
     assert popen.call_args[0][0][-2:] == ["voice", "--daemon"]
+
+
+def test_clips_are_kept_and_pruned(tmp_path):
+    import numpy as np
+    clock = [0.0]
+    s = daemon.StatusFile(str(tmp_path / "status.json"), clock=lambda: clock[0])
+    with patch.object(daemon, "_CLIPS_KEEP", 2):
+        for i in range(3):
+            clock[0] = 1000.0 + i
+            s.save_clip(np.zeros(160), f"text {i}")
+    names = sorted(os.listdir(daemon.CLIPS_DIR))
+    assert names == ["1001.00.npy", "1001.00.txt", "1002.00.npy", "1002.00.txt"]
