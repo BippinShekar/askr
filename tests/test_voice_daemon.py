@@ -92,3 +92,19 @@ def test_clips_are_kept_and_pruned(tmp_path):
             s.save_clip(np.zeros(160), f"text {i}")
     names = sorted(os.listdir(daemon.CLIPS_DIR))
     assert names == ["1001.00.npy", "1001.00.txt", "1002.00.npy", "1002.00.txt"]
+
+
+def test_stop_kills_a_daemon_that_hangs_on_sigint():
+    import subprocess, sys, time
+    # A child that ignores SIGINT, standing in for a daemon stuck closing its mic stream.
+    child = subprocess.Popen([sys.executable, "-c",
+                              "import signal,time; signal.signal(signal.SIGINT, signal.SIG_IGN); time.sleep(60)"])
+    try:
+        time.sleep(0.3)
+        with open(daemon.PID_PATH, "w") as f:
+            f.write(str(child.pid))
+        assert daemon.stop(wait_secs=0.5) is True
+        assert child.wait(timeout=3) == -9
+    finally:
+        if child.poll() is None:
+            child.kill()

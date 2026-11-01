@@ -349,7 +349,6 @@ def main(args: list):
         save_profile(profile)
         restarted = daemon.stop()
         if restarted:
-            time.sleep(1.5)
             daemon.start_detached()
         print(f"askr voice: wake word is now \"{profile['wake_word']}\"" + (" (restarted)." if restarted else "."))
         return

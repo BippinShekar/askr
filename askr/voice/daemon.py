@@ -240,7 +240,10 @@ def start_detached() -> bool:
     return True
 
 
-def stop() -> bool:
+def stop(wait_secs: float = 4.0) -> bool:
+    """Stop the daemon and wait until it's gone. Found 2026-11-01: SIGINT
+    alone can leave it hung in shutdown (closing the mic stream) — still
+    holding the lock, so a restart silently kept the old one running."""
     pid = running_pid()
     if not pid:
         return False
@@ -248,6 +251,18 @@ def stop() -> bool:
         os.kill(pid, signal.SIGINT)
     except OSError:
         return False
+    deadline = time.time() + wait_secs
+    while time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return True
+        time.sleep(0.1)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    time.sleep(0.3)
     return True
 
 
