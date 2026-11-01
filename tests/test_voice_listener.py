@@ -127,3 +127,15 @@ def test_wake_word_after_background_speech():
                  "thanks for watching. Ask her, run the tests",
                  "and that's the whole recipe. Oscar, run the tests"]:
         assert WakeGate().accept(said, now=0).lower() == "run the tests", said
+
+
+def test_custom_wake_word_and_phrase():
+    gate = WakeGate(word="terminal")
+    assert gate.accept("Terminal, run the tests", now=0) == "run the tests"
+    assert gate.accept("Terminel, run the tests", now=100) == "run the tests"   # one edit
+    assert gate.accept("Askr, run the tests", now=200) is None                 # old word no longer wakes it
+    assert gate.accept("open a new terminal and run it", now=300) is None      # mid-sentence use of the word
+    assert gate.accept("that was the video. Terminal, push it", now=400) == "push it"
+    phrase = WakeGate(word="heads up")
+    assert phrase.accept("Heads up, run the tests", now=0) == "run the tests"
+    assert phrase.accept("Okay heads-up: push it", now=100) == "push it"

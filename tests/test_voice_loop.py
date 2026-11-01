@@ -140,3 +140,20 @@ def test_bare_wake_word_is_shown_as_heard_not_ignored(tmp_path):
     loop.handle_utterance(b"audio")
     assert lines and lines[0][0] == "you" and "listening" in lines[0][1]
     assert talker.seen == []
+
+
+def test_push_to_talk_needs_no_wake_word_and_sends_on_release(tmp_path):
+    loop, talker, speaker, _ = _loop(tmp_path, "make the header purple", Reply("On it.", "Make the header purple."))
+    held = [True]
+    loop.ptt_state = lambda: held[0]
+    loop.poll_ptt()
+    loop.handle_utterance(b"audio")          # no wake word, collected, not acted on yet
+    assert talker.seen == []
+    loop.transcriber.text = "and the footer too"
+    loop.listener.utterances.put(b"queued")  # finished speaking just before release
+    held[0] = False
+    with patch.object(loop, "deliver") as deliver:
+        loop.poll_ptt()
+    assert talker.seen[0][0] == "make the header purple and the footer too"
+    deliver.assert_called_once()
+    assert loop._ptt is None

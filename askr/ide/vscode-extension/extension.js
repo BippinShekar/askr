@@ -706,6 +706,43 @@ const VOICE_STATUS_PATH  = path.join(VOICE_DIR, 'voice_status.json');
 const VOICE_FOCUS_PATH   = path.join(VOICE_DIR, 'voice_focus.json');
 const VOICE_DISABLED     = path.join(VOICE_DIR, 'voice_disabled');
 const VOICE_HEARD_PATH   = path.join(VOICE_DIR, 'voice_heard.jsonl');
+const VOICE_PTT_PATH     = path.join(VOICE_DIR, 'voice_ptt.json');
+const PTT_COMMAND        = 'askr.voicePushToTalk';
+
+// Push-to-talk (askr/voice/daemon.py ptt_on): the shortcut toggles recording;
+// the daemon sends everything said in between, no wake word.
+function pttOn() {
+  try {
+    const s = JSON.parse(fs.readFileSync(VOICE_PTT_PATH, 'utf8'));
+    return !!s.on && Date.now() - s.ts * 1000 < 120000;
+  } catch {
+    return false;
+  }
+}
+
+function togglePushToTalk() {
+  const on = !pttOn();
+  fs.mkdirSync(VOICE_DIR, { recursive: true });
+  const tmp = `${VOICE_PTT_PATH}.tmp.${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify({ on, ts: Date.now() / 1000 }));
+  fs.renameSync(tmp, VOICE_PTT_PATH);
+  writeVoiceFocus();
+}
+
+// A focused terminal swallows keybindings unless the command is listed in
+// terminal.integrated.commandsToSkipShell — and the Claude terminal is
+// exactly where push-to-talk is needed.
+function ensurePttSkipsShell() {
+  try {
+    const cfg = vscode.workspace.getConfiguration('terminal.integrated');
+    const list = cfg.get('commandsToSkipShell') || [];
+    if (!list.includes(PTT_COMMAND)) {
+      cfg.update('commandsToSkipShell', [...list, PTT_COMMAND], vscode.ConfigurationTarget.Global);
+    }
+  } catch (e) {
+    console.error(`Askr: could not register push-to-talk with the terminal: ${e}`);
+  }
+}
 const VOICE_STALE_MS     = 10000;
 const VOICE_START_EVERY  = 30000;
 let voiceLastStart = 0;
@@ -780,7 +817,11 @@ function renderVoice(item) {
   const last = s.last && Date.now() - s.last.ts * 1000 < 6000 ? s.last : null;
   let text;
   let color = COLOR_OK;
-  if (s.state.startsWith('hearing') && s.partial) {
+  const wake = s.wake || 'askr';
+  if (s.state === 'recording') {
+    text = `$(record) recording${s.partial ? ` "${clip(s.partial, 50)}"` : '…'} — press again to send`;
+    color = COLOR_HIGH;
+  } else if (s.state.startsWith('hearing') && s.partial) {
     text = `$(record) "${clip(s.partial, 50)}"`;
   } else if (s.state.startsWith('hearing')) {
     text = `$(record) hearing ${voiceLevelBar(s.level, s.threshold)}`;
@@ -789,7 +830,7 @@ function renderVoice(item) {
   } else if (s.state === 'speaking') {
     text = '$(unmute) speaking';
   } else if (last && last.kind === 'ignored') {
-    text = `$(mic) heard "${clip(last.text.replace(/^heard:\s*/, '').split('←')[0], 40)}" — no "askr"`;
+    text = `$(mic) heard "${clip(last.text.replace(/^heard:\s*/, '').split('←')[0], 40)}" — no "${wake}"`;
     color = COLOR_IDLE;
   } else if (last && last.kind === 'you') {
     text = `$(check) "${clip(last.text, 50)}"`;
@@ -797,7 +838,7 @@ function renderVoice(item) {
     text = `$(warning) ${clip(last.text, 50)}`;
     color = COLOR_WARN;
   } else if (s.state === 'listening') {
-    text = `$(mic) say "askr …" ${voiceLevelBar(s.level, s.threshold)}`;
+    text = `$(mic) say "${wake} …" ${voiceLevelBar(s.level, s.threshold)}`;
   } else {
     text = `$(mic) ${s.state}`;
     color = COLOR_IDLE;
@@ -805,15 +846,21 @@ function renderVoice(item) {
   item.text = text;
   item.color = color;
   item.tooltip = `askr voice — ${s.state}\nTalking to: ${s.session || 'no Claude session found'}\n` +
-    `Mic ${s.level.toFixed(3)} / speech threshold ${s.threshold.toFixed(3)}\nClick for options.`;
+    `Mic ${s.level.toFixed(3)} / speech threshold ${s.threshold.toFixed(3)}\n` +
+    `Wake word: "${wake}" · push-to-talk: ⌃⌥Space\nClick for options.`;
   item.show();
 }
 
 async function voiceMenu() {
   const off = fs.existsSync(VOICE_DISABLED);
   const pick = await vscode.window.showQuickPick(
-    [off ? 'Turn voice on' : 'Turn voice off', 'Show what it heard', 'Calibrate to my voice'],
+    [off ? 'Turn voice on' : 'Turn voice off', 'Change wake word', 'Show what it heard', 'Calibrate to my voice'],
     { placeHolder: 'askr voice' });
+  if (pick === 'Change wake word') {
+    const word = await vscode.window.showInputBox({ prompt: 'Wake word or short phrase', placeHolder: 'e.g. heads up' });
+    if (word && word.trim()) runAskrSilently(['voice', 'wake', ...word.trim().split(/\s+/)], { successMessage: `askr voice: wake word is now "${word.trim()}"` });
+    return;
+  }
   if (pick === 'Turn voice on') runAskrSilently(['voice', 'on']);
   else if (pick === 'Turn voice off') runAskrSilently(['voice', 'off']);
   else if (pick === 'Show what it heard') {
@@ -839,8 +886,10 @@ function activate(context) {
       terminal.show();
       terminal.sendText('askr status');
     }),
-    vscode.commands.registerCommand('askr.voiceMenu', voiceMenu)
+    vscode.commands.registerCommand('askr.voiceMenu', voiceMenu),
+    vscode.commands.registerCommand(PTT_COMMAND, () => { togglePushToTalk(); refreshVoice(); })
   );
+  ensurePttSkipsShell();
 
   const voiceItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 999);
   voiceItem.command = 'askr.voiceMenu';

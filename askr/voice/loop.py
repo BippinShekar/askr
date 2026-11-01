@@ -40,7 +40,8 @@ class _NullDisplay:
 
 class VoiceLoop:
     def __init__(self, project_path: str, listener, transcriber, talker, speaker,
-                 session_id: str = "", display=None, clock=time.time, resolve=None):
+                 session_id: str = "", display=None, clock=time.time, resolve=None,
+                 ptt_state=None):
         self.project_path = project_path
         self.listener = listener
         self.transcriber = transcriber
@@ -51,6 +52,8 @@ class VoiceLoop:
         self.display = display or _NullDisplay()
         self.clock = clock
         self.resolve = resolve  # () -> transcript path; default: newest in project_path
+        self.ptt_state = ptt_state or (lambda: False)  # () -> push-to-talk held?
+        self._ptt = None  # list of texts while push-to-talk is recording
         self.transcript_path = ""
         self.narrator = None
         self.last_request = ""
@@ -104,6 +107,12 @@ class VoiceLoop:
         save_clip = getattr(self.display, "save_clip", None)
         if save_clip:
             save_clip(audio, text)
+        if self._ptt is not None:
+            # Push-to-talk: no wake word; collect until the shortcut is pressed again.
+            if text:
+                self._ptt.append(text)
+                self.display.line("you", f"  (push-to-talk) {text}")
+            return
         if not text:
             self.display.line("ignored", "  (heard sound, no words)")
             return
@@ -121,11 +130,15 @@ class VoiceLoop:
         command = self.gate.accept(text, self.clock())
         if command is None:
             if self.gate.match(text) is not None:
-                self.display.line("you", f"askr — listening, go ahead   (heard: {text})")
+                self.display.line("you", f"{self.gate.word} — listening, go ahead   (heard: {text})")
             else:
                 self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
         self.display.line("you", command)
+        self.handle_command(command)
+
+    def handle_command(self, command: str):
+        """Act on something addressed to askr (wake word already stripped)."""
         if notes.wants_start(command):
             title = notes.start(self.clock())
             self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
@@ -242,8 +255,44 @@ class VoiceLoop:
 
     # --- main loop -------------------------------------------------------
 
+    # --- push-to-talk ------------------------------------------------------
+
+    def poll_ptt(self):
+        held = self.ptt_state()
+        if held and self._ptt is None:
+            self._ptt = []
+            self.display.line("info", "push-to-talk: recording — press the shortcut again to send")
+        elif not held and self._ptt is not None:
+            self.finish_ptt()
+
+    def finish_ptt(self):
+        texts, self._ptt = self._ptt or [], []
+        # Speech still in progress when the shortcut was pressed: finished
+        # utterances queued but not yet handled, then the open segment.
+        while True:
+            try:
+                audio = self.listener.utterances.get_nowait()
+            except queue.Empty:
+                break
+            texts.append(self.transcriber.transcribe(audio))
+        seg = getattr(self.listener, "segmenter", None)
+        if seg is not None:
+            audio = seg.snapshot()
+            seg.reset()
+            if audio is not None:
+                texts.append(self.transcriber.transcribe(audio))
+        self._ptt = None
+        command = " ".join(t.strip() for t in texts if t and t.strip())
+        if not command:
+            self.display.line("ignored", "  push-to-talk: heard nothing")
+            return
+        self.display.line("you", command)
+        self.gate.open_window(self.clock())
+        self.handle_command(command)
+
     def run_once(self, wait: float = 0.15):
         self.retarget()
+        self.poll_ptt()
         try:
             audio = self.listener.utterances.get(timeout=wait)
         except queue.Empty:
@@ -255,12 +304,15 @@ class VoiceLoop:
         self.narrate()
         seg = getattr(self.listener, "segmenter", None)
         hearing = bool(seg and seg.active)
-        self._status("hearing…" if hearing else "listening", self._partial if hearing else "")
+        if self._ptt is not None:
+            self._status("recording", self._partial if hearing else " ".join(self._ptt)[-80:])
+        else:
+            self._status("hearing…" if hearing else "listening", self._partial if hearing else "")
 
     def run(self):
         self.retarget(force=True)
         self.listener.start()
-        self.display.line("info", 'listening — start with "askr …"   (Ctrl+C to stop)')
+        self.display.line("info", f'listening — start with "{self.gate.word} …"   (Ctrl+C to stop)')
         try:
             while True:
                 self.run_once()
@@ -279,6 +331,21 @@ def main(args: list):
             print("askr voice: stopped taking notes.")
         else:
             print(f"askr voice: taking notes in Notes → {notes.start()}. `askr voice notes off` to stop.")
+        return
+    if args[:1] == ["wake"]:
+        from askr.voice.wake import DEFAULT_WORD, load_profile, save_profile
+        profile = load_profile()
+        if len(args) < 2:
+            print(f"askr voice: wake word is \"{profile.get('wake_word', DEFAULT_WORD)}\". "
+                  "`askr voice wake <word or phrase>` to change it.")
+            return
+        profile["wake_word"] = " ".join(args[1:]).strip()
+        save_profile(profile)
+        restarted = daemon.stop()
+        if restarted:
+            time.sleep(1.5)
+            daemon.start_detached()
+        print(f"askr voice: wake word is now \"{profile['wake_word']}\"" + (" (restarted)." if restarted else "."))
         return
     if args[:1] == ["off"]:
         daemon.set_enabled(False)
@@ -322,24 +389,29 @@ def main(args: list):
     from askr.voice.stt import Transcriber
     from askr.voice.talker import Talker
     from askr.voice.ui import Display
-    from askr.voice.wake import load_profile
+    from askr.voice.wake import DEFAULT_WORD, load_profile, phrase_key
 
     project = find_project_root() or os.getcwd()
     display = daemon.StatusFile() if is_daemon else Display()
-    display.status("loading speech model…")
-    transcriber = Transcriber()
-
     profile = load_profile()
+    word = profile.get("wake_word") or DEFAULT_WORD
+    if is_daemon:
+        display.wake = word
+    display.status("loading speech model…")
+    transcriber = Transcriber(wake_word=word)
+
     if "calibrate" in args:
         calibrate.run(transcriber, display)
         return
 
     listener = MicListener(segmenter=Segmenter(min_rms=profile.get("min_rms", 0.004)))
-    gate = WakeGate(variants=profile.get("variants", []))
+    # Calibration-learned spellings are for "askr"; a chosen word matches on its own.
+    learned = profile.get("variants", []) if phrase_key(word) == "askr" else []
+    gate = WakeGate(variants=learned, word=word)
     speaker = Speaker(listener=listener, gate=gate)
     try:
         VoiceLoop(project, listener, transcriber, Talker(), speaker, session_id=session_id,
-                  display=display, resolve=daemon.target_transcript).run()
+                  display=display, resolve=daemon.target_transcript, ptt_state=daemon.ptt_on).run()
     finally:
         if lock is not None:
             display.status("off")

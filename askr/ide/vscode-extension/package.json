@@ -23,6 +23,16 @@
       {
         "command": "askr.voiceMenu",
         "title": "Askr: Voice"
+      },
+      {
+        "command": "askr.voicePushToTalk",
+        "title": "Askr: Push to Talk"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "askr.voicePushToTalk",
+        "key": "ctrl+alt+space"
       }
     ]
   }

@@ -34,6 +34,9 @@ PID_PATH = os.path.join(_DIR, "voice_daemon.pid")
 LOG_PATH = os.path.join(_DIR, "voice_daemon.log")
 HEARD_PATH = os.path.join(_DIR, "voice_heard.jsonl")
 DISABLED_PATH = os.path.join(_DIR, "voice_disabled")
+PTT_PATH = os.path.join(_DIR, "voice_ptt.json")
+# A push-to-talk left on (window closed mid-recording) mustn't record forever.
+PTT_MAX_SECS = 120.0
 _HEARD_MAX_BYTES = 512 * 1024
 CLIPS_DIR = os.path.join(_DIR, "voice_clips")
 _CLIPS_KEEP = 40
@@ -60,6 +63,7 @@ class StatusFile:
         self.partial = ""
         self.last = None
         self.session = ""
+        self.wake = ""
         self._written = float("-inf")
 
     def line(self, kind: str, text: str):
@@ -109,6 +113,7 @@ class StatusFile:
                 "pid": os.getpid(), "ts": now, "state": self.state,
                 "level": round(self.level, 5), "threshold": round(self.threshold, 5),
                 "partial": self.partial, "last": self.last, "session": self.session,
+                "wake": self.wake,
             })
         except OSError:
             pass
@@ -122,6 +127,17 @@ def _append_heard(entry: dict):
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass
+
+
+def ptt_on(now: float | None = None) -> bool:
+    """Push-to-talk is held: the IDE shortcut toggled it on (voice_ptt.json)."""
+    try:
+        with open(PTT_PATH) as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        return False
+    now = time.time() if now is None else now
+    return bool(state.get("on")) and now - float(state.get("ts") or 0) < PTT_MAX_SECS
 
 
 # --- which session -------------------------------------------------------

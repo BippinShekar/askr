@@ -16,6 +16,7 @@ import os
 import re
 
 FOLLOW_UP_SECS = 20.0
+DEFAULT_WORD = "askr"
 PROFILE_PATH = os.path.expanduser("~/.config/askr/voice_profile.json")
 
 # Spellings Whisper produced for "askr" in testing (single tokens, or two
@@ -74,26 +75,40 @@ def save_profile(profile: dict):
         json.dump(profile, f, indent=2)
 
 
+def phrase_key(phrase: str) -> str:
+    """"Heads up" -> "headsup": how a wake phrase is compared, tokens joined."""
+    return "".join(_norm(t) for t in _TOKEN_RE.findall(phrase or ""))
+
+
 class WakeGate:
-    def __init__(self, follow_up_secs: float = FOLLOW_UP_SECS, variants=()):
+    """`word` is the wake word or phrase (profile "wake_word"); "askr" — the
+    default — also gets the built-in Whisper spellings and fuzzy matching tuned
+    for it. Any other word matches exactly (tokens joined) or one edit away."""
+
+    def __init__(self, follow_up_secs: float = FOLLOW_UP_SECS, variants=(), word: str = DEFAULT_WORD):
         self.follow_up_secs = follow_up_secs
-        self.variants = _BUILTIN | {_norm(v) for v in variants if _norm(v)}
+        self.word = word or DEFAULT_WORD
+        self.is_askr = phrase_key(self.word) == "askr"
+        self.targets = _TARGETS if self.is_askr else (phrase_key(self.word),)
+        self._span = 2 if self.is_askr else max(1, len(_TOKEN_RE.findall(self.word))) + 1
+        builtin = _BUILTIN if self.is_askr else {phrase_key(self.word)}
+        self.variants = builtin | {_norm(v) for v in variants if _norm(v)}
         self._open_until = 0.0
 
     def _is_wake(self, word: str) -> bool:
         if word in self.variants:
             return True
-        if word in _NOT_WAKE or len(word) < 4:
+        if word in _NOT_WAKE or len(word) < (4 if self.is_askr else 5):
             return False
-        return any(_edit_distance(word, t) <= 1 for t in _TARGETS)
+        return any(_edit_distance(word, t) <= 1 for t in self.targets)
 
     def _match_at(self, tokens, start: int) -> int | None:
-        first = _norm(tokens[start].group())
-        if start + 1 < len(tokens):
-            pair = first + _norm(tokens[start + 1].group())
-            if pair in self.variants:
-                return tokens[start + 1].end()
-        if self._is_wake(first):
+        # Longest span first: "ask her" (askr) or "heads up" arrive as several tokens.
+        for k in range(min(self._span, len(tokens) - start), 1, -1):
+            joined = "".join(_norm(t.group()) for t in tokens[start:start + k])
+            if joined in self.variants or (not self.is_askr and self._is_wake(joined)):
+                return tokens[start + k - 1].end()
+        if self._is_wake(_norm(tokens[start].group())):
             return tokens[start].end()
         return None
 
@@ -123,8 +138,10 @@ class WakeGate:
         return None
 
     def _is_strong(self, spoken: str) -> bool:
+        # Only askr's invented spellings are safe mid-sentence; a chosen real
+        # word ("terminal") mid-sentence is just someone using the word.
         word = _norm(spoken)
-        return " " not in spoken.strip() and word not in _WEAK and len(word) >= 4
+        return self.is_askr and " " not in spoken.strip() and word not in _WEAK and len(word) >= 4
 
     def open_window(self, now: float):
         """Call when askr finishes speaking — the user's reply needs no wake word."""
