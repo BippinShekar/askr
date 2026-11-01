@@ -687,6 +687,139 @@ async function checkVoicePrompt() {
   }
 }
 
+// askr voice daemon (askr/voice/daemon.py): started from here so voice just
+// works in every Cursor window — no command, no extra window. It runs as a
+// descendant of Cursor, so it uses Cursor's microphone permission. Its state
+// comes back through voice_status.json and is shown in its own status bar
+// item; which terminal it talks to goes out through voice_focus.json.
+const VOICE_DIR          = path.join(os.homedir(), '.config', 'askr');
+const VOICE_STATUS_PATH  = path.join(VOICE_DIR, 'voice_status.json');
+const VOICE_FOCUS_PATH   = path.join(VOICE_DIR, 'voice_focus.json');
+const VOICE_DISABLED     = path.join(VOICE_DIR, 'voice_disabled');
+const VOICE_HEARD_PATH   = path.join(VOICE_DIR, 'voice_heard.jsonl');
+const VOICE_STALE_MS     = 10000;
+const VOICE_START_EVERY  = 30000;
+let voiceLastStart = 0;
+
+function readVoiceStatus() {
+  try {
+    const s = JSON.parse(fs.readFileSync(VOICE_STATUS_PATH, 'utf8'));
+    if (Date.now() - s.ts * 1000 > VOICE_STALE_MS) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function ensureVoiceDaemon() {
+  if (fs.existsSync(VOICE_DISABLED) || readVoiceStatus()) return;
+  if (Date.now() - voiceLastStart < VOICE_START_EVERY) return;
+  voiceLastStart = Date.now();
+  // The daemon refuses to run twice (flock), so several windows racing here is harmless.
+  cp.execFile('/bin/zsh', ['-l', '-c', 'askr voice start'], { timeout: 15000 }, (err) => {
+    if (err) console.error(`Askr: askr voice start failed: ${err.message}`);
+  });
+}
+
+async function writeVoiceFocus() {
+  if (!vscode.window.state.focused) return;
+  const term = vscode.window.activeTerminal;
+  if (!term) return;
+  try {
+    const shellPid = await term.processId;
+    if (!shellPid) return;
+    fs.mkdirSync(VOICE_DIR, { recursive: true });
+    const tmp = `${VOICE_FOCUS_PATH}.tmp.${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify({ shell_pid: shellPid, name: term.name, ts: Date.now() / 1000 }));
+    fs.renameSync(tmp, VOICE_FOCUS_PATH);
+  } catch (e) {
+    console.error(`Askr: writeVoiceFocus failed: ${e}`);
+  }
+}
+
+function clip(text, n) {
+  text = String(text || '').replace(/\s+/g, ' ').trim();
+  return text.length > n ? text.slice(0, n - 1) + '…' : text;
+}
+
+function voiceLevelBar(level, threshold) {
+  // Same log scale as askr/voice/ui.py meter(): 1e-4 .. ~0.3; '|' is the speech threshold.
+  const pos = (x) => Math.round((Math.log10(Math.max(x, 1e-4)) + 4) / 3.5 * 8);
+  const n = Math.min(pos(level), 8);
+  const t = Math.min(pos(threshold), 7);
+  let bar = '';
+  for (let i = 0; i < 8; i++) bar += i === t ? '|' : (i < n ? '▮' : '·');
+  return bar;
+}
+
+function renderVoice(item) {
+  if (fs.existsSync(VOICE_DISABLED)) {
+    item.text = '$(mute) voice off';
+    item.color = COLOR_IDLE;
+    item.tooltip = 'askr voice is off — click to turn it on';
+    item.show();
+    return;
+  }
+  const s = readVoiceStatus();
+  if (!s) {
+    item.text = '$(mic) voice starting…';
+    item.color = COLOR_IDLE;
+    item.tooltip = 'Starting askr voice. If this stays, run `askr voice --here` in a terminal to see why.';
+    item.show();
+    return;
+  }
+  const last = s.last && Date.now() - s.last.ts * 1000 < 6000 ? s.last : null;
+  let text;
+  let color = COLOR_OK;
+  if (s.state.startsWith('hearing') && s.partial) {
+    text = `$(record) "${clip(s.partial, 50)}"`;
+  } else if (s.state.startsWith('hearing')) {
+    text = `$(record) hearing ${voiceLevelBar(s.level, s.threshold)}`;
+  } else if (['transcribing', 'thinking', 'sending'].includes(s.state)) {
+    text = `$(loading~spin) ${s.state}`;
+  } else if (s.state === 'speaking') {
+    text = '$(unmute) speaking';
+  } else if (last && last.kind === 'ignored') {
+    text = `$(mic) heard "${clip(last.text.replace(/^heard:\s*/, '').split('←')[0], 40)}" — no "askr"`;
+    color = COLOR_IDLE;
+  } else if (last && last.kind === 'you') {
+    text = `$(check) "${clip(last.text, 50)}"`;
+  } else if (last && last.kind === 'error') {
+    text = `$(warning) ${clip(last.text, 50)}`;
+    color = COLOR_WARN;
+  } else if (s.state === 'listening') {
+    text = `$(mic) say "askr …" ${voiceLevelBar(s.level, s.threshold)}`;
+  } else {
+    text = `$(mic) ${s.state}`;
+    color = COLOR_IDLE;
+  }
+  item.text = text;
+  item.color = color;
+  item.tooltip = `askr voice — ${s.state}\nTalking to: ${s.session || 'no Claude session found'}\n` +
+    `Mic ${s.level.toFixed(3)} / speech threshold ${s.threshold.toFixed(3)}\nClick for options.`;
+  item.show();
+}
+
+async function voiceMenu() {
+  const off = fs.existsSync(VOICE_DISABLED);
+  const pick = await vscode.window.showQuickPick(
+    [off ? 'Turn voice on' : 'Turn voice off', 'Show what it heard', 'Calibrate to my voice'],
+    { placeHolder: 'askr voice' });
+  if (pick === 'Turn voice on') runAskrSilently(['voice', 'on']);
+  else if (pick === 'Turn voice off') runAskrSilently(['voice', 'off']);
+  else if (pick === 'Show what it heard') {
+    if (!fs.existsSync(VOICE_HEARD_PATH)) {
+      vscode.window.showInformationMessage('askr voice hasn\'t heard anything yet.');
+      return;
+    }
+    vscode.window.showTextDocument(vscode.Uri.file(VOICE_HEARD_PATH), { preview: true });
+  } else if (pick === 'Calibrate to my voice') {
+    const t = vscode.window.createTerminal({ name: 'askr voice calibrate' });
+    t.show();
+    t.sendText('askr voice calibrate');
+  }
+}
+
 function activate(context) {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
   item.command = 'askr.openStatus';
@@ -696,14 +829,30 @@ function activate(context) {
       const terminal = vscode.window.createTerminal({ name: 'askr' });
       terminal.show();
       terminal.sendText('askr status');
-    })
+    }),
+    vscode.commands.registerCommand('askr.voiceMenu', voiceMenu)
   );
+
+  const voiceItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 999);
+  voiceItem.command = 'askr.voiceMenu';
+  context.subscriptions.push(voiceItem);
+  const refreshVoice = () => renderVoice(voiceItem);
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTerminal(writeVoiceFocus),
+    vscode.window.onDidChangeWindowState((st) => { if (st.focused) writeVoiceFocus(); })
+  );
+  writeVoiceFocus();
+  ensureVoiceDaemon();
+  refreshVoice();
+  const voiceTimer = setInterval(() => { ensureVoiceDaemon(); refreshVoice(); }, 1000);
+  context.subscriptions.push({ dispose: () => clearInterval(voiceTimer) });
 
   try {
     const configDir = path.dirname(VOICE_PROMPT_PATH);
     if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
     const voiceWatcher = fs.watch(configDir, (_, filename) => {
       if (filename === 'voice_prompt.json') checkVoicePrompt();
+      else if (filename === 'voice_status.json') refreshVoice();
     });
     context.subscriptions.push({ dispose: () => voiceWatcher.close() });
   } catch (e) {
