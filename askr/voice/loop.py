@@ -5,18 +5,15 @@
                                                      └─ send -> terminal (or Stop-hook inbox)
   session transcript -> Narrator -> Talker.narrate -> Speaker
 
-Runs in its own Terminal.app window (see launch_window) so there's one
-obvious place showing that it's listening, the mic level, and everything it
-hears — including lines it ignored and why.
+Normally runs in the background (daemon.py), started by the askr IDE
+extension, which shows its status in the status bar and types requests into
+the focused Claude Code terminal. `askr voice --here` runs it in the current
+terminal instead, with a live status line — for debugging.
 """
 
 import os
-import platform
 import queue
-import shlex
-import shutil
-import subprocess
-import sys
+import signal
 import time
 
 from askr.voice import inbox, session, terminal
@@ -26,7 +23,10 @@ from askr.voice.wake import WakeGate
 _RETARGET_EVERY_SECS = 10.0
 _CLAIM_TIMEOUT_SECS = 6.0
 _PARTIAL_EVERY_SECS = 1.0
-_WINDOW_ENV = "ASKR_VOICE_WINDOW"
+# Partials only transcribe the tail: with a video playing an utterance runs
+# up to the segmenter's 30s cap, and re-transcribing all of it every second
+# would pin a core.
+_PARTIAL_TAIL_SECS = 6.0
 
 
 class _NullDisplay:
@@ -39,7 +39,7 @@ class _NullDisplay:
 
 class VoiceLoop:
     def __init__(self, project_path: str, listener, transcriber, talker, speaker,
-                 session_id: str = "", display=None, clock=time.time):
+                 session_id: str = "", display=None, clock=time.time, resolve=None):
         self.project_path = project_path
         self.listener = listener
         self.transcriber = transcriber
@@ -49,6 +49,7 @@ class VoiceLoop:
         self.pinned_session = session_id
         self.display = display or _NullDisplay()
         self.clock = clock
+        self.resolve = resolve  # () -> transcript path; default: newest in project_path
         self.transcript_path = ""
         self.narrator = None
         self.last_request = ""
@@ -79,7 +80,9 @@ class VoiceLoop:
         if not force and now - self._last_retarget < _RETARGET_EVERY_SECS:
             return
         self._last_retarget = now
-        if self.pinned_session:
+        if self.resolve and not self.pinned_session:
+            path = self.resolve()
+        elif self.pinned_session:
             folder = os.path.dirname(session.find_latest_transcript(self.project_path) or "")
             path = os.path.join(folder, f"{self.pinned_session}.jsonl") if folder else ""
         else:
@@ -105,8 +108,9 @@ class VoiceLoop:
             self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
         self.display.line("you", command)
+        self.retarget(force=True)  # the terminal focused now, not 10s ago
         if not self.transcript_path:
-            self._speak("I can't find a Claude Code session in this project.")
+            self._speak("I can't find an open Claude Code session.")
             return
         self._status("thinking")
         d = session.digest(self.transcript_path)
@@ -159,6 +163,8 @@ class VoiceLoop:
         self._last_partial = now
         audio = seg.snapshot()
         if audio is not None:
+            from askr.voice.listener import SAMPLE_RATE
+            audio = audio[-int(_PARTIAL_TAIL_SECS * SAMPLE_RATE):]
             self._partial = self.transcriber.transcribe(audio)
 
     # --- narration -------------------------------------------------------
@@ -205,32 +211,45 @@ class VoiceLoop:
             self.listener.stop()
 
 
-def launch_window(project: str, args: list) -> bool:
-    """Open a Terminal.app window running voice mode; True if launched."""
-    if platform.system() != "Darwin":
-        return False
-    askr_bin = shutil.which("askr") or f"{sys.executable} -m askr.cli.askr"
-    cmd = (f"cd {shlex.quote(project)} && {_WINDOW_ENV}=1 {askr_bin} voice "
-           + " ".join(shlex.quote(a) for a in args))
-    from askr.session.lifecycle import _applescript_quote
-    script = f'tell application "Terminal"\n  do script {_applescript_quote(cmd)}\n  activate\nend tell'
-    return subprocess.run(["osascript", "-e", script], capture_output=True, timeout=10).returncode == 0
-
-
 def main(args: list):
-    from askr.session.monitor import find_project_root
-    project = find_project_root() or os.getcwd()
+    from askr.voice import daemon
 
-    if "--here" not in args and not os.environ.get(_WINDOW_ENV):
-        if launch_window(project, args):
-            print("askr voice opened in a Terminal window — talk to it there.")
+    if args[:1] == ["off"]:
+        daemon.set_enabled(False)
+        daemon.stop()
+        print("askr voice: off (the IDE extension won't restart it). `askr voice on` to turn it back on.")
+        return
+    if args[:1] in (["on"], ["start"]):
+        if args[0] == "on":
+            daemon.set_enabled(True)
+        if daemon.running_pid():
+            print("askr voice: already listening in the background.")
+        elif daemon.start_detached():
+            print("askr voice: listening in the background — status is in the Cursor status bar.")
+        else:
+            print("askr voice: turned off — `askr voice on` to enable.")
+        return
+
+    is_daemon = "--daemon" in args
+    lock = None
+    if is_daemon:
+        if os.path.exists(daemon.DISABLED_PATH):
             return
+        lock = daemon.acquire_lock()
+        if lock is None:
+            return  # another daemon is already listening
+        signal.signal(signal.SIGTERM, signal.default_int_handler)  # stop cleanly, like Ctrl+C
+    elif daemon.running_pid() and "calibrate" not in args:
+        print("askr voice is already listening in the background (status is in the Cursor status bar).\n"
+              "`askr voice off` stops it; `askr voice calibrate` tunes it to your voice.")
+        return
 
     session_id = ""
     if "--session" in args:
         i = args.index("--session")
         session_id = args[i + 1] if i + 1 < len(args) else ""
 
+    from askr.session.monitor import find_project_root
     from askr.voice import calibrate
     from askr.voice.listener import MicListener, Segmenter
     from askr.voice.speaker import Speaker
@@ -239,19 +258,22 @@ def main(args: list):
     from askr.voice.ui import Display
     from askr.voice.wake import load_profile
 
-    display = Display()
-    display.line("info", f"askr voice — project {project}")
+    project = find_project_root() or os.getcwd()
+    display = daemon.StatusFile() if is_daemon else Display()
     display.status("loading speech model…")
     transcriber = Transcriber()
 
     profile = load_profile()
-    if "calibrate" in args or "calibrated_at" not in profile:
-        profile = calibrate.run(transcriber, display)
-        if "calibrate" in args:
-            return
+    if "calibrate" in args:
+        calibrate.run(transcriber, display)
+        return
 
     listener = MicListener(segmenter=Segmenter(min_rms=profile.get("min_rms", 0.004)))
     gate = WakeGate(variants=profile.get("variants", []))
     speaker = Speaker(listener=listener, gate=gate)
-    VoiceLoop(project, listener, transcriber, Talker(), speaker,
-              session_id=session_id, display=display).run()
+    try:
+        VoiceLoop(project, listener, transcriber, Talker(), speaker, session_id=session_id,
+                  display=display, resolve=daemon.target_transcript).run()
+    finally:
+        if lock is not None:
+            display.status("off")
