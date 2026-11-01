@@ -114,5 +114,16 @@ def test_learned_two_word_variant():
     assert gate.accept("Is car, run the tests", now=0) == "run the tests"
 
 
-def test_wake_word_must_be_at_start():
-    assert WakeGate().accept("I was telling my friend to ask her later", now=0) is None
+def test_mid_sentence_ordinary_words_do_not_wake():
+    for said in ["I was telling my friend to ask her later", "and then Oscar went home",
+                 "Asked him. Asks again."]:
+        assert WakeGate().accept(said, now=0) is None, said
+
+
+def test_wake_word_after_background_speech():
+    # A video kept the segmenter open, so the request is glued onto its audio.
+    for said in ["I will see you in the next video. Askr, run the tests",
+                 "so that is how it works askr run the tests",
+                 "thanks for watching. Ask her, run the tests",
+                 "and that's the whole recipe. Oscar, run the tests"]:
+        assert WakeGate().accept(said, now=0).lower() == "run the tests", said

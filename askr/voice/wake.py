@@ -29,6 +29,9 @@ _TARGETS = ("asker", "askr")
 _NOT_WAKE = {"asked", "asks", "aster", "ashes", "asset"}
 # May precede the wake word ("Hey askr", "Okay, askr", Whisper's "He askedr").
 _FILLERS = {"hey", "hi", "ok", "okay", "so", "um", "uh", "he", "yo", "and"}
+# Spellings that are real words — they only wake it at the start of an
+# utterance or right after a sentence break, never mid-sentence.
+_WEAK = {"oscar", "aska", "asca", "masker", "tasker", "basker"}
 
 # Whisper's stock hallucinations on silence/noise — never a real command.
 _NOISE = {
@@ -84,23 +87,44 @@ class WakeGate:
             return False
         return any(_edit_distance(word, t) <= 1 for t in _TARGETS)
 
+    def _match_at(self, tokens, start: int) -> int | None:
+        first = _norm(tokens[start].group())
+        if start + 1 < len(tokens):
+            pair = first + _norm(tokens[start + 1].group())
+            if pair in self.variants:
+                return tokens[start + 1].end()
+        if self._is_wake(first):
+            return tokens[start].end()
+        return None
+
     def match(self, text: str) -> int | None:
-        """Character offset just past the wake word, or None if it doesn't start the text."""
+        """Character offset just past the wake word, or None if there isn't one."""
         tokens = list(_TOKEN_RE.finditer(text))
         i = 0
         while i < len(tokens) and i < 2 and _norm(tokens[i].group()) in _FILLERS:
             i += 1
         for start in sorted({0, i}):
-            if start >= len(tokens):
+            if start < len(tokens):
+                end = self._match_at(tokens, start)
+                if end is not None:
+                    return end
+        # Mid-utterance. With a video or music playing the segmenter never
+        # hears silence, so "askr, run the tests" arrives glued onto whatever
+        # was playing — the wake word is no longer first. Mid-text only counts
+        # after a sentence break, or as a spelling that isn't ordinary English
+        # ("…to ask her later" must not wake it).
+        for start in range(1, len(tokens)):
+            before = text[tokens[start - 1].end():tokens[start].start()]
+            end = self._match_at(tokens, start)
+            if end is None:
                 continue
-            first = _norm(tokens[start].group())
-            if start + 1 < len(tokens):
-                pair = first + _norm(tokens[start + 1].group())
-                if pair in self.variants:
-                    return tokens[start + 1].end()
-            if self._is_wake(first):
-                return tokens[start].end()
+            if re.search(r"[.?!]", before) or self._is_strong(text[tokens[start].start():end]):
+                return end
         return None
+
+    def _is_strong(self, spoken: str) -> bool:
+        word = _norm(spoken)
+        return " " not in spoken.strip() and word not in _WEAK and len(word) >= 4
 
     def open_window(self, now: float):
         """Call when askr finishes speaking — the user's reply needs no wake word."""
