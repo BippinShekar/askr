@@ -16,8 +16,9 @@ import queue
 import signal
 import time
 
-from askr.voice import inbox, notes, session, terminal
+from askr.voice import inbox, menu, notes, session, terminal
 from askr.voice.narrator import Narrator
+from askr.voice.talker import VOICE_MODEL, Reply
 from askr.voice.wake import WakeGate
 
 _RETARGET_EVERY_SECS = 10.0
@@ -135,8 +136,14 @@ class VoiceLoop:
             self._speak("I can't find an open Claude Code session.")
             return
         self._status("thinking")
+        questions = menu.pending_questions(session._tail_entries(self.transcript_path))
+        if questions is not None and self.answer_menu(command, questions):
+            return
         d = session.digest(self.transcript_path)
         reply = self.talker.respond(command, d.render())
+        if questions is not None and reply.send:
+            # Typed text would land inside the open menu and pick who-knows-what.
+            reply = Reply("It's waiting on its question first — answer that, then tell me.")
         self.display.line("askr", reply.say)
         if reply.send:
             self.display.line("claude", f"  → {reply.send}")
@@ -147,6 +154,36 @@ class VoiceLoop:
             self.last_request = reply.send
             self._status("sending")
             self.deliver(reply.send, d.in_flight)
+
+    def answer_menu(self, command: str, questions: list) -> bool:
+        """Answer an open AskUserQuestion menu; False if `command` isn't an answer to it."""
+        answers, say = None, ""
+        if len(questions) == 1:
+            n = menu.quick_pick(command, questions[0].get("options") or [])
+            if n:
+                answers = [{"choice": n}]
+        if answers is None:
+            try:
+                answers, say = menu.model_pick(self.talker._post, VOICE_MODEL, command, questions)
+            except Exception:
+                answers = None
+        if not answers:
+            return False
+        keys = menu.keys_for(questions, answers)
+        if keys is None:
+            self.display.line("askr", "  menu needs picking on screen (multi-select or partial answer)")
+            self._speak("I can't fill that one in by voice. Pick it on screen.")
+            return True
+        picked = menu.describe(questions, answers)
+        self.display.line("you", f"  menu → {picked}")
+        self._speak(say or f"Picking {picked}.")
+        self._status("sending")
+        if terminal.type_keys(self.session_id, keys, self.project_path) and self._claimed():
+            self.display.line("info", "  selected in the menu")
+        else:
+            self.display.line("error", "  terminal not found — menu not answered")
+            self._speak("I couldn't reach its terminal. Pick it on screen.")
+        return True
 
     def deliver(self, text: str, in_flight: bool):
         if terminal.type_prompt(self.session_id, text, self.project_path) and self._claimed():

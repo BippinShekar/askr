@@ -678,6 +678,15 @@ async function checkVoicePrompt() {
     const claimedPrompt = JSON.parse(fs.readFileSync(claimed, 'utf8'));
     fs.unlinkSync(claimed);
     if (claimedPrompt.id !== p.id) return;  // replaced between read and claim; next pass handles it
+    if (Array.isArray(p.keys)) {
+      // Menu navigation (askr/voice/menu.py): one keystroke at a time, with a
+      // pause so Claude Code's menu re-renders between them.
+      for (const k of p.keys) {
+        term.sendText(k, false);
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return;
+    }
     term.sendText(p.text, false);
     term.sendText('\r', false);
   } catch (e) {

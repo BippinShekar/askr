@@ -71,13 +71,22 @@ def session_pid(session_id: str) -> int | None:
 
 def type_prompt(session_id: str, text: str, project_path: str = "") -> bool:
     """Ask the IDE extension to type `text` + Enter into this session's terminal."""
+    return _post_to_terminal(session_id, {"text": text}, project_path)
+
+
+def type_keys(session_id: str, keys: list, project_path: str = "") -> bool:
+    """Ask the IDE extension to send raw keystrokes (menu navigation), one at a time, no Enter added."""
+    return _post_to_terminal(session_id, {"text": "", "keys": keys}, project_path)
+
+
+def _post_to_terminal(session_id: str, body: dict, project_path: str) -> bool:
     pid = session_pid(session_id)
     if not pid:
         return False
     from askr.session.lifecycle import _get_ancestor_pids
     payload = {
         "id": uuid.uuid4().hex,
-        "text": text,
+        **body,
         "ancestor_pids": [pid] + _get_ancestor_pids(pid),
         "project_path": project_path,
         "shown": False,
