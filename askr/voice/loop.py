@@ -16,7 +16,7 @@ import queue
 import signal
 import time
 
-from askr.voice import inbox, session, terminal
+from askr.voice import inbox, notes, session, terminal
 from askr.voice.narrator import Narrator
 from askr.voice.wake import WakeGate
 
@@ -106,6 +106,17 @@ class VoiceLoop:
         if not text:
             self.display.line("ignored", "  (heard sound, no words)")
             return
+        if notes.active():
+            # Dictation: everything heard goes into the note, no wake word, no Claude.
+            if notes.wants_stop(text):
+                notes.stop()
+                self.display.line("askr", "Stopped taking notes.")
+                self._speak("Stopped taking notes.")
+            elif notes.append(text):
+                self.display.line("notes", text)
+            else:
+                self.display.line("error", f"  couldn't write to Notes: {text}")
+            return
         command = self.gate.accept(text, self.clock())
         if command is None:
             if self.gate.match(text) is not None:
@@ -114,6 +125,11 @@ class VoiceLoop:
                 self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
         self.display.line("you", command)
+        if notes.wants_start(command):
+            title = notes.start(self.clock())
+            self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
+            self._speak("Taking notes. Say stop taking notes when you're done.")
+            return
         self.retarget(force=True)  # the terminal focused now, not 10s ago
         if not self.transcript_path:
             self._speak("I can't find an open Claude Code session.")
@@ -220,6 +236,13 @@ class VoiceLoop:
 def main(args: list):
     from askr.voice import daemon
 
+    if args[:1] == ["notes"]:
+        if args[1:2] == ["off"]:
+            notes.stop()
+            print("askr voice: stopped taking notes.")
+        else:
+            print(f"askr voice: taking notes in Notes → {notes.start()}. `askr voice notes off` to stop.")
+        return
     if args[:1] == ["off"]:
         daemon.set_enabled(False)
         daemon.stop()
