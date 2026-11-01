@@ -157,3 +157,35 @@ def test_push_to_talk_needs_no_wake_word_and_sends_on_release(tmp_path):
     assert talker.seen[0][0] == "make the header purple and the footer too"
     deliver.assert_called_once()
     assert loop._ptt is None
+
+
+def test_errands_run_hidden_not_in_the_session(tmp_path):
+    from askr.voice import tasks as tasks_mod
+    loop, talker, speaker, _ = _loop(tmp_path, "askr open a random youtube video",
+                                     Reply("On it.", "Open a random YouTube video.", kind="task"))
+    ran = []
+    loop.tasks = tasks_mod.Tasks(runner=lambda task, folder: (ran.append(task), (True, "Opened a pasta video."))[1])
+    with patch.object(loop, "deliver") as deliver, patch.object(tasks_mod, "TASKS_DIR", str(tmp_path / "t")):
+        loop.handle_utterance(b"audio")
+        loop.tasks.finished.get(timeout=5)
+    deliver.assert_not_called()          # nothing typed into the session
+    assert ran == ["Open a random YouTube video."]
+    assert speaker.said[0] == "On it."
+
+
+def test_finished_task_is_spoken(tmp_path):
+    from askr.voice import tasks as tasks_mod
+    loop, talker, speaker, _ = _loop(tmp_path, "", Reply("x"))
+    loop.tasks.finished.put(tasks_mod.Done("Open a video", "Opened a pasta video.", True, ""))
+    loop.report_tasks()
+    assert speaker.said == ["spoken: Opened a pasta video."]
+
+
+def test_dictate_intent_opens_notes_instead_of_messaging_claude(tmp_path):
+    from askr.voice import notes
+    loop, talker, speaker, _ = _loop(tmp_path, "askr can you jot down what I say from now on",
+                                     Reply("Taking notes.", kind="dictate"))
+    with patch.object(notes, "_osascript", return_value=True) as osa, patch.object(loop, "deliver") as deliver:
+        loop.handle_utterance(b"audio")
+    deliver.assert_not_called()
+    assert notes.active() and "show n" in osa.call_args[0][0]

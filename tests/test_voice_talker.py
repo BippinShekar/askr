@@ -148,3 +148,13 @@ def test_respond_survives_transport_error():
         raise RuntimeError("HTTP 500")
     r = Talker(post=boom).respond("hello", "d")
     assert r.send is None and "couldn't reach" in r.say
+
+
+def test_task_and_dictate_intents():
+    from askr.voice.talker import _parse
+    r = _parse('{"intent": "task", "send": "Open a random YouTube video in the browser.", "say": ""}')
+    assert (r.kind, r.send, r.say) == ("task", "Open a random YouTube video in the browser.", "On it.")
+    r = _parse('{"intent": "dictate", "send": null, "say": "Okay, taking notes."}')
+    assert r.kind == "dictate" and r.send is None
+    r = _parse('{"intent": "instruction", "send": "Make the header purple.", "say": "Sending that over."}')
+    assert r.kind == "session"

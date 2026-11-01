@@ -25,12 +25,22 @@ e.g. "link" for "lint", "get" for "git"; fix them using context) and a digest of
 the Claude Code session is doing.
 
 Reply with ONLY a JSON object, deciding "intent" first:
-{"intent": "instruction" | "question" | "clarify" | "chat", "send": "..." or null, "say": "..."}
+{"intent": "instruction" | "task" | "dictate" | "question" | "clarify" | "chat", "send": "..." or null, "say": "..."}
 
-- "intent": what the user's words are. "instruction": they want something done (even if it
-  seems unrelated to the current work). "question": they're asking about status/progress.
-  "clarify": the request is genuinely ambiguous and you need to ask. "chat": anything else.
-- "send": the message for Claude Code, or null.
+- "intent": what the user's words are.
+  "instruction": they want something done to the work in this Claude Code session — its code,
+  its project, its current task, or anything that refers to "it"/"this"/the session.
+  "task": a self-contained errand that has nothing to do with the session's work — open an
+  app, website or video; look something up or research a topic; draft a message; anything
+  about a different project or their computer in general. It runs in a separate hidden
+  Claude, so the session isn't interrupted. When unsure between the two, use "instruction".
+  "dictate": they want what they say next written down / transcribed into Notes (or "take
+  notes"). send null. This is always "dictate", never an instruction — even when the session
+  happens to be working on dictation or Notes code.
+  "question": they're asking about status/progress. "clarify": the request is genuinely
+  ambiguous and you need to ask. "chat": anything else.
+- "send": for "instruction", the message for Claude Code; for "task", the complete errand for
+  the background Claude, self-contained (it sees nothing of this conversation); else null.
   Any clear instruction is sent — "tell it to X", "have it X", "ask it to X", or a bare
   imperative ("make the archived layer purple") all mean send X. Never hold back or
   second-guess an instruction because it seems unrelated to the current work: the user may
@@ -43,8 +53,8 @@ Reply with ONLY a JSON object, deciding "intent" first:
   clarifying question because the request itself is ambiguous ("change the colour" — of what?).
 - "say": what to speak back. At most two short sentences, under 30 words — it is read aloud.
   Plain spoken English: no markdown, no code, no file paths read character by character.
-  If send is non-null: a brief confirmation of what you passed on, nothing else — no
-  commentary on whether it fits the current work. Otherwise: answer from the digest or ask
+  If send is non-null: a brief confirmation of what you passed on ("On it." for a task),
+  nothing else — no commentary on whether it fits the current work. Otherwise: answer from the digest or ask
   your ONE clarifying question. Never say you're passing something on when send is null.
   Don't invent progress that isn't in the digest.
 - When the user answers your clarifying question, send the combined, complete request.
@@ -55,6 +65,7 @@ Reply with ONLY a JSON object, deciding "intent" first:
 class Reply:
     say: str
     send: str | None = None
+    kind: str = "session"  # "session" (to Claude Code) | "task" (hidden background run) | "dictate"
 
 
 def _parse(text: str, utterance: str = "") -> Reply:
@@ -72,10 +83,15 @@ def _parse(text: str, utterance: str = "") -> Reply:
     # but still withheld it 3 runs in 4 ("did you mean a different session?")
     # when it didn't match the session's current topic. An instruction always
     # goes through, with a plain confirmation instead of second-guessing.
-    if data.get("intent") == "instruction":
+    intent = data.get("intent")
+    if intent == "dictate":
+        return Reply(say=say or "Taking notes.", kind="dictate")
+    if intent in ("instruction", "task"):
         send = send or utterance.strip() or None
         if send and (not say or "?" in say):
-            say = "Sending that over."
+            say = "On it." if intent == "task" else "Sending that over."
+        if intent == "task" and send:
+            return Reply(say=say, send=send, kind="task")
 
     if not say and not send:
         return Reply(say="Sorry, I didn't get that.")

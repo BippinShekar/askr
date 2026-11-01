@@ -64,6 +64,7 @@ class StatusFile:
         self.last = None
         self.session = ""
         self.wake = ""
+        self.tasks_running = 0
         self._written = float("-inf")
 
     def line(self, kind: str, text: str):
@@ -114,7 +115,7 @@ class StatusFile:
                 "pid": os.getpid(), "ts": now, "state": self.state,
                 "level": round(self.level, 5), "threshold": round(self.threshold, 5),
                 "partial": self.partial, "last": self.last, "session": self.session,
-                "wake": self.wake, "notes": _notes_title(),
+                "wake": self.wake, "notes": _notes_title(), "tasks": self.tasks_running,
             })
         except OSError:
             pass

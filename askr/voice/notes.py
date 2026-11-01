@@ -84,7 +84,9 @@ def _as_string(s: str) -> str:
 
 def _script(title: str, body_html: str, create_only: bool = False) -> str:
     t, b = _as_string(title), _as_string(body_html)
-    append_line = "" if create_only else f"\n    set body of n to (body of n) & {b}"
+    # On creation, bring Notes forward on the note so the user watches it fill in.
+    append_line = ("\n  show n\n  activate" if create_only
+                   else f"\n    set body of n to (body of n) & {b}")
     return f'''tell application "Notes"
   set found to (notes whose name is {t})
   if (count of found) is 0 then

@@ -116,9 +116,11 @@ _SESSION_PARENT_PATH = os.path.expanduser("~/.config/askr/session_parent.json")
 # ---------------------------------------------------------------------------
 
 _ASKR_SRC_DIR = os.path.join(_ASKR_ROOT, "askr")
+# Only the loader (extension.js) and package.json need a window reload; the
+# loader hot-swaps main.js itself, so changes there don't prompt one.
 _EXTENSION_PATHS = [
-    os.path.expanduser("~/.cursor/extensions/askr.askr-status-1.0.0/extension.js"),
-    os.path.expanduser("~/.vscode/extensions/askr.askr-status-1.0.0/extension.js"),
+    os.path.expanduser(f"~/{ide}/extensions/askr.askr-status-1.0.0/{name}")
+    for ide in (".cursor", ".vscode") for name in ("extension.js", "package.json")
 ]
 
 

@@ -16,7 +16,7 @@ import queue
 import signal
 import time
 
-from askr.voice import inbox, menu, notes, session, terminal
+from askr.voice import inbox, menu, notes, session, tasks, terminal
 from askr.voice.narrator import Narrator
 from askr.voice.talker import VOICE_MODEL, Reply
 from askr.voice.wake import WakeGate
@@ -53,6 +53,7 @@ class VoiceLoop:
         self.clock = clock
         self.resolve = resolve  # () -> transcript path; default: newest in project_path
         self.ptt_state = ptt_state or (lambda: False)  # () -> push-to-talk held?
+        self.tasks = tasks.Tasks()
         self._ptt = None  # list of texts while push-to-talk is recording
         self.transcript_path = ""
         self.narrator = None
@@ -146,20 +147,31 @@ class VoiceLoop:
             self._speak("Stopped taking notes.")
             return
         if notes.wants_start(command):
-            title = notes.start(self.clock())
-            self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
-            self._speak("Taking notes. Say stop taking notes when you're done.")
+            self.start_dictation()
             return
         self.retarget(force=True)  # the terminal focused now, not 10s ago
-        if not self.transcript_path:
-            self._speak("I can't find an open Claude Code session.")
-            return
         self._status("thinking")
-        questions = menu.pending_questions(session._tail_entries(self.transcript_path))
-        if questions is not None and self.answer_menu(command, questions):
+        questions = None
+        if self.transcript_path:
+            questions = menu.pending_questions(session._tail_entries(self.transcript_path))
+            if questions is not None and self.answer_menu(command, questions):
+                return
+            d = session.digest(self.transcript_path)
+        else:
+            d = session.Digest()
+        reply = self.talker.respond(command, d.render() if self.transcript_path else
+                                    "No Claude Code session is open — only tasks and dictation are possible.")
+        if reply.kind == "dictate":
+            self.start_dictation()
             return
-        d = session.digest(self.transcript_path)
-        reply = self.talker.respond(command, d.render())
+        if reply.kind == "task":
+            self.display.line("askr", reply.say)
+            self.display.line("task", f"  ⇢ background: {reply.send}")
+            self.tasks.start(reply.send)
+            self._speak(reply.say)
+            return
+        if reply.send and not self.transcript_path:
+            reply = Reply("I can't find an open Claude Code session to send that to.")
         if questions is not None and reply.send:
             # Typed text would land inside the open menu and pick who-knows-what.
             reply = Reply("It's waiting on its question first — answer that, then tell me.")
@@ -173,6 +185,27 @@ class VoiceLoop:
             self.last_request = reply.send
             self._status("sending")
             self.deliver(reply.send, d.in_flight)
+
+    def start_dictation(self):
+        title = notes.start(self.clock())  # also opens Notes on the new note
+        self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
+        self._speak("Taking notes. Say stop taking notes when you're done.")
+
+    def report_tasks(self):
+        """Speak the outcome of background tasks as they finish."""
+        while True:
+            try:
+                done = self.tasks.finished.get_nowait()
+            except queue.Empty:
+                return
+            self._status("thinking")
+            spoken = (self.talker.narrate(done.result, done.task) or done.result) if done.result else ""
+            if not done.ok:
+                spoken = f"That task didn't work. {spoken}".strip()
+            spoken = spoken or "Done."
+            self.display.line("task", f"  ✓ {done.task[:60]} — {done.result[:200]}")
+            self.display.line("askr", spoken)
+            self._speak(spoken)
 
     def answer_menu(self, command: str, questions: list) -> bool:
         """Answer an open AskUserQuestion menu; False if `command` isn't an answer to it."""
@@ -308,6 +341,9 @@ class VoiceLoop:
         else:
             self.update_partial()
         self.narrate()
+        self.report_tasks()
+        if hasattr(self.display, "tasks_running"):
+            self.display.tasks_running = len(self.tasks.running)
         seg = getattr(self.listener, "segmenter", None)
         hearing = bool(seg and seg.active)
         if self._ptt is not None:
