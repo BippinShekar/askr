@@ -131,3 +131,12 @@ def test_pinned_session(tmp_path):
     with patch("askr.voice.session.find_latest_transcript", return_value=str(tmp_path / "other.jsonl")):
         loop.retarget(force=True)
     assert loop.session_id == "pinned"
+
+
+def test_bare_wake_word_is_shown_as_heard_not_ignored(tmp_path):
+    loop, talker, speaker, _ = _loop(tmp_path, "…and that was the video. Askr.", Reply("x"))
+    lines = []
+    loop.display.line = lambda kind, text: lines.append((kind, text))
+    loop.handle_utterance(b"audio")
+    assert lines and lines[0][0] == "you" and "listening" in lines[0][1]
+    assert talker.seen == []

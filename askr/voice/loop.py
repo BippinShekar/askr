@@ -105,7 +105,10 @@ class VoiceLoop:
             return
         command = self.gate.accept(text, self.clock())
         if command is None:
-            self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
+            if self.gate.match(text) is not None:
+                self.display.line("you", f"askr — listening, go ahead   (heard: {text})")
+            else:
+                self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
         self.display.line("you", command)
         self.retarget(force=True)  # the terminal focused now, not 10s ago
