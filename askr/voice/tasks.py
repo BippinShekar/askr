@@ -63,11 +63,23 @@ class Tasks:
         self.finished.put(Done(task, result, ok, folder))
 
 
+def claude_env() -> dict:
+    """Environment for the hidden Claude: the user's Claude login, never an API key.
+    Found 2026-11-02: askr's CLI loads ANTHROPIC_API_KEY from its .env, the
+    daemon inherited it, and claude -p — which prefers an API key over the
+    claude.ai login — failed every task with "Credit balance is too low"."""
+    env = dict(os.environ)
+    for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+        env.pop(key, None)
+    return env
+
+
 def _run_claude(task: str, folder: str) -> tuple:
     proc = subprocess.run(
         ["claude", "-p", "--permission-mode", "auto", "--output-format", "json",
          "--append-system-prompt", _SYSTEM, task],
-        cwd=folder, capture_output=True, text=True, timeout=TIMEOUT_SECS, stdin=subprocess.DEVNULL)
+        cwd=folder, env=claude_env(), capture_output=True, text=True, timeout=TIMEOUT_SECS,
+        stdin=subprocess.DEVNULL)
     with open(os.path.join(folder, "output.json"), "w") as f:
         f.write(proc.stdout)
     if proc.stderr:
