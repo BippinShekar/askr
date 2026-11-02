@@ -4,7 +4,6 @@ import sys
 import os
 import getpass
 
-import anthropic
 import openai
 
 from askr.qa.pipeline import run
@@ -16,22 +15,19 @@ from askr.utils.display import console, print_progress, print_init, print_respon
 def _run_query(query: str):
     try:
         return run(query)
-    except anthropic.AuthenticationError:
-        console.print("\n  [bold red]✗ Anthropic rejected your API key[/bold red]")
-        console.print("  run [bold]ask setup[/bold] to reconfigure it\n")
+    except RuntimeError as e:
+        # Claude calls go through the Claude Code login (askr/clients/claude.py
+        # _post_messages); a 429 here means the subscription's quota is used up.
+        msg = str(e)
+        if "HTTP 429" in msg:
+            console.print("\n  [bold red]✗ your Claude subscription is rate-limited right now — try again after it resets[/bold red]\n")
+        elif "HTTP 401" in msg or "HTTP 403" in msg:
+            console.print("\n  [bold red]✗ Claude rejected your login[/bold red] — run [bold]claude auth[/bold]\n")
+        else:
+            console.print(f"\n  [bold red]✗ Claude call failed:[/bold red] {msg[:300]}\n")
         raise SystemExit(1)
-    except anthropic.PermissionDeniedError:
-        console.print("\n  [bold red]✗ Anthropic denied this request — often an insufficient credit balance[/bold red]")
-        console.print("  check your balance at [dim]console.anthropic.com[/dim]\n")
-        raise SystemExit(1)
-    except anthropic.RateLimitError:
-        console.print("\n  [bold red]✗ rate limited by Anthropic — try again in a moment[/bold red]\n")
-        raise SystemExit(1)
-    except anthropic.APIConnectionError:
-        console.print("\n  [bold red]✗ couldn't reach Anthropic — check your network connection[/bold red]\n")
-        raise SystemExit(1)
-    except anthropic.AnthropicError as e:
-        console.print(f"\n  [bold red]✗ Anthropic API error:[/bold red] {e}\n")
+    except OSError:
+        console.print("\n  [bold red]✗ couldn't reach Claude — check your network connection[/bold red]\n")
         raise SystemExit(1)
     except openai.AuthenticationError:
         console.print("\n  [bold red]✗ OpenAI rejected your API key[/bold red]")
@@ -67,14 +63,9 @@ def setup_keys():
     else:
         console.print(f"  [dim]saving to[/dim] {env_file}\n")
 
+    # No Anthropic key: Claude calls go through the Claude Code login
+    # (subscription). A key already in the file is kept, never used.
     anthropic_key = existing.get("ANTHROPIC_API_KEY", "")
-    if anthropic_key:
-        console.print("  [dim]- ANTHROPIC_API_KEY already set[/dim]")
-    else:
-        anthropic_key = getpass.getpass("  ANTHROPIC_API_KEY: ").strip()
-        if not anthropic_key:
-            console.print("  [red]✗ anthropic key required[/red]\n")
-            raise SystemExit(1)
 
     openai_key = existing.get("OPENAI_API_KEY", "")
     if openai_key:
@@ -99,7 +90,8 @@ def setup_keys():
 
     os.makedirs(config_dir, exist_ok=True)
     with open(env_file, "w") as f:
-        f.write(f"ANTHROPIC_API_KEY={anthropic_key}\n")
+        if anthropic_key:
+            f.write(f"ANTHROPIC_API_KEY={anthropic_key}\n")
         if openai_key:
             f.write(f"OPENAI_API_KEY={openai_key}\n")
         if discord_webhook:

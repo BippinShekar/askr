@@ -655,24 +655,10 @@ def cmd_init():
     console.print(f"  [green]✓[/green] [dim]project:[/dim] [bold]{os.getcwd()}[/bold]")
     console.print()
 
-    # Ensure API keys are configured globally before doing anything that needs them
+    # Claude calls use the Claude Code login (subscription) — no Anthropic API
+    # key is asked for or used (2026-11-02). .env still supplies other keys.
     from askr.utils import env as _env
     _env.load()
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        console.print("  [yellow]no API keys found — let's set them up[/yellow]")
-        console.print()
-        from askr.cli.ask import setup_keys
-        try:
-            setup_keys()
-        except SystemExit:
-            # setup_keys() exits if the user declines to enter a key. That's a
-            # valid choice, not a fatal error for `askr init` as a whole — state
-            # files, hooks, and team registration don't need a key; only
-            # codebase indexing and ask/architecture-summary calls do, and those
-            # already degrade gracefully below when no key is present.
-            console.print("  [yellow]⚠ no API key set — continuing without codebase indexing[/yellow]")
-            console.print("  [dim]run[/dim] [bold]ask setup[/bold] [dim]later to add one[/dim]\n")
-        _env.load()
 
     # Register developer in team roster
     _register_team_member(developer)
