@@ -14,6 +14,7 @@ terminal instead, with a live status line — for debugging.
 import os
 import queue
 import signal
+import threading
 import time
 
 from askr.voice import inbox, menu, notes, session, tasks, terminal
@@ -41,7 +42,7 @@ class _NullDisplay:
 class VoiceLoop:
     def __init__(self, project_path: str, listener, transcriber, talker, speaker,
                  session_id: str = "", display=None, clock=time.time, resolve=None,
-                 ptt_state=None):
+                 ptt_state=None, mic_off=None):
         self.project_path = project_path
         self.listener = listener
         self.transcriber = transcriber
@@ -53,6 +54,8 @@ class VoiceLoop:
         self.clock = clock
         self.resolve = resolve  # () -> transcript path; default: newest in project_path
         self.ptt_state = ptt_state or (lambda: False)  # () -> push-to-talk held?
+        self.mic_off = mic_off or (lambda: False)  # () -> user turned the mic off
+        self._mic_lock = threading.Lock()
         self.tasks = tasks.Tasks()
         self._ptt = None  # list of texts while push-to-talk is recording
         self.transcript_path = ""
@@ -329,8 +332,41 @@ class VoiceLoop:
         self.gate.open_window(self.clock())
         self.handle_command(command)
 
+    def poll_mic(self) -> bool:
+        """Open or close the mic to match the user's toggle; True if it's off.
+        Runs on its own thread (watch_mic) as well as the main loop: the main
+        loop can sit 5-10s in a Haiku call, and ⌘M has to act immediately."""
+        with self._mic_lock:
+            off = self.mic_off()
+            running = getattr(self.listener, "running", True)
+            if off and running:
+                self.listener.stop()
+                self._ptt = None
+                self._partial = ""
+                self.display.line("info", "mic off")
+                self._status("mic off")
+            elif not off and not running:
+                self.listener.start()
+                self.display.line("info", "mic on")
+                self._status("listening")
+            return off
+
+    def watch_mic(self, stop: threading.Event, every: float = 0.2):
+        while not stop.wait(every):
+            try:
+                self.poll_mic()
+            except Exception as e:
+                self.display.line("error", f"  mic toggle failed: {e}")
+
     def run_once(self, wait: float = 0.15):
         self.retarget()
+        if self.poll_mic():
+            # Mic closed: still speak finished tasks and session updates.
+            time.sleep(wait)
+            self.narrate()
+            self.report_tasks()
+            self._status("mic off")
+            return
         self.poll_ptt()
         try:
             audio = self.listener.utterances.get(timeout=wait)
@@ -353,15 +389,20 @@ class VoiceLoop:
 
     def run(self):
         self.retarget(force=True)
-        self.listener.start()
+        if not self.mic_off():
+            self.listener.start()
         self.display.line("info", f'listening — start with "{self.gate.word} …"   (Ctrl+C to stop)')
+        stop = threading.Event()
+        threading.Thread(target=self.watch_mic, args=(stop,), daemon=True).start()
         try:
             while True:
                 self.run_once()
         except KeyboardInterrupt:
             self.display.line("info", "stopped")
         finally:
-            self.listener.stop()
+            stop.set()
+            with self._mic_lock:
+                self.listener.stop()
 
 
 def main(args: list):
@@ -387,6 +428,10 @@ def main(args: list):
         if restarted:
             daemon.start_detached()
         print(f"askr voice: wake word is now \"{profile['wake_word']}\"" + (" (restarted)." if restarted else "."))
+        return
+    if args[:1] == ["mic"]:
+        daemon.set_mic(args[1:2] != ["off"])
+        print(f"askr voice: mic {'off' if daemon.mic_off() else 'on'}.")
         return
     if args[:1] == ["off"]:
         daemon.set_enabled(False)
@@ -452,7 +497,8 @@ def main(args: list):
     speaker = Speaker(listener=listener, gate=gate)
     try:
         VoiceLoop(project, listener, transcriber, Talker(), speaker, session_id=session_id,
-                  display=display, resolve=daemon.target_transcript, ptt_state=daemon.ptt_on).run()
+                  display=display, resolve=daemon.target_transcript, ptt_state=daemon.ptt_on,
+                  mic_off=daemon.mic_off).run()
     finally:
         if lock is not None:
             display.status("off")

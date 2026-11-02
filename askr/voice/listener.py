@@ -117,6 +117,10 @@ class MicListener:
         )
         self._stream.start()
 
+    @property
+    def running(self) -> bool:
+        return self._stream is not None
+
     def stop(self):
         if self._stream is not None:
             self._stream.stop()

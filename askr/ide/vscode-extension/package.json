@@ -27,12 +27,21 @@
       {
         "command": "askr.voicePushToTalk",
         "title": "Askr: Push to Talk"
+      },
+      {
+        "command": "askr.toggleMic",
+        "title": "Askr: Toggle Microphone"
       }
     ],
     "keybindings": [
       {
         "command": "askr.voicePushToTalk",
         "key": "ctrl+alt+space"
+      },
+      {
+        "command": "askr.toggleMic",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+m"
       }
     ]
   }

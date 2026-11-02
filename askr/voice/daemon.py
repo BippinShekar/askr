@@ -22,6 +22,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from askr.voice import terminal
@@ -35,6 +36,9 @@ LOG_PATH = os.path.join(_DIR, "voice_daemon.log")
 HEARD_PATH = os.path.join(_DIR, "voice_heard.jsonl")
 DISABLED_PATH = os.path.join(_DIR, "voice_disabled")
 PTT_PATH = os.path.join(_DIR, "voice_ptt.json")
+# Present = the mic is off (⌘M in the IDE, or `askr voice mic off`): the
+# daemon closes its input stream entirely, so macOS shows the mic as unused.
+MIC_OFF_PATH = os.path.join(_DIR, "voice_mic_off")
 # A push-to-talk left on (window closed mid-recording) mustn't record forever.
 PTT_MAX_SECS = 120.0
 _HEARD_MAX_BYTES = 512 * 1024
@@ -45,7 +49,8 @@ _STATUS_EVERY_SECS = 0.25
 
 def _write_json(path: str, data: dict):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f"{path}.tmp.{os.getpid()}"
+    # Per thread, not just per process: the mic watcher thread writes status too.
+    tmp = f"{path}.tmp.{os.getpid()}.{threading.get_ident()}"
     with open(tmp, "w") as f:
         json.dump(data, f)
     os.replace(tmp, path)
@@ -135,6 +140,21 @@ def _append_heard(entry: dict):
             f.write(json.dumps(entry) + "\n")
     except OSError:
         pass
+
+
+def mic_off() -> bool:
+    return os.path.exists(MIC_OFF_PATH)
+
+
+def set_mic(on: bool):
+    if on:
+        try:
+            os.remove(MIC_OFF_PATH)
+        except OSError:
+            pass
+    else:
+        os.makedirs(_DIR, exist_ok=True)
+        open(MIC_OFF_PATH, "w").close()
 
 
 def ptt_on(now: float | None = None) -> bool:

@@ -189,3 +189,28 @@ def test_dictate_intent_opens_notes_instead_of_messaging_claude(tmp_path):
         loop.handle_utterance(b"audio")
     deliver.assert_not_called()
     assert notes.active() and "show n" in osa.call_args[0][0]
+
+
+def test_mic_toggle_closes_and_reopens_the_stream(tmp_path):
+    loop, talker, speaker, _ = _loop(tmp_path, "", Reply("x"))
+    events = []
+
+    class Mic(FakeListener):
+        running = True
+
+        def stop(self):
+            events.append("stop")
+            self.running = False
+
+        def start(self):
+            events.append("start")
+            self.running = True
+
+    loop.listener = Mic()
+    off = [True]
+    loop.mic_off = lambda: off[0]
+    loop.run_once(wait=0)
+    loop.run_once(wait=0)            # already closed: no second stop
+    off[0] = False
+    loop.run_once(wait=0)
+    assert events == ["stop", "start"]

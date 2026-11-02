@@ -708,6 +708,21 @@ const VOICE_DISABLED     = path.join(VOICE_DIR, 'voice_disabled');
 const VOICE_HEARD_PATH   = path.join(VOICE_DIR, 'voice_heard.jsonl');
 const VOICE_PTT_PATH     = path.join(VOICE_DIR, 'voice_ptt.json');
 const PTT_COMMAND        = 'askr.voicePushToTalk';
+const MIC_COMMAND        = 'askr.toggleMic';
+const VOICE_MIC_OFF      = path.join(VOICE_DIR, 'voice_mic_off');
+
+// ⌘M: the daemon closes its input stream while voice_mic_off exists
+// (askr/voice/daemon.py mic_off), so macOS shows the mic as unused.
+function toggleMic() {
+  const off = fs.existsSync(VOICE_MIC_OFF);
+  try {
+    if (off) fs.unlinkSync(VOICE_MIC_OFF);
+    else { fs.mkdirSync(VOICE_DIR, { recursive: true }); fs.writeFileSync(VOICE_MIC_OFF, ''); }
+  } catch (e) {
+    console.error(`Askr: toggleMic failed: ${e}`);
+  }
+  vscode.window.setStatusBarMessage(off ? 'askr: mic on' : 'askr: mic off', 2000);
+}
 
 // Push-to-talk (askr/voice/daemon.py ptt_on): the shortcut toggles recording;
 // the daemon sends everything said in between, no wake word.
@@ -736,8 +751,9 @@ function ensurePttSkipsShell() {
   try {
     const cfg = vscode.workspace.getConfiguration('terminal.integrated');
     const list = cfg.get('commandsToSkipShell') || [];
-    if (!list.includes(PTT_COMMAND)) {
-      cfg.update('commandsToSkipShell', [...list, PTT_COMMAND], vscode.ConfigurationTarget.Global);
+    const missing = [PTT_COMMAND, MIC_COMMAND].filter((c) => !list.includes(c));
+    if (missing.length) {
+      cfg.update('commandsToSkipShell', [...list, ...missing], vscode.ConfigurationTarget.Global);
     }
   } catch (e) {
     console.error(`Askr: could not register push-to-talk with the terminal: ${e}`);
@@ -818,7 +834,10 @@ function renderVoice(item) {
   let text;
   let color = COLOR_OK;
   const wake = s.wake || 'askr';
-  if (s.notes && !['transcribing', 'thinking', 'sending', 'speaking', 'recording'].includes(s.state)) {
+  if (s.state === 'mic off' || fs.existsSync(VOICE_MIC_OFF)) {
+    text = '$(mute) mic off — ⌘M to turn on';
+    color = COLOR_IDLE;
+  } else if (s.notes && !['transcribing', 'thinking', 'sending', 'speaking', 'recording'].includes(s.state)) {
     // Dictation swallows everything without a wake word — never let it look like normal listening.
     text = `$(note) taking notes${s.partial ? ` "${clip(s.partial, 40)}"` : ''} — say "stop taking notes"`;
     color = COLOR_WARN;
@@ -861,8 +880,13 @@ function renderVoice(item) {
 async function voiceMenu() {
   const off = fs.existsSync(VOICE_DISABLED);
   const pick = await vscode.window.showQuickPick(
-    [off ? 'Turn voice on' : 'Turn voice off', 'Change wake word', 'Show what it heard', 'Calibrate to my voice'],
+    [fs.existsSync(VOICE_MIC_OFF) ? 'Turn mic on (⌘M)' : 'Turn mic off (⌘M)',
+     off ? 'Turn voice on' : 'Turn voice off', 'Change wake word', 'Show what it heard', 'Calibrate to my voice'],
     { placeHolder: 'askr voice' });
+  if (pick && pick.startsWith('Turn mic')) {
+    toggleMic();
+    return;
+  }
   if (pick === 'Change wake word') {
     const word = await vscode.window.showInputBox({ prompt: 'Wake word or short phrase', placeHolder: 'e.g. heads up' });
     if (word && word.trim()) runAskrSilently(['voice', 'wake', ...word.trim().split(/\s+/)], { successMessage: `askr voice: wake word is now "${word.trim()}"` });
@@ -894,7 +918,8 @@ function activate(context) {
       terminal.sendText('askr status');
     }),
     vscode.commands.registerCommand('askr.voiceMenu', voiceMenu),
-    vscode.commands.registerCommand(PTT_COMMAND, () => { togglePushToTalk(); refreshVoice(); })
+    vscode.commands.registerCommand(PTT_COMMAND, () => { togglePushToTalk(); refreshVoice(); }),
+    vscode.commands.registerCommand(MIC_COMMAND, () => { toggleMic(); refreshVoice(); })
   );
   ensurePttSkipsShell();
 
