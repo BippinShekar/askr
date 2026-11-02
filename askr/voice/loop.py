@@ -17,9 +17,11 @@ import signal
 import threading
 import time
 
+from askr.voice import agent as agent_mod
 from askr.voice import inbox, menu, notes, session, tasks, terminal
+from askr.voice.agent import VoiceAgent
 from askr.voice.narrator import Narrator
-from askr.voice.talker import VOICE_MODEL, Reply
+from askr.voice.talker import VOICE_MODEL
 from askr.voice.wake import WakeGate
 
 _RETARGET_EVERY_SECS = 10.0
@@ -42,7 +44,7 @@ class _NullDisplay:
 class VoiceLoop:
     def __init__(self, project_path: str, listener, transcriber, talker, speaker,
                  session_id: str = "", display=None, clock=time.time, resolve=None,
-                 ptt_state=None, mic_off=None):
+                 ptt_state=None, mic_off=None, agent=None):
         self.project_path = project_path
         self.listener = listener
         self.transcriber = transcriber
@@ -57,6 +59,8 @@ class VoiceLoop:
         self.mic_off = mic_off or (lambda: False)  # () -> user turned the mic off
         self._mic_lock = threading.Lock()
         self.tasks = tasks.Tasks()
+        self._menu_open = False
+        self.agent = agent or VoiceAgent(self._tool_handlers(), post=getattr(talker, "_post", None))
         self._ptt = None  # list of texts while push-to-talk is recording
         self.transcript_path = ""
         self.narrator = None
@@ -159,40 +163,65 @@ class VoiceLoop:
             questions = menu.pending_questions(session._tail_entries(self.transcript_path))
             if questions is not None and self.answer_menu(command, questions):
                 return
-            d = session.digest(self.transcript_path)
-        else:
-            d = session.Digest()
-        reply = self.talker.respond(command, d.render() if self.transcript_path else
-                                    "No Claude Code session is open — only tasks and dictation are possible.")
-        if reply.kind == "dictate":
-            self.start_dictation()
-            return
-        if reply.kind == "task":
-            self.display.line("askr", reply.say)
-            self.display.line("task", f"  ⇢ background: {reply.send}")
-            self.tasks.start(reply.send)
-            self._speak(reply.say)
-            return
-        if reply.send and not self.transcript_path:
-            reply = Reply("I can't find an open Claude Code session to send that to.")
-        if questions is not None and reply.send:
-            # Typed text would land inside the open menu and pick who-knows-what.
-            reply = Reply("It's waiting on its question first — answer that, then tell me.")
-        self.display.line("askr", reply.say)
-        if reply.send:
-            self.display.line("claude", f"  → {reply.send}")
-        self._speak(reply.say)
+        self._menu_open = questions is not None
+        extra = ("Claude Code is showing a multiple-choice question and is blocked on it; "
+                 "nothing can be sent to the session until it's answered." if self._menu_open else "")
+        turn = self.agent.respond(command, extra)
+        self.display.line("askr", turn.say)
+        self._speak(turn.say)
         if self.narrator:
             self.narrator.mark_spoken(self.clock())
-        if reply.send:
-            self.last_request = reply.send
-            self._status("sending")
-            self.deliver(reply.send, d.in_flight)
 
-    def start_dictation(self):
+    # --- the agent's tools (askr/voice/agent.py) ------------------------
+
+    def _tool_handlers(self) -> dict:
+        return {
+            "session_status": self._tool_session_status,
+            "send_to_session": self._tool_send,
+            "open_url": self._tool_open_url,
+            "start_dictation": lambda inp: (self.start_dictation(speak=False), "dictation started; Notes is open")[1],
+            "delegate_task": self._tool_delegate,
+        }
+
+    def _tool_session_status(self, inp: dict) -> str:
+        if not self.transcript_path:
+            return "No Claude Code session is open."
+        detail = bool(inp.get("detail"))
+        return session.digest(self.transcript_path, max_text=8 if detail else 3,
+                              max_tools=16 if detail else 6).render()
+
+    def _tool_send(self, inp: dict) -> str:
+        text = str(inp.get("instruction") or "").strip()
+        if not text:
+            return "error: empty instruction"
+        if not self.transcript_path:
+            return "error: no Claude Code session is open to send that to"
+        if self._menu_open:
+            # Typed text would land inside the open menu and pick who-knows-what.
+            return "error: the session is waiting on its multiple-choice question; it must be answered first"
+        self.display.line("claude", f"  → {text}")
+        self.last_request = text
+        self._status("sending")
+        return self.deliver(text, session.digest(self.transcript_path).in_flight)
+
+    def _tool_open_url(self, inp: dict) -> str:
+        url = str(inp.get("url") or "")
+        self.display.line("task", f"  ⇢ open {url}")
+        return agent_mod.open_url(url)
+
+    def _tool_delegate(self, inp: dict) -> str:
+        task = str(inp.get("task") or "").strip()
+        if not task:
+            return "error: empty task"
+        self.display.line("task", f"  ⇢ background: {task}")
+        self.tasks.start(task)
+        return "started in the background; its result will be spoken when it finishes"
+
+    def start_dictation(self, speak: bool = True):
         title = notes.start(self.clock())  # also opens Notes on the new note
         self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
-        self._speak("Taking notes. Say stop taking notes when you're done.")
+        if speak:
+            self._speak("Taking notes. Say stop taking notes when you're done.")
 
     def report_tasks(self):
         """Speak the outcome of background tasks as they finish."""
@@ -240,17 +269,17 @@ class VoiceLoop:
             self._speak("I couldn't reach its terminal. Pick it on screen.")
         return True
 
-    def deliver(self, text: str, in_flight: bool):
+    def deliver(self, text: str, in_flight: bool) -> str:
+        """Hand `text` to the session; returns what happened (the agent tells the user)."""
         if terminal.type_prompt(self.session_id, text, self.project_path) and self._claimed():
             self.display.line("info", "  delivered to the session's terminal")
-            return
+            return "typed into its terminal"
         if in_flight:
             inbox.post(self.session_id, text)
             self.display.line("error", "  terminal not found — queued for the end of this turn")
-            self._speak("I couldn't reach its terminal, so it'll get that when it finishes this step.")
-        else:
-            self.display.line("error", "  terminal not found — not delivered")
-            self._speak("I couldn't find that session's terminal. Is the askr extension running in Cursor?")
+            return "queued: its terminal couldn't be reached, so it'll get that when it finishes this step"
+        self.display.line("error", "  terminal not found — not delivered")
+        return "error: couldn't find that session's terminal — is the askr extension running in Cursor?"
 
     def _claimed(self) -> bool:
         """The extension deletes voice_prompt.json once it has typed it."""
@@ -293,7 +322,7 @@ class VoiceLoop:
                 spoken = f"It's asking: {spoken}"
             self.display.line("askr", spoken)
             self._speak(spoken)
-            self.talker.note_update(spoken)
+            self.agent.note_update(spoken)
 
     # --- main loop -------------------------------------------------------
 

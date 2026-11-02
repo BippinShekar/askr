@@ -91,4 +91,4 @@ def test_unrelated_speech_while_menu_open_is_never_typed(tmp_path):
         loop.handle_utterance(b"audio")
     type_keys.assert_not_called()
     deliver.assert_not_called()
-    assert "question first" in speaker.said[0]
+    assert "multiple-choice question" in speaker.said[0]

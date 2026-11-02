@@ -50,11 +50,40 @@ class FakeSpeaker:
         self.said.append(text)
 
 
+class ScriptedAgent:
+    """Stands in for the model in askr/voice/agent.py: plays the test's Reply
+    as the tool call the model would make, through the loop's real handlers."""
+
+    def __init__(self, talker):
+        self.talker = talker
+        self.loop = None
+
+    def respond(self, utterance, extra=""):
+        from askr.voice.agent import Turn
+        self.talker.seen.append((utterance, extra))
+        reply, handlers = self.talker.reply, self.loop._tool_handlers()
+        say = reply.say
+        if reply.kind == "dictate":
+            handlers["start_dictation"]({})
+        elif reply.kind == "task":
+            handlers["delegate_task"]({"task": reply.send})
+        elif reply.send:
+            result = handlers["send_to_session"]({"instruction": reply.send})
+            if not result.startswith("typed"):
+                say = result  # the model relays what went wrong
+        return Turn(say)
+
+    def note_update(self, spoken):
+        self.talker.updates.append(spoken)
+
+
 def _loop(tmp_path, heard, reply, session_entries=None):
     t = tmp_path / "sess-1.jsonl"
     t.write_text("\n".join(json.dumps(e) for e in (session_entries or [])) + "\n")
     talker, speaker = FakeTalker(reply), FakeSpeaker()
-    loop = VoiceLoop(str(tmp_path), FakeListener(), FakeSTT(heard), talker, speaker)
+    agent = ScriptedAgent(talker)
+    loop = VoiceLoop(str(tmp_path), FakeListener(), FakeSTT(heard), talker, speaker, agent=agent)
+    agent.loop = loop
     with patch("askr.voice.session.find_latest_transcript", return_value=str(t)):
         loop.retarget(force=True)
     return loop, talker, speaker, t
