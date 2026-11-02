@@ -100,16 +100,55 @@ def test_speaker_mutes_mic_while_speaking_then_opens_window():
     s = Speaker(listener=listener, gate=gate)
     s.say_bin = "/usr/bin/say"
 
-    def fake_run(cmd, **kw):
-        listener.muted_during = listener.muted.is_set()
+    class FakeProc:
+        def __init__(self, cmd):
+            self.cmd = cmd
+            listener.muted_during = listener.muted.is_set()
 
-    with patch("askr.voice.speaker.subprocess.run", side_effect=fake_run) as run, \
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+    with patch("askr.voice.speaker.subprocess.Popen", side_effect=FakeProc) as popen, \
          patch("askr.voice.speaker.time.sleep"):
         s.speak("**Tests** pass.")
     assert listener.muted_during is True
     assert not listener.muted.is_set()
     assert gate.opened is not None
-    assert run.call_args[0][0][-1] == "Tests pass."  # markdown stripped
+    assert popen.call_args[0][0][-1] == "Tests pass."  # markdown stripped
+
+
+def test_muted_askr_says_nothing_anywhere():
+    # ⌘M silences voice mode and every other spoken output (notifications too).
+    import os
+    from askr.clients import voice
+    os.makedirs(os.path.dirname(voice.MUTED_PATH), exist_ok=True)
+    open(voice.MUTED_PATH, "w").close()
+    s = Speaker()
+    s.say_bin = "/usr/bin/say"
+    with patch("askr.voice.speaker.subprocess.Popen") as popen:
+        s.speak("hello")
+    popen.assert_not_called()
+    assert voice._say_preconditions() == ("", "askr is muted (⌘M)")
+
+
+def test_stop_cuts_off_current_speech():
+    s = Speaker()
+
+    class Proc:
+        terminated = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+    s._proc = Proc()
+    s.stop()
+    assert s._proc.terminated
 
 
 def test_speaker_noop_on_empty_text():

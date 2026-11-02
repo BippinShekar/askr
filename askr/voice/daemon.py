@@ -38,7 +38,7 @@ DISABLED_PATH = os.path.join(_DIR, "voice_disabled")
 PTT_PATH = os.path.join(_DIR, "voice_ptt.json")
 # Present = the mic is off (⌘M in the IDE, or `askr voice mic off`): the
 # daemon closes its input stream entirely, so macOS shows the mic as unused.
-MIC_OFF_PATH = os.path.join(_DIR, "voice_mic_off")
+MIC_OFF_PATH = os.path.join(_DIR, "voice_mic_off")  # == clients.voice.MUTED_PATH: also silences speech
 # A push-to-talk left on (window closed mid-recording) mustn't record forever.
 PTT_MAX_SECS = 120.0
 _HEARD_MAX_BYTES = 512 * 1024

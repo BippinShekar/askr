@@ -43,6 +43,7 @@ def _isolate_real_askr_side_effects(tmp_path, monkeypatch):
     from askr.session import checkpoint, monitor  # noqa: F401
     from askr.utils import logger  # noqa: F401
     from askr.voice import daemon, inbox, notes, terminal, wake  # noqa: F401
+    from askr.clients import voice as _voice_client  # noqa: F401
     from askr.session import lifecycle
     monkeypatch.setattr(lifecycle, "_spawn_terminal_app_fallback", lambda *a, **k: None)
 

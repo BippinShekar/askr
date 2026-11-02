@@ -30,7 +30,7 @@
       },
       {
         "command": "askr.toggleMic",
-        "title": "Askr: Toggle Microphone"
+        "title": "Askr: Mute / Unmute (mic and speech)"
       }
     ],
     "keybindings": [

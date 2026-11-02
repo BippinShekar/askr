@@ -340,6 +340,9 @@ class VoiceLoop:
             off = self.mic_off()
             running = getattr(self.listener, "running", True)
             if off and running:
+                stop_speaking = getattr(self.speaker, "stop", None)
+                if stop_speaking:
+                    stop_speaking()
                 self.listener.stop()
                 self._ptt = None
                 self._partial = ""

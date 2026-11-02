@@ -711,8 +711,9 @@ const PTT_COMMAND        = 'askr.voicePushToTalk';
 const MIC_COMMAND        = 'askr.toggleMic';
 const VOICE_MIC_OFF      = path.join(VOICE_DIR, 'voice_mic_off');
 
-// ⌘M: the daemon closes its input stream while voice_mic_off exists
-// (askr/voice/daemon.py mic_off), so macOS shows the mic as unused.
+// ⌘M mutes askr both ways while voice_mic_off exists: the daemon closes its
+// input stream (macOS shows the mic as unused) and nothing askr says is
+// spoken (askr/clients/voice.py is_muted), including notifications.
 function toggleMic() {
   const off = fs.existsSync(VOICE_MIC_OFF);
   try {
@@ -721,7 +722,7 @@ function toggleMic() {
   } catch (e) {
     console.error(`Askr: toggleMic failed: ${e}`);
   }
-  vscode.window.setStatusBarMessage(off ? 'askr: mic on' : 'askr: mic off', 2000);
+  vscode.window.setStatusBarMessage(off ? 'askr: listening and speaking again' : 'askr: muted — not listening, not speaking', 2500);
 }
 
 // Push-to-talk (askr/voice/daemon.py ptt_on): the shortcut toggles recording;
@@ -835,7 +836,7 @@ function renderVoice(item) {
   let color = COLOR_OK;
   const wake = s.wake || 'askr';
   if (s.state === 'mic off' || fs.existsSync(VOICE_MIC_OFF)) {
-    text = '$(mute) mic off — ⌘M to turn on';
+    text = '$(mute) askr muted — ⌘M to unmute';
     color = COLOR_IDLE;
   } else if (s.notes && !['transcribing', 'thinking', 'sending', 'speaking', 'recording'].includes(s.state)) {
     // Dictation swallows everything without a wake word — never let it look like normal listening.
@@ -880,10 +881,10 @@ function renderVoice(item) {
 async function voiceMenu() {
   const off = fs.existsSync(VOICE_DISABLED);
   const pick = await vscode.window.showQuickPick(
-    [fs.existsSync(VOICE_MIC_OFF) ? 'Turn mic on (⌘M)' : 'Turn mic off (⌘M)',
+    [fs.existsSync(VOICE_MIC_OFF) ? 'Unmute askr (⌘M)' : 'Mute askr — mic and speech (⌘M)',
      off ? 'Turn voice on' : 'Turn voice off', 'Change wake word', 'Show what it heard', 'Calibrate to my voice'],
     { placeHolder: 'askr voice' });
-  if (pick && pick.startsWith('Turn mic')) {
+  if (pick && (pick.startsWith('Mute askr') || pick.startsWith('Unmute askr'))) {
     toggleMic();
     return;
   }

@@ -45,12 +45,23 @@ def humanize_for_speech(text: str, max_len: int = 200) -> str:
     return text
 
 
+# ⌘M in the IDE (askr/voice/daemon.py set_mic): askr neither listens nor
+# speaks — every spoken output path checks this, not just voice mode.
+MUTED_PATH = os.path.expanduser("~/.config/askr/voice_mic_off")
+
+
+def is_muted() -> bool:
+    return os.path.exists(MUTED_PATH)
+
+
 def _say_preconditions(project_path: str = "") -> tuple[str, str]:
     """Shared gate for any spoken output: voice_notifications on, macOS, `say` on PATH.
     Returns (say_bin, "") when clear to speak, ("", reason) otherwise. `project_path`
     resolves a per-project override (askr_state/config.json) ahead of the global
     machine-level default — required for callers like the daemon whose own cwd is
     never the project being announced about."""
+    if is_muted():
+        return "", "askr is muted (⌘M)"
     try:
         from askr.state.config import load_voice_enabled
         if not load_voice_enabled(project_path or None):
