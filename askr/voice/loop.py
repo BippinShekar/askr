@@ -54,7 +54,7 @@ class _NullDisplay:
 class VoiceLoop:
     def __init__(self, project_path: str, listener, transcriber, talker, speaker,
                  session_id: str = "", display=None, clock=time.time, resolve=None,
-                 ptt_state=None, mic_off=None, agent=None):
+                 ptt_state=None, mic_off=None, agent=None, addressee=None):
         self.project_path = project_path
         self.listener = listener
         self.transcriber = transcriber
@@ -70,6 +70,8 @@ class VoiceLoop:
         self._mic_lock = threading.Lock()
         self.tasks = tasks.Tasks()
         self._last_spoke = 0.0
+        self._last_said = ""
+        self.addressee = addressee  # set = always-on listening (askr/voice/addressee.py)
         self._permission = None  # the permission prompt a spoken "yes" would answer
         self._menu_open = False
         self.agent = agent or VoiceAgent(self._tool_handlers(), post=getattr(talker, "_post", None))
@@ -96,6 +98,7 @@ class VoiceLoop:
         self._status("speaking")
         self.speaker.speak(text)
         self._last_spoke = self.clock()
+        self._last_said = text
 
     # --- target session --------------------------------------------------
 
@@ -154,17 +157,31 @@ class VoiceLoop:
             return
         in_conversation = self.gate.is_open(self.clock())
         command = self.gate.accept(text, self.clock())
+        if command is None and self.gate.match(text) is not None:
+            self.speaker_cue()
+            self.display.line("you", f"{self.gate.word} — listening, go ahead   (heard: {text})")
+            return
+        if command is None and self.addressee is not None:
+            # Always-on: no wake word, the model decides if it was meant for askr.
+            why = self.addressee.worth_checking(text)
+            if not why:
+                self._status("thinking")
+                recent = self._last_said if self.clock() - self._last_spoke < 60 else ""
+                if self.addressee.is_for_askr(text, recent):
+                    command = text
+                    self.gate.open_window(self.clock())
+                else:
+                    why = "not for askr"
+            if command is None:
+                self.display.line("ignored", f"  heard: {text}   ← {why}")
+                return
         if command is None:
-            if self.gate.match(text) is not None:
-                self.speaker_cue()
-                self.display.line("you", f"{self.gate.word} — listening, go ahead   (heard: {text})")
-            else:
-                self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
+            self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
         if in_conversation and _ENDS_CONVERSATION.match(command):
             self.gate.close()
             self.display.line("you", command)
-            self.display.line("info", "conversation closed — say the wake word to start again")
+            self.display.line("info", "conversation closed")
             return
         self.speaker_cue()
         self.display.line("you", command)
@@ -571,6 +588,18 @@ def main(args: list):
             daemon.start_detached()
         print(f"askr voice: wake word is now \"{profile['wake_word']}\"" + (" (restarted)." if restarted else "."))
         return
+    if args[:1] == ["mode"]:
+        from askr.voice.wake import load_profile, save_profile
+        profile = load_profile()
+        if args[1:2] in (["always"], ["wake"]):
+            profile["listen_mode"] = args[1]
+            save_profile(profile)
+            if daemon.stop():
+                daemon.start_detached()
+        mode = profile.get("listen_mode", "always")
+        print(f"askr voice: {'always listening — acts when you talk to it' if mode == 'always' else 'wake word only'}."
+              "  (`askr voice mode always|wake`)")
+        return
     if args[:1] == ["mic"]:
         daemon.set_mic(args[1:2] != ["off"])
         print(f"askr voice: mic {'off' if daemon.mic_off() else 'on'}.")
@@ -617,14 +646,17 @@ def main(args: list):
     from askr.voice.stt import Transcriber
     from askr.voice.talker import Talker
     from askr.voice.ui import Display
+    from askr.voice.addressee import Addressee
     from askr.voice.wake import DEFAULT_WORD, load_profile, phrase_key
 
     project = find_project_root() or os.getcwd()
     display = daemon.StatusFile() if is_daemon else Display()
     profile = load_profile()
     word = profile.get("wake_word") or DEFAULT_WORD
+    always_on = profile.get("listen_mode", "always") == "always"
     if is_daemon:
         display.wake = word
+        display.mode = "always" if always_on else "wake"
     display.status("loading speech model…")
     transcriber = Transcriber(wake_word=word)
 
@@ -640,7 +672,7 @@ def main(args: list):
     try:
         VoiceLoop(project, listener, transcriber, Talker(), speaker, session_id=session_id,
                   display=display, resolve=daemon.target_transcript, ptt_state=daemon.ptt_on,
-                  mic_off=daemon.mic_off).run()
+                  mic_off=daemon.mic_off, addressee=Addressee() if always_on else None).run()
     finally:
         if lock is not None:
             display.status("off")

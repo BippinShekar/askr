@@ -856,7 +856,8 @@ function renderVoice(item) {
   } else if (s.state === 'speaking') {
     text = '$(unmute) speaking';
   } else if (last && last.kind === 'ignored') {
-    text = `$(mic) heard "${clip(last.text.replace(/^heard:\s*/, '').split('←')[0], 40)}" — no "${wake}"`;
+    const why = s.mode === 'always' ? 'not for me' : `no "${wake}"`;
+    text = `$(mic) heard "${clip(last.text.replace(/^heard:\s*/, '').split('←')[0], 40)}" — ${why}`;
     color = COLOR_IDLE;
   } else if (last && last.kind === 'you') {
     text = `$(check) "${clip(last.text, 50)}"`;
@@ -864,7 +865,9 @@ function renderVoice(item) {
     text = `$(warning) ${clip(last.text, 50)}`;
     color = COLOR_WARN;
   } else if (s.state === 'listening') {
-    text = `$(mic) say "${wake} …" ${voiceLevelBar(s.level, s.threshold)}`;
+    text = s.mode === 'always'
+      ? `$(mic) listening — just talk ${voiceLevelBar(s.level, s.threshold)}`
+      : `$(mic) say "${wake} …" ${voiceLevelBar(s.level, s.threshold)}`;
   } else {
     text = `$(mic) ${s.state}`;
     color = COLOR_IDLE;
@@ -884,10 +887,16 @@ async function voiceMenu() {
   const off = fs.existsSync(VOICE_DISABLED);
   const pick = await vscode.window.showQuickPick(
     [fs.existsSync(VOICE_MIC_OFF) ? 'Unmute askr (⌘M)' : 'Mute askr — mic and speech (⌘M)',
+     'Always listening (no wake word)', 'Wake word only',
      off ? 'Turn voice on' : 'Turn voice off', 'Change wake word', 'Show what it heard', 'Calibrate to my voice'],
     { placeHolder: 'askr voice' });
   if (pick && (pick.startsWith('Mute askr') || pick.startsWith('Unmute askr'))) {
     toggleMic();
+    return;
+  }
+  if (pick === 'Always listening (no wake word)' || pick === 'Wake word only') {
+    runAskrSilently(['voice', 'mode', pick.startsWith('Always') ? 'always' : 'wake'],
+                    { successMessage: `askr voice: ${pick.toLowerCase()}` });
     return;
   }
   if (pick === 'Change wake word') {
