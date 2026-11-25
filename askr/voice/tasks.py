@@ -13,6 +13,7 @@ askr's hooks stay quiet) holding the prompt and the full output.
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -94,6 +95,16 @@ def resolve_project(name: str) -> str:
     except OSError:
         pass
     return ""
+
+
+def create_project(name: str) -> str:
+    """A new, empty project folder ~/Desktop/<name> for code the user asked for; '' if the name is unusable."""
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", (name or "").strip()).strip("-.")
+    if not slug:
+        return ""
+    path = os.path.join(os.path.expanduser("~/Desktop"), slug)
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def _run_claude(task: str, folder: str, cwd: str = "") -> tuple:

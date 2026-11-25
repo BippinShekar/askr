@@ -37,6 +37,15 @@ Act with tools:
 - open_url: open a page or video in their browser. Always get the URL from web_search results first — never type a video or page URL from memory.
 - start_dictation: they want what they say next written into Apple Notes ("transcribe what I say into Notes", "take notes").
 - open_terminal: open a new terminal tab in the window they're in — optionally starting a new Claude Code session there ("open a new Claude session", "new terminal in leaps"). "Cloud session" is speech-to-text for "Claude session".
+- Mac control — you can run this whole computer:
+  mac_app (open / quit / list running apps), mac_volume (set level, mute), mac_media (play, pause, next…
+  in Spotify or Music), mac_files (open or reveal a file/folder, find files by name), clipboard (read or set).
+  run_on_mac runs a shell command or AppleScript for anything else (disk space, wifi, battery, dark mode,
+  moving files…). It is NOT run right away: it returns what will happen and you must ask the user "OK?" in
+  one short line; it runs only if they say yes. Prefer the specific tools when they fit.
+- Writing code: on the open session's project → send_to_session. On another project → delegate_task with
+  that project. For something new ("build me a script that…", "start a new app for…") → delegate_task with
+  a short new folder name in project and create=true; it's made under ~/Desktop.
 - delegate_task: heavy orchestration and execution — anything that needs a full coding agent working inside a project (reading or changing its code, running its commands, multi-step research write-ups about it) when that project isn't the open session's. Set "project" to the project folder name (their projects live in ~/Desktop/<name>, e.g. "leaps") so the agent runs inside it; leave it out only for work tied to no project. Never ask what a project is — the agent can read it. Its result is spoken later.
 Rule of thumb: answering, looking up, opening, dictating and passing instructions are quick and direct — do them yourself. Work on the open session's project goes to send_to_session. Work on any other project goes to delegate_task.
 A clear instruction goes straight to send_to_session — never call session_status first, and never hold it back because the session is busy: it's queued and Claude Code picks it up mid-turn. Do simple errands yourself. Ask one short question only if a request is genuinely ambiguous and nothing you or a background agent could look up would resolve it.
@@ -69,8 +78,40 @@ TOOLS = [
                     "The task must be self-contained — the agent sees nothing of this conversation.",
      "input_schema": {"type": "object", "properties": {
          "task": {"type": "string"},
-         "project": {"type": "string", "description": "Project folder to run in, e.g. 'leaps' (~/Desktop/leaps)."}},
+         "project": {"type": "string", "description": "Project folder to run in, e.g. 'leaps' (~/Desktop/leaps)."},
+         "create": {"type": "boolean", "description": "Create ~/Desktop/<project> if it doesn't exist (new code)."}},
          "required": ["task"]}},
+    {"name": "mac_app",
+     "description": "Open or quit an app by name, or list the apps that are running.",
+     "input_schema": {"type": "object", "properties": {
+         "action": {"type": "string", "enum": ["open", "quit", "list"]}, "name": {"type": "string"}},
+         "required": ["action"]}},
+    {"name": "mac_volume",
+     "description": "Set the output volume (0-100), mute/unmute, or read it (no arguments).",
+     "input_schema": {"type": "object", "properties": {
+         "level": {"type": "integer"}, "mute": {"type": "boolean"}}}},
+    {"name": "mac_media",
+     "description": "Control music playback in Spotify or Music.",
+     "input_schema": {"type": "object", "properties": {
+         "action": {"type": "string", "enum": ["play", "pause", "toggle", "next", "previous"]},
+         "app": {"type": "string"}}, "required": ["action"]}},
+    {"name": "mac_files",
+     "description": "open or reveal (in Finder) a file or folder by path, or find files by name.",
+     "input_schema": {"type": "object", "properties": {
+         "action": {"type": "string", "enum": ["open", "reveal", "find"]},
+         "path": {"type": "string"}, "query": {"type": "string"}}, "required": ["action"]}},
+    {"name": "clipboard",
+     "description": "Read the clipboard (no text) or put text on it.",
+     "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}}},
+    {"name": "run_on_mac",
+     "description": "Prepare a shell command (zsh) or AppleScript for anything the other tools can't do. "
+                    "Returns what will happen; it runs only after the user says yes.",
+     "input_schema": {"type": "object", "properties": {
+         "kind": {"type": "string", "enum": ["shell", "applescript"]},
+         "code": {"type": "string"}, "cwd": {"type": "string"},
+         "what": {"type": "string", "description": "What it does in a few plain words, e.g. 'check your free disk "
+                                                   "space', 'turn on dark mode' — read back to the user."}},
+         "required": ["kind", "code", "what"]}},
     {"name": "open_terminal",
      "description": "Open a new terminal in the Cursor window the user is in. project: folder to open it in "
                     "(e.g. 'leaps'; default: that window's folder). start_claude: start a Claude Code session in "

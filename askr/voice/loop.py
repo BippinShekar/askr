@@ -20,7 +20,7 @@ import time
 
 from askr.voice import agent as agent_mod
 from askr.voice import daemon as daemon_mod
-from askr.voice import events, inbox, menu, notes, permission, session, tasks, terminal, workspace
+from askr.voice import events, inbox, mac, menu, notes, permission, session, tasks, terminal, workspace
 from askr.voice.agent import VoiceAgent
 from askr.voice.style import concise
 from askr.voice.narrator import Narrator
@@ -33,6 +33,8 @@ _PARTIAL_EVERY_SECS = 1.0
 # "Waiting for your input" right after askr spoke (usually the turn-done
 # summary) is a repeat — skip it inside this window.
 _IDLE_QUIET_SECS = 90.0
+# A spoken "OK?" for a shell command/AppleScript expires after this long.
+_CONFIRM_SECS = 120.0
 # Said during a conversation, these end it (and aren't sent anywhere).
 _ENDS_CONVERSATION = re.compile(
     r"^\W*(ok(ay)?[, ]+)?(thanks|thank you|cheers|that's (all|it)|that is all|never ?mind|nothing|"
@@ -73,6 +75,7 @@ class VoiceLoop:
         self._last_said = ""
         self.addressee = addressee  # set = always-on listening (askr/voice/addressee.py)
         self._permission = None  # the permission prompt a spoken "yes" would answer
+        self._pending_action = None  # a shell/AppleScript run waiting for the user's OK
         self._menu_open = False
         self.agent = agent or VoiceAgent(self._tool_handlers(), post=getattr(talker, "_post", None))
         self._ptt = None  # list of texts while push-to-talk is recording
@@ -195,6 +198,8 @@ class VoiceLoop:
 
     def handle_command(self, command: str):
         """Act on something addressed to askr (wake word already stripped)."""
+        if self._confirm_pending_action(command):
+            return
         if self._permission_still_waiting():
             decision = permission.classify(command)
             if decision:
@@ -248,6 +253,14 @@ class VoiceLoop:
             "delegate_task": self._tool_delegate,
             "answer_permission": lambda inp: self.answer_permission(str(inp.get("decision") or "")),
             "open_terminal": self._tool_open_terminal,
+            "mac_app": self._tool_mac_app,
+            "mac_volume": lambda inp: (mac.set_volume(inp.get("level"), inp.get("mute"))
+                                       if inp.get("level") is not None or inp.get("mute") is not None
+                                       else mac.get_volume()),
+            "mac_media": lambda inp: mac.media(str(inp.get("action") or ""), str(inp.get("app") or "")),
+            "mac_files": self._tool_mac_files,
+            "clipboard": lambda inp: mac.clipboard(inp.get("text")),
+            "run_on_mac": self._tool_run_on_mac,
         }
 
     def _tool_session_status(self, inp: dict) -> str:
@@ -270,6 +283,57 @@ class VoiceLoop:
         self.last_request = text
         self._status("sending")
         return self.deliver(text, session.digest(self.transcript_path).in_flight)
+
+    # --- Mac control (askr/voice/mac.py) ---------------------------------
+
+    def _tool_mac_app(self, inp: dict) -> str:
+        action, name = str(inp.get("action") or ""), str(inp.get("name") or "").strip()
+        if action == "list":
+            return mac.running_apps()
+        if not name:
+            return "error: which app?"
+        self.display.line("task", f"  ⇢ {action} {name}")
+        return mac.open_app(name) if action == "open" else mac.quit_app(name)
+
+    def _tool_mac_files(self, inp: dict) -> str:
+        action = str(inp.get("action") or "")
+        if action == "find":
+            return mac.find_files(str(inp.get("query") or ""))
+        return mac.open_path(str(inp.get("path") or ""), reveal=action == "reveal")
+
+    def _tool_run_on_mac(self, inp: dict) -> str:
+        kind, code = str(inp.get("kind") or ""), str(inp.get("code") or "")
+        summary, err = mac.prepare_risky(kind, code)
+        if err:
+            return err
+        what = str(inp.get("what") or "").strip().rstrip(".?") or summary
+        self._pending_action = {"kind": kind, "code": code, "cwd": str(inp.get("cwd") or ""),
+                                "summary": what, "ts": self.clock()}
+        self.display.line("task", f"  ? waiting for OK: {code[:120]}")
+        return f'not run yet — it needs the user\'s OK. Ask exactly: "Want me to {what}?"'
+
+    def _confirm_pending_action(self, command: str) -> bool:
+        """The user's answer to a pending 'OK?'; True if this line was that answer."""
+        p = self._pending_action
+        if not p:
+            return False
+        self._pending_action = None
+        if self.clock() - p["ts"] > _CONFIRM_SECS:
+            return False
+        decision = permission.classify(command)
+        if decision is None:
+            return False  # they moved on; the action is dropped
+        if decision == "no":
+            self._speak("Okay, skipped it.")
+            return True
+        self.display.line("task", f"  ⇢ running: {p['code'][:120]}")
+        self._status("sending")
+        output = mac.run_risky(p["kind"], p["code"], p["cwd"])
+        turn = self.agent.respond(f"(I said yes. It ran. Output:\n{output})")
+        if turn.say:
+            self.display.line("askr", turn.say)
+            self._speak(turn.say)
+        return True
 
     def _session_cwd(self) -> str:
         if not self.transcript_path:
@@ -299,6 +363,8 @@ class VoiceLoop:
             return "error: empty task"
         project = str(inp.get("project") or "").strip()
         cwd = tasks.resolve_project(project) if project else ""
+        if project and not cwd and inp.get("create"):
+            cwd = tasks.create_project(project)
         if project and not cwd:
             return f"error: couldn't find a project folder called {project!r}"
         self.display.line("task", f"  ⇢ background{f' in {cwd}' if cwd else ''}: {task}")
