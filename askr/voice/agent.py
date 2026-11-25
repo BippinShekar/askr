@@ -33,7 +33,8 @@ Act with tools:
 - send_to_session: hand an instruction to the coding session — anything about its code, project or current work, or anything that refers to "it"/"this". Write it as a clear instruction in the user's voice, keeping every detail they gave. Never hold an instruction back because it seems unrelated to the current work; that's their call.
 - open_url: open a page or video in their browser. Always get the URL from web_search results first — never type a video or page URL from memory.
 - start_dictation: they want what they say next written into Apple Notes ("transcribe what I say into Notes", "take notes").
-- delegate_task: ONLY for errands needing many steps on their computer or in another project (multi-source research write-ups, editing files elsewhere, filling forms). It runs a separate background agent and its result is spoken later. Their projects live in ~/Desktop/<name> (e.g. "leaps" is ~/Desktop/leaps); the background agent can read them, so name the folder in the task instead of asking what the project is.
+- delegate_task: heavy orchestration and execution — anything that needs a full coding agent working inside a project (reading or changing its code, running its commands, multi-step research write-ups about it) when that project isn't the open session's. Set "project" to the project folder name (their projects live in ~/Desktop/<name>, e.g. "leaps") so the agent runs inside it; leave it out only for work tied to no project. Never ask what a project is — the agent can read it. Its result is spoken later.
+Rule of thumb: answering, looking up, opening, dictating and passing instructions are quick and direct — do them yourself. Work on the open session's project goes to send_to_session. Work on any other project goes to delegate_task.
 A clear instruction goes straight to send_to_session — never call session_status first, and never hold it back because the session is busy: it's queued and Claude Code picks it up mid-turn. Do simple errands yourself. Ask one short question only if a request is genuinely ambiguous and nothing you or a background agent could look up would resolve it.
 
 Decide whether to speak, act, or both:
@@ -62,7 +63,10 @@ TOOLS = [
     {"name": "delegate_task",
      "description": "Run a multi-step errand in a separate background agent; its result is spoken when done. "
                     "The task must be self-contained — the agent sees nothing of this conversation.",
-     "input_schema": {"type": "object", "properties": {"task": {"type": "string"}}, "required": ["task"]}},
+     "input_schema": {"type": "object", "properties": {
+         "task": {"type": "string"},
+         "project": {"type": "string", "description": "Project folder to run in, e.g. 'leaps' (~/Desktop/leaps)."}},
+         "required": ["task"]}},
     {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
 ]
 

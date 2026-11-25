@@ -239,9 +239,14 @@ class VoiceLoop:
         task = str(inp.get("task") or "").strip()
         if not task:
             return "error: empty task"
-        self.display.line("task", f"  ⇢ background: {task}")
-        self.tasks.start(task)
-        return "started in the background; its result will be spoken when it finishes"
+        project = str(inp.get("project") or "").strip()
+        cwd = tasks.resolve_project(project) if project else ""
+        if project and not cwd:
+            return f"error: couldn't find a project folder called {project!r}"
+        self.display.line("task", f"  ⇢ background{f' in {cwd}' if cwd else ''}: {task}")
+        self.tasks.start(task, cwd)
+        return ("started in the background" + (f" inside {os.path.basename(cwd)}" if cwd else "")
+                + "; its result will be spoken when it finishes")
 
     def start_dictation(self, speak: bool = True):
         title = notes.start(self.clock())  # also opens Notes on the new note

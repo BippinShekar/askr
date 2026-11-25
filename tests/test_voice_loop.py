@@ -193,7 +193,7 @@ def test_errands_run_hidden_not_in_the_session(tmp_path):
     loop, talker, speaker, _ = _loop(tmp_path, "askr open a random youtube video",
                                      Reply("On it.", "Open a random YouTube video.", kind="task"))
     ran = []
-    loop.tasks = tasks_mod.Tasks(runner=lambda task, folder: (ran.append(task), (True, "Opened a pasta video."))[1])
+    loop.tasks = tasks_mod.Tasks(runner=lambda task, folder, cwd="": (ran.append(task), (True, "Opened a pasta video."))[1])
     with patch.object(loop, "deliver") as deliver, patch.object(tasks_mod, "TASKS_DIR", str(tmp_path / "t")):
         loop.handle_utterance(b"audio")
         loop.tasks.finished.get(timeout=5)

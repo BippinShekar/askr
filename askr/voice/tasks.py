@@ -40,19 +40,22 @@ class Tasks:
         self._lock = threading.Lock()
         self.running: list = []
 
-    def start(self, task: str) -> str:
+    def start(self, task: str, cwd: str = "") -> str:
+        """Run `task` in the background. `cwd` is the project to run it in (its
+        code, CLAUDE.md and hooks apply); without one it runs in its own empty
+        folder. Prompt and output are always kept in the task's log folder."""
         folder = os.path.join(TASKS_DIR, time.strftime("%Y%m%d-%H%M%S"))
         os.makedirs(folder, exist_ok=True)
         with open(os.path.join(folder, "task.txt"), "w") as f:
-            f.write(task)
+            f.write(task + (f"\n\n(cwd: {cwd})" if cwd else ""))
         with self._lock:
             self.running.append(task)
-        threading.Thread(target=self._run, args=(task, folder), daemon=True).start()
+        threading.Thread(target=self._run, args=(task, folder, cwd or folder), daemon=True).start()
         return folder
 
-    def _run(self, task: str, folder: str):
+    def _run(self, task: str, folder: str, cwd: str):
         try:
-            ok, result = self._runner(task, folder)
+            ok, result = self._runner(task, folder, cwd)
         except Exception as e:
             ok, result = False, f"It failed: {e}"
         with open(os.path.join(folder, "result.txt"), "w") as f:
@@ -74,11 +77,30 @@ def claude_env() -> dict:
     return env
 
 
-def _run_claude(task: str, folder: str) -> tuple:
+def resolve_project(name: str) -> str:
+    """A project the user named ("leaps", "~/Desktop/leaps", an absolute path)
+    as an existing directory, or "" if it can't be found."""
+    name = (name or "").strip()
+    if not name:
+        return ""
+    for candidate in (os.path.expanduser(name), os.path.expanduser(f"~/Desktop/{name}")):
+        if os.path.isdir(candidate):
+            return os.path.abspath(candidate)
+    desktop = os.path.expanduser("~/Desktop")
+    try:
+        for entry in os.listdir(desktop):
+            if entry.lower() == name.lower() and os.path.isdir(os.path.join(desktop, entry)):
+                return os.path.join(desktop, entry)
+    except OSError:
+        pass
+    return ""
+
+
+def _run_claude(task: str, folder: str, cwd: str = "") -> tuple:
     proc = subprocess.run(
         ["claude", "-p", "--permission-mode", "auto", "--output-format", "json",
          "--append-system-prompt", _SYSTEM, task],
-        cwd=folder, env=claude_env(), capture_output=True, text=True, timeout=TIMEOUT_SECS,
+        cwd=cwd or folder, env=claude_env(), capture_output=True, text=True, timeout=TIMEOUT_SECS,
         stdin=subprocess.DEVNULL)
     with open(os.path.join(folder, "output.json"), "w") as f:
         f.write(proc.stdout)
