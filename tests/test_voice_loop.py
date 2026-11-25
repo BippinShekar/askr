@@ -259,3 +259,24 @@ def test_conversation_flows_without_wake_word_until_closed(tmp_path):
     loop.transcriber.text = "and push it"
     loop.handle_utterance(b"a")
     assert len(talker.seen) == 2                  # closed: back to needing the wake word
+
+
+
+def test_send_now_interrupts_a_busy_session_first(tmp_path):
+    running = [{"type": "user", "message": {"content": "do the long thing"}}]
+    loop, talker, speaker, _ = _loop(tmp_path, "", Reply("x"), session_entries=running)
+    order = []
+    with patch.object(terminal, "type_keys", side_effect=lambda *a: order.append(("keys", a[1])) or True), \
+         patch.object(loop, "_claimed", return_value=True), \
+         patch("askr.voice.loop.time.sleep"), \
+         patch.object(loop, "deliver", side_effect=lambda text, busy: order.append(("type", text, busy)) or "typed"):
+        loop._tool_handlers()["send_to_session"]({"instruction": "switch to zoe", "interrupt": True})
+    assert order == [("keys", ["\x1b"]), ("type", "switch to zoe", False)]
+
+
+def test_plain_send_never_interrupts(tmp_path):
+    running = [{"type": "user", "message": {"content": "do the long thing"}}]
+    loop, talker, speaker, _ = _loop(tmp_path, "", Reply("x"), session_entries=running)
+    with patch.object(terminal, "type_keys") as keys, patch.object(loop, "deliver", return_value="typed"):
+        loop._tool_handlers()["send_to_session"]({"instruction": "also run lint"})
+    keys.assert_not_called()

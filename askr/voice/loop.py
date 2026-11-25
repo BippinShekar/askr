@@ -35,6 +35,8 @@ _PARTIAL_EVERY_SECS = 1.0
 _IDLE_QUIET_SECS = 90.0
 # A spoken "OK?" for a shell command/AppleScript expires after this long.
 _CONFIRM_SECS = 120.0
+# Claude Code needs a moment after Esc before a typed prompt starts a new turn.
+_AFTER_INTERRUPT_SECS = 1.0
 # Said during a conversation, these end it (and aren't sent anywhere).
 _ENDS_CONVERSATION = re.compile(
     r"^\W*(ok(ay)?[, ]+)?(thanks|thank you|cheers|that's (all|it)|that is all|never ?mind|nothing|"
@@ -279,10 +281,17 @@ class VoiceLoop:
         if self._menu_open:
             # Typed text would land inside the open menu and pick who-knows-what.
             return "error: the session is waiting on its multiple-choice question; it must be answered first"
+        in_flight = session.digest(self.transcript_path).in_flight
+        if inp.get("interrupt") and in_flight:
+            # "Send it now, don't queue it": Esc stops the running step, then it's typed as the next prompt.
+            if terminal.type_keys(self.session_id, [permission.ESC], self.project_path) and self._claimed():
+                self.display.line("info", "  interrupted the running step")
+                time.sleep(_AFTER_INTERRUPT_SECS)
+                in_flight = False
         self.display.line("claude", f"  → {text}")
         self.last_request = text
         self._status("sending")
-        return self.deliver(text, session.digest(self.transcript_path).in_flight)
+        return self.deliver(text, in_flight)
 
     # --- Mac control (askr/voice/mac.py) ---------------------------------
 

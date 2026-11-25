@@ -60,6 +60,7 @@ class Speaker:
         try:
             if not _voice.is_muted():  # may have been muted while waiting for the lock
                 self._proc = subprocess.Popen(cmd)
+                _voice._log_voice_event(text, True, "", {"source": "voice_mode"})
                 self._proc.wait(timeout=90)
         except Exception:
             if self._proc and self._proc.poll() is None:

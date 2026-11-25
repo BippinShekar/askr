@@ -64,9 +64,13 @@ TOOLS = [
                     "the last request, recent tool calls and assistant messages. detail=true returns more.",
      "input_schema": {"type": "object", "properties": {"detail": {"type": "boolean"}}}},
     {"name": "send_to_session",
-     "description": "Send an instruction to the Claude Code session (typed into its terminal, or queued if it's busy).",
-     "input_schema": {"type": "object", "properties": {"instruction": {"type": "string"}},
-                      "required": ["instruction"]}},
+     "description": "Send an instruction to the Claude Code session (typed into its terminal). If it's busy, Claude "
+                    "Code holds the message until its current step finishes — unless interrupt is true, which "
+                    "stops the current step first (Esc) and sends it immediately. Use interrupt only when the user "
+                    "says now / right now / don't queue it / stop and …",
+     "input_schema": {"type": "object", "properties": {
+         "instruction": {"type": "string"}, "interrupt": {"type": "boolean"}},
+         "required": ["instruction"]}},
     {"name": "open_url",
      "description": "Open a URL in the user's default browser.",
      "input_schema": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}},
