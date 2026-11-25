@@ -20,7 +20,7 @@ import time
 
 from askr.voice import agent as agent_mod
 from askr.voice import daemon as daemon_mod
-from askr.voice import events, inbox, menu, notes, permission, session, tasks, terminal
+from askr.voice import events, inbox, menu, notes, permission, session, tasks, terminal, workspace
 from askr.voice.agent import VoiceAgent
 from askr.voice.style import concise
 from askr.voice.narrator import Narrator
@@ -220,8 +220,10 @@ class VoiceLoop:
             if questions is not None and self.answer_menu(command, questions):
                 return
         self._menu_open = questions is not None
-        extra = ("Claude Code is showing a multiple-choice question and is blocked on it; "
-                 "nothing can be sent to the session until it's answered." if self._menu_open else "")
+        extra = workspace.describe(workspace.read_focus(), self._session_cwd())
+        if self._menu_open:
+            extra += (" Claude Code is showing a multiple-choice question and is blocked on it; "
+                      "nothing can be sent to the session until it's answered.")
         if self._permission_still_waiting():
             extra = (extra + " " if extra else "") + (
                 f"A session is waiting for the user's permission to {self._permission['what']}; "
@@ -245,6 +247,7 @@ class VoiceLoop:
             "start_dictation": lambda inp: (self.start_dictation(speak=False), "dictation started; Notes is open")[1],
             "delegate_task": self._tool_delegate,
             "answer_permission": lambda inp: self.answer_permission(str(inp.get("decision") or "")),
+            "open_terminal": self._tool_open_terminal,
         }
 
     def _tool_session_status(self, inp: dict) -> str:
@@ -267,6 +270,23 @@ class VoiceLoop:
         self.last_request = text
         self._status("sending")
         return self.deliver(text, session.digest(self.transcript_path).in_flight)
+
+    def _session_cwd(self) -> str:
+        if not self.transcript_path:
+            return ""
+        for entry in reversed(session._tail_entries(self.transcript_path)[-50:]):
+            if entry.get("cwd"):
+                return entry["cwd"]
+        return ""
+
+    def _tool_open_terminal(self, inp: dict) -> str:
+        project = str(inp.get("project") or "").strip()
+        cwd = tasks.resolve_project(project) if project else ""
+        if project and not cwd:
+            return f"error: couldn't find a project folder called {project!r}"
+        command = workspace.claude_command(str(inp.get("prompt") or "")) if inp.get("start_claude") else ""
+        self.display.line("task", f"  ⇢ new terminal{' in ' + cwd if cwd else ''}{': ' + command if command else ''}")
+        return workspace.open_terminal(cwd, command, name="claude" if command else "askr")
 
     def _tool_open_url(self, inp: dict) -> str:
         url = str(inp.get("url") or "")

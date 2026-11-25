@@ -784,19 +784,52 @@ function ensureVoiceDaemon() {
   });
 }
 
+// Where the user is: the focused window, its folders and terminals, and the
+// active terminal. The voice agent gets this as context ("this window",
+// "the untitled workspace terminal") and open-terminal requests go to the
+// window that wrote it last (ext_pid).
 async function writeVoiceFocus() {
   if (!vscode.window.state.focused) return;
   const term = vscode.window.activeTerminal;
-  if (!term) return;
   try {
-    const shellPid = await term.processId;
-    if (!shellPid) return;
+    const shellPid = term ? await term.processId : 0;
     fs.mkdirSync(VOICE_DIR, { recursive: true });
     const tmp = `${VOICE_FOCUS_PATH}.tmp.${process.pid}`;
-    fs.writeFileSync(tmp, JSON.stringify({ shell_pid: shellPid, name: term.name, ts: Date.now() / 1000 }));
+    fs.writeFileSync(tmp, JSON.stringify({
+      shell_pid: shellPid || 0,
+      name: term ? term.name : '',
+      ext_pid: process.pid,
+      workspace: vscode.workspace.name || '',
+      folders: (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath),
+      terminals: vscode.window.terminals.map((t) => t.name),
+      ts: Date.now() / 1000,
+    }));
     fs.renameSync(tmp, VOICE_FOCUS_PATH);
   } catch (e) {
     console.error(`Askr: writeVoiceFocus failed: ${e}`);
+  }
+}
+
+// askr voice asks for a new terminal (askr/voice/workspace.py open_terminal):
+// the window the user was last in (ext_pid from voice_focus.json) opens it,
+// in the requested folder, optionally starting a Claude Code session there.
+const VOICE_OPEN_TERMINAL_PATH = path.join(VOICE_DIR, 'voice_open_terminal.json');
+
+function checkVoiceOpenTerminal() {
+  if (!fs.existsSync(VOICE_OPEN_TERMINAL_PATH)) return;
+  try {
+    const req = JSON.parse(fs.readFileSync(VOICE_OPEN_TERMINAL_PATH, 'utf8'));
+    if (req.ext_pid && req.ext_pid !== process.pid) return;   // another window's
+    if (!req.ext_pid && !vscode.window.state.focused) return;
+    const claimed = `${VOICE_OPEN_TERMINAL_PATH}.${process.pid}.claimed`;
+    try { fs.renameSync(VOICE_OPEN_TERMINAL_PATH, claimed); } catch { return; }
+    fs.unlinkSync(claimed);
+    const cwd = req.cwd || ((vscode.workspace.workspaceFolders || [])[0] || {}).uri?.fsPath;
+    const t = vscode.window.createTerminal({ name: req.name || 'askr', cwd });
+    t.show();
+    if (req.command) t.sendText(req.command);
+  } catch (e) {
+    console.error(`Askr: open-terminal request failed: ${e && e.stack || e}`);
   }
 }
 
@@ -941,6 +974,8 @@ function activate(context) {
   const refreshVoice = () => renderVoice(voiceItem);
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTerminal(writeVoiceFocus),
+    vscode.window.onDidOpenTerminal(writeVoiceFocus),
+    vscode.window.onDidCloseTerminal(writeVoiceFocus),
     vscode.window.onDidChangeWindowState((st) => { if (st.focused) writeVoiceFocus(); })
   );
   writeVoiceFocus();
@@ -955,6 +990,7 @@ function activate(context) {
     const voiceWatcher = fs.watch(configDir, (_, filename) => {
       if (filename === 'voice_prompt.json') checkVoicePrompt();
       else if (filename === 'voice_status.json') refreshVoice();
+      else if (filename === 'voice_open_terminal.json') checkVoiceOpenTerminal();
     });
     context.subscriptions.push({ dispose: () => voiceWatcher.close() });
   } catch (e) {
@@ -964,6 +1000,7 @@ function activate(context) {
   function refresh() {
     checkNotification();
     checkVoicePrompt();
+    checkVoiceOpenTerminal();
     const result = readStats();
     if (result) {
       item.text    = result.label;
