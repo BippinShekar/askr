@@ -40,10 +40,22 @@ def _send_discord(message: str, level: str):
         pass
 
 
-def _speak(message: str):
+def _tell_voice(payload: dict):
+    """Claude is blocked on the user — make sure they hear it. The voice
+    daemon says it in its own style; without one, permission prompts are
+    announced directly. (The old check on payload["level"] never fired:
+    Claude Code doesn't send a level, it sends notification_type.)"""
+    from askr.voice import events
+    kind = payload.get("notification_type") or ""
+    if kind not in events.SPOKEN_TYPES:
+        return
     try:
-        from askr.clients.voice import announce
-        announce(message)
+        from askr.voice import daemon
+        if daemon.running_pid():
+            events.post(payload.get("session_id", ""), kind, payload.get("message", ""), payload.get("cwd", ""))
+        elif kind == "permission_prompt":
+            from askr.clients.voice import announce
+            announce(events.spoken({"kind": kind, "message": payload.get("message", "")}, True))
     except Exception:
         pass
 
@@ -57,6 +69,9 @@ def main():
     from askr.utils.hook_capture import capture_hook_payload
     capture_hook_payload("Notification", payload)
 
+    # Before the project check: being told Claude needs you matters in any repo.
+    _tell_voice(payload)
+
     if not os.path.isdir(get_state_dir()):
         return
 
@@ -69,7 +84,6 @@ def main():
     _log_notification(message, level)
     if level != "INFO":
         _send_discord(message, level)
-        _speak(message)
 
 
 if __name__ == "__main__":

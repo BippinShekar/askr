@@ -19,7 +19,7 @@ import threading
 import time
 
 from askr.voice import agent as agent_mod
-from askr.voice import inbox, menu, notes, session, tasks, terminal
+from askr.voice import events, inbox, menu, notes, session, tasks, terminal
 from askr.voice.agent import VoiceAgent
 from askr.voice.style import concise
 from askr.voice.narrator import Narrator
@@ -29,6 +29,9 @@ from askr.voice.wake import WakeGate
 _RETARGET_EVERY_SECS = 10.0
 _CLAIM_TIMEOUT_SECS = 6.0
 _PARTIAL_EVERY_SECS = 1.0
+# "Waiting for your input" right after askr spoke (usually the turn-done
+# summary) is a repeat — skip it inside this window.
+_IDLE_QUIET_SECS = 90.0
 # Said during a conversation, these end it (and aren't sent anywhere).
 _ENDS_CONVERSATION = re.compile(
     r"^\W*(ok(ay)?[, ]+)?(thanks|thank you|cheers|that's (all|it)|that is all|never ?mind|nothing|"
@@ -65,6 +68,7 @@ class VoiceLoop:
         self.mic_off = mic_off or (lambda: False)  # () -> user turned the mic off
         self._mic_lock = threading.Lock()
         self.tasks = tasks.Tasks()
+        self._last_spoke = 0.0
         self._menu_open = False
         self.agent = agent or VoiceAgent(self._tool_handlers(), post=getattr(talker, "_post", None))
         self._ptt = None  # list of texts while push-to-talk is recording
@@ -89,6 +93,7 @@ class VoiceLoop:
             return
         self._status("speaking")
         self.speaker.speak(text)
+        self._last_spoke = self.clock()
 
     # --- target session --------------------------------------------------
 
@@ -253,6 +258,16 @@ class VoiceLoop:
         self.display.line("askr", f"Taking notes in Notes → “{title}”. Say “stop taking notes” to end.")
         if speak:
             self._speak("Taking notes. Say stop taking notes when you're done.")
+
+    def speak_events(self):
+        """Say it when a session is blocked on the user (askr/voice/events.py)."""
+        for event in events.drain(self.clock()):
+            same = event.get("session_id") == self.session_id
+            if event.get("kind") == "idle_prompt" and self.clock() - self._last_spoke < _IDLE_QUIET_SECS:
+                continue  # it just said the turn was done; "waiting on you" would be a repeat
+            line = events.spoken(event, same)
+            self.display.line("askr", line)
+            self._speak(line)
 
     def report_tasks(self):
         """Speak the outcome of background tasks as they finish."""
@@ -431,6 +446,7 @@ class VoiceLoop:
             time.sleep(wait)
             self.narrate()
             self.report_tasks()
+            self.speak_events()
             self._status("mic off")
             return
         self.poll_ptt()
@@ -444,6 +460,7 @@ class VoiceLoop:
             self.update_partial()
         self.narrate()
         self.report_tasks()
+        self.speak_events()
         if hasattr(self.display, "tasks_running"):
             self.display.tasks_running = len(self.tasks.running)
         seg = getattr(self.listener, "segmenter", None)
