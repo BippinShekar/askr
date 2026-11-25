@@ -13,6 +13,7 @@ terminal instead, with a live status line — for debugging.
 
 import os
 import queue
+import re
 import signal
 import threading
 import time
@@ -28,6 +29,10 @@ from askr.voice.wake import WakeGate
 _RETARGET_EVERY_SECS = 10.0
 _CLAIM_TIMEOUT_SECS = 6.0
 _PARTIAL_EVERY_SECS = 1.0
+# Said during a conversation, these end it (and aren't sent anywhere).
+_ENDS_CONVERSATION = re.compile(
+    r"^\W*(ok(ay)?[, ]+)?(thanks|thank you|cheers|that's (all|it)|that is all|never ?mind|nothing|"
+    r"bye|stop listening|we're done|i'm done|all good)\W*$", re.I)
 # Partials only transcribe the tail: with a video playing an utterance runs
 # up to the segmenter's 30s cap, and re-transcribing all of it every second
 # would pin a core.
@@ -140,15 +145,29 @@ class VoiceLoop:
             else:
                 self.display.line("error", f"  couldn't write to Notes: {text}")
             return
+        in_conversation = self.gate.is_open(self.clock())
         command = self.gate.accept(text, self.clock())
         if command is None:
             if self.gate.match(text) is not None:
+                self.speaker_cue()
                 self.display.line("you", f"{self.gate.word} — listening, go ahead   (heard: {text})")
             else:
                 self.display.line("ignored", f"  heard: {text}   ← no wake word, ignored")
             return
+        if in_conversation and _ENDS_CONVERSATION.match(command):
+            self.gate.close()
+            self.display.line("you", command)
+            self.display.line("info", "conversation closed — say the wake word to start again")
+            return
+        self.speaker_cue()
         self.display.line("you", command)
         self.handle_command(command)
+
+    def speaker_cue(self):
+        """A short tick the moment it hears you — feedback before the reply is ready."""
+        cue = getattr(self.speaker, "cue", None)
+        if cue:
+            cue()
 
     def handle_command(self, command: str):
         """Act on something addressed to askr (wake word already stripped)."""
@@ -427,7 +446,8 @@ class VoiceLoop:
         if self._ptt is not None:
             self._status("recording", self._partial if hearing else " ".join(self._ptt)[-80:])
         else:
-            self._status("hearing…" if hearing else "listening", self._partial if hearing else "")
+            idle = "conversation" if self.gate.is_open(self.clock()) else "listening"
+            self._status("hearing…" if hearing else idle, self._partial if hearing else "")
 
     def run(self):
         self.retarget(force=True)

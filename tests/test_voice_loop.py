@@ -243,3 +243,19 @@ def test_mic_toggle_closes_and_reopens_the_stream(tmp_path):
     off[0] = False
     loop.run_once(wait=0)
     assert events == ["stop", "start"]
+
+
+def test_conversation_flows_without_wake_word_until_closed(tmp_path):
+    loop, talker, speaker, _ = _loop(tmp_path, "askr what's it doing", Reply("Running tests."))
+    loop.speaker.cue = lambda: speaker.said.append("<tick>")
+    loop.handle_utterance(b"a")                   # wake word opens the conversation
+    loop.transcriber.text = "and is lint passing"
+    loop.handle_utterance(b"a")                   # no wake word needed now
+    assert [u for u, _ in talker.seen] == ["what's it doing", "and is lint passing"]
+    assert speaker.said.count("<tick>") == 2      # it acknowledged both lines
+    loop.transcriber.text = "thanks"
+    loop.handle_utterance(b"a")
+    assert len(talker.seen) == 2                  # "thanks" closed it, wasn't sent anywhere
+    loop.transcriber.text = "and push it"
+    loop.handle_utterance(b"a")
+    assert len(talker.seen) == 2                  # closed: back to needing the wake word

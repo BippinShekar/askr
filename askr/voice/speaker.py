@@ -6,6 +6,7 @@ Shares the same cross-process lock so it never talks over a daemon
 announcement. Mutes the mic for the duration so askr never hears itself.
 """
 
+import os
 import shutil
 import subprocess
 import time
@@ -14,16 +15,44 @@ from askr.clients import voice as _voice
 from askr.clients.voice import _acquire_voice_lock, _release_voice_lock, humanize_for_speech
 
 _ECHO_TAIL_SECS = 0.4  # room reverb after `say` exits
+_CUE_SOUND = "/System/Library/Sounds/Tink.aiff"
+
+
+def best_voice() -> str:
+    """The most natural English voice installed: a Premium or Enhanced Siri-era
+    voice if the user has downloaded one (System Settings → Accessibility →
+    Spoken Content → System voice → Manage Voices), else the system default."""
+    try:
+        out = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return ""
+    english = [line for line in out.splitlines() if " en_" in line]
+    for tier in ("(Premium)", "(Enhanced)"):
+        for preferred in ("Ava", "Zoe", "Evan", "Nathan", "Joelle", "Noelle", "Tom", "Allison", ""):
+            for line in english:
+                if tier in line and line.startswith(preferred):
+                    return line.split("  ")[0].split(" en_")[0].strip()
+    return ""
 
 
 class Speaker:
     def __init__(self, listener=None, gate=None, voice: str = "", rate: int = 0):
         self.listener = listener
         self.gate = gate
-        self.voice = voice
+        self.voice = voice if voice else best_voice()
         self.rate = rate
         self.say_bin = shutil.which("say")
         self._proc = None
+
+    def cue(self):
+        """Non-blocking tick: askr heard you. Silent while muted."""
+        if _voice.is_muted() or not os.path.exists(_CUE_SOUND):
+            return
+        try:
+            subprocess.Popen(["afplay", "-v", "0.4", _CUE_SOUND],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
     def stop(self):
         """Cut off whatever is being said right now (⌘M mid-sentence)."""

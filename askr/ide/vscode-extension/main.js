@@ -845,6 +845,8 @@ function renderVoice(item) {
   } else if (s.state === 'recording') {
     text = `$(record) recording${s.partial ? ` "${clip(s.partial, 50)}"` : '…'} — press again to send`;
     color = COLOR_HIGH;
+  } else if (s.state === 'conversation') {
+    text = `$(comment-discussion) just talk — no "${wake}" needed`;
   } else if (s.state.startsWith('hearing') && s.partial) {
     text = `$(record) "${clip(s.partial, 50)}"`;
   } else if (s.state.startsWith('hearing')) {

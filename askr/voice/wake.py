@@ -15,7 +15,9 @@ import json
 import os
 import re
 
-FOLLOW_UP_SECS = 20.0
+# A conversation stays open this long after each turn (yours or askr's), so
+# a back-and-forth never needs the wake word again.
+FOLLOW_UP_SECS = 30.0
 DEFAULT_WORD = "askr"
 PROFILE_PATH = os.path.expanduser("~/.config/askr/voice_profile.json")
 
@@ -147,6 +149,13 @@ class WakeGate:
         # word ("terminal") mid-sentence is just someone using the word.
         word = _norm(spoken)
         return self.is_askr and " " not in spoken.strip() and word not in _WEAK and len(word) >= 4
+
+    def is_open(self, now: float) -> bool:
+        return now < self._open_until
+
+    def close(self):
+        """End the conversation: the next line needs the wake word again."""
+        self._open_until = 0.0
 
     def open_window(self, now: float):
         """Call when askr finishes speaking — the user's reply needs no wake word."""
