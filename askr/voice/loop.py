@@ -19,7 +19,8 @@ import threading
 import time
 
 from askr.voice import agent as agent_mod
-from askr.voice import events, inbox, menu, notes, session, tasks, terminal
+from askr.voice import daemon as daemon_mod
+from askr.voice import events, inbox, menu, notes, permission, session, tasks, terminal
 from askr.voice.agent import VoiceAgent
 from askr.voice.style import concise
 from askr.voice.narrator import Narrator
@@ -69,6 +70,7 @@ class VoiceLoop:
         self._mic_lock = threading.Lock()
         self.tasks = tasks.Tasks()
         self._last_spoke = 0.0
+        self._permission = None  # the permission prompt a spoken "yes" would answer
         self._menu_open = False
         self.agent = agent or VoiceAgent(self._tool_handlers(), post=getattr(talker, "_post", None))
         self._ptt = None  # list of texts while push-to-talk is recording
@@ -176,6 +178,15 @@ class VoiceLoop:
 
     def handle_command(self, command: str):
         """Act on something addressed to askr (wake word already stripped)."""
+        if self._permission_still_waiting():
+            decision = permission.classify(command)
+            if decision:
+                result = self.answer_permission(decision)
+                if result.startswith("error"):
+                    self._speak(result.removeprefix("error: "))
+                elif decision == "no":
+                    self._speak("Okay, told it no.")
+                return  # approving needs no words: it just runs
         if notes.active() and notes.wants_stop(command):
             notes.stop()
             self.display.line("askr", "Stopped taking notes.")
@@ -194,6 +205,10 @@ class VoiceLoop:
         self._menu_open = questions is not None
         extra = ("Claude Code is showing a multiple-choice question and is blocked on it; "
                  "nothing can be sent to the session until it's answered." if self._menu_open else "")
+        if self._permission_still_waiting():
+            extra = (extra + " " if extra else "") + (
+                f"A session is waiting for the user's permission to {self._permission['what']}; "
+                "if they're answering that, use answer_permission.")
         turn = self.agent.respond(command, extra)
         if turn.say:
             self.display.line("askr", turn.say)
@@ -212,6 +227,7 @@ class VoiceLoop:
             "open_url": self._tool_open_url,
             "start_dictation": lambda inp: (self.start_dictation(speak=False), "dictation started; Notes is open")[1],
             "delegate_task": self._tool_delegate,
+            "answer_permission": lambda inp: self.answer_permission(str(inp.get("decision") or "")),
         }
 
     def _tool_session_status(self, inp: dict) -> str:
@@ -266,8 +282,50 @@ class VoiceLoop:
             if event.get("kind") == "idle_prompt" and self.clock() - self._last_spoke < _IDLE_QUIET_SECS:
                 continue  # it just said the turn was done; "waiting on you" would be a repeat
             line = events.spoken(event, same)
+            if event.get("kind") == "permission_prompt":
+                line = self._note_permission(event, same) or line
             self.display.line("askr", line)
             self._speak(line)
+            self.gate.open_window(self.clock())  # the answer ("yeah go ahead") needs no wake word
+
+    # --- permission prompts (askr/voice/permission.py) ------------------
+
+    def _note_permission(self, event: dict, same: bool) -> str:
+        """Remember the prompt so a spoken 'yes' can answer it; returns the line to say."""
+        sid = event.get("session_id") or ""
+        transcript = self.transcript_path if same else daemon_mod.transcript_for(sid)
+        tool = permission.pending_tool(session._tail_entries(transcript)) if transcript else None
+        if not tool:
+            return ""
+        self._permission = {"session_id": sid, "transcript": transcript, "tool_id": tool.get("id"),
+                            "what": permission.describe(tool)}
+        where = "" if same else f"Over in {os.path.basename(event.get('cwd') or '') or 'another session'}, "
+        what = self._permission["what"] or "do something"
+        line = f"{where}it wants to {what}. OK?"
+        return line[0].upper() + line[1:]
+
+    def _permission_still_waiting(self) -> bool:
+        p = self._permission
+        if not p:
+            return False
+        tool = permission.pending_tool(session._tail_entries(p["transcript"]))
+        if not tool or tool.get("id") != p["tool_id"]:
+            self._permission = None  # answered on screen, or moved on
+            return False
+        return True
+
+    def answer_permission(self, decision: str) -> str:
+        if decision not in permission.KEYS:
+            return f"error: unknown decision {decision!r}"
+        if not self._permission_still_waiting():
+            return "error: nothing is waiting for permission any more"
+        p = self._permission
+        if not (terminal.type_keys(p["session_id"], permission.KEYS[decision], self.project_path)
+                and self._claimed()):
+            return "error: couldn't reach that session's terminal — answer it on screen"
+        self._permission = None
+        self.display.line("you", f"  permission → {decision}: {p['what']}")
+        return {"yes": "approved", "always": "approved, and it won't ask again", "no": "denied"}[decision]
 
     def report_tasks(self):
         """Speak the outcome of background tasks as they finish."""

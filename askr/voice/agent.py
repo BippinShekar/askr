@@ -67,6 +67,11 @@ TOOLS = [
          "task": {"type": "string"},
          "project": {"type": "string", "description": "Project folder to run in, e.g. 'leaps' (~/Desktop/leaps)."}},
          "required": ["task"]}},
+    {"name": "answer_permission",
+     "description": "Answer the permission prompt a session is blocked on: yes (allow once), always "
+                    "(allow and don't ask again), or no (deny). Only when told a prompt is waiting.",
+     "input_schema": {"type": "object", "properties": {
+         "decision": {"type": "string", "enum": ["yes", "always", "no"]}}, "required": ["decision"]}},
     {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
 ]
 
