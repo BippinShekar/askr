@@ -18,6 +18,7 @@ _MAX_AGE_SECS = 120  # older than this when read: stale, dropped unspoken
 
 # Notification types worth saying out loud (Claude Code's notification_type).
 SPOKEN_TYPES = {"permission_prompt", "elicitation_dialog", "idle_prompt"}
+# "announce": any other askr process's line, handed over so only the daemon speaks.
 
 
 def post(session_id: str, kind: str, message: str, cwd: str = ""):
@@ -55,6 +56,8 @@ def spoken(event: dict, same_session: bool) -> str:
     """One short line for an event, in askr's voice style."""
     kind, msg = event.get("kind"), (event.get("message") or "").strip()
     where = "" if same_session else f"over in {os.path.basename(event.get('cwd') or '') or 'another session'}, "
+    if kind == "announce":
+        return msg
     if kind == "permission_prompt":
         what = msg.replace("Claude needs your permission to ", "").rstrip(".")
         line = f"{where}it needs your OK to {what}" if what and what != msg else f"{where}it needs your permission"

@@ -726,3 +726,31 @@ class SpeakerChoiceTests(unittest.TestCase):
         self.assertEqual(self._pick({"Samantha", "Zoe", "Ava"}, speaker="zoe"), "Zoe")
         self.assertEqual(self._pick({"Samantha", "Zoe"}), "Zoe")           # no Ava yet
         self.assertEqual(self._pick({"Samantha"}), "Samantha")
+
+
+
+class OneSpeakerTests(_IsolatedVoiceLogMixin, unittest.TestCase):
+    """While voice mode runs, nothing else plays `say` (overlap found 2026-11-25)."""
+
+    def _speak(self, **kw):
+        from askr.voice import daemon, events
+        with tempfile.TemporaryDirectory() as d, \
+             patch.object(events, "EVENTS_DIR", d), \
+             patch.object(daemon, "running_pid", return_value=os.getpid() + 1), \
+             patch("askr.state.config.load_voice_enabled", return_value=True), \
+             patch("platform.system", return_value="Darwin"), \
+             patch("shutil.which", return_value="/usr/bin/say"), \
+             patch("subprocess.run") as run:
+            ok, _ = voice.speak("quota at 90 percent", **kw)
+            return ok, run, events.drain()
+
+    def test_other_processes_hand_their_line_to_the_daemon(self):
+        ok, run, queued = self._speak(context={"source": "quota"})
+        self.assertTrue(ok)
+        run.assert_not_called()
+        self.assertEqual([(e["kind"], e["message"]) for e in queued], [("announce", "quota at 90 percent")])
+
+    def test_turn_end_announcements_are_dropped_not_doubled(self):
+        ok, run, queued = self._speak(context={"source": "stop._speak_session_done"})
+        run.assert_not_called()
+        self.assertEqual(queued, [])

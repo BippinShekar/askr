@@ -208,6 +208,29 @@ def _log_voice_event(text: str, spoken: bool, reason: str, context: dict = None)
         pass
 
 
+def _handed_to_voice_daemon(text: str, context: dict | None) -> str:
+    """
+    One speaker at a time. While the voice daemon runs it is the only thing
+    that talks: other processes hand their line to it (spoken in order,
+    between its own replies) instead of playing `say` themselves. Found
+    2026-11-25: a hook's "Done." landed on top of a voice reply and the user
+    couldn't make out either. Turn-end announcements are dropped outright —
+    the daemon already narrates the end of the turn it's following.
+    Returns why it was handed off ('' = not handed off, speak normally).
+    """
+    try:
+        from askr.voice import daemon, events
+        pid = daemon.running_pid()
+        if not pid or pid == os.getpid():
+            return ""
+        if str((context or {}).get("source", "")).startswith("stop._speak_session_done"):
+            return "voice mode narrates turn ends"
+        events.post(str((context or {}).get("session_id", "")), "announce", text)
+        return "handed to the voice daemon"
+    except Exception:
+        return ""
+
+
 def speak(text: str, voice: str = "", context: dict = None, project_path: str = "") -> tuple[bool, str]:
     """
     Speak text aloud via macOS's native `say` command.
@@ -228,6 +251,10 @@ def speak(text: str, voice: str = "", context: dict = None, project_path: str = 
     if not say_bin:
         _log_voice_event(text, False, reason, context)
         return False, reason
+    handed = _handed_to_voice_daemon(text, context)
+    if handed:
+        _log_voice_event(text, False, handed, context)
+        return True, ""
 
     lock_fd = _acquire_voice_lock()
     try:
@@ -257,6 +284,10 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, 
     if not say_bin:
         _log_voice_event(f"{prefix} {body}".strip(), False, reason, context)
         return False, reason
+    handed = _handed_to_voice_daemon(f"{prefix} {body}".strip(), context)
+    if handed:
+        _log_voice_event(f"{prefix} {body}".strip(), False, handed, context)
+        return True, ""
 
     lock_fd = _acquire_voice_lock()
     try:
