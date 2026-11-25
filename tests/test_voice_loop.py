@@ -34,7 +34,7 @@ class FakeTalker:
         self.seen.append((utterance, digest))
         return self.reply
 
-    def narrate(self, update, request):
+    def narrate(self, update, request, kind="done"):
         return f"spoken: {update}"
 
     def note_update(self, spoken):

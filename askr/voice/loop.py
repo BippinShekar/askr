@@ -20,6 +20,7 @@ import time
 from askr.voice import agent as agent_mod
 from askr.voice import inbox, menu, notes, session, tasks, terminal
 from askr.voice.agent import VoiceAgent
+from askr.voice.style import concise
 from askr.voice.narrator import Narrator
 from askr.voice.talker import VOICE_MODEL
 from askr.voice.wake import WakeGate
@@ -78,6 +79,9 @@ class VoiceLoop:
         self.display.status(state, level, threshold, partial)
 
     def _speak(self, text: str):
+        text = concise(text)
+        if not text:
+            return
         self._status("speaking")
         self.speaker.speak(text)
 
@@ -167,8 +171,11 @@ class VoiceLoop:
         extra = ("Claude Code is showing a multiple-choice question and is blocked on it; "
                  "nothing can be sent to the session until it's answered." if self._menu_open else "")
         turn = self.agent.respond(command, extra)
-        self.display.line("askr", turn.say)
-        self._speak(turn.say)
+        if turn.say:
+            self.display.line("askr", turn.say)
+            self._speak(turn.say)
+        else:
+            self.display.line("askr", "  (did it quietly: " + ", ".join(n for n, _ in turn.actions) + ")")
         if self.narrator:
             self.narrator.mark_spoken(self.clock())
 
@@ -231,9 +238,11 @@ class VoiceLoop:
             except queue.Empty:
                 return
             self._status("thinking")
-            spoken = (self.talker.narrate(done.result, done.task) or done.result) if done.result else ""
+            spoken = (self.talker.narrate(done.result, done.task, "task") or done.result) if done.result else ""
+            if spoken.strip().upper().startswith("SKIP"):
+                spoken = ""
             if not done.ok:
-                spoken = f"That task didn't work. {spoken}".strip()
+                spoken = f"That didn't work — {spoken}".strip(" —")
             spoken = spoken or "Done."
             self.display.line("task", f"  ✓ {done.task[:60]} — {done.result[:200]}")
             self.display.line("askr", spoken)
@@ -317,9 +326,10 @@ class VoiceLoop:
             return
         for event in self.narrator.poll(self.clock()):
             self._status("thinking")
-            spoken = self.talker.narrate(event.text, self.last_request) or event.text
-            if event.kind == "question":
-                spoken = f"It's asking: {spoken}"
+            spoken = self.talker.narrate(event.text, self.last_request, event.kind)
+            if spoken.strip().upper().startswith("SKIP"):
+                continue
+            spoken = spoken or (f"It's asking: {event.text}" if event.kind == "question" else event.text)
             self.display.line("askr", spoken)
             self._speak(spoken)
             self.agent.note_update(spoken)

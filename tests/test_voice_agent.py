@@ -46,7 +46,7 @@ def test_actions_are_recorded_and_noted_in_history():
 def test_step_limit_and_unknown_tools_do_not_crash():
     loop_forever = lambda body, *a: _reply({"type": "tool_use", "id": "x", "name": "nope", "input": {}}, stop="tool_use")
     turn = VoiceAgent({}, post=loop_forever).respond("hm")
-    assert turn.say == "Done." and len(turn.actions) == agent.MAX_STEPS
+    assert turn.say == "" and len(turn.actions) == agent.MAX_STEPS  # acted, nothing to say
 
 
 def test_open_url_refuses_non_web_urls():

@@ -137,17 +137,26 @@ class Talker:
             {"role": "assistant", "content": json.dumps({"say": spoken, "send": None})},
         ])[-_MAX_HISTORY:]
 
-    def narrate(self, update: str, request: str) -> str:
-        """Turn Claude Code's written output into a short spoken update (stage 4)."""
+    def narrate(self, update: str, request: str, kind: str = "done") -> str:
+        """Turn Claude Code's written output into a short spoken update, or
+        NARRATE_SKIP when it isn't worth interrupting the user for."""
+        from askr.voice.style import VOICE_STYLE
+        when = {
+            "done": "It just finished its turn. Say the outcome in a few words. If it ends by asking the "
+                    "user something or needs a decision, say that's what it needs.",
+            "question": "It's asking the user a question and is blocked until they answer. Say what it "
+                        "needs from them, in a few words.",
+            "progress": "It's still working. Only speak if something notable happened (a failure, a "
+                        "decision, a milestone); otherwise reply exactly SKIP.",
+            "task": "This is the result of a background errand the user asked for. Say the outcome, or "
+                    "what failed.",
+        }.get(kind, "")
         try:
             data = self._post({
                 "model": VOICE_MODEL,
-                "max_tokens": 200,
-                "system": ("Rewrite a coding agent's message as one or two short spoken sentences for "
-                           "the user who asked it something by voice. Plain English, no markdown, no "
-                           "paths or code read out, no filler. Keep concrete outcomes: what changed, "
-                           "what passed or failed, and any question it's asking the user. "
-                           "Reply with only the sentences."),
+                "max_tokens": 120,
+                "system": ("You turn a coding agent's written message into what you'd say out loud to "
+                           "the user. " + when + "\n\n" + VOICE_STYLE + "\nReply with only what to say."),
                 "messages": [{"role": "user", "content": f"User's request: {request}\n\nAgent's message:\n{update}"}],
             }, "voice_narrate", update[:80])
             return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()

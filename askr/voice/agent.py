@@ -17,6 +17,7 @@ import json
 import subprocess
 from dataclasses import dataclass, field
 
+from askr.voice.style import SILENT, VOICE_STYLE
 from askr.voice.talker import VOICE_MODEL
 
 MAX_STEPS = 6
@@ -33,9 +34,15 @@ Act with tools:
 - open_url: open a page or video in their browser. Always get the URL from web_search results first — never type a video or page URL from memory.
 - start_dictation: they want what they say next written into Apple Notes ("transcribe what I say into Notes", "take notes").
 - delegate_task: ONLY for errands needing many steps on their computer or in another project (multi-source research write-ups, editing files elsewhere, filling forms). It runs a separate background agent and its result is spoken later. Their projects live in ~/Desktop/<name> (e.g. "leaps" is ~/Desktop/leaps); the background agent can read them, so name the folder in the task instead of asking what the project is.
-A clear instruction goes straight to send_to_session — don't check session_status first. Do simple errands yourself. Ask one short question only if a request is genuinely ambiguous and nothing you or a background agent could look up would resolve it.
+A clear instruction goes straight to send_to_session — never call session_status first, and never hold it back because the session is busy: it's queued and Claude Code picks it up mid-turn. Do simple errands yourself. Ask one short question only if a request is genuinely ambiguous and nothing you or a background agent could look up would resolve it.
 
-Your final reply is read aloud: at most two short sentences, under 30 words, plain spoken English — no markdown, links, code or file paths. If you used a tool, briefly say what you did. Don't invent progress you didn't read with session_status."""
+Decide whether to speak, act, or both:
+- Act and stay quiet when the result speaks for itself — they asked to open something and it opened, or you typed an instruction into the terminal they're looking at. Reply exactly (silent).
+- Act and speak when they can't see the outcome or need to know something: you answered a question, you started something in the background ("on it, I'll tell you when it's done"), or a tool returned an error — always tell them what failed, briefly, in the error's own terms; never guess a cause it didn't give ("couldn't find its terminal", not "the session crashed").
+- Only speak when they asked something you can answer, or you need one detail from them.
+Don't invent progress you didn't read with session_status.
+
+""" + VOICE_STYLE
 
 TOOLS = [
     {"name": "session_status",
@@ -115,12 +122,14 @@ class VoiceAgent:
                 actions.append((name, inp))
                 results.append({"type": "tool_result", "tool_use_id": call.get("id"), "content": str(out)[:4000]})
             messages = messages + [{"role": "user", "content": results}]
-        say = text or ("Done." if actions else "Sorry, I didn't get that.")
+        say = text if text else ("" if actions else "Sorry, didn't catch that.")
+        if say.strip() == SILENT:
+            say = ""
         # Keep only the spoken exchange: tool output (session status, search
         # results) goes stale and would crowd every later call.
         self.history = (self.history + [
             {"role": "user", "content": utterance},
-            {"role": "assistant", "content": say + _action_note(actions)},
+            {"role": "assistant", "content": (say or SILENT) + _action_note(actions)},
         ])[-_MAX_HISTORY:]
         return Turn(say, actions)
 
