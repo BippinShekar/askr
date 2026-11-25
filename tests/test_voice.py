@@ -25,7 +25,7 @@ from askr.hooks import stop as stop_module
 
 def SAY(text):
     """argv for askr's one voice and pace (voice.say_command), with the voice pinned for tests."""
-    return ["/usr/bin/say", "-v", "TestVoice", "-r", str(voice.SPEECH_RATE), text]
+    return ["/usr/bin/say", "-v", "TestVoice", "-r", str(voice.speech_rate()), text]
 
 
 class _IsolatedVoiceLogMixin:

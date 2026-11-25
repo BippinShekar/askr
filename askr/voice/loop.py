@@ -620,6 +620,16 @@ def main(args: list):
         print(f"askr voice: {'always listening — acts when you talk to it' if mode == 'always' else 'wake word only'}."
               "  (`askr voice mode always|wake`)")
         return
+    if args[:1] == ["rate"]:
+        from askr.clients import voice as voice_client
+        from askr.voice.wake import load_profile, save_profile
+        if args[1:2] and args[1].isdigit():
+            profile = load_profile()
+            profile["rate"] = int(args[1])
+            save_profile(profile)
+        print(f"askr voice: speaking at {voice_client.speech_rate()} words per minute."
+              "  (`askr voice rate <wpm>`, 90-500)")
+        return
     if args[:1] == ["speaker"]:
         from askr.clients import voice as voice_client
         from askr.voice.wake import load_profile, save_profile

@@ -66,7 +66,7 @@ VOICES = {
     "samantha": ("Samantha",),
 }
 DEFAULT_SPEAKER = "ava"
-SPEECH_RATE = 200  # words per minute
+SPEECH_RATE = 200  # words per minute, unless the profile sets "rate" (`askr voice rate <wpm>`)
 _PROFILE_PATH = os.path.expanduser("~/.config/askr/voice_profile.json")
 # Re-check what's installed this often, so a voice downloaded while askr is
 # running is picked up without a restart.
@@ -75,13 +75,25 @@ _RECHECK_SECS = 60.0
 _chosen = ("", 0.0)  # (voice, when chosen)
 
 
-def chosen_speaker() -> str:
-    """The user's pick ('ava', 'zoe', 'samantha') — set with `askr voice speaker <name>`."""
+def _profile() -> dict:
     try:
         with open(_PROFILE_PATH) as f:
-            name = str(json.load(f).get("speaker") or "").lower()
+            return json.load(f)
     except (OSError, ValueError):
-        name = ""
+        return {}
+
+
+def speech_rate() -> int:
+    try:
+        rate = int(_profile().get("rate") or SPEECH_RATE)
+    except (TypeError, ValueError):
+        return SPEECH_RATE
+    return max(90, min(rate, 500))
+
+
+def chosen_speaker() -> str:
+    """The user's pick ('ava', 'zoe', 'samantha') — set with `askr voice speaker <name>`."""
+    name = str(_profile().get("speaker") or "").lower()
     return name if name in VOICES else DEFAULT_SPEAKER
 
 
@@ -113,7 +125,7 @@ def say_command(say_bin: str, text: str) -> list:
     voice = spoken_voice()
     if voice:
         cmd += ["-v", voice]
-    return cmd + ["-r", str(SPEECH_RATE), text]
+    return cmd + ["-r", str(speech_rate()), text]
 
 
 def _say_preconditions(project_path: str = "") -> tuple[str, str]:
