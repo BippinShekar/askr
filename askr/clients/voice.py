@@ -4,6 +4,7 @@ import os
 import platform
 import re
 import shutil
+import time
 import subprocess
 from datetime import datetime, timezone
 
@@ -54,27 +55,56 @@ def is_muted() -> bool:
     return os.path.exists(MUTED_PATH)
 
 
-# One voice and pace for everything askr says. Samantha is the user's pick
-# (2026-11-25, after Eddy at 220 wpm was hard to understand); 200 wpm is the
-# pace they chose her at — still faster than say's ~175 default, which they
-# found too slow. The first installed name in the list is used.
-VOICE_PREFERENCE = ("Samantha",)
+# One voice and pace for everything askr says (user, 2026-11-25): Ava is the
+# main voice, Zoe the alternative (`askr voice speaker zoe`), Samantha the
+# fallback until those are downloaded (System Settings → Accessibility →
+# Spoken Content → Manage Voices — there's no CLI for it). Premium beats
+# Enhanced. 200 wpm is the pace the user picked Samantha at.
+VOICES = {
+    "ava": ("Ava (Premium)", "Ava (Enhanced)", "Ava"),
+    "zoe": ("Zoe (Premium)", "Zoe (Enhanced)", "Zoe"),
+    "samantha": ("Samantha",),
+}
+DEFAULT_SPEAKER = "ava"
 SPEECH_RATE = 200  # words per minute
+_PROFILE_PATH = os.path.expanduser("~/.config/askr/voice_profile.json")
+# Re-check what's installed this often, so a voice downloaded while askr is
+# running is picked up without a restart.
+_RECHECK_SECS = 60.0
 
-_chosen_voice = None
+_chosen = ("", 0.0)  # (voice, when chosen)
+
+
+def chosen_speaker() -> str:
+    """The user's pick ('ava', 'zoe', 'samantha') — set with `askr voice speaker <name>`."""
+    try:
+        with open(_PROFILE_PATH) as f:
+            name = str(json.load(f).get("speaker") or "").lower()
+    except (OSError, ValueError):
+        name = ""
+    return name if name in VOICES else DEFAULT_SPEAKER
+
+
+def installed_voices() -> set:
+    out = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
+    # "Eddy (English (US)) en_US    # Hello…" — the name is everything before the locale.
+    return {m.group(1) for m in re.finditer(r"^(.+?)\s+[a-z]{2,3}_[A-Z0-9]{2,3}\b", out, re.M)}
 
 
 def spoken_voice() -> str:
-    global _chosen_voice
-    if _chosen_voice is None:
-        try:
-            out = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
-            # "Eddy (English (US)) en_US    # Hello…" — the name is everything before the locale.
-            installed = {m.group(1) for m in re.finditer(r"^(.+?)\s+[a-z]{2,3}_[A-Z0-9]{2,3}\b", out, re.M)}
-        except Exception:
-            return ""  # don't cache a failed lookup
-        _chosen_voice = next((v for v in VOICE_PREFERENCE if v in installed), "")
-    return _chosen_voice
+    global _chosen
+    voice, at = _chosen
+    if voice and time.time() - at < _RECHECK_SECS:
+        return voice
+    try:
+        installed = installed_voices()
+    except Exception:
+        return voice  # keep the last good choice; don't cache a failed lookup
+    pick = chosen_speaker()
+    order = [pick] + [k for k in ("ava", "zoe", "samantha") if k != pick]
+    voice = next((v for k in order for v in VOICES[k] if v in installed), "")
+    _chosen = (voice, time.time())
+    return voice
 
 
 def say_command(say_bin: str, text: str) -> list:

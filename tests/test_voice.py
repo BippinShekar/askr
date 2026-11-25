@@ -701,3 +701,28 @@ class VoiceModeConfigRoundTripTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class SpeakerChoiceTests(unittest.TestCase):
+    """Ava is askr's voice, Zoe the alternative, Samantha the fallback (2026-11-25)."""
+
+    def _pick(self, installed, speaker=None):
+        with tempfile.TemporaryDirectory() as d:
+            prof = os.path.join(d, "voice_profile.json")
+            if speaker:
+                with open(prof, "w") as f:
+                    json.dump({"speaker": speaker}, f)
+            with patch.object(voice, "_PROFILE_PATH", prof), \
+                 patch.object(voice, "installed_voices", return_value=set(installed)), \
+                 patch.object(voice, "_chosen", ("", 0.0)):
+                return voice.spoken_voice()
+
+    def test_ava_by_default_premium_first(self):
+        self.assertEqual(self._pick({"Samantha", "Zoe", "Ava", "Ava (Premium)"}), "Ava (Premium)")
+        self.assertEqual(self._pick({"Samantha", "Zoe", "Ava"}), "Ava")
+
+    def test_zoe_when_chosen_and_fallbacks(self):
+        self.assertEqual(self._pick({"Samantha", "Zoe", "Ava"}, speaker="zoe"), "Zoe")
+        self.assertEqual(self._pick({"Samantha", "Zoe"}), "Zoe")           # no Ava yet
+        self.assertEqual(self._pick({"Samantha"}), "Samantha")

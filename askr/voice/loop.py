@@ -620,6 +620,19 @@ def main(args: list):
         print(f"askr voice: {'always listening — acts when you talk to it' if mode == 'always' else 'wake word only'}."
               "  (`askr voice mode always|wake`)")
         return
+    if args[:1] == ["speaker"]:
+        from askr.clients import voice as voice_client
+        from askr.voice.wake import load_profile, save_profile
+        if args[1:2] and args[1].lower() in voice_client.VOICES:
+            profile = load_profile()
+            profile["speaker"] = args[1].lower()
+            save_profile(profile)
+            voice_client._chosen = ("", 0.0)
+        pick, using = voice_client.chosen_speaker(), voice_client.spoken_voice()
+        print(f"askr voice: speaker {pick} — speaking as {using or 'the system default'}"
+              + ("" if using.lower().startswith(pick) else f" ({pick} isn't installed yet)")
+              + ".  (`askr voice speaker ava|zoe|samantha`)")
+        return
     if args[:1] == ["mic"]:
         daemon.set_mic(args[1:2] != ["off"])
         print(f"askr voice: mic {'off' if daemon.mic_off() else 'on'}.")
