@@ -34,7 +34,10 @@ def pending_tool(entries: list) -> dict | None:
         for block in content:
             if not isinstance(block, dict):
                 continue
-            if block.get("type") == "tool_use":
+            # AskUserQuestion is a menu, not a permission prompt (menu.py answers
+            # those). Found 2026-11-25: treating it as one turned "always on…"
+            # into Down+Enter on the user's menu.
+            if block.get("type") == "tool_use" and block.get("name") != "AskUserQuestion":
                 calls[block.get("id")] = block
             elif block.get("type") == "tool_result":
                 done.add(block.get("tool_use_id"))

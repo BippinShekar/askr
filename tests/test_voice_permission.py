@@ -60,3 +60,10 @@ def test_no_keys_once_it_was_answered_on_screen(tmp_path):
     with patch.object(terminal, "type_keys") as keys:
         loop.handle_utterance(b"a")
     keys.assert_not_called()
+
+
+def test_question_menus_are_never_treated_as_permission_prompts():
+    ask = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "q1", "name": "AskUserQuestion", "input": {"questions": []}}]}}
+    assert permission.pending_tool([ask]) is None
+    assert permission.pending_tool([BASH, RESULT, ask]) is None
