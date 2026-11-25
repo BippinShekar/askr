@@ -23,6 +23,11 @@ from askr.session import lifecycle
 from askr.hooks import stop as stop_module
 
 
+def SAY(text):
+    """argv for askr's one voice and pace (voice.say_command), with the voice pinned for tests."""
+    return ["/usr/bin/say", "-v", "TestVoice", "-r", str(voice.SPEECH_RATE), text]
+
+
 class _IsolatedVoiceLogMixin:
     """
     Redirects voice._VOICE_LOG_PATH to a per-test temp file. Without this,
@@ -40,6 +45,11 @@ class _IsolatedVoiceLogMixin:
             voice, "_VOICE_LOG_PATH", os.path.join(self._voice_log_tmp.name, "voice_log.jsonl")
         )
         self._voice_log_patch.start()
+        # Pin the voice: spoken_voice() lists installed voices via subprocess.run,
+        # which these tests mock.
+        self._voice_choice_patch = patch.object(voice, "spoken_voice", return_value="TestVoice")
+        self._voice_choice_patch.start()
+        self.addCleanup(self._voice_choice_patch.stop)
 
     def tearDown(self):
         self._voice_log_patch.stop()
@@ -108,7 +118,7 @@ class SpeakGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
             self.assertEqual(reason, "")
             mock_run.assert_called_once()
             args, kwargs = mock_run.call_args
-            self.assertEqual(args[0], ["/usr/bin/say", "done with task"])
+            self.assertEqual(args[0], SAY("done with task"))
 
     def test_speak_sends_humanized_text_to_say(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
@@ -117,20 +127,21 @@ class SpeakGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
              patch("subprocess.run") as mock_run:
             voice.speak("🔴 **[askr] Claude notification (ERROR)**\nBash(rm -rf /tmp/*) needs approval")
             args, kwargs = mock_run.call_args
-            spoken = args[0][1]
+            spoken = args[0][-1]
             self.assertNotIn("🔴", spoken)
             self.assertNotIn("**", spoken)
             self.assertNotIn("Bash(", spoken)
             self.assertIn("a bash action", spoken)
 
-    def test_speak_with_voice_passes_dash_v_flag(self):
+    def test_speak_uses_askrs_one_voice_and_pace_whatever_voice_is_passed(self):
+        # 2026-11-25: one voice (Greg, else the first installed fallback) at 1.25x for everything.
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
              patch("platform.system", return_value="Darwin"), \
              patch("shutil.which", return_value="/usr/bin/say"), \
              patch("subprocess.run") as mock_run:
             voice.speak("done", voice="Zarvox")
             args, kwargs = mock_run.call_args
-            self.assertEqual(args[0], ["/usr/bin/say", "-v", "Zarvox", "done"])
+            self.assertEqual(args[0], SAY("done"))
 
     def test_empty_text_skips_subprocess_entirely(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
@@ -144,18 +155,15 @@ class SpeakGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
 
 
 class SpeakSignatureTests(_IsolatedVoiceLogMixin, unittest.TestCase):
-    def test_speaks_prefix_then_body_in_their_own_voices(self):
+    def test_speaks_prefix_and_body_together_in_one_voice(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
              patch("platform.system", return_value="Darwin"), \
              patch("shutil.which", return_value="/usr/bin/say"), \
              patch("subprocess.run") as mock_run:
             ok, reason = voice.speak_signature("Done.", "ship OAuth", "Good News", "Zarvox")
             self.assertTrue(ok)
-            self.assertEqual(mock_run.call_count, 2)
-            first_args = mock_run.call_args_list[0][0][0]
-            second_args = mock_run.call_args_list[1][0][0]
-            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Done."])
-            self.assertEqual(second_args, ["/usr/bin/say", "-v", "Zarvox", "ship OAuth"])
+            mock_run.assert_called_once()
+            self.assertEqual(mock_run.call_args[0][0], SAY("Done. ship OAuth"))
 
     def test_disabled_never_touches_subprocess(self):
         with patch("askr.state.config.load_voice_enabled", return_value=False), \
@@ -172,7 +180,7 @@ class SpeakSignatureTests(_IsolatedVoiceLogMixin, unittest.TestCase):
             voice.speak_signature("Done.", "", "Good News", "Zarvox")
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
-            self.assertEqual(args, ["/usr/bin/say", "-v", "Good News", "Done."])
+            self.assertEqual(args, SAY("Done."))
 
     def test_empty_prefix_only_speaks_body(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
@@ -182,7 +190,7 @@ class SpeakSignatureTests(_IsolatedVoiceLogMixin, unittest.TestCase):
             voice.speak_signature("", "ship OAuth", "Good News", "Zarvox")
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
-            self.assertEqual(args, ["/usr/bin/say", "-v", "Zarvox", "ship OAuth"])
+            self.assertEqual(args, SAY("ship OAuth"))
 
     def test_both_empty_touches_subprocess_not_at_all(self):
         with patch("askr.state.config.load_voice_enabled", return_value=True), \
@@ -590,7 +598,7 @@ class SpeakSessionDoneGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
                 self.assertIn(args[0], stop_module._GENERIC_DONE_PHRASES)
                 self.assertEqual(kwargs["prefix"], "Done.")
 
-    def test_respects_configured_voice_style(self):
+    def test_configured_voice_style_no_longer_changes_the_voice(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg_path = os.path.join(tmpdir, "config.json")
             with patch.object(state_config, "CONFIG_PATH", cfg_path):
@@ -604,10 +612,8 @@ class SpeakSessionDoneGatingTests(_IsolatedVoiceLogMixin, unittest.TestCase):
                      patch("shutil.which", return_value="/usr/bin/say"), \
                      patch("subprocess.run") as mock_run:
                     stop_module._speak_session_done(["ship OAuth"], transcript_path="")
-                    first_args = mock_run.call_args_list[0][0][0]
-                    second_args = mock_run.call_args_list[1][0][0]
-                    self.assertEqual(first_args, ["/usr/bin/say", "-v", "Daniel", "Done."])
-                    self.assertEqual(second_args, ["/usr/bin/say", "-v", "Ralph", "ship OAuth"])
+                    mock_run.assert_called_once()
+                    self.assertEqual(mock_run.call_args[0][0], SAY("Done. ship OAuth"))
 
 
 class AnnounceTests(_IsolatedVoiceLogMixin, unittest.TestCase):
@@ -620,10 +626,8 @@ class AnnounceTests(_IsolatedVoiceLogMixin, unittest.TestCase):
              patch("shutil.which", return_value="/usr/bin/say"), \
              patch("subprocess.run") as mock_run:
             voice.announce("quota at 90 percent")
-            first_args = mock_run.call_args_list[0][0][0]
-            second_args = mock_run.call_args_list[1][0][0]
-            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Askr."])
-            self.assertEqual(second_args, ["/usr/bin/say", "-v", "Zarvox", "quota at 90 percent"])
+            mock_run.assert_called_once()
+            self.assertEqual(mock_run.call_args[0][0], SAY("Askr. quota at 90 percent"))
 
     def test_single_mode_speaks_message_in_one_voice_only(self):
         with patch("askr.state.config.load_voice_mode", return_value="single"), \
@@ -635,7 +639,7 @@ class AnnounceTests(_IsolatedVoiceLogMixin, unittest.TestCase):
             voice.announce("quota at 90 percent")
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
-            self.assertEqual(args, ["/usr/bin/say", "-v", "Samantha", "quota at 90 percent"])
+            self.assertEqual(args, SAY("quota at 90 percent"))
 
     def test_single_mode_empty_message_skips_subprocess(self):
         with patch("askr.state.config.load_voice_mode", return_value="single"), \
@@ -668,8 +672,7 @@ class AnnounceTests(_IsolatedVoiceLogMixin, unittest.TestCase):
              patch("shutil.which", return_value="/usr/bin/say"), \
              patch("subprocess.run") as mock_run:
             voice.announce("ship OAuth", prefix="Done.")
-            first_args = mock_run.call_args_list[0][0][0]
-            self.assertEqual(first_args, ["/usr/bin/say", "-v", "Good News", "Done."])
+            self.assertEqual(mock_run.call_args[0][0], SAY("Done. ship OAuth"))
 
 
 class VoiceModeConfigRoundTripTests(unittest.TestCase):

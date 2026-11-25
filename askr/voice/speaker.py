@@ -18,28 +18,11 @@ _ECHO_TAIL_SECS = 0.4  # room reverb after `say` exits
 _CUE_SOUND = "/System/Library/Sounds/Tink.aiff"
 
 
-def best_voice() -> str:
-    """The most natural English voice installed: a Premium or Enhanced Siri-era
-    voice if the user has downloaded one (System Settings → Accessibility →
-    Spoken Content → System voice → Manage Voices), else the system default."""
-    try:
-        out = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
-    except Exception:
-        return ""
-    english = [line for line in out.splitlines() if " en_" in line]
-    for tier in ("(Premium)", "(Enhanced)"):
-        for preferred in ("Ava", "Zoe", "Evan", "Nathan", "Joelle", "Noelle", "Tom", "Allison", ""):
-            for line in english:
-                if tier in line and line.startswith(preferred):
-                    return line.split("  ")[0].split(" en_")[0].strip()
-    return ""
-
-
 class Speaker:
     def __init__(self, listener=None, gate=None, voice: str = "", rate: int = 0):
         self.listener = listener
         self.gate = gate
-        self.voice = voice if voice else best_voice()
+        self.voice = voice  # overrides askr's one voice (clients.voice.say_command) only if set
         self.rate = rate
         self.say_bin = shutil.which("say")
         self._proc = None
@@ -64,12 +47,13 @@ class Speaker:
         text = humanize_for_speech(text or "", max_len=600)
         if not text or not self.say_bin or _voice.is_muted():
             return
-        cmd = [self.say_bin]
+        cmd = _voice.say_command(self.say_bin, text)
         if self.voice:
-            cmd += ["-v", self.voice]
+            cmd[1:1] = ["-v", self.voice] if "-v" not in cmd else []
+            if "-v" in cmd:
+                cmd[cmd.index("-v") + 1] = self.voice
         if self.rate:
-            cmd += ["-r", str(self.rate)]
-        cmd.append(text)
+            cmd[cmd.index("-r") + 1] = str(self.rate)
         if self.listener:
             self.listener.muted.set()
         lock_fd = _acquire_voice_lock()

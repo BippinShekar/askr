@@ -54,6 +54,37 @@ def is_muted() -> bool:
     return os.path.exists(MUTED_PATH)
 
 
+# One voice and pace for everything askr says (user, 2026-11-25: voice Greg,
+# 1.25x — the default ~175 wpm was "overtly slow"). Greg isn't a stock macOS
+# voice; the first installed name in this list is used.
+VOICE_PREFERENCE = ("Greg", "Eddy (English (US))", "Reed (English (US))", "Samantha")
+SPEECH_RATE = 220  # words per minute: 1.25 x say's ~175 default
+
+_chosen_voice = None
+
+
+def spoken_voice() -> str:
+    global _chosen_voice
+    if _chosen_voice is None:
+        try:
+            out = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
+            # "Eddy (English (US)) en_US    # Hello…" — the name is everything before the locale.
+            installed = {m.group(1) for m in re.finditer(r"^(.+?)\s+[a-z]{2,3}_[A-Z0-9]{2,3}\b", out, re.M)}
+        except Exception:
+            return ""  # don't cache a failed lookup
+        _chosen_voice = next((v for v in VOICE_PREFERENCE if v in installed), "")
+    return _chosen_voice
+
+
+def say_command(say_bin: str, text: str) -> list:
+    """`say` argv in askr's one voice and pace."""
+    cmd = [say_bin]
+    voice = spoken_voice()
+    if voice:
+        cmd += ["-v", voice]
+    return cmd + ["-r", str(SPEECH_RATE), text]
+
+
 def _say_preconditions(project_path: str = "") -> tuple[str, str]:
     """Shared gate for any spoken output: voice_notifications on, macOS, `say` on PATH.
     Returns (say_bin, "") when clear to speak, ("", reason) otherwise. `project_path`
@@ -157,11 +188,8 @@ def speak(text: str, voice: str = "", context: dict = None, project_path: str = 
 
     lock_fd = _acquire_voice_lock()
     try:
-        cmd = [say_bin]
-        if voice:
-            cmd += ["-v", voice]
-        cmd.append(humanize_for_speech(text))
-        subprocess.run(cmd, timeout=30, check=False)
+        # `voice` is ignored: everything askr says uses one voice and pace (say_command).
+        subprocess.run(say_command(say_bin, humanize_for_speech(text)), timeout=30, check=False)
         _log_voice_event(text, True, "", context)
         return True, ""
     except Exception as e:
@@ -189,10 +217,11 @@ def speak_signature(prefix: str, body: str, prefix_voice: str, body_voice: str, 
 
     lock_fd = _acquire_voice_lock()
     try:
-        if prefix:
-            subprocess.run([say_bin, "-v", prefix_voice, humanize_for_speech(prefix)], timeout=30, check=False)
-        if body:
-            subprocess.run([say_bin, "-v", body_voice, humanize_for_speech(body)], timeout=30, check=False)
+        # One voice and pace for everything (say_command); the two-voice
+        # prefix/body split was dropped 2026-11-25 at the user's request.
+        spoken = " ".join(humanize_for_speech(t) for t in (prefix, body) if t)
+        if spoken:
+            subprocess.run(say_command(say_bin, spoken), timeout=30, check=False)
         _log_voice_event(f"{prefix} {body}".strip(), True, "", context)
         return True, ""
     except Exception as e:
