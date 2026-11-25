@@ -54,11 +54,12 @@ def is_muted() -> bool:
     return os.path.exists(MUTED_PATH)
 
 
-# One voice and pace for everything askr says (user, 2026-11-25: voice Greg,
-# 1.25x — the default ~175 wpm was "overtly slow"). Greg isn't a stock macOS
-# voice; the first installed name in this list is used.
-VOICE_PREFERENCE = ("Greg", "Eddy (English (US))", "Reed (English (US))", "Samantha")
-SPEECH_RATE = 220  # words per minute: 1.25 x say's ~175 default
+# One voice and pace for everything askr says. Samantha is the user's pick
+# (2026-11-25, after Eddy at 220 wpm was hard to understand); 200 wpm is the
+# pace they chose her at — still faster than say's ~175 default, which they
+# found too slow. The first installed name in the list is used.
+VOICE_PREFERENCE = ("Samantha",)
+SPEECH_RATE = 200  # words per minute
 
 _chosen_voice = None
 
